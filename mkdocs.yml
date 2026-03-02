@@ -1,0 +1,44 @@
+site_name: Stock Signal Platform
+site_description: Personal stock analysis and investment signal platform
+site_author: Vipul Bhatia
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - PRD: PRD.md
+  - Functional Spec: FSD.md
+  - Technical Design: TDD.md
+  - Architecture: architecture.md
+  - Data Architecture: data-architecture.md
+  - Getting Started: getting-started.md
+  - API Reference: api-reference.md
+  - Signals Guide: signals-guide.md
+  - Development:
+    - Setup: dev/setup.md
+    - Testing: dev/testing.md
+    - Changelog: dev/changelog.md
+
+markdown_extensions:
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - admonition
+  - tables

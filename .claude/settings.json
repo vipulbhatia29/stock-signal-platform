@@ -1,0 +1,44 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Bash(uv *)",
+      "Bash(pytest *)",
+      "Bash(docker compose *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git status *)",
+      "Bash(alembic *)",
+      "Bash(cd *)",
+      "Bash(cat *)",
+      "Bash(ls *)",
+      "Bash(mkdir *)",
+      "Bash(cp *)",
+      "Bash(mv *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(grep *)",
+      "Bash(find *)",
+      "Bash(wc *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(ruff *)",
+      "Bash(mkdocs *)"
+    ],
+    "deny": [
+      "Bash(rm -rf /)",
+      "Bash(sudo *)",
+      "Bash(pip install *)",
+      "Bash(pip *)"
+    ]
+  },
+  "env": {
+    "UV_PYTHON": "3.12"
+  }
+}

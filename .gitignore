@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+
+# uv
+uv.lock
+
+# Environment
+.env
+backend/.env
+*.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Node/Frontend
+node_modules/
+.next/
+frontend/.env.local
+
+# Data and model artifacts
+data/
+*.parquet
+*.csv.bak
+
+# Process PIDs
+.pids/
+
+# Logs
+logs/
+*.log
+
+# Docker
+postgres_data/
+redis_data/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
