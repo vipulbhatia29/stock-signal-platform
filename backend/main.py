@@ -8,7 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from backend.config import settings
-from backend.routers import auth
+from backend.routers import auth, stocks
 
 limiter = Limiter(
     key_func=get_remote_address,
@@ -44,3 +44,4 @@ async def health_check() -> dict[str, str]:
 
 # --- Routers ---
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(stocks.router, prefix="/api/v1/stocks", tags=["stocks"])

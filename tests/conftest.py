@@ -21,7 +21,10 @@ from backend.database import get_async_session
 from backend.dependencies import create_access_token, hash_password
 from backend.main import app
 from backend.models import Base
-from backend.models.stock import Stock
+from backend.models.price import StockPrice
+from backend.models.recommendation import RecommendationSnapshot
+from backend.models.signal import SignalSnapshot
+from backend.models.stock import Stock, Watchlist
 from backend.models.user import User, UserPreference, UserRole
 
 
@@ -188,4 +191,82 @@ async def authenticated_client(client: AsyncClient, db_url) -> AsyncClient:
 
     token = create_access_token(user.id)
     client.headers["Authorization"] = f"Bearer {token}"
+    # Store user reference on the client so tests can access the user's ID
+    client._test_user = user  # type: ignore[attr-defined]
     return client
+
+
+# ---------------------------------------------------------------------------
+# Additional factories for Session 2 (signals, prices, recommendations)
+# ---------------------------------------------------------------------------
+class StockPriceFactory(factory.Factory):
+    """Factory for StockPrice model instances (daily OHLCV data)."""
+
+    class Meta:
+        model = StockPrice
+
+    time = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    ticker = "AAPL"
+    open = factory.LazyFunction(lambda: 150.0)
+    high = factory.LazyFunction(lambda: 155.0)
+    low = factory.LazyFunction(lambda: 148.0)
+    close = factory.LazyFunction(lambda: 152.0)
+    adj_close = factory.LazyFunction(lambda: 152.0)
+    volume = 50_000_000
+    source = "yfinance"
+
+
+class SignalSnapshotFactory(factory.Factory):
+    """Factory for SignalSnapshot model instances."""
+
+    class Meta:
+        model = SignalSnapshot
+
+    computed_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    ticker = "AAPL"
+    rsi_value = 55.0
+    rsi_signal = "NEUTRAL"
+    macd_value = 1.5
+    macd_histogram = 0.3
+    macd_signal_label = "BULLISH"
+    sma_50 = 150.0
+    sma_200 = 145.0
+    sma_signal = "ABOVE_200"
+    bb_upper = 160.0
+    bb_lower = 140.0
+    bb_position = "MIDDLE"
+    annual_return = 0.15
+    volatility = 0.22
+    sharpe_ratio = 0.48
+    composite_score = 6.5
+    composite_weights = {"rsi": 1.0, "macd": 1.5, "sma": 1.5, "sharpe": 0.5, "total": 4.5}
+
+
+class RecommendationSnapshotFactory(factory.Factory):
+    """Factory for RecommendationSnapshot model instances."""
+
+    class Meta:
+        model = RecommendationSnapshot
+
+    generated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    ticker = "AAPL"
+    user_id = factory.LazyFunction(uuid.uuid4)
+    action = "WATCH"
+    confidence = "MEDIUM"
+    composite_score = 6.5
+    price_at_recommendation = 152.0
+    reasoning = {"summary": "Mixed signals", "signals": {}}
+    is_actionable = False
+    acknowledged = False
+
+
+class WatchlistFactory(factory.Factory):
+    """Factory for Watchlist model instances."""
+
+    class Meta:
+        model = Watchlist
+
+    id = factory.LazyFunction(uuid.uuid4)
+    user_id = factory.LazyFunction(uuid.uuid4)
+    ticker = "AAPL"
+    added_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
