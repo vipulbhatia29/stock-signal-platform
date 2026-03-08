@@ -211,3 +211,55 @@ Track what was built in each Claude Code session.
 index model + migration → ingestion endpoint → bulk signals → signal history), then
 scaffold Next.js frontend and build pages. See `docs/phase2-requirements.md` Section 6
 for full implementation order.
+
+---
+
+## Session 5 — Phase 2 Backend Pre-Requisites
+
+**Date:** 2026-03-07
+**Branch:** `feat/initial-scaffold`
+**What was done:**
+- [x] httpOnly cookie authentication (dual-mode: Authorization header + cookie):
+  - `backend/dependencies.py` — `_extract_token()` checks header first, then cookie
+  - `backend/routers/auth.py` — login/refresh set cookies via `_set_auth_cookies()`
+  - `POST /logout` endpoint added — clears auth cookies
+  - `backend/config.py` — added `COOKIE_SECURE` setting
+- [x] `backend/models/index.py` — StockIndex + StockIndexMembership models:
+  - StockIndex: name, slug (indexed), description
+  - StockIndexMembership: ticker FK + index_id FK with unique constraint
+- [x] `backend/routers/indexes.py` — Index API endpoints:
+  - `GET /indexes` — list all indexes with stock counts (LEFT JOIN + COUNT)
+  - `GET /indexes/{slug}/stocks` — paginated stocks with latest price + signal via window functions
+- [x] `backend/schemas/index.py` — IndexResponse, IndexStockItem, IndexStocksResponse
+- [x] `backend/routers/stocks.py` — 3 new endpoints:
+  - `POST /{ticker}/ingest` — on-demand ingestion with ticker validation
+  - `GET /signals/bulk` — screener with filters (index, RSI, MACD, sector, score range), sorting, pagination
+  - `GET /{ticker}/signals/history` — chronological signal snapshots with days + limit params
+- [x] `backend/schemas/stock.py` — added IngestResponse, BulkSignalItem, BulkSignalsResponse, SignalHistoryItem
+- [x] `backend/tools/market_data.py` — delta fetch functions:
+  - `fetch_prices_delta()` — queries MAX(time), fetches from that date forward
+  - `update_last_fetched_at()` — updates Stock.last_fetched_at after fetch
+  - `_download_ticker_range()` — yfinance download with start date
+- [x] `scripts/sync_indexes.py` — seed S&P 500, NASDAQ-100, Dow 30 index memberships from Wikipedia
+- [x] Indexes router mounted in `backend/main.py` at `/api/v1/indexes`
+- [x] Test factories: StockIndexFactory, StockIndexMembershipFactory added to conftest.py
+- [x] `tests/api/test_auth.py` — expanded from 12 to 20 tests (cookie auth, logout)
+- [x] `tests/api/test_indexes.py` — 8 tests for index endpoints
+- [x] `tests/api/test_ingest.py` — 4 tests for ingestion endpoint
+- [x] `tests/api/test_bulk_signals.py` — 7 tests for screener endpoint
+- [x] `tests/api/test_signal_history.py` — 6 tests for signal history
+- [x] All **147 tests pass** (`uv run pytest tests/ -v`)
+
+**Key decisions:**
+- Dual-mode auth preserves backward compatibility (header takes precedence over cookie)
+- Window functions (row_number OVER PARTITION BY) for efficient "latest per ticker" queries
+- Lazy imports in ingest endpoint to avoid circular dependency between routers and tools
+- Ticker validation via regex pattern `^[A-Za-z0-9.\-]{1,10}$`
+
+**Test count:** 114 (Session 4) → 147 (Session 5) = +33 new tests
+
+**Pending:**
+- Alembic migration `002_stock_indexes.py` for new tables (needs Docker running)
+
+**Next:** Phase 2 frontend — Next.js project setup, login/register pages, dashboard,
+screener, stock detail page. See `docs/workflow_phase2.md` Tasks 2.1-2.7.
