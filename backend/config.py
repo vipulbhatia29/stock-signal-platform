@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     # --- Auth ---
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    COOKIE_SECURE: bool = False  # Set True in production (requires HTTPS)
 
     # --- App ---
     CORS_ORIGINS: str = "http://localhost:3000"

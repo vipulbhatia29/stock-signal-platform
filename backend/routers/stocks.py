@@ -22,6 +22,8 @@ API Endpoints:
 
 from __future__ import annotations
 
+import logging
+import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -30,6 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
 from backend.dependencies import get_current_user
+from backend.models.index import StockIndexMembership
 from backend.models.price import StockPrice
 from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
@@ -37,18 +40,26 @@ from backend.models.stock import Stock, Watchlist
 from backend.models.user import User
 from backend.schemas.stock import (
     BollingerResponse,
+    BulkSignalItem,
+    BulkSignalsResponse,
+    IngestResponse,
     MACDResponse,
     PricePeriod,
     PricePointResponse,
-    RSIResponse,
     RecommendationResponse,
     ReturnsResponse,
-    SMAResponse,
+    RSIResponse,
+    SignalHistoryItem,
     SignalResponse,
+    SMAResponse,
     StockSearchResponse,
     WatchlistAddRequest,
     WatchlistItemResponse,
 )
+
+logger = logging.getLogger(__name__)
+
+TICKER_PATTERN = re.compile(r"^[A-Za-z0-9.\-]{1,10}$")
 
 router = APIRouter()
 
@@ -57,9 +68,12 @@ router = APIRouter()
 # Stock search
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/search", response_model=list[StockSearchResponse])
 async def search_stocks(
-    q: str = Query(min_length=1, max_length=20, description="Search query (ticker or company name)"),
+    q: str = Query(
+        min_length=1, max_length=20, description="Search query (ticker or company name)"
+    ),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> list[Stock]:
@@ -76,9 +90,7 @@ async def search_stocks(
     # "starts with q" (prefix match). We search both ticker and name.
     query = (
         select(Stock)
-        .where(
-            (Stock.ticker.ilike(f"{q}%")) | (Stock.name.ilike(f"%{q}%"))
-        )
+        .where((Stock.ticker.ilike(f"{q}%")) | (Stock.name.ilike(f"%{q}%")))
         .where(Stock.is_active.is_(True))
         .order_by(Stock.ticker)
         .limit(20)  # Cap results to avoid returning thousands of rows
@@ -92,10 +104,13 @@ async def search_stocks(
 # Price history
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/{ticker}/prices", response_model=list[PricePointResponse])
 async def get_prices(
     ticker: str,
-    period: PricePeriod = Query(default=PricePeriod.ONE_YEAR, description="How far back to fetch prices"),
+    period: PricePeriod = Query(
+        default=PricePeriod.ONE_YEAR, description="How far back to fetch prices"
+    ),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> list[StockPrice]:
@@ -146,6 +161,7 @@ async def get_prices(
 # Signals
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/{ticker}/signals", response_model=SignalResponse)
 async def get_signals(
     ticker: str,
@@ -182,7 +198,7 @@ async def get_signals(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"No signals computed for '{ticker.upper()}'. "
-                   "Signals need to be computed first via the signal engine.",
+            "Signals need to be computed first via the signal engine.",
         )
 
     # ── Check if signals are stale (older than 24 hours) ─────────────
@@ -290,9 +306,7 @@ async def add_to_watchlist(
 
     # ── Check watchlist size limit ───────────────────────────────────
     count_result = await db.execute(
-        select(func.count()).select_from(Watchlist).where(
-            Watchlist.user_id == current_user.id
-        )
+        select(func.count()).select_from(Watchlist).where(Watchlist.user_id == current_user.id)
     )
     watchlist_count = count_result.scalar_one()
 
@@ -300,7 +314,7 @@ async def add_to_watchlist(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Watchlist is full (maximum {MAX_WATCHLIST_SIZE} tickers). "
-                   "Remove a ticker before adding a new one.",
+            "Remove a ticker before adding a new one.",
         )
 
     # ── Check for duplicate ──────────────────────────────────────────
@@ -372,15 +386,14 @@ async def remove_from_watchlist(
 # Recommendations
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @router.get("/recommendations", response_model=list[RecommendationResponse])
 async def get_recommendations(
     action: str | None = Query(
-        default=None,
-        description="Filter by action: BUY, WATCH, AVOID, HOLD, SELL"
+        default=None, description="Filter by action: BUY, WATCH, AVOID, HOLD, SELL"
     ),
     confidence: str | None = Query(
-        default=None,
-        description="Filter by confidence: HIGH, MEDIUM, LOW"
+        default=None, description="Filter by confidence: HIGH, MEDIUM, LOW"
     ),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
@@ -395,23 +408,16 @@ async def get_recommendations(
     be valid.
     """
     # ── Start with a base query for this user's recommendations ──────
-    query = (
-        select(RecommendationSnapshot)
-        .where(RecommendationSnapshot.user_id == current_user.id)
-    )
+    query = select(RecommendationSnapshot).where(RecommendationSnapshot.user_id == current_user.id)
 
     # ── Apply optional filters ───────────────────────────────────────
     # These let the client ask "show me only BUY recommendations" or
     # "show me only HIGH confidence recommendations"
     if action is not None:
-        query = query.where(
-            RecommendationSnapshot.action == action.upper()
-        )
+        query = query.where(RecommendationSnapshot.action == action.upper())
 
     if confidence is not None:
-        query = query.where(
-            RecommendationSnapshot.confidence == confidence.upper()
-        )
+        query = query.where(RecommendationSnapshot.confidence == confidence.upper())
 
     # ── Only return recent recommendations (last 24 hours) ───────────
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
@@ -426,8 +432,236 @@ async def get_recommendations(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# On-demand data ingestion
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.post("/{ticker}/ingest", response_model=IngestResponse)
+async def ingest_ticker(
+    ticker: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> IngestResponse:
+    """Ingest price data and compute signals for a ticker.
+
+    If the ticker has no data, fetches 10Y of history. If it already has
+    data, performs a delta fetch (only new data since the last stored row).
+    After fetching, computes technical signals and stores a snapshot.
+
+    Returns 201 for newly ingested tickers, 200 for delta updates.
+    """
+    ticker = ticker.upper().strip()
+    if not TICKER_PATTERN.match(ticker):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid ticker format. Use alphanumeric characters, dots, and hyphens only.",
+        )
+
+    from backend.tools.market_data import (
+        ensure_stock_exists,
+        fetch_prices_delta,
+        update_last_fetched_at,
+    )
+    from backend.tools.signals import compute_signals, store_signal_snapshot
+
+    # Ensure stock record exists (creates from yfinance if needed)
+    try:
+        stock = await ensure_stock_exists(ticker, db)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+    # Fetch price data (delta or full)
+    try:
+        df = await fetch_prices_delta(ticker, db)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e),
+        )
+
+    rows_fetched = len(df) if not df.empty else 0
+
+    # Compute signals if we have enough data
+    composite_score = None
+    if not df.empty:
+        signals = compute_signals(df)
+        if signals.get("composite_score") is not None:
+            await store_signal_snapshot(ticker, signals, db)
+            composite_score = signals["composite_score"]
+
+    await update_last_fetched_at(ticker, db)
+
+    is_new = stock.last_fetched_at is None
+    return IngestResponse(
+        ticker=ticker,
+        name=stock.name,
+        rows_fetched=rows_fetched,
+        composite_score=composite_score,
+        status="created" if is_new else "updated",
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bulk signals (screener)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/signals/bulk", response_model=BulkSignalsResponse)
+async def get_bulk_signals(
+    index_id: str | None = Query(default=None, description="Filter by index ID"),
+    rsi_state: str | None = Query(default=None, description="Filter by RSI signal"),
+    macd_state: str | None = Query(default=None, description="Filter by MACD signal"),
+    sector: str | None = Query(default=None, description="Filter by sector"),
+    score_min: float | None = Query(default=None, ge=0, le=10),
+    score_max: float | None = Query(default=None, ge=0, le=10),
+    sort_by: str = Query(default="composite_score", description="Field to sort by"),
+    sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> BulkSignalsResponse:
+    """Get latest signals for multiple stocks (screener endpoint).
+
+    Returns the most recent signal snapshot per ticker, with filtering
+    by index, RSI state, MACD state, sector, and composite score range.
+    Results are paginated and sortable.
+    """
+    # Latest signal per ticker using row_number window function
+    latest = select(
+        SignalSnapshot,
+        Stock.name,
+        Stock.sector.label("stock_sector"),
+        func.row_number()
+        .over(
+            partition_by=SignalSnapshot.ticker,
+            order_by=SignalSnapshot.computed_at.desc(),
+        )
+        .label("rn"),
+    ).join(Stock, SignalSnapshot.ticker == Stock.ticker)
+
+    # Apply index filter via join
+    if index_id is not None:
+        latest = latest.join(
+            StockIndexMembership,
+            Stock.ticker == StockIndexMembership.ticker,
+        ).where(StockIndexMembership.index_id == index_id)
+
+    latest = latest.subquery("latest")
+
+    # Build main query filtering to rn=1 (most recent per ticker)
+    query = select(latest).where(latest.c.rn == 1)
+
+    # Apply filters
+    if rsi_state is not None:
+        query = query.where(latest.c.rsi_signal == rsi_state.upper())
+    if macd_state is not None:
+        query = query.where(latest.c.macd_signal_label == macd_state.upper())
+    if sector is not None:
+        query = query.where(latest.c.stock_sector == sector)
+    if score_min is not None:
+        query = query.where(latest.c.composite_score >= score_min)
+    if score_max is not None:
+        query = query.where(latest.c.composite_score <= score_max)
+
+    # Count total before pagination
+    count_query = select(func.count()).select_from(query.subquery())
+    count_result = await db.execute(count_query)
+    total = count_result.scalar_one()
+
+    # Apply sorting
+    sort_column = getattr(latest.c, sort_by, latest.c.composite_score)
+    if sort_order == "asc":
+        query = query.order_by(sort_column.asc().nulls_last())
+    else:
+        query = query.order_by(sort_column.desc().nulls_last())
+
+    # Apply pagination
+    query = query.limit(limit).offset(offset)
+
+    result = await db.execute(query)
+    rows = result.all()
+
+    stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    items = [
+        BulkSignalItem(
+            ticker=row.ticker,
+            name=row.name,
+            sector=row.stock_sector,
+            composite_score=row.composite_score,
+            rsi_value=row.rsi_value,
+            rsi_signal=row.rsi_signal,
+            macd_signal=row.macd_signal_label,
+            sma_signal=row.sma_signal,
+            bb_position=row.bb_position,
+            annual_return=row.annual_return,
+            volatility=row.volatility,
+            sharpe_ratio=row.sharpe_ratio,
+            computed_at=row.computed_at,
+            is_stale=(
+                row.computed_at.replace(tzinfo=timezone.utc) < stale_cutoff
+                if row.computed_at
+                else True
+            ),
+        )
+        for row in rows
+    ]
+
+    return BulkSignalsResponse(total=total, items=items)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Signal history
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/{ticker}/signals/history", response_model=list[SignalHistoryItem])
+async def get_signal_history(
+    ticker: str,
+    days: int = Query(default=90, ge=1, le=365, description="Number of days of history"),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> list[dict]:
+    """Get historical signal snapshots for a ticker.
+
+    Returns chronological signal data for charting signal trends over time.
+    Default is last 90 days, maximum 365 days.
+    """
+    await _require_stock(ticker, db)
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    result = await db.execute(
+        select(SignalSnapshot)
+        .where(SignalSnapshot.ticker == ticker.upper())
+        .where(SignalSnapshot.computed_at >= cutoff)
+        .order_by(SignalSnapshot.computed_at.asc())
+        .limit(limit)
+    )
+    snapshots = result.scalars().all()
+
+    return [
+        {
+            "computed_at": s.computed_at,
+            "composite_score": s.composite_score,
+            "rsi_value": s.rsi_value,
+            "rsi_signal": s.rsi_signal,
+            "macd_value": s.macd_value,
+            "macd_signal": s.macd_signal_label,
+            "sma_signal": s.sma_signal,
+            "bb_position": s.bb_position,
+        }
+        for s in snapshots
+    ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Shared helpers
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def _require_stock(ticker: str, db: AsyncSession) -> Stock:
     """Look up a stock by ticker, raising 404 if not found.
@@ -445,16 +679,14 @@ async def _require_stock(ticker: str, db: AsyncSession) -> Stock:
     Raises:
         HTTPException: 404 if the ticker doesn't exist.
     """
-    result = await db.execute(
-        select(Stock).where(Stock.ticker == ticker.upper())
-    )
+    result = await db.execute(select(Stock).where(Stock.ticker == ticker.upper()))
     stock = result.scalar_one_or_none()
 
     if stock is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Stock '{ticker.upper()}' not found. "
-                   "Make sure the ticker is correct and has been added to the system.",
+            "Make sure the ticker is correct and has been added to the system.",
         )
 
     return stock

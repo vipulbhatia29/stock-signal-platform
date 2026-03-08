@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -15,7 +15,13 @@ from backend.database import get_async_session
 from backend.models.user import User
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+# Cookie configuration constants
+COOKIE_ACCESS_TOKEN = "access_token"
+COOKIE_REFRESH_TOKEN = "refresh_token"
+COOKIE_SAMESITE = "lax"
+COOKIE_PATH = "/"
 
 
 def hash_password(password: str) -> str:
@@ -79,15 +85,42 @@ def decode_token(token: str, expected_type: str = "access") -> uuid.UUID:
         raise credentials_exception
 
 
+def _extract_token(request: Request) -> str | None:
+    """Extract JWT access token from Authorization header or cookie.
+
+    Header takes precedence over cookie for backward compatibility with
+    non-browser clients (e.g. tests, scripts, mobile apps).
+    """
+    # 1. Try Authorization header first
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        return auth_header.removeprefix("Bearer ").strip()
+
+    # 2. Fall back to httpOnly cookie
+    return request.cookies.get(COOKIE_ACCESS_TOKEN)
+
+
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    request: Request,
     db: AsyncSession = Depends(get_async_session),
 ) -> User:
     """FastAPI dependency: decode JWT and return the current user.
 
+    Supports dual-mode authentication:
+    - Authorization: Bearer <token> header (takes precedence)
+    - httpOnly access_token cookie (fallback for browser clients)
+
     Raises:
-        HTTPException: 401 if token invalid or user not found/inactive.
+        HTTPException: 401 if no token found, token invalid, or user not found/inactive.
     """
+    token = _extract_token(request)
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     user_id = decode_token(token, expected_type="access")
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()

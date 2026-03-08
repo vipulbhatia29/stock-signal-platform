@@ -19,23 +19,24 @@ from enum import Enum
 
 from pydantic import BaseModel, Field
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Stock schemas
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class StockResponse(BaseModel):
     """Response for a single stock record.
 
     Returned when searching for stocks or looking up a specific ticker.
     """
+
     id: uuid.UUID
     ticker: str
     name: str
     exchange: str | None = None
     sector: str | None = None
     industry: str | None = None
-    is_in_universe: bool              # True if part of S&P 500
+    is_in_universe: bool  # True if part of S&P 500
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -43,6 +44,7 @@ class StockResponse(BaseModel):
 
 class StockSearchResponse(BaseModel):
     """Simplified stock info for search results."""
+
     ticker: str
     name: str
     exchange: str | None = None
@@ -55,6 +57,7 @@ class StockSearchResponse(BaseModel):
 # Price schemas
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class PricePointResponse(BaseModel):
     """A single OHLCV data point (one trading day).
 
@@ -65,6 +68,7 @@ class PricePointResponse(BaseModel):
       - Close: price when the market closed
       - Volume: number of shares traded
     """
+
     time: datetime
     open: float
     high: float
@@ -81,6 +85,7 @@ class PricePeriod(str, Enum):
     These map to yfinance period strings. Each one defines how far back
     to look when fetching historical prices.
     """
+
     ONE_MONTH = "1mo"
     THREE_MONTHS = "3mo"
     SIX_MONTHS = "6mo"
@@ -94,38 +99,44 @@ class PricePeriod(str, Enum):
 # Signal schemas
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class RSIResponse(BaseModel):
     """RSI (Relative Strength Index) signal breakdown."""
-    value: float | None = None        # The RSI number (0-100)
-    signal: str | None = None         # OVERSOLD, NEUTRAL, or OVERBOUGHT
+
+    value: float | None = None  # The RSI number (0-100)
+    signal: str | None = None  # OVERSOLD, NEUTRAL, or OVERBOUGHT
 
 
 class MACDResponse(BaseModel):
     """MACD (Moving Average Convergence Divergence) signal breakdown."""
-    value: float | None = None        # MACD line value
-    histogram: float | None = None    # MACD histogram value
-    signal: str | None = None         # BULLISH or BEARISH
+
+    value: float | None = None  # MACD line value
+    histogram: float | None = None  # MACD histogram value
+    signal: str | None = None  # BULLISH or BEARISH
 
 
 class SMAResponse(BaseModel):
     """SMA (Simple Moving Average) crossover signal breakdown."""
-    sma_50: float | None = None       # 50-day SMA value
-    sma_200: float | None = None      # 200-day SMA value
-    signal: str | None = None         # GOLDEN_CROSS, DEATH_CROSS, etc.
+
+    sma_50: float | None = None  # 50-day SMA value
+    sma_200: float | None = None  # 200-day SMA value
+    signal: str | None = None  # GOLDEN_CROSS, DEATH_CROSS, etc.
 
 
 class BollingerResponse(BaseModel):
     """Bollinger Bands signal breakdown."""
-    upper: float | None = None        # Upper band value
-    lower: float | None = None        # Lower band value
-    position: str | None = None       # UPPER, MIDDLE, or LOWER
+
+    upper: float | None = None  # Upper band value
+    lower: float | None = None  # Lower band value
+    position: str | None = None  # UPPER, MIDDLE, or LOWER
 
 
 class ReturnsResponse(BaseModel):
     """Risk and return metrics."""
-    annual_return: float | None = None   # Annualized return (decimal, e.g. 0.15 = 15%)
-    volatility: float | None = None      # Annualized volatility
-    sharpe: float | None = None          # Sharpe ratio
+
+    annual_return: float | None = None  # Annualized return (decimal, e.g. 0.15 = 15%)
+    volatility: float | None = None  # Annualized volatility
+    sharpe: float | None = None  # Sharpe ratio
 
 
 class SignalResponse(BaseModel):
@@ -134,6 +145,7 @@ class SignalResponse(BaseModel):
     This is the main response from GET /stocks/{ticker}/signals.
     It nests all individual indicator responses for clean JSON structure.
     """
+
     ticker: str
     computed_at: datetime | None = None
 
@@ -155,17 +167,16 @@ class SignalResponse(BaseModel):
 # Watchlist schemas
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class WatchlistAddRequest(BaseModel):
     """Request body to add a ticker to the user's watchlist."""
-    ticker: str = Field(
-        min_length=1,
-        max_length=10,
-        description="Stock ticker symbol, e.g. 'AAPL'"
-    )
+
+    ticker: str = Field(min_length=1, max_length=10, description="Stock ticker symbol, e.g. 'AAPL'")
 
 
 class WatchlistItemResponse(BaseModel):
     """A single watchlist entry with its associated stock info."""
+
     id: uuid.UUID
     ticker: str
     name: str | None = None
@@ -179,18 +190,84 @@ class WatchlistItemResponse(BaseModel):
 # Recommendation schemas
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class RecommendationResponse(BaseModel):
     """A single recommendation snapshot.
 
     This is what the user sees when they ask "what should I buy/sell/watch?"
     """
+
     ticker: str
-    action: str                        # BUY, WATCH, AVOID, HOLD, SELL
-    confidence: str                    # HIGH, MEDIUM, LOW
+    action: str  # BUY, WATCH, AVOID, HOLD, SELL
+    confidence: str  # HIGH, MEDIUM, LOW
     composite_score: float
-    price_at_recommendation: float     # Stock price when recommendation was made
-    reasoning: dict | None = None      # Detailed explanation (JSONB)
+    price_at_recommendation: float  # Stock price when recommendation was made
+    reasoning: dict | None = None  # Detailed explanation (JSONB)
     generated_at: datetime
-    is_actionable: bool                # True if user should act on this
+    is_actionable: bool  # True if user should act on this
 
     model_config = {"from_attributes": True}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ingestion schemas
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class IngestResponse(BaseModel):
+    """Response from the data ingestion endpoint."""
+
+    ticker: str
+    name: str
+    rows_fetched: int
+    composite_score: float | None = None
+    status: str = Field(description="'created' if new, 'updated' if delta fetch")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bulk signals schemas (screener)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class BulkSignalItem(BaseModel):
+    """A single stock's signal summary for the screener table."""
+
+    ticker: str
+    name: str
+    sector: str | None = None
+    composite_score: float | None = None
+    rsi_value: float | None = None
+    rsi_signal: str | None = None
+    macd_signal: str | None = None
+    sma_signal: str | None = None
+    bb_position: str | None = None
+    annual_return: float | None = None
+    volatility: float | None = None
+    sharpe_ratio: float | None = None
+    computed_at: datetime | None = None
+    is_stale: bool = False
+
+
+class BulkSignalsResponse(BaseModel):
+    """Paginated bulk signal response for the screener."""
+
+    total: int
+    items: list[BulkSignalItem]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Signal history schemas
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class SignalHistoryItem(BaseModel):
+    """A single signal snapshot in a time series."""
+
+    computed_at: datetime
+    composite_score: float | None = None
+    rsi_value: float | None = None
+    rsi_signal: str | None = None
+    macd_value: float | None = None
+    macd_signal: str | None = None
+    sma_signal: str | None = None
+    bb_position: str | None = None

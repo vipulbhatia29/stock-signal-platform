@@ -1,6 +1,7 @@
 """Database models package — import all models so Alembic can discover them."""
 
 from backend.models.base import Base
+from backend.models.index import StockIndex, StockIndexMembership
 from backend.models.price import StockPrice
 from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
@@ -12,6 +13,8 @@ __all__ = [
     "RecommendationSnapshot",
     "SignalSnapshot",
     "Stock",
+    "StockIndex",
+    "StockIndexMembership",
     "StockPrice",
     "User",
     "UserPreference",

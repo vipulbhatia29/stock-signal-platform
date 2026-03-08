@@ -21,6 +21,7 @@ from backend.database import get_async_session
 from backend.dependencies import create_access_token, hash_password
 from backend.main import app
 from backend.models import Base
+from backend.models.index import StockIndex, StockIndexMembership
 from backend.models.price import StockPrice
 from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
@@ -89,9 +90,7 @@ async def client(db_url) -> AsyncGenerator[AsyncClient, None]:
     avoiding connection pool conflicts between test and cleanup.
     """
     engine = create_async_engine(db_url, echo=False, pool_size=5)
-    test_session_factory = async_sessionmaker(
-        engine, class_=AsyncSession, expire_on_commit=False
-    )
+    test_session_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async def _override_session() -> AsyncGenerator[AsyncSession, None]:
         async with test_session_factory() as session:
@@ -269,4 +268,33 @@ class WatchlistFactory(factory.Factory):
     id = factory.LazyFunction(uuid.uuid4)
     user_id = factory.LazyFunction(uuid.uuid4)
     ticker = "AAPL"
+    added_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+
+
+# ---------------------------------------------------------------------------
+# Additional factories for Session 5 (indexes)
+# ---------------------------------------------------------------------------
+class StockIndexFactory(factory.Factory):
+    """Factory for StockIndex model instances."""
+
+    class Meta:
+        model = StockIndex
+
+    id = factory.LazyFunction(uuid.uuid4)
+    name = factory.Sequence(lambda n: f"Test Index {n}")
+    slug = factory.Sequence(lambda n: f"test-index-{n}")
+    description = "A test index"
+    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+
+
+class StockIndexMembershipFactory(factory.Factory):
+    """Factory for StockIndexMembership model instances."""
+
+    class Meta:
+        model = StockIndexMembership
+
+    id = factory.LazyFunction(uuid.uuid4)
+    ticker = "AAPL"
+    index_id = factory.LazyFunction(uuid.uuid4)
     added_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))

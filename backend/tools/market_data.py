@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 
 import pandas as pd
 import yfinance as yf
-from sqlalchemy import select, text
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -178,17 +178,25 @@ async def _store_prices(
 
     for i in range(0, len(rows), chunk_size):
         chunk = rows[i : i + chunk_size]
-        stmt = pg_insert(StockPrice).values(chunk).on_conflict_do_nothing(
-            # The conflict target is the composite primary key (time, ticker).
-            # If a row with the same date + ticker already exists, skip it.
-            index_elements=["time", "ticker"],
+        stmt = (
+            pg_insert(StockPrice)
+            .values(chunk)
+            .on_conflict_do_nothing(
+                # The conflict target is the composite primary key (time, ticker).
+                # If a row with the same date + ticker already exists, skip it.
+                index_elements=["time", "ticker"],
+            )
         )
         result = await db.execute(stmt)
         inserted += result.rowcount  # how many rows were actually inserted
 
     await db.commit()
-    logger.info("Stored %d new price rows for %s (skipped %d duplicates)",
-                inserted, ticker, len(rows) - inserted)
+    logger.info(
+        "Stored %d new price rows for %s (skipped %d duplicates)",
+        inserted,
+        ticker,
+        len(rows) - inserted,
+    )
 
     return inserted
 
@@ -215,9 +223,7 @@ async def ensure_stock_exists(
         ValueError: If yfinance can't find info for this ticker.
     """
     # ── Check if stock already exists ────────────────────────────────
-    result = await db.execute(
-        select(Stock).where(Stock.ticker == ticker.upper())
-    )
+    result = await db.execute(select(Stock).where(Stock.ticker == ticker.upper()))
     stock = result.scalar_one_or_none()
 
     if stock is not None:
@@ -230,8 +236,7 @@ async def ensure_stock_exists(
 
     if not info or info.get("regularMarketPrice") is None:
         raise ValueError(
-            f"Could not find stock info for '{ticker}'. "
-            "Make sure the ticker symbol is correct."
+            f"Could not find stock info for '{ticker}'. Make sure the ticker symbol is correct."
         )
 
     # ── Create the Stock record ──────────────────────────────────────
@@ -263,6 +268,85 @@ def _get_ticker_info(ticker: str) -> dict:
     except Exception:
         logger.exception("Failed to fetch info for %s", ticker)
         return {}
+
+
+async def fetch_prices_delta(
+    ticker: str,
+    db: AsyncSession,
+) -> pd.DataFrame:
+    """Fetch only new price data since the last stored row for a ticker.
+
+    Queries MAX(time) from stock_prices for this ticker, then fetches
+    data from that date forward. If no data exists, fetches full 10Y.
+    Uses the existing upsert logic so overlapping rows are skipped.
+
+    Args:
+        ticker: Stock symbol like "AAPL".
+        db: Async database session.
+
+    Returns:
+        DataFrame of newly fetched data (may include overlap rows).
+    """
+    result = await db.execute(
+        select(func.max(StockPrice.time)).where(StockPrice.ticker == ticker.upper())
+    )
+    max_time = result.scalar_one_or_none()
+
+    if max_time is None:
+        logger.info("No existing data for %s, fetching full 10Y", ticker)
+        return await fetch_prices(ticker, period="10y", db=db)
+
+    # yfinance start parameter expects a string "YYYY-MM-DD"
+    start_date = max_time.strftime("%Y-%m-%d")
+    logger.info("Delta fetch for %s from %s", ticker, start_date)
+
+    df = await asyncio.to_thread(_download_ticker_range, ticker, start_date)
+
+    if df.empty:
+        logger.info("No new data for %s since %s", ticker, start_date)
+        return df
+
+    await _store_prices(ticker, df, db)
+    return df
+
+
+async def update_last_fetched_at(ticker: str, db: AsyncSession) -> None:
+    """Update the Stock.last_fetched_at timestamp after a successful fetch.
+
+    Args:
+        ticker: Stock symbol.
+        db: Async database session.
+    """
+    result = await db.execute(select(Stock).where(Stock.ticker == ticker.upper()))
+    stock = result.scalar_one_or_none()
+    if stock is not None:
+        stock.last_fetched_at = datetime.now(timezone.utc)
+        await db.commit()
+
+
+def _download_ticker_range(ticker: str, start: str) -> pd.DataFrame:
+    """Synchronous helper — download OHLCV data from a start date to today.
+
+    Args:
+        ticker: Stock symbol.
+        start: Start date as "YYYY-MM-DD".
+
+    Returns:
+        DataFrame with OHLCV columns.
+    """
+    try:
+        df = yf.download(
+            ticker,
+            start=start,
+            auto_adjust=False,
+            progress=False,
+        )
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        return df
+    except Exception:
+        logger.exception("yfinance range download failed for %s", ticker)
+        return pd.DataFrame()
 
 
 async def get_latest_price(ticker: str, db: AsyncSession) -> float | None:
