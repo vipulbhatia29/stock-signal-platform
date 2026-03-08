@@ -302,7 +302,11 @@ stock-signal-platform/
 4. `docs/FSD.md` — updated if functional requirements changed
 5. `docs/TDD.md` — updated if API contracts or technical design changed
 6. `docs/data-architecture.md` — updated if data model changed
-7. Serena project memories — updated if persistent gotchas or patterns discovered
+7. Serena project memories — **ALWAYS** update via `edit_memory` / `write_memory`:
+   - `project_overview` — update Current State (phase, test count, what's next, pending items)
+   - `style_and_conventions` — update if conventions or gotchas changed
+   - `suggested_commands` — update if new scripts or commands were added
+   - This is the primary way context persists across sessions — do not skip
 
 ## Environment Variables
 

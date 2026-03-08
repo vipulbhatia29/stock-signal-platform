@@ -1,10 +1,8 @@
 """Tests for on-demand data ingestion endpoint."""
 
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
-import pytest
 from httpx import AsyncClient
 
 
@@ -16,9 +14,7 @@ class TestIngestTicker:
         response = await client.post("/api/v1/stocks/AAPL/ingest")
         assert response.status_code == 401
 
-    async def test_ingest_invalid_ticker_format(
-        self, authenticated_client: AsyncClient
-    ) -> None:
+    async def test_ingest_invalid_ticker_format(self, authenticated_client: AsyncClient) -> None:
         """Invalid ticker format returns 400."""
         response = await authenticated_client.post("/api/v1/stocks/$INVALID!/ingest")
         assert response.status_code == 400
@@ -26,15 +22,15 @@ class TestIngestTicker:
 
     @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
     @patch("backend.tools.signals.compute_signals")
-    @patch(
-        "backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock
-    )
+    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
     @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
     @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
     async def test_ingest_new_ticker_success(
         self,
         mock_ensure: AsyncMock,
         mock_fetch: AsyncMock,
+        mock_load: AsyncMock,
         mock_update: AsyncMock,
         mock_compute: MagicMock,
         mock_store_signal: AsyncMock,
@@ -46,10 +42,15 @@ class TestIngestTicker:
         mock_stock.last_fetched_at = None
         mock_ensure.return_value = mock_stock
 
-        df = pd.DataFrame({"Close": [150.0, 151.0]})
-        mock_fetch.return_value = df
+        delta_df = pd.DataFrame({"Close": [150.0, 151.0]})
+        mock_fetch.return_value = delta_df
 
-        mock_compute.return_value = {"composite_score": 7.5}
+        full_df = pd.DataFrame({"Close": [148.0, 149.0, 150.0, 151.0]})
+        mock_load.return_value = full_df
+
+        mock_result = MagicMock()
+        mock_result.composite_score = 7.5
+        mock_compute.return_value = mock_result
 
         response = await authenticated_client.post("/api/v1/stocks/AAPL/ingest")
         assert response.status_code == 200

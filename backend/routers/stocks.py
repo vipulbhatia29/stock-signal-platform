@@ -460,6 +460,7 @@ async def ingest_ticker(
     from backend.tools.market_data import (
         ensure_stock_exists,
         fetch_prices_delta,
+        load_prices_df,
         update_last_fetched_at,
     )
     from backend.tools.signals import compute_signals, store_signal_snapshot
@@ -473,28 +474,32 @@ async def ingest_ticker(
             detail=str(e),
         )
 
+    is_new = stock.last_fetched_at is None
+
     # Fetch price data (delta or full)
     try:
-        df = await fetch_prices_delta(ticker, db)
+        delta_df = await fetch_prices_delta(ticker, db)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e),
         )
 
-    rows_fetched = len(df) if not df.empty else 0
+    rows_fetched = len(delta_df) if not delta_df.empty else 0
+
+    # Load full history from DB for signal computation (delta may be too small)
+    full_df = await load_prices_df(ticker, db)
 
     # Compute signals if we have enough data
     composite_score = None
-    if not df.empty:
-        signals = compute_signals(df)
-        if signals.get("composite_score") is not None:
-            await store_signal_snapshot(ticker, signals, db)
-            composite_score = signals["composite_score"]
+    if not full_df.empty:
+        result = compute_signals(ticker, full_df)
+        if result.composite_score is not None:
+            await store_signal_snapshot(result, db)
+            composite_score = result.composite_score
 
     await update_last_fetched_at(ticker, db)
 
-    is_new = stock.last_fetched_at is None
     return IngestResponse(
         ticker=ticker,
         name=stock.name,

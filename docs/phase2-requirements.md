@@ -312,7 +312,26 @@ These MUST be built before or alongside the frontend.
 
 ---
 
-## 5. Out of Scope (Phase 2)
+## 5. Design System (Phase 2.5 — Post-MVP Polish)
+
+After Phase 2 functional requirements are met, a design system layer is applied.
+**Detailed plan:** `.claude/plans/cozy-wandering-backus.md`
+
+**In-scope for Phase 2 polish:**
+- Financial semantic CSS variables (gain/loss/neutral) replacing hardcoded Tailwind classes
+- Typography token constants (`lib/typography.ts`)
+- Chart design system with `useChartColors()` hook (fixes OKLCH/HSL mismatch)
+- New components: ChangeIndicator, SectionHeading, ChartTooltip, ErrorState, Breadcrumbs
+- Responsive grid fixes (signal cards, risk/return, chart heights)
+- Dark mode tuning (Bloomberg-inspired), accessibility (WCAG AA)
+- Session 7 UI bug fixes
+
+**Deferred to post-Phase 2:**
+- Screener column preset tabs (TradingView-inspired)
+- MetricCard, Sparkline, SignalMeter components
+- DensityProvider, chart grid view, entry animations
+
+## 6. Out of Scope (Phase 2)
 
 - Portfolio tracking (Phase 3)
 - AI chatbot (Phase 4)
@@ -323,7 +342,7 @@ These MUST be built before or alongside the frontend.
 
 ---
 
-## 6. Implementation Order
+## 7. Implementation Order
 
 ### Backend Pre-requisites (build first)
 1. httpOnly cookie auth + logout endpoint

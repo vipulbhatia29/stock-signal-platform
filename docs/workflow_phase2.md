@@ -297,6 +297,55 @@ ORDER BY ss.ticker, ss.computed_at DESC
 
 ---
 
+### Task 2.8 — Design System + UI Polish (Phase 2.5)
+**Priority:** P1 (enhances UX, builds on Task 2.7)
+**Detailed plan:** `.claude/plans/cozy-wandering-backus.md`
+**Research:** TradingView, Robinhood, Bloomberg Terminal UI patterns analyzed
+
+**Pre-requisites (do first):**
+- Fix 5 Session 7 UI bugs (screener filter placeholders, watchlist score N/A, stock name, market indexes)
+- Commit all Session 6+7 work (establish baseline)
+
+**Phase A — Foundation:**
+- Add financial semantic CSS variables to `globals.css` (gain/loss/neutral, chart colors)
+- Register in `@theme inline` for Tailwind class generation
+- Fix OKLCH/HSL chart color mismatch (charts use `hsl()` but vars are OKLCH)
+- Create `lib/design-tokens.ts`, `lib/chart-theme.ts`, `lib/typography.ts`
+- Migrate `lib/signals.ts` hardcoded Tailwind classes to CSS variable classes
+- Build `useChartColors()` hook for theme-aware Recharts colors
+
+**Phase B — Core Components:**
+- `ChangeIndicator` — gain/loss with icon + sign + color (accessible)
+- `SectionHeading` — replaces 6+ inline heading patterns
+- `ChartTooltip` — reusable Recharts tooltip, refactor both charts
+- `ErrorState` — error display with retry button
+- `Breadcrumbs` — back navigation for stock detail page
+
+**Phase C — Responsive & Polish:**
+- Fix signal cards grid: `grid-cols-1 sm:grid-cols-2 xl:grid-cols-4`
+- Fix risk/return grid: `grid-cols-1 sm:grid-cols-3`
+- Responsive chart heights: `h-[250px] sm:h-[400px]`
+- Sticky screener table header with backdrop blur
+- aria-labels on ScoreBadge, SignalBadge
+
+**Phase D — Dark Mode & Theme:**
+- Bloomberg-inspired warm dark backgrounds (subtle blue undertone)
+- Chart color brightness increase for dark mode (L >= 0.70)
+- Sun/Moon toggle icons (replace text toggle)
+
+**Deferred (post-Phase 2):**
+- Screener column preset tabs (TradingView-inspired)
+- MetricCard, Sparkline, SignalMeter components
+- Entry animations, DensityProvider, chart grid view
+
+**Files to create:** `lib/design-tokens.ts`, `lib/chart-theme.ts`, `lib/typography.ts`, `components/change-indicator.tsx`, `components/section-heading.tsx`, `components/chart-tooltip.tsx`, `components/error-state.tsx`, `components/breadcrumbs.tsx`
+
+**Files to modify:** `globals.css`, `lib/signals.ts`, `price-chart.tsx`, `signal-history-chart.tsx`, `signal-cards.tsx`, `risk-return-card.tsx`, `screener-table.tsx`, `stock-header.tsx`, `score-badge.tsx`, `signal-badge.tsx`, `nav-bar.tsx`
+
+**Checkpoint:** `npm run build` + `npm run lint` pass, charts render in both themes, responsive at 375/768/1280px
+
+---
+
 ## STAGE 3: Testing + Integration
 
 ### Task 3.1 — Backend Test Completion
@@ -359,6 +408,8 @@ Task 1.6 (History) ──────┤                      │
                           │
                     Task 2.7 (Polish)
                           │
+                    Task 2.8 (Design System)
+                          │
               ┌───────────┼───────────┐
               │           │           │
         Task 3.1      Task 3.2    Task 3.3
@@ -383,11 +434,11 @@ Task 1.6 (History) ──────┤                      │
 
 | Session | Tasks | Focus |
 |---------|-------|-------|
-| Session 5 | 1.1, 1.2, 1.3 | Cookie auth + Index model + seed |
-| Session 6 | 1.4, 1.5, 1.6 | Ingestion + Bulk signals + History |
-| Session 7 | 2.1, 2.2, 2.3 | Next.js setup + Login + Auth guard |
-| Session 8 | 2.4, 2.5 | Dashboard + Screener pages |
-| Session 9 | 2.6, 2.7 | Stock detail + Polish |
+| Session 5 | 1.1-1.6 | All backend pre-reqs (DONE) |
+| Session 6 | 2.1-2.6 | Next.js setup + all pages (DONE) |
+| Session 7 | 2.7 (partial) | Build verification + bug fixes (DONE) |
+| Session 8 | — | Design system research + planning (DONE) |
+| Session 9 | 2.7 + 2.8 | UI bug fixes + design system implementation |
 | Session 10 | 3.1, 3.2, 3.3 | Testing + E2E verification |
 
 ---

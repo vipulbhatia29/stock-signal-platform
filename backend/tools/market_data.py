@@ -310,6 +310,38 @@ async def fetch_prices_delta(
     return df
 
 
+async def load_prices_df(ticker: str, db: AsyncSession) -> pd.DataFrame:
+    """Load all stored prices for a ticker from the database as a DataFrame.
+
+    Returns a DataFrame with the same column layout that compute_signals
+    expects (Open, High, Low, Close, Adj Close, Volume) indexed by date.
+
+    Args:
+        ticker: Stock symbol.
+        db: Async database session.
+
+    Returns:
+        DataFrame of historical prices, or empty DataFrame if none found.
+    """
+    result = await db.execute(
+        select(StockPrice).where(StockPrice.ticker == ticker.upper()).order_by(StockPrice.time)
+    )
+    rows = result.scalars().all()
+    if not rows:
+        return pd.DataFrame()
+
+    data = {
+        "Open": [float(r.open) for r in rows],
+        "High": [float(r.high) for r in rows],
+        "Low": [float(r.low) for r in rows],
+        "Close": [float(r.close) for r in rows],
+        "Adj Close": [float(r.adj_close) for r in rows],
+        "Volume": [int(r.volume) for r in rows],
+    }
+    index = pd.DatetimeIndex([r.time for r in rows])
+    return pd.DataFrame(data, index=index)
+
+
 async def update_last_fetched_at(ticker: str, db: AsyncSession) -> None:
     """Update the Stock.last_fetched_at timestamp after a successful fetch.
 

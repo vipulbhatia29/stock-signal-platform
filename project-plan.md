@@ -86,6 +86,51 @@ Includes backend pre-requisites (cookie auth, index model, new endpoints).
 
 ---
 
+## Phase 2.5: Design System + UI Polish (Week 4)
+
+### Goal
+Establish a cohesive design system informed by TradingView, Robinhood, and
+Bloomberg Terminal UI patterns. Fix responsive layout issues, standardize
+color/typography tokens, and add financial-specific components.
+
+**Detailed plan:** `.claude/plans/cozy-wandering-backus.md`
+
+### Deliverables — Phase 2 Polish (do now)
+1. **Color system overhaul** — financial semantic CSS variables (gain/loss/neutral),
+   fix OKLCH/HSL chart color mismatch, migrate hardcoded sentiment classes to CSS vars
+2. **Typography tokens** — `lib/typography.ts` with semantic constants (PAGE_TITLE,
+   SECTION_HEADING, METRIC_PRIMARY, TICKER, TABLE_NUM)
+3. **Chart design system** — `lib/chart-theme.ts` with `useChartColors()` hook,
+   standardized `ChartTooltip` component, crosshair cursor
+4. **New components:** `ChangeIndicator` (gain/loss with icon+sign+color),
+   `SectionHeading`, `ChartTooltip`, `ErrorState`, `Breadcrumbs`
+5. **Responsive fixes** — signal cards grid (1/2/4 cols), risk/return grid (1/3 cols),
+   responsive chart heights, sticky screener table header
+6. **Dark mode tuning** — Bloomberg-inspired warm backgrounds, chart color brightness,
+   Sun/Moon toggle icons
+7. **Accessibility** — aria-labels on badges, color+icon+sign for all gain/loss
+   indicators (WCAG AA compliance)
+8. **Fix Session 7 UI bugs** — screener filter placeholders, watchlist score N/A,
+   stock detail name, market indexes rendering
+
+### Deliverables — Deferred Enhancements (Phase 2.5+)
+9. Screener column preset tabs (TradingView-inspired: Overview | Signals | Performance)
+10. `MetricCard`, `Sparkline`, `SignalMeter` components
+11. Sentiment-tinted chart gradient (Robinhood-style)
+12. Entry animations + `prefers-reduced-motion`
+13. DensityProvider (compact/comfortable toggle)
+14. Chart grid view toggle for screener
+
+### Success Criteria
+- All colors defined as CSS variables, no hardcoded Tailwind sentiment classes
+- Charts render correctly in both light and dark mode (OKLCH fix verified)
+- Signal cards and risk/return grids responsive at 375px, 768px, 1280px
+- All gain/loss indicators use color + icon + sign (accessibility)
+- `npm run build` and `npm run lint` pass with zero errors
+- Session 7 UI bugs all resolved
+
+---
+
 ## Phase 3: Portfolio Tracker + Fundamentals (Weeks 5-6)
 
 ### Goal
