@@ -115,3 +115,99 @@ Track what was built in each Claude Code session.
 **Test count:** 23 (Session 1) → 104 (Session 2) = +81 new tests
 
 **Next:** Seed scripts (`scripts/sync_sp500.py`, `scripts/seed_prices.py`) to populate real stock data, then verify end-to-end: fetch AAPL prices → compute signals → get recommendation via API. After that, Phase 2 (Dashboard UI) or remaining Phase 1 items (Celery tasks for nightly computation).
+
+---
+
+## Session 3 — Seed Scripts + End-to-End Verification + Phase 1 Complete
+
+**Date:** 2026-03-07
+**Branch:** `feat/initial-scaffold`
+**What was done:**
+- [x] `scripts/sync_sp500.py` — S&P 500 universe sync:
+  - Scrapes current S&P 500 constituents from Wikipedia via `pandas.read_html()`
+  - Upserts into `stocks` table with sector/industry metadata
+  - Marks removed stocks as `is_in_universe=False`
+  - Supports `--dry-run` flag for preview
+  - Handles ticker format conversion (BRK.B → BRK-B for yfinance compatibility)
+- [x] `scripts/seed_prices.py` — Price backfill + signal computation:
+  - Fetches OHLCV data via yfinance for specified tickers or full universe
+  - Stores prices in TimescaleDB (idempotent upsert)
+  - Computes technical signals and stores snapshots
+  - Generates recommendations (computed but not persisted — recommendations are user-scoped)
+  - Supports `--tickers`, `--universe`, `--period`, `--dry-run` flags
+  - Rate-limited (0.5s between tickers) to avoid yfinance throttling
+  - Default tickers: AAPL, MSFT, GOOGL, AMZN, NVDA, META, TSLA, JPM, V, UNH
+- [x] Added `lxml` dependency for `pandas.read_html()`
+- [x] Bug fix: `UserRole` enum in `backend/models/user.py` — SQLAlchemy was sending
+  uppercase enum names (`"USER"`) instead of lowercase values (`"user"`) to Postgres.
+  Fixed with `values_callable=lambda e: [m.value for m in e]`
+- [x] End-to-end verification with real data:
+  - AAPL: 501 price rows, composite score 4.0, AVOID (MEDIUM confidence)
+  - MSFT: 501 price rows, composite score 4.0, AVOID (MEDIUM confidence)
+  - API verified: register (201), login (200), signals (200), prices (200), search (200)
+  - Idempotent upsert confirmed (re-run skipped 501 duplicates per ticker)
+- [x] `tests/unit/test_sync_sp500.py` — 5 tests:
+  - DataFrame structure, whitespace stripping, dot-to-dash conversion, exchange is None, all tickers present
+- [x] `tests/unit/test_seed_prices.py` — 5 tests:
+  - Successful seed, error handling, signal computation, recommendation generation, default tickers
+- [x] All **114 tests pass** (`uv run pytest tests/ -v`)
+
+**Key decisions:**
+- Recommendations are NOT persisted by seed script (they require `user_id` FK — generated per-user via API)
+- Seed script computes recommendations in-memory for logging/verification only
+- `scripts/` is a proper Python package (has `__init__.py`) for `python -m scripts.xxx` usage
+
+**Test count:** 104 (Session 2) → 114 (Session 3) = +10 new tests
+
+**Phase 1 Status:** COMPLETE — all deliverables from project-plan.md Phase 1 are done.
+
+**Next:** Phase 2 — Dashboard + Screener UI (Next.js, login page, stock cards with sentiment badges, screener table with filters, stock detail page with charts). See `project-plan.md` Phase 2 for full deliverable list.
+
+---
+
+## Session 4 — Phase 2 Requirements & Documentation Enhancement
+
+**Date:** 2026-03-07
+**Branch:** `feat/initial-scaffold`
+**What was done:**
+- [x] Created `docs/phase2-requirements.md` — comprehensive Phase 2 requirements spec:
+  - 5 backend pre-requisites (httpOnly cookie auth, index membership, on-demand ingestion,
+    bulk signals endpoint, signal history endpoint)
+  - 7 frontend page specs with wireframe layouts (login, register, dashboard, screener,
+    stock detail, nav, auth guard)
+  - Acceptance criteria (functional, non-functional, testing)
+  - Implementation order (backend first, then frontend)
+- [x] Enhanced `CLAUDE.md` with 9 new sections:
+  - Session Start protocol, Anti-Patterns tables (Python/TS/Architecture),
+    Error Handling & Logging standards, Security section with critical files list,
+    Troubleshooting table (consolidated gotchas), Mock & Patch Guidelines,
+    Documentation Triggers table, TypeScript/Frontend rules, Dependency management rules
+- [x] Fixed `.claude/rules/python-backend.md` — changed "structlog" to `logging.getLogger(__name__)`
+  (matches actual codebase; structlog is in deps but never imported)
+- [x] Updated `project-plan.md` — Phase 2 now includes backend pre-requisites
+  (cookie auth, index model, on-demand ingestion, bulk signals, signal history)
+- [x] Updated `docs/FSD.md` — added FR-1.5 (httpOnly cookies), FR-2.4 (index management),
+  FR-2.5 (on-demand ingestion), FR-7.5 (bulk signals), FR-7.6 (signal history);
+  updated Feature × Phase Matrix; fixed structlog references
+- [x] Updated `docs/TDD.md` — rewrote JWT flow for cookie auth (Section 9.1),
+  added Sections 3.7-3.10 (index, ingestion, bulk signals, signal history endpoints);
+  fixed structlog references
+- [x] Updated `docs/data-architecture.md` — added StockIndex + StockIndexMembership tables
+  to Section 3.1, updated Phase Mapping (Phase 2 row), updated query patterns and
+  data seeding strategy
+
+**Key decisions:**
+- httpOnly cookies over localStorage (security — XSS protection)
+- Stock indexes as separate table with membership (not boolean flags) — supports
+  multi-index membership (AAPL in S&P 500 + NASDAQ-100 + Dow 30)
+- On-demand ingestion with delta fetch (not full re-fetch for existing tickers)
+- Server-side pagination for screener (not client-side — 500 stocks too large)
+- stdlib `logging` over structlog for now (structlog migration deferred to production)
+- Dark/light theme toggle; mobile layouts deferred
+
+**Test count:** 114 (unchanged — no code changes, only documentation)
+
+**Next:** Begin Phase 2 implementation. Start with backend pre-requisites (cookie auth →
+index model + migration → ingestion endpoint → bulk signals → signal history), then
+scaffold Next.js frontend and build pages. See `docs/phase2-requirements.md` Section 6
+for full implementation order.

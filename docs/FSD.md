@@ -58,6 +58,13 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
   position/sector caps, stop-loss defaults
 - Preferences used by recommendation engine, alert system, and background jobs
 
+**FR-1.5: httpOnly Cookie Authentication (Phase 2)**
+- Login and refresh endpoints set JWT tokens as httpOnly, Secure, SameSite=Lax cookies
+- Frontend cannot access tokens via JavaScript (XSS protection)
+- Server reads tokens from cookies OR `Authorization: Bearer` header (dual-mode)
+- `POST /api/v1/auth/logout` clears cookies (Set-Cookie with Max-Age=0)
+- CORS must set `allow_credentials=True` with explicit `allow_origins` (no wildcard)
+
 ### FR-2: Stock Universe & Watchlist
 
 **FR-2.1: Stock Universe**
@@ -75,6 +82,23 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 - Search stocks by ticker or name (prefix match)
 - If ticker not in database, attempt to add via yfinance lookup
 - Return: ticker, name, exchange, sector, industry
+
+**FR-2.4: Stock Index Management (Phase 2)**
+- System maintains multiple stock indexes: S&P 500, NASDAQ-100, Dow 30
+- Each index is a `StockIndex` record with name, description, last sync timestamp
+- Stocks belong to indexes via `StockIndexMembership` (many-to-many with dates)
+- Membership tracks `added_date` and `removed_date` (null = still a member)
+- Dashboard groups stocks by index; screener can filter by index
+- Replaces the `is_in_universe` boolean approach with proper index membership
+- Seed scripts sync membership from public sources (Wikipedia, etc.)
+
+**FR-2.5: On-Demand Data Ingestion (Phase 2)**
+- When user searches for a ticker not yet in the system, UI can trigger ingestion
+- `POST /api/v1/stocks/{ticker}/ingest` fetches 10Y of OHLCV data from yfinance
+- If ticker already has data: delta fetch only (from `last_fetched_at` to today)
+- After price fetch: compute signals and store snapshot
+- Upsert logic (ON CONFLICT DO NOTHING) ensures idempotent re-runs
+- Rate-limited aggressively (5 requests/minute) — yfinance calls are expensive
 
 ### FR-3: Signal Engine
 
@@ -266,10 +290,12 @@ Users can override weights via UserPreference.composite_weights.
 ### FR-7: Screener (Phase 2)
 
 **FR-7.1: Stock Universe**
-- Operates on all stocks where is_in_universe=True (S&P 500)
+- Operates on stocks belonging to a selected index (S&P 500, NASDAQ-100, Dow 30)
 - Uses pre-computed signals (not live computation)
+- Default view: all indexes combined
 
 **FR-7.2: Filtering**
+- Index: S&P 500 / NASDAQ-100 / Dow 30 / All
 - RSI state: OVERSOLD / NEUTRAL / OVERBOUGHT
 - MACD state: BULLISH / BEARISH
 - Sector: multi-select from GICS sectors
@@ -279,11 +305,25 @@ Users can override weights via UserPreference.composite_weights.
 **FR-7.3: Sorting**
 - Default: composite_score DESC
 - Sortable by any visible column
-- Client-side sorting (data pre-loaded)
+- Server-side sorting via query params
 
 **FR-7.4: Display**
 - Color coding: ≥8 green, 5-7 amber, <5 red
 - Click row → navigate to stock detail page
+- Server-side pagination (50 rows per page, max 200)
+- URL state: filters + sort + page reflected in query params (shareable)
+
+**FR-7.5: Bulk Signals Endpoint**
+- `GET /api/v1/stocks/signals/bulk` returns latest signal snapshot per stock
+- Supports index, RSI, MACD, sector, and score range filters via query params
+- Sortable by any numeric field (composite_score, sharpe, annual_return, etc.)
+- Paginated response with total count for UI pagination controls
+- Performance target: 500 stocks in <3 seconds
+
+**FR-7.6: Signal History**
+- `GET /api/v1/stocks/{ticker}/signals/history` returns chronological snapshots
+- Default: last 90 days; configurable up to 365 days
+- Used by stock detail page to render signal trend charts (composite score, RSI over time)
 
 ### FR-8: AI Chatbot (Phase 4)
 
@@ -435,8 +475,9 @@ After 3+ months of data accumulation, the following metrics become available:
 - All API endpoints require JWT (except /auth/login, /auth/register, /health)
 - Password hashing: bcrypt with cost factor 12
 - JWT tokens: RS256 or HS256, short-lived access (60 min), rotating refresh (7 days)
-- Rate limiting: 60 requests/minute per user (configurable)
-- CORS: whitelist frontend origin only
+- JWT storage: httpOnly, Secure, SameSite=Lax cookies (Phase 2+)
+- Rate limiting: 60 requests/minute per user (configurable); 5/min for data ingestion
+- CORS: whitelist frontend origin only, `allow_credentials=True`
 - Secrets: environment variables only, never in code or git
 - HTTPS: enforced in production via reverse proxy
 - SQL injection: prevented by SQLAlchemy parameterized queries
@@ -452,7 +493,7 @@ After 3+ months of data accumulation, the following metrics become available:
 
 ### NFR-6: Observability
 
-- Structured logging: structlog with JSON output
+- Structured logging: `logging.getLogger(__name__)` (stdlib; structlog for production later)
 - Request tracing: correlation ID on every API request
 - Background job monitoring: TaskLog table + dashboard widget
 - LLM usage tracking: tokens_used and model_used on every ChatMessage
@@ -514,9 +555,9 @@ After 3+ months of data accumulation, the following metrics become available:
 
 | Feature | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 |
 |---------|---------|---------|---------|---------|---------|---------|
-| Auth + JWT refresh | ✓ | | | | | |
+| Auth + JWT refresh | ✓ | httpOnly cookies | | | | |
 | User preferences | ✓ | | Enhanced | | Enhanced | |
-| Stock universe + watchlist | ✓ | | | | | |
+| Stock universe + watchlist | ✓ | Index membership | | | | |
 | Technical signals | ✓ | | | | | |
 | Composite score (tech only) | ✓ | | Upgraded 50/50 | | | |
 | Basic recommendations | ✓ | | Portfolio-aware | | Macro-aware | |

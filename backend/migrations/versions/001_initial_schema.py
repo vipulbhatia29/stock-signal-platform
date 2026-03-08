@@ -8,9 +8,8 @@ Create Date: 2026-03-01
 from typing import Sequence, Union
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import JSONB
-
 from alembic import op
+from sqlalchemy.dialects.postgresql import JSONB
 
 revision: str = "001_initial"
 down_revision: Union[str, None] = None
@@ -62,19 +61,13 @@ def upgrade() -> None:
             unique=True,
             nullable=False,
         ),
-        sa.Column(
-            "timezone", sa.String(50), nullable=False, server_default="America/New_York"
-        ),
+        sa.Column("timezone", sa.String(50), nullable=False, server_default="America/New_York"),
         sa.Column("default_stop_loss_pct", sa.Float(), nullable=False, server_default="20.0"),
         sa.Column("max_position_pct", sa.Float(), nullable=False, server_default="5.0"),
         sa.Column("max_sector_pct", sa.Float(), nullable=False, server_default="30.0"),
         sa.Column("min_cash_reserve_pct", sa.Float(), nullable=False, server_default="10.0"),
-        sa.Column(
-            "notify_telegram", sa.Boolean(), nullable=False, server_default=sa.text("false")
-        ),
-        sa.Column(
-            "notify_email", sa.Boolean(), nullable=False, server_default=sa.text("false")
-        ),
+        sa.Column("notify_telegram", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("notify_email", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("quiet_hours_start", sa.Time(), nullable=True),
         sa.Column("quiet_hours_end", sa.Time(), nullable=True),
         sa.Column("composite_weights", JSONB, nullable=True),
@@ -95,9 +88,7 @@ def upgrade() -> None:
         sa.Column("exchange", sa.String(20), nullable=True),
         sa.Column("sector", sa.String(100), nullable=True),
         sa.Column("industry", sa.String(255), nullable=True),
-        sa.Column(
-            "is_in_universe", sa.Boolean(), nullable=False, server_default=sa.text("false")
-        ),
+        sa.Column("is_in_universe", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("last_fetched_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
@@ -216,12 +207,8 @@ def upgrade() -> None:
         sa.Column("suggested_amount_usd", sa.Float(), nullable=True),
         sa.Column("macro_regime", sa.String(20), nullable=True),
         sa.Column("reasoning", JSONB, nullable=True),
-        sa.Column(
-            "is_actionable", sa.Boolean(), nullable=False, server_default=sa.text("false")
-        ),
-        sa.Column(
-            "acknowledged", sa.Boolean(), nullable=False, server_default=sa.text("false")
-        ),
+        sa.Column("is_actionable", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("acknowledged", sa.Boolean(), nullable=False, server_default=sa.text("false")),
     )
 
     # --- Create TimescaleDB hypertables ---

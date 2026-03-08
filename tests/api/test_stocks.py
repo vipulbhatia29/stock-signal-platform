@@ -16,7 +16,6 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncSession,
@@ -29,13 +28,12 @@ from tests.conftest import (
     SignalSnapshotFactory,
     StockFactory,
     StockPriceFactory,
-    WatchlistFactory,
 )
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: insert test data into the database
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def _insert_stock(db_url: str, **kwargs) -> None:
     """Insert a stock record into the test database.
@@ -52,7 +50,9 @@ async def _insert_stock(db_url: str, **kwargs) -> None:
     await engine.dispose()
 
 
-async def _insert_stock_with_signals(db_url: str, ticker: str, user_id: uuid.UUID | None = None) -> None:
+async def _insert_stock_with_signals(
+    db_url: str, ticker: str, user_id: uuid.UUID | None = None
+) -> None:
     """Insert a stock with price data, signals, and optionally a recommendation."""
     engine = create_async_engine(db_url, echo=False)
     factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
@@ -95,6 +95,7 @@ async def _insert_stock_with_signals(db_url: str, ticker: str, user_id: uuid.UUI
 # ═════════════════════════════════════════════════════════════════════════════
 # Stock Search Tests
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestStockSearch:
     """Tests for GET /api/v1/stocks/search."""
@@ -148,6 +149,7 @@ class TestStockSearch:
 # Price History Tests
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestPriceHistory:
     """Tests for GET /api/v1/stocks/{ticker}/prices."""
 
@@ -164,7 +166,9 @@ class TestPriceHistory:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_prices_returns_data(self, authenticated_client: AsyncClient, db_url: str) -> None:
+    async def test_prices_returns_data(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
         """Should return price data for a valid ticker."""
         await _insert_stock_with_signals(db_url, "AAPL")
 
@@ -182,6 +186,7 @@ class TestPriceHistory:
 # Signal Tests
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestSignals:
     """Tests for GET /api/v1/stocks/{ticker}/signals."""
 
@@ -198,7 +203,9 @@ class TestSignals:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_signals_not_found_no_snapshot(self, authenticated_client: AsyncClient, db_url: str) -> None:
+    async def test_signals_not_found_no_snapshot(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
         """Should return 404 when stock exists but has no signal data."""
         await _insert_stock(db_url, ticker="MSFT", name="Microsoft Corp")
 
@@ -206,7 +213,9 @@ class TestSignals:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_signals_returns_full_response(self, authenticated_client: AsyncClient, db_url: str) -> None:
+    async def test_signals_returns_full_response(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
         """Should return nested signal response with all indicator groups."""
         await _insert_stock_with_signals(db_url, "AAPL")
 
@@ -258,6 +267,7 @@ class TestSignals:
 # Watchlist Tests
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestWatchlist:
     """Tests for watchlist CRUD endpoints."""
 
@@ -293,7 +303,9 @@ class TestWatchlist:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_add_to_watchlist_duplicate(self, authenticated_client: AsyncClient, db_url: str) -> None:
+    async def test_add_to_watchlist_duplicate(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
         """Should return 409 when adding a ticker that's already in watchlist."""
         await _insert_stock(db_url, ticker="AAPL", name="Apple Inc")
 
@@ -331,7 +343,9 @@ class TestWatchlist:
         assert data[0]["ticker"] == "AAPL"
 
     @pytest.mark.asyncio
-    async def test_remove_from_watchlist(self, authenticated_client: AsyncClient, db_url: str) -> None:
+    async def test_remove_from_watchlist(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
         """Should remove a ticker from the user's watchlist."""
         await _insert_stock(db_url, ticker="AAPL", name="Apple Inc")
 
@@ -365,6 +379,7 @@ class TestWatchlist:
 # Recommendation Tests
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestRecommendations:
     """Tests for GET /api/v1/stocks/recommendations."""
 
@@ -382,7 +397,9 @@ class TestRecommendations:
         assert response.json() == []
 
     @pytest.mark.asyncio
-    async def test_recommendations_returns_data(self, authenticated_client: AsyncClient, db_url: str) -> None:
+    async def test_recommendations_returns_data(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
         """Should return recent recommendations for the user."""
         user = authenticated_client._test_user  # type: ignore[attr-defined]
         await _insert_stock_with_signals(db_url, "AAPL", user_id=user.id)
@@ -398,7 +415,9 @@ class TestRecommendations:
         assert "composite_score" in data[0]
 
     @pytest.mark.asyncio
-    async def test_recommendations_filter_by_action(self, authenticated_client: AsyncClient, db_url: str) -> None:
+    async def test_recommendations_filter_by_action(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
         """Should filter recommendations by action parameter."""
         user = authenticated_client._test_user  # type: ignore[attr-defined]
         await _insert_stock_with_signals(db_url, "AAPL", user_id=user.id)
@@ -410,7 +429,9 @@ class TestRecommendations:
         assert all(r["action"] == "WATCH" for r in data)
 
     @pytest.mark.asyncio
-    async def test_recommendations_filter_no_match(self, authenticated_client: AsyncClient, db_url: str) -> None:
+    async def test_recommendations_filter_no_match(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
         """Filtering for an action that doesn't match should return empty."""
         user = authenticated_client._test_user  # type: ignore[attr-defined]
         await _insert_stock_with_signals(db_url, "AAPL", user_id=user.id)
@@ -421,7 +442,9 @@ class TestRecommendations:
         assert response.json() == []
 
     @pytest.mark.asyncio
-    async def test_stale_recommendations_excluded(self, authenticated_client: AsyncClient, db_url: str) -> None:
+    async def test_stale_recommendations_excluded(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
         """Recommendations older than 24 hours should NOT be returned."""
         user = authenticated_client._test_user  # type: ignore[attr-defined]
 

@@ -42,8 +42,8 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # Score thresholds — these define the boundaries for each action
 # ─────────────────────────────────────────────────────────────────────────────
-BUY_THRESHOLD = 8.0       # Score >= 8 → BUY
-WATCH_THRESHOLD = 5.0     # Score >= 5 but < 8 → WATCH
+BUY_THRESHOLD = 8.0  # Score >= 8 → BUY
+WATCH_THRESHOLD = 5.0  # Score >= 5 but < 8 → WATCH
 # Below 5 → AVOID
 
 
@@ -59,6 +59,7 @@ class Action:
     HOLD:  Currently unused in Phase 1 (needs portfolio context in Phase 3).
     SELL:  Currently unused in Phase 1 (needs portfolio context in Phase 3).
     """
+
     BUY = "BUY"
     WATCH = "WATCH"
     AVOID = "AVOID"
@@ -73,6 +74,7 @@ class Confidence:
     MEDIUM: Some agreement but not overwhelming.
     LOW:    Marginal signals, borderline scores.
     """
+
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
     LOW = "LOW"
@@ -89,13 +91,14 @@ class RecommendationResult:
     reasoning behind it. The reasoning dict is stored as JSONB in the
     database so we can inspect why each recommendation was made.
     """
+
     ticker: str
-    action: str                    # BUY, WATCH, or AVOID
-    confidence: str                # HIGH, MEDIUM, or LOW
-    composite_score: float         # The score that drove the decision
-    current_price: float           # Stock price at time of recommendation
-    reasoning: dict                # Human-readable explanation of why
-    is_actionable: bool            # True if the user should act on this
+    action: str  # BUY, WATCH, or AVOID
+    confidence: str  # HIGH, MEDIUM, or LOW
+    composite_score: float  # The score that drove the decision
+    current_price: float  # Stock price at time of recommendation
+    reasoning: dict  # Human-readable explanation of why
+    is_actionable: bool  # True if the user should act on this
 
 
 def generate_recommendation(
@@ -178,8 +181,7 @@ def generate_recommendation(
         action = Action.AVOID
         confidence = Confidence.HIGH if score < 2.0 else Confidence.MEDIUM
         reasoning["summary"] = (
-            f"Weak signals — composite score {score}/10. "
-            "Technical indicators are mostly bearish."
+            f"Weak signals — composite score {score}/10. Technical indicators are mostly bearish."
         )
         is_actionable = False
 
@@ -302,6 +304,7 @@ def _sma_interpretation(label: str | None) -> str:
 # Database persistence
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 async def store_recommendation(
     result: RecommendationResult,
     user_id: str,
@@ -354,5 +357,8 @@ async def store_recommendation(
 
     logger.info(
         "Stored recommendation for %s: %s (confidence=%s, score=%.1f)",
-        result.ticker, result.action, result.confidence, result.composite_score,
+        result.ticker,
+        result.action,
+        result.confidence,
+        result.composite_score,
     )

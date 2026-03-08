@@ -10,20 +10,17 @@ Test strategy:
   confidence level, and reasoning.
 """
 
-import pytest
-
 from backend.tools.recommendations import (
     Action,
     Confidence,
-    RecommendationResult,
     generate_recommendation,
 )
 from backend.tools.signals import SignalResult
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: create a SignalResult with a specific composite score
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _make_signal(
     ticker: str = "AAPL",
@@ -65,13 +62,20 @@ def _make_signal(
         volatility=volatility,
         sharpe_ratio=sharpe_ratio,
         composite_score=composite_score,
-        composite_weights={"rsi": 1.0, "macd": 1.5, "sma": 1.5, "sharpe": 0.5, "total": composite_score or 0},
+        composite_weights={
+            "rsi": 1.0,
+            "macd": 1.5,
+            "sma": 1.5,
+            "sharpe": 0.5,
+            "total": composite_score or 0,
+        },
     )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
 # BUY recommendation tests
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestBuyRecommendation:
     """Tests for when the engine should recommend BUY."""
@@ -116,6 +120,7 @@ class TestBuyRecommendation:
 # WATCH recommendation tests
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestWatchRecommendation:
     """Tests for when the engine should recommend WATCH."""
 
@@ -154,6 +159,7 @@ class TestWatchRecommendation:
 # ═════════════════════════════════════════════════════════════════════════════
 # AVOID recommendation tests
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestAvoidRecommendation:
     """Tests for when the engine should recommend AVOID."""
@@ -194,6 +200,7 @@ class TestAvoidRecommendation:
 # ═════════════════════════════════════════════════════════════════════════════
 # Edge cases and missing data
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestEdgeCases:
     """Tests for edge cases and missing data."""
@@ -254,6 +261,7 @@ class TestEdgeCases:
 # ═════════════════════════════════════════════════════════════════════════════
 # Reasoning quality tests
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestReasoning:
     """Tests for the quality and structure of recommendation reasoning."""

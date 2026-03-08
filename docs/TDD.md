@@ -226,19 +226,60 @@ POST /api/v1/chat/stream
     { type: "done", session_id: uuid, tokens_used: int }
 ```
 
-### 3.7 Screener Endpoint (Phase 2)
+### 3.7 Index Endpoints (Phase 2)
 
 ```
-GET /api/v1/screener?rsi={OVERSOLD|NEUTRAL|OVERBOUGHT}
-                    &macd={BULLISH|BEARISH}
-                    &sector={Technology|Healthcare|...}
-                    &min_score={0-10}&max_score={0-10}
-                    &min_sharpe={float}
-                    &sort_by={composite_score|sharpe|annual_return}
-                    &sort_dir={asc|desc}
-  Response: [{ ticker, name, sector, rsi_signal, macd_signal,
-               sma_signal, annual_return, volatility, sharpe,
-               composite_score }]
+GET /api/v1/indexes
+  Response: [{ id, name, description, stock_count, last_synced_at }]
+  Auth:     Required
+
+GET /api/v1/indexes/{index_id}/stocks
+  Response: [{ ticker, name, sector, latest_price, composite_score,
+               signal_summary, last_updated }]
+  Auth:     Required
+```
+
+### 3.8 Data Ingestion Endpoint (Phase 2)
+
+```
+POST /api/v1/stocks/{ticker}/ingest
+  Response: { ticker, name, sector, prices_fetched, signals_computed,
+              composite_score }
+  Auth:     Required
+  Rate:     5 requests/minute (expensive: yfinance + signal computation)
+  Behavior: If ticker has no data → full 10Y fetch
+            If ticker has data → delta fetch from last_fetched_at
+            Always recomputes signals after fetch
+  Errors:   404 (invalid ticker on yfinance), 429 (rate limit)
+```
+
+### 3.9 Bulk Signals Endpoint (Phase 2)
+
+```
+GET /api/v1/stocks/signals/bulk?index_id={uuid}
+                               &rsi={OVERSOLD|NEUTRAL|OVERBOUGHT}
+                               &macd={BULLISH|BEARISH}
+                               &sector={Technology|Healthcare|...}
+                               &score_min={0-10}&score_max={0-10}
+                               &sort_by={composite_score|sharpe|annual_return}
+                               &sort_order={asc|desc}
+                               &limit={50}&offset={0}
+  Response: { total, items: [{ ticker, name, sector, rsi_value, rsi_signal,
+               macd_signal, sma_signal, bollinger_signal, annual_return,
+               volatility, sharpe, composite_score, computed_at, is_stale }] }
+  Auth:     Required
+  Query:    DISTINCT ON (ticker) ORDER BY computed_at DESC
+  Perf:     <3 seconds for 500 stocks
+```
+
+### 3.10 Signal History Endpoint (Phase 2)
+
+```
+GET /api/v1/stocks/{ticker}/signals/history?days={90}&limit={100}
+  Response: [{ computed_at, composite_score, rsi_value, rsi_signal,
+               macd_value, macd_signal, sma_signal, bollinger_signal }]
+  Auth:     Required
+  Default:  90 days, max 365 days
 ```
 
 ---
@@ -597,18 +638,25 @@ async def send_telegram(user_id: uuid, message: str):
 
 ## 9. Security Design
 
-### 9.1 JWT Token Flow
+### 9.1 JWT Token Flow (httpOnly Cookies)
 
 ```
 1. Client sends POST /auth/login with credentials
-2. Server validates, returns { access_token (60 min), refresh_token (7 day) }
-3. Client stores tokens (httpOnly cookie or secure localStorage)
-4. Client sends access_token in Authorization: Bearer header
+2. Server validates and sets httpOnly cookies in response:
+   Set-Cookie: access_token=<jwt>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=3600
+   Set-Cookie: refresh_token=<jwt>; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth; Max-Age=604800
+3. Browser automatically includes cookies on all same-origin requests
+4. Server reads token from cookie (or Authorization header — dual-mode)
 5. When access_token expires → 401 response
-6. Client sends POST /auth/refresh with refresh_token
-7. Server rotates: old refresh_token invalidated, new pair issued
-8. If refresh_token expired → redirect to login
+6. Frontend middleware automatically calls POST /auth/refresh
+7. Server reads refresh_token from cookie, validates, sets new cookie pair
+8. POST /auth/logout clears cookies (Set-Cookie with Max-Age=0)
+9. If refresh_token expired → redirect to /login
 ```
+
+**Dual-mode auth dependency**: `get_current_user` checks `Authorization: Bearer`
+header first (for API clients, scripts). If absent, reads `access_token` cookie.
+This allows both browser (cookie) and programmatic (header) access.
 
 ### 9.2 Rate Limiting Design
 
@@ -678,9 +726,9 @@ GitHub Actions:
 
 ```python
 # Structured logging throughout
-import structlog
+import logging
 
-logger = structlog.get_logger()
+logger = logging.getLogger(__name__)
 
 @router.get("/stocks/{ticker}/signals")
 async def get_signals(ticker: str, request: Request):
@@ -690,7 +738,7 @@ async def get_signals(ticker: str, request: Request):
                 duration_ms=elapsed)
 ```
 
-- **Logs:** structlog JSON → stdout → Azure Monitor (production)
+- **Logs:** stdlib `logging` → stdout → Azure Monitor (production); structlog migration for later
 - **Metrics:** OpenTelemetry instrumentation on FastAPI + Celery
 - **Traces:** Correlation ID on every request (X-Request-ID header)
 - **Alerts:** Azure Monitor alerts on error rate > 5%, P95 latency > 5s

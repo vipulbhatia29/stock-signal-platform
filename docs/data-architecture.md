@@ -77,6 +77,19 @@ compression on time-series data older than 30 days.
 │ updated_at          │      └─────────────────────────┘
 └─────────────────────┘
                              ┌─────────────────────────┐
+┌─────────────────────┐      │ StockIndexMembership     │
+│ StockIndex          │      │─────────────────────────│
+│─────────────────────│      │ id (PK, UUID)           │
+│ id (PK, UUID)       │──┐   │ index_id (FK→StockIndex)│
+│ name (unique)       │  └──>│ ticker (FK → Stock)     │
+│ description (TEXT)  │      │ added_date (DATE)       │
+│ source_url (VARCHAR)│      │ removed_date(DATE,null) │ ← null = current member
+│ last_synced_at(TSTZ)│      │ created_at              │
+│ created_at          │      └─────────────────────────┘
+└─────────────────────┘      Unique: (index_id, ticker, added_date)
+Names: "S&P 500",           Index: (index_id, removed_date)
+  "NASDAQ-100", "Dow 30"      for current-members query
+                             ┌─────────────────────────┐
 ┌─────────────────────┐      │ Portfolio               │
 │ CorporateAction     │      │─────────────────────────│
 │─────────────────────│      │ id (PK, UUID)           │
@@ -644,6 +657,8 @@ SELECT add_continuous_aggregate_policy('stock_prices_weekly',
 | User's portfolio positions | Transaction | `(portfolio_id, ticker, transacted_at)` |
 | Failed background jobs | TaskLog | `(status, created_at DESC) WHERE status = 'FAILED'` |
 | Stock universe for screener | Stock | `(is_in_universe) WHERE is_in_universe AND is_active` |
+| Stocks in an index | StockIndexMembership | `(index_id, removed_date) WHERE removed_date IS NULL` |
+| Bulk signals for screener | SignalSnapshot | `DISTINCT ON (ticker) ORDER BY computed_at DESC` |
 | Unevaluated recommendations | RecommendationSnapshot | `(generated_at) WHERE NOT EXISTS matching outcome for horizon` |
 | Recommendation hit rate by action | RecommendationOutcome | `(action, action_was_correct)` — aggregate |
 | Recommendation alpha by score | RecommendationOutcome | `(composite_score_at_rec, alpha)` — for calibration |
@@ -669,6 +684,12 @@ CREATE INDEX idx_forecasts_unevaluated ON forecast_results
    - Script: `scripts/sync_sp500.py` — fetches current S&P 500 list from
      Wikipedia or a public API, upserts into Stock table
    - Run quarterly to keep universe current
+
+### Phase 2 (index membership):
+1a. Create `StockIndex` records for S&P 500, NASDAQ-100, Dow 30
+1b. Populate `StockIndexMembership` to link stocks to their indexes
+   - Script: `scripts/sync_indexes.py` — syncs all three indexes
+   - Each stock can belong to multiple indexes (e.g., AAPL in all three)
 2. Pre-populate watchlist with ~50 starter stocks across sectors:
    - **Benchmark: SPY** (S&P 500 ETF — ALWAYS included, required for
      recommendation outcome evaluation and alpha calculations)
@@ -719,6 +740,7 @@ All scripts are:
 | Phase | New Tables | New Hypertables |
 |-------|-----------|-----------------|
 | 1 | User, UserPreference, Stock, Watchlist | StockPrice, SignalSnapshot |
+| 2 | StockIndex, StockIndexMembership | — |
 | 3 | Portfolio, Transaction, Position, DividendPayment, CorporateAction, AlertRule, AlertLog | FundamentalSnapshot, RecommendationSnapshot, PortfolioSnapshot |
 | 4 | ChatSession, ChatMessage | — |
 | 5 | ModelVersion, TaskLog | ForecastResult, MacroSnapshot, RecommendationOutcome |

@@ -40,24 +40,49 @@ Fetch stock data, compute technical signals, store in database, expose via API.
 
 ### Goal
 Visual dashboard showing watchlist, signals, and a stock screener.
+Includes backend pre-requisites (cookie auth, index model, new endpoints).
 
-### Deliverables
-1. **Next.js app** with App Router, Tailwind, shadcn/ui
-2. **Login page** with JWT auth flow
-3. **Dashboard page** showing stock cards with:
-   - Ticker, price, sentiment badge (bullish/neutral/bearish)
-   - 10Y return, last updated date
-   - Sector filter toggle (Technology, Healthcare, Financials, etc.)
-4. **Screener page** with filterable table:
-   - Columns: Ticker, RSI Signal, MACD, vs SMA 200, Ann. Return, Volatility, Sharpe
-   - Filter by: RSI state (oversold/neutral/overbought), Sector, Composite Score range
-   - Sort by any column
-5. **Stock detail page** with signal history chart (Recharts)
-6. **Auth guard** — redirect to login if no valid token
-7. **API integration** via TanStack Query + centralized fetch wrapper
+### Deliverables — Backend Pre-requisites
+1. **httpOnly cookie auth** — login/refresh set Secure httpOnly cookies; dual-mode
+   auth dependency (cookie + header); `POST /auth/logout` clears cookies
+2. **Stock index membership model** — `StockIndex` + `StockIndexMembership` tables;
+   Alembic migration; `GET /api/v1/indexes`, `GET /api/v1/indexes/{id}/stocks` endpoints;
+   seed scripts for S&P 500, NASDAQ-100, Dow 30
+3. **On-demand data ingestion** — `POST /api/v1/stocks/{ticker}/ingest` endpoint;
+   delta fetch (only new data since `last_fetched_at`); signal computation after fetch
+4. **Bulk signals endpoint** — `GET /api/v1/stocks/signals/bulk` with index filter,
+   pagination, RSI/MACD/sector/score filters, sorting; `DISTINCT ON (ticker)` query
+5. **Signal history endpoint** — `GET /api/v1/stocks/{ticker}/signals/history`
+   returning chronological snapshots (default 90 days, max 365)
+
+### Deliverables — Frontend
+6. **Next.js app** with App Router, Tailwind, shadcn/ui, dark/light theme toggle
+7. **Login + Register pages** with cookie-based JWT auth flow
+8. **Dashboard page** showing:
+   - Major index cards (S&P 500, NASDAQ-100, Dow 30) — click navigates to screener
+   - User's watchlist as stock cards (ticker, price, sentiment badge, return, last updated)
+   - Inline search bar to add tickers to watchlist (triggers ingestion if needed)
+   - Sector filter toggle
+9. **Screener page** with filterable, sortable table:
+   - Columns: Ticker, RSI Signal, MACD, vs SMA 200, Ann. Return, Volatility, Sharpe, Score
+   - Filters: Index, RSI state, MACD state, Sector, Composite Score range
+   - Row color-coding: green (≥8), yellow (5-7), red (<5)
+   - Server-side pagination, URL state for shareable filters
+10. **Stock detail page** with:
+    - Price chart (Recharts) with 1M/3M/6M/1Y/5Y timeframe selector
+    - Signal breakdown cards (RSI, MACD, SMA, Bollinger)
+    - Signal history chart (composite score + RSI over time)
+    - Risk & return section (annualized return, volatility, Sharpe)
+11. **Auth guard** — redirect to login if no valid cookie; auto-refresh on 401
+12. **API integration** via TanStack Query + centralized fetch wrapper (cookie auth)
 
 ### Success Criteria
-Can log in, see watchlist dashboard, filter screener, click into stock detail.
+- Can register, log in (httpOnly cookies), and be redirected to dashboard
+- Dashboard shows index cards and watchlist with live signal data
+- Can search and add a new ticker — data is ingested on-demand
+- Screener loads 500 stocks in <3 seconds with working filters and sorting
+- Stock detail shows price chart + signal breakdown + signal history chart
+- Dark/light theme toggle works and persists
 
 ---
 

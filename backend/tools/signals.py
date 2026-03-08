@@ -55,19 +55,19 @@ logger = logging.getLogger(__name__)
 # Constants — these are standard values used across the finance industry.
 # You'll see these same numbers in TradingView, Bloomberg, etc.
 # ─────────────────────────────────────────────────────────────────────────────
-RSI_PERIOD = 14           # 14-day RSI is the industry standard
-RSI_OVERSOLD = 30         # Below 30 = oversold
-RSI_OVERBOUGHT = 70       # Above 70 = overbought
+RSI_PERIOD = 14  # 14-day RSI is the industry standard
+RSI_OVERSOLD = 30  # Below 30 = oversold
+RSI_OVERBOUGHT = 70  # Above 70 = overbought
 
-MACD_FAST = 12            # 12-day EMA (fast line)
-MACD_SLOW = 26            # 26-day EMA (slow line)
-MACD_SIGNAL = 9           # 9-day EMA of MACD (signal line)
+MACD_FAST = 12  # 12-day EMA (fast line)
+MACD_SLOW = 26  # 26-day EMA (slow line)
+MACD_SIGNAL = 9  # 9-day EMA of MACD (signal line)
 
-SMA_SHORT = 50            # 50-day Simple Moving Average
-SMA_LONG = 200            # 200-day Simple Moving Average
+SMA_SHORT = 50  # 50-day Simple Moving Average
+SMA_LONG = 200  # 200-day Simple Moving Average
 
-BB_PERIOD = 20            # 20-day Bollinger Band
-BB_STD_DEV = 2            # 2 standard deviations for band width
+BB_PERIOD = 20  # 20-day Bollinger Band
+BB_STD_DEV = 2  # 2 standard deviations for band width
 
 TRADING_DAYS_PER_YEAR = 252  # Approx. trading days in a year (excludes weekends/holidays)
 
@@ -79,27 +79,27 @@ DEFAULT_RISK_FREE_RATE = 0.045  # 4.5% — used when we can't fetch from FRED AP
 # These are stored in the database alongside the numeric values.
 # ─────────────────────────────────────────────────────────────────────────────
 class RSISignal:
-    OVERSOLD = "OVERSOLD"       # RSI < 30 → potential buying opportunity
-    NEUTRAL = "NEUTRAL"         # RSI 30-70 → no clear signal
-    OVERBOUGHT = "OVERBOUGHT"   # RSI > 70 → may be overvalued
+    OVERSOLD = "OVERSOLD"  # RSI < 30 → potential buying opportunity
+    NEUTRAL = "NEUTRAL"  # RSI 30-70 → no clear signal
+    OVERBOUGHT = "OVERBOUGHT"  # RSI > 70 → may be overvalued
 
 
 class MACDSignal:
-    BULLISH = "BULLISH"         # Histogram > 0 → upward momentum
-    BEARISH = "BEARISH"         # Histogram <= 0 → downward momentum
+    BULLISH = "BULLISH"  # Histogram > 0 → upward momentum
+    BEARISH = "BEARISH"  # Histogram <= 0 → downward momentum
 
 
 class SMASignal:
     GOLDEN_CROSS = "GOLDEN_CROSS"  # 50-day just crossed above 200-day → strong BUY
-    DEATH_CROSS = "DEATH_CROSS"    # 50-day just crossed below 200-day → strong SELL
-    ABOVE_200 = "ABOVE_200"        # Price above 200-day SMA → healthy uptrend
-    BELOW_200 = "BELOW_200"        # Price below 200-day SMA → potential downtrend
+    DEATH_CROSS = "DEATH_CROSS"  # 50-day just crossed below 200-day → strong SELL
+    ABOVE_200 = "ABOVE_200"  # Price above 200-day SMA → healthy uptrend
+    BELOW_200 = "BELOW_200"  # Price below 200-day SMA → potential downtrend
 
 
 class BBSignal:
-    UPPER = "UPPER"     # Price above upper Bollinger Band → may be overbought
-    MIDDLE = "MIDDLE"   # Price between bands → normal range
-    LOWER = "LOWER"     # Price below lower Bollinger Band → may be oversold
+    UPPER = "UPPER"  # Price above upper Bollinger Band → may be overbought
+    MIDDLE = "MIDDLE"  # Price between bands → normal range
+    LOWER = "LOWER"  # Price below lower Bollinger Band → may be oversold
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -114,31 +114,32 @@ class SignalResult:
     value plus the labels and composite score. Think of it as a "report
     card" for a stock's technical health.
     """
+
     ticker: str
 
     # RSI — momentum indicator (0-100)
     rsi_value: float | None
-    rsi_signal: str | None          # OVERSOLD, NEUTRAL, or OVERBOUGHT
+    rsi_signal: str | None  # OVERSOLD, NEUTRAL, or OVERBOUGHT
 
     # MACD — trend direction
-    macd_value: float | None        # MACD line value
-    macd_histogram: float | None    # Difference between MACD and signal line
-    macd_signal_label: str | None   # BULLISH or BEARISH
+    macd_value: float | None  # MACD line value
+    macd_histogram: float | None  # Difference between MACD and signal line
+    macd_signal_label: str | None  # BULLISH or BEARISH
 
     # SMA — long-term trend
-    sma_50: float | None            # 50-day simple moving average
-    sma_200: float | None           # 200-day simple moving average
-    sma_signal: str | None          # GOLDEN_CROSS, DEATH_CROSS, etc.
+    sma_50: float | None  # 50-day simple moving average
+    sma_200: float | None  # 200-day simple moving average
+    sma_signal: str | None  # GOLDEN_CROSS, DEATH_CROSS, etc.
 
     # Bollinger Bands — volatility measure
-    bb_upper: float | None          # Upper band (mean + 2*stdev)
-    bb_lower: float | None          # Lower band (mean - 2*stdev)
-    bb_position: str | None         # UPPER, MIDDLE, or LOWER
+    bb_upper: float | None  # Upper band (mean + 2*stdev)
+    bb_lower: float | None  # Lower band (mean - 2*stdev)
+    bb_position: str | None  # UPPER, MIDDLE, or LOWER
 
     # Risk/Return metrics
-    annual_return: float | None     # Annualized return (e.g., 0.15 = 15%)
-    volatility: float | None        # Annualized volatility (e.g., 0.20 = 20%)
-    sharpe_ratio: float | None      # Risk-adjusted return
+    annual_return: float | None  # Annualized return (e.g., 0.15 = 15%)
+    volatility: float | None  # Annualized volatility (e.g., 0.20 = 20%)
+    sharpe_ratio: float | None  # Risk-adjusted return
 
     # Composite score (0-10 scale)
     composite_score: float | None
@@ -184,12 +185,22 @@ def compute_signals(
         logger.warning("Not enough data for %s: only %d rows", ticker, len(closes))
         return SignalResult(
             ticker=ticker,
-            rsi_value=None, rsi_signal=None,
-            macd_value=None, macd_histogram=None, macd_signal_label=None,
-            sma_50=None, sma_200=None, sma_signal=None,
-            bb_upper=None, bb_lower=None, bb_position=None,
-            annual_return=None, volatility=None, sharpe_ratio=None,
-            composite_score=None, composite_weights=None,
+            rsi_value=None,
+            rsi_signal=None,
+            macd_value=None,
+            macd_histogram=None,
+            macd_signal_label=None,
+            sma_50=None,
+            sma_200=None,
+            sma_signal=None,
+            bb_upper=None,
+            bb_lower=None,
+            bb_position=None,
+            annual_return=None,
+            volatility=None,
+            sharpe_ratio=None,
+            composite_score=None,
+            composite_weights=None,
         )
 
     # ── Compute each indicator ───────────────────────────────────────
@@ -201,26 +212,39 @@ def compute_signals(
 
     # ── Compute composite score ──────────────────────────────────────
     score, weights = compute_composite_score(
-        rsi_val, rsi_sig,
-        macd_hist, macd_sig,
+        rsi_val,
+        rsi_sig,
+        macd_hist,
+        macd_sig,
         sma_sig,
         sharpe,
     )
 
     return SignalResult(
         ticker=ticker,
-        rsi_value=rsi_val, rsi_signal=rsi_sig,
-        macd_value=macd_val, macd_histogram=macd_hist, macd_signal_label=macd_sig,
-        sma_50=sma50, sma_200=sma200, sma_signal=sma_sig,
-        bb_upper=bb_up, bb_lower=bb_low, bb_position=bb_pos,
-        annual_return=ann_ret, volatility=vol, sharpe_ratio=sharpe,
-        composite_score=score, composite_weights=weights,
+        rsi_value=rsi_val,
+        rsi_signal=rsi_sig,
+        macd_value=macd_val,
+        macd_histogram=macd_hist,
+        macd_signal_label=macd_sig,
+        sma_50=sma50,
+        sma_200=sma200,
+        sma_signal=sma_sig,
+        bb_upper=bb_up,
+        bb_lower=bb_low,
+        bb_position=bb_pos,
+        annual_return=ann_ret,
+        volatility=vol,
+        sharpe_ratio=sharpe,
+        composite_score=score,
+        composite_weights=weights,
     )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Individual indicator calculations
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def compute_rsi(closes: pd.Series, period: int = RSI_PERIOD) -> tuple[float | None, str | None]:
     """Compute the RSI (Relative Strength Index).
@@ -254,8 +278,8 @@ def compute_rsi(closes: pd.Series, period: int = RSI_PERIOD) -> tuple[float | No
     delta = closes.diff()
 
     # Separate into gains (positive changes) and losses (negative → positive)
-    gains = delta.clip(lower=0)       # Keep only positive values, zeros otherwise
-    losses = (-delta).clip(lower=0)   # Flip negatives to positive, zeros otherwise
+    gains = delta.clip(lower=0)  # Keep only positive values, zeros otherwise
+    losses = (-delta).clip(lower=0)  # Flip negatives to positive, zeros otherwise
 
     # Wilder's smoothed moving average — uses exponential weighting.
     # com = period - 1 makes the EMA equivalent to Wilder's smoothing.
@@ -379,8 +403,16 @@ def compute_sma(
     sma_long = closes.rolling(window=long).mean() if len(closes) >= long else None
 
     # Extract latest values
-    sma50_val = round(float(sma_short.iloc[-1]), 4) if sma_short is not None and not pd.isna(sma_short.iloc[-1]) else None
-    sma200_val = round(float(sma_long.iloc[-1]), 4) if sma_long is not None and not pd.isna(sma_long.iloc[-1]) else None
+    sma50_val = (
+        round(float(sma_short.iloc[-1]), 4)
+        if sma_short is not None and not pd.isna(sma_short.iloc[-1])
+        else None
+    )
+    sma200_val = (
+        round(float(sma_long.iloc[-1]), 4)
+        if sma_long is not None and not pd.isna(sma_long.iloc[-1])
+        else None
+    )
 
     # ── Determine the signal label ───────────────────────────────────
     if sma_short is None or sma_long is None or sma50_val is None or sma200_val is None:
@@ -460,11 +492,11 @@ def compute_bollinger(
 
     # Determine where the current price sits relative to the bands
     if current_price > upper_val:
-        position = BBSignal.UPPER     # Above upper band → potentially overbought
+        position = BBSignal.UPPER  # Above upper band → potentially overbought
     elif current_price < lower_val:
-        position = BBSignal.LOWER     # Below lower band → potentially oversold
+        position = BBSignal.LOWER  # Below lower band → potentially oversold
     else:
-        position = BBSignal.MIDDLE    # Between bands → normal range
+        position = BBSignal.MIDDLE  # Between bands → normal range
 
     return upper_val, lower_val, position
 
@@ -541,6 +573,7 @@ def compute_risk_return(
 # Composite score — combines all indicators into a single 0-10 number
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def compute_composite_score(
     rsi_value: float | None,
     rsi_signal: str | None,
@@ -589,13 +622,13 @@ def compute_composite_score(
     # (contrarian signal — buy when others are selling).
     if rsi_value is not None:
         if rsi_value < RSI_OVERSOLD:
-            rsi_points = 2.5     # Oversold → strong buying opportunity
+            rsi_points = 2.5  # Oversold → strong buying opportunity
         elif rsi_value < 45:
-            rsi_points = 1.5     # Slightly below neutral → moderate opportunity
+            rsi_points = 1.5  # Slightly below neutral → moderate opportunity
         elif rsi_value > RSI_OVERBOUGHT:
-            rsi_points = 0.0     # Overbought → risky to buy now
+            rsi_points = 0.0  # Overbought → risky to buy now
         else:
-            rsi_points = 1.0     # Neutral zone
+            rsi_points = 1.0  # Neutral zone
         score += rsi_points
         weights["rsi"] = rsi_points
 
@@ -608,9 +641,9 @@ def compute_composite_score(
             # histogram value magnitude as a proxy for strength).
             macd_points = 2.5 if macd_histogram > 0.5 else 1.5
         elif macd_signal == MACDSignal.BEARISH and macd_histogram < -0.5:
-            macd_points = 0.0    # Strong bearish momentum
+            macd_points = 0.0  # Strong bearish momentum
         else:
-            macd_points = 0.5    # Weak or transitional
+            macd_points = 0.5  # Weak or transitional
         score += macd_points
         weights["macd"] = macd_points
 
@@ -619,9 +652,9 @@ def compute_composite_score(
     if sma_signal is not None:
         sma_points_map = {
             SMASignal.GOLDEN_CROSS: 2.5,  # 50-day crossed above 200-day
-            SMASignal.ABOVE_200: 1.5,     # Price above long-term trend
-            SMASignal.BELOW_200: 0.5,     # Price below long-term trend
-            SMASignal.DEATH_CROSS: 0.0,   # 50-day crossed below 200-day
+            SMASignal.ABOVE_200: 1.5,  # Price above long-term trend
+            SMASignal.BELOW_200: 0.5,  # Price below long-term trend
+            SMASignal.DEATH_CROSS: 0.0,  # 50-day crossed below 200-day
         }
         sma_points = sma_points_map.get(sma_signal, 0.5)
         score += sma_points
@@ -631,15 +664,15 @@ def compute_composite_score(
     # Higher Sharpe = better risk-adjusted returns.
     if sharpe is not None:
         if sharpe > 1.5:
-            sharpe_points = 2.5   # Excellent risk-adjusted return
+            sharpe_points = 2.5  # Excellent risk-adjusted return
         elif sharpe > 1.0:
-            sharpe_points = 2.0   # Very good
+            sharpe_points = 2.0  # Very good
         elif sharpe > 0.5:
-            sharpe_points = 1.0   # Decent
+            sharpe_points = 1.0  # Decent
         elif sharpe > 0:
-            sharpe_points = 0.5   # Positive but low
+            sharpe_points = 0.5  # Positive but low
         else:
-            sharpe_points = 0.0   # Negative → losing money after risk adjustment
+            sharpe_points = 0.0  # Negative → losing money after risk adjustment
         score += sharpe_points
         weights["sharpe"] = sharpe_points
 
@@ -652,6 +685,7 @@ def compute_composite_score(
 # ─────────────────────────────────────────────────────────────────────────────
 # Database persistence — store the computed signals
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 async def store_signal_snapshot(
     result: SignalResult,
@@ -709,5 +743,6 @@ async def store_signal_snapshot(
     await db.execute(stmt)
     await db.commit()
 
-    logger.info("Stored signal snapshot for %s (score=%.1f)",
-                result.ticker, result.composite_score or 0)
+    logger.info(
+        "Stored signal snapshot for %s (score=%.1f)", result.ticker, result.composite_score or 0
+    )

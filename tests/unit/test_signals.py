@@ -15,7 +15,6 @@ Key testing strategy:
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from backend.tools.signals import (
     BBSignal,
@@ -31,10 +30,10 @@ from backend.tools.signals import (
     compute_sma,
 )
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper: generate synthetic price data
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 def _make_price_series(
     start: float = 100.0,
@@ -82,19 +81,23 @@ def _make_ohlcv_df(closes: pd.Series) -> pd.DataFrame:
     The exact values don't matter much for signal tests — we just need
     the DataFrame structure that compute_signals() expects.
     """
-    return pd.DataFrame({
-        "Open": closes * 0.998,       # Open slightly below close
-        "High": closes * 1.005,       # High slightly above close
-        "Low": closes * 0.995,        # Low slightly below close
-        "Close": closes,
-        "Adj Close": closes,          # No splits/dividends in test data
-        "Volume": [1_000_000] * len(closes),
-    }, index=closes.index)
+    return pd.DataFrame(
+        {
+            "Open": closes * 0.998,  # Open slightly below close
+            "High": closes * 1.005,  # High slightly above close
+            "Low": closes * 0.995,  # Low slightly below close
+            "Close": closes,
+            "Adj Close": closes,  # No splits/dividends in test data
+            "Volume": [1_000_000] * len(closes),
+        },
+        index=closes.index,
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
 # RSI Tests
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestComputeRSI:
     """Tests for RSI (Relative Strength Index) computation."""
@@ -119,10 +122,12 @@ class TestComputeRSI:
     def test_rsi_extreme_drop_is_oversold(self) -> None:
         """A sharp crash should produce an OVERSOLD signal (RSI < 30)."""
         # Start high, then crash hard in the last 20 days
-        prices = np.concatenate([
-            np.full(250, 100.0),            # Flat for 250 days
-            np.linspace(100, 50, 50),       # Crash from 100 to 50
-        ])
+        prices = np.concatenate(
+            [
+                np.full(250, 100.0),  # Flat for 250 days
+                np.linspace(100, 50, 50),  # Crash from 100 to 50
+            ]
+        )
         dates = pd.date_range("2024-01-01", periods=300, freq="B")
         closes = pd.Series(prices, index=dates)
 
@@ -134,10 +139,12 @@ class TestComputeRSI:
 
     def test_rsi_extreme_rally_is_overbought(self) -> None:
         """A sharp rally should produce an OVERBOUGHT signal (RSI > 70)."""
-        prices = np.concatenate([
-            np.full(250, 100.0),            # Flat for 250 days
-            np.linspace(100, 200, 50),      # Rally from 100 to 200
-        ])
+        prices = np.concatenate(
+            [
+                np.full(250, 100.0),  # Flat for 250 days
+                np.linspace(100, 200, 50),  # Rally from 100 to 200
+            ]
+        )
         dates = pd.date_range("2024-01-01", periods=300, freq="B")
         closes = pd.Series(prices, index=dates)
 
@@ -167,6 +174,7 @@ class TestComputeRSI:
 # ═════════════════════════════════════════════════════════════════════════════
 # MACD Tests
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestComputeMACD:
     """Tests for MACD (Moving Average Convergence Divergence) computation."""
@@ -217,6 +225,7 @@ class TestComputeMACD:
 # ═════════════════════════════════════════════════════════════════════════════
 # SMA Tests
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestComputeSMA:
     """Tests for SMA (Simple Moving Average) crossover detection."""
@@ -274,6 +283,7 @@ class TestComputeSMA:
 # Bollinger Bands Tests
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestComputeBollinger:
     """Tests for Bollinger Bands computation."""
 
@@ -323,6 +333,7 @@ class TestComputeBollinger:
 # ═════════════════════════════════════════════════════════════════════════════
 # Risk/Return Tests
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestComputeRiskReturn:
     """Tests for annualized return, volatility, and Sharpe ratio."""
@@ -389,18 +400,19 @@ class TestComputeRiskReturn:
 # Composite Score Tests
 # ═════════════════════════════════════════════════════════════════════════════
 
+
 class TestComputeCompositeScore:
     """Tests for the composite score calculation (0-10 scale)."""
 
     def test_max_score_all_bullish(self) -> None:
         """Perfect bullish signals should produce a high composite score."""
         score, weights = compute_composite_score(
-            rsi_value=25.0,          # Oversold → 2.5 points
+            rsi_value=25.0,  # Oversold → 2.5 points
             rsi_signal="OVERSOLD",
-            macd_histogram=1.0,      # Strong bullish → 2.5 points
+            macd_histogram=1.0,  # Strong bullish → 2.5 points
             macd_signal="BULLISH",
             sma_signal="GOLDEN_CROSS",  # Golden cross → 2.5 points
-            sharpe=2.0,              # Excellent Sharpe → 2.5 points
+            sharpe=2.0,  # Excellent Sharpe → 2.5 points
         )
 
         assert score is not None
@@ -414,12 +426,12 @@ class TestComputeCompositeScore:
     def test_min_score_all_bearish(self) -> None:
         """All bearish signals should produce a very low composite score."""
         score, weights = compute_composite_score(
-            rsi_value=80.0,          # Overbought → 0 points
+            rsi_value=80.0,  # Overbought → 0 points
             rsi_signal="OVERBOUGHT",
-            macd_histogram=-1.0,     # Strong bearish → 0 points
+            macd_histogram=-1.0,  # Strong bearish → 0 points
             macd_signal="BEARISH",
-            sma_signal="DEATH_CROSS",   # Death cross → 0 points
-            sharpe=-0.5,             # Negative Sharpe → 0 points
+            sma_signal="DEATH_CROSS",  # Death cross → 0 points
+            sharpe=-0.5,  # Negative Sharpe → 0 points
         )
 
         assert score is not None
@@ -428,12 +440,12 @@ class TestComputeCompositeScore:
     def test_mixed_signals_mid_range(self) -> None:
         """Mixed bullish/bearish signals should produce a mid-range score."""
         score, weights = compute_composite_score(
-            rsi_value=50.0,          # Neutral → 1.0 points
+            rsi_value=50.0,  # Neutral → 1.0 points
             rsi_signal="NEUTRAL",
-            macd_histogram=0.2,      # Weak bullish → 1.5 points
+            macd_histogram=0.2,  # Weak bullish → 1.5 points
             macd_signal="BULLISH",
             sma_signal="ABOVE_200",  # Above 200 → 1.5 points
-            sharpe=0.7,              # Decent → 1.0 points
+            sharpe=0.7,  # Decent → 1.0 points
         )
 
         assert score is not None
@@ -442,8 +454,10 @@ class TestComputeCompositeScore:
     def test_all_none_returns_none(self) -> None:
         """If all indicators are None, composite score is None."""
         score, weights = compute_composite_score(
-            rsi_value=None, rsi_signal=None,
-            macd_histogram=None, macd_signal=None,
+            rsi_value=None,
+            rsi_signal=None,
+            macd_histogram=None,
+            macd_signal=None,
             sma_signal=None,
             sharpe=None,
         )
@@ -461,9 +475,7 @@ class TestComputeCompositeScore:
         ]
 
         for rsi_v, rsi_s, macd_h, macd_s, sma_s, sharpe in test_cases:
-            score, _ = compute_composite_score(
-                rsi_v, rsi_s, macd_h, macd_s, sma_s, sharpe
-            )
+            score, _ = compute_composite_score(rsi_v, rsi_s, macd_h, macd_s, sma_s, sharpe)
             assert score is not None
             assert 0 <= score <= 10, f"Score {score} out of range for inputs"
 
@@ -471,6 +483,7 @@ class TestComputeCompositeScore:
 # ═════════════════════════════════════════════════════════════════════════════
 # Integration: compute_signals() end-to-end
 # ═════════════════════════════════════════════════════════════════════════════
+
 
 class TestComputeSignalsEndToEnd:
     """End-to-end tests for the main compute_signals() function."""
