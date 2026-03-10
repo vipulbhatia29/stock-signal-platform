@@ -38,6 +38,15 @@ export function PriceChart({ ticker, period, onPeriodChange }: PriceChartProps) 
   const { data: prices, isLoading } = usePrices(ticker, period);
   const colors = useChartColors();
 
+  const trendColor =
+    prices && prices.length >= 2
+      ? prices[prices.length - 1].close > prices[0].close
+        ? colors.gain
+        : prices[prices.length - 1].close < prices[0].close
+          ? colors.loss
+          : colors.price
+      : colors.price;
+
   const periodSelector = (
     <div className="flex gap-1">
       {PERIODS.map((p) => (
@@ -69,8 +78,8 @@ export function PriceChart({ ticker, period, onPeriodChange }: PriceChartProps) 
           >
             <defs>
               <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor={colors.price} stopOpacity={0.3} />
-                <stop offset="95%" stopColor={colors.price} stopOpacity={0} />
+                <stop offset="5%" stopColor={trendColor} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={trendColor} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid {...CHART_STYLE.grid} />

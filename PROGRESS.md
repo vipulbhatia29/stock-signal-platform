@@ -412,3 +412,96 @@ screener, stock detail page. See `docs/workflow_phase2.md` Tasks 2.1-2.7.
 5. Phase D: Responsive fixes (signal cards, risk/return, chart heights)
 6. Dark mode tuning + accessibility
 7. `npm run build` + `npm run lint` verification
+
+→ **ALL COMPLETE in Session 9**
+
+---
+
+## Session 9 — UI Bug Fixes + Phase 2.5 Design System
+
+**Date:** 2026-03-10
+**Branch:** `feat/initial-scaffold`
+**What was done:**
+- [x] **Bug #1 — Screener dropdowns showing `__all__`**: @base-ui/react Select doesn't resolve SelectItem labels when popup is closed. Fixed by computing display label explicitly and passing as SelectValue children.
+- [x] **Bug #2 — Watchlist score N/A**: Added `row_number()` subquery to watchlist endpoint to join latest composite_score from signal_snapshots. Extended `WatchlistItemResponse` schema + `WatchlistItem` frontend type. Dashboard now passes `score={item.composite_score}` to StockCard.
+- [x] **Bug #3 — Price chart sparse**: Added `domain={["auto","auto"]}` to price YAxis — was defaulting to `[0, max]` making all movements look flat.
+- [x] **Bug #4 — Stock detail header "—" for name**: Added `useStockMeta()` hook to derive name/sector from watchlist cache. Replaced hardcoded `name={null}` in `stock-detail-client.tsx`.
+- [x] **Bug #5 — Market Indexes empty**: Added empty state with seeding instructions instead of silent nothing.
+- [x] **Committed bug fixes**: `c0302ac`
+- [x] **Phase A — Design System Foundation**:
+  - `globals.css`: financial semantic CSS vars (--gain, --loss, --neutral-signal, --chart-price etc.) in both :root and .dark; Bloomberg dark mode (oklch subtle blue undertone)
+  - `lib/design-tokens.ts`, `lib/chart-theme.ts` (useChartColors + CHART_STYLE), `lib/typography.ts`
+  - `lib/signals.ts`: migrated SENTIMENT_CLASSES from hardcoded Tailwind → CSS variable classes
+- [x] **Phase B — Core Components**: ChangeIndicator, SectionHeading, ChartTooltip, ErrorState, Breadcrumbs
+- [x] **Phase D — Responsive + Polish**:
+  - signal-cards: responsive grid (1/2/4 cols), risk-return: (1/3 cols)
+  - Responsive chart heights (250px/400px), sticky screener header, full-row click
+  - nav-bar: Sun/Moon icons, score/signal badges with aria-labels
+  - price-chart + signal-history-chart: useChartColors + ChartTooltip (fixes OKLCH mismatch)
+  - stock-detail: Breadcrumbs added; SectionHeading throughout
+- [x] **Build + lint clean**: `npm run build` ✓, `npm run lint` ✓, 75 unit tests ✓
+- [x] **Committed design system**: `2cbe7a8`
+
+**Key decisions:**
+- useChartColors() uses MutationObserver on `<html class>` to detect dark/light toggle; lazy useState initializer handles initial value (avoids setState-in-effect lint error)
+- Bloomberg dark bg: oklch(0.145 0.005 250) — subtle blue undertone reduces eye strain vs pure black
+- Semantic color classes (text-gain, text-loss) registered via @theme inline — Tailwind generates utilities from CSS vars
+
+**Test count:** 75 unit (unchanged — frontend-only changes)
+**Files created:** 8 new (design-tokens, chart-theme, typography, 5 components)
+**Files changed:** 12 existing
+
+**Next:** Session 10 deferred items completed (see below).
+
+---
+
+## Session 10 — Phase 2.5 Deferred Components
+
+**Date:** 2026-03-10
+**Branch:** `feat/initial-scaffold`
+**What was done:**
+- [x] `components/sparkline.tsx` — tiny inline Recharts line chart (no axes/grid/tooltip). Props: `data`, `width`, `height`, `sentiment`. Color driven by CSS vars via `useSparklineColor` hook with MutationObserver for dark/light reactivity. Used by chart grid view (next session).
+- [x] `components/signal-meter.tsx` — 10-segment horizontal score bar. Segments color-coded: red (1-4), amber (5-6), green (7-10). `role="meter"` with aria attributes. Size sm/default.
+- [x] `components/metric-card.tsx` — standardized KPI block (label + value + optional ChangeIndicator). `MetricCardSkeleton` included. Used by RiskReturnCard + IndexCard.
+- [x] Refactored `components/risk-return-card.tsx` — 3 ad-hoc metric divs → `MetricCard` with `valueClassName` for color logic.
+- [x] Refactored `components/index-card.tsx` — stock count display → `MetricCard`.
+- [x] `price-chart.tsx` — sentiment-tinted gradient: computes `trendColor` from first/last price, fills gradient with `colors.gain`/`colors.loss`/`colors.price`. Stroke unchanged.
+- [x] `lib/chart-theme.ts` — added `gain` + `loss` to `ChartColors` interface + `resolveChartColors()`.
+- [x] `components/screener-table.tsx` — full rewrite with TradingView-style column preset tabs (Overview | Signals | Performance), each backed by a different column set. Signals tab includes `SignalMeter`. Density-aware row padding/text via `useDensity()`.
+- [x] `lib/density-context.tsx` — `DensityProvider` + `useDensity()`. Toggles comfortable/compact row density. Persisted to `localStorage`. Lazy initializer avoids setState-in-effect lint error.
+- [x] `app/(authenticated)/screener/page.tsx` — added `DensityProvider` wrapper, `DensityToggle` button (AlignJustify/LayoutList icons), `activeTab` state passed to `ScreenerTable`.
+- [x] `npm run build` ✓, `npm run lint` ✓
+
+**Key decisions:**
+- Lazy `useState(() => ...)` initializer for localStorage reads (avoids `setState` in effect — ESLint `react-hooks/set-state-in-effect` rule)
+- `MutationObserver` on `<html class>` attribute for dark/light color reactivity in Sparkline (same pattern as `useChartColors`)
+- Column definitions extracted to `COL` record + `TAB_COLUMNS` presets — clean separation between column rendering and tab layout
+- `activeTab` state lives in `screener/page.tsx` (not URL) — tab preference is ephemeral UI state, not a bookmark-worthy filter
+
+**Test count:** 147 backend / 75 frontend unit (unchanged — frontend-only changes)
+**Files created:** 3 new (`sparkline.tsx`, `signal-meter.tsx`, `metric-card.tsx`, `density-context.tsx`)
+**Files changed:** 6 existing
+
+---
+
+## Chart Grid View — Next Session Integration Contract
+
+The chart grid view (deferred) requires these specific changes to pick up cleanly:
+
+**Backend change needed:**
+- Add `price_history: list[float]` (30 data points, daily closes) to `BulkSignalItem` Pydantic schema
+- Update `GET /api/v1/stocks/signals/bulk` query to include last 30 `adj_close` values per ticker (window function or subquery)
+- Update `tests/api/test_bulk_signals.py` mocks
+
+**Frontend changes needed:**
+1. Add `price_history: number[] | null` to `BulkSignalItem` in `types/api.ts`
+2. Create `components/screener-grid.tsx` — CSS grid of stock cards, each with:
+   - Ticker + name header
+   - `<Sparkline data={item.price_history} sentiment={scoreToSentiment(item.composite_score)} width={120} height={40} />`
+   - Score badge + signal badges
+   - Click → navigate to stock detail
+3. Add `viewMode: "table" | "grid"` state to `screener/page.tsx`
+4. Add `LayoutGrid` / `LayoutList` toggle button beside `DensityToggle`
+5. Conditionally render `ScreenerTable` or `ScreenerGrid` based on `viewMode`
+
+**Next:** Phase 3 planning (Agent/chat interface, portfolio tracking, LangChain/LangGraph integration) or chart grid view.

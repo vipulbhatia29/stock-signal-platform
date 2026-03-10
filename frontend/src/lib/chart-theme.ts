@@ -23,6 +23,8 @@ export interface ChartColors {
   chart1: string;
   chart2: string;
   chart3: string;
+  gain: string;
+  loss: string;
 }
 
 function resolveChartColors(): ChartColors {
@@ -35,6 +37,8 @@ function resolveChartColors(): ChartColors {
     chart1: readCssVar(CSS_VARS.chart1),
     chart2: readCssVar(CSS_VARS.chart2),
     chart3: readCssVar(CSS_VARS.chart3),
+    gain: readCssVar(CSS_VARS.gain),
+    loss: readCssVar(CSS_VARS.loss),
   };
 }
 

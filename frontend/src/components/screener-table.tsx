@@ -11,13 +11,160 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge } from "@/components/score-badge";
 import { SignalBadge } from "@/components/signal-badge";
+import { SignalMeter } from "@/components/signal-meter";
 import { formatNumber, formatPercent } from "@/lib/format";
 import { scoreToSentiment, SENTIMENT_BG_CLASSES } from "@/lib/signals";
+import { useDensity } from "@/lib/density-context";
 import { cn } from "@/lib/utils";
 import type { BulkSignalItem } from "@/types/api";
+
+// ── Column definitions ────────────────────────────────────────────────────────
+
+interface Column {
+  key: string;
+  label: string;
+  sortable: boolean;
+  render: (item: BulkSignalItem) => React.ReactNode;
+}
+
+const COL: Record<string, Column> = {
+  ticker: {
+    key: "ticker",
+    label: "Ticker",
+    sortable: true,
+    render: (item) => (
+      <Link
+        href={`/stocks/${item.ticker}`}
+        className="font-mono font-semibold hover:underline"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {item.ticker}
+      </Link>
+    ),
+  },
+  name: {
+    key: "name",
+    label: "Name",
+    sortable: false,
+    render: (item) => (
+      <span className="max-w-[180px] truncate block">{item.name}</span>
+    ),
+  },
+  sector: {
+    key: "sector",
+    label: "Sector",
+    sortable: false,
+    render: (item) => (
+      <span className="text-muted-foreground">{item.sector || "—"}</span>
+    ),
+  },
+  rsi: {
+    key: "rsi_value",
+    label: "RSI",
+    sortable: true,
+    render: (item) => (
+      <span className="tabular-nums">
+        {formatNumber(item.rsi_value, 1)}
+        {item.rsi_signal && (
+          <span className="ml-1">
+            <SignalBadge signal={item.rsi_signal} type="rsi" />
+          </span>
+        )}
+      </span>
+    ),
+  },
+  macd: {
+    key: "macd_signal",
+    label: "MACD",
+    sortable: false,
+    render: (item) => <SignalBadge signal={item.macd_signal} type="macd" />,
+  },
+  sma: {
+    key: "sma_signal",
+    label: "SMA",
+    sortable: false,
+    render: (item) => <SignalBadge signal={item.sma_signal} type="sma" />,
+  },
+  bb: {
+    key: "bb_position",
+    label: "Bollinger",
+    sortable: false,
+    render: (item) => (
+      <span className="text-muted-foreground text-sm">{item.bb_position || "—"}</span>
+    ),
+  },
+  score: {
+    key: "composite_score",
+    label: "Score",
+    sortable: true,
+    render: (item) => <ScoreBadge score={item.composite_score} size="sm" />,
+  },
+  meter: {
+    key: "composite_score_meter",
+    label: "Signal Strength",
+    sortable: false,
+    render: (item) => (
+      <div className="w-24">
+        <SignalMeter score={item.composite_score} size="sm" />
+      </div>
+    ),
+  },
+  annualReturn: {
+    key: "annual_return",
+    label: "Annual Return",
+    sortable: true,
+    render: (item) => (
+      <span
+        className={cn(
+          "tabular-nums",
+          item.annual_return !== null && item.annual_return >= 0
+            ? "text-gain"
+            : "text-loss"
+        )}
+      >
+        {formatPercent(item.annual_return)}
+      </span>
+    ),
+  },
+  volatility: {
+    key: "volatility",
+    label: "Volatility",
+    sortable: true,
+    render: (item) => (
+      <span className="tabular-nums">{formatPercent(item.volatility)}</span>
+    ),
+  },
+  sharpe: {
+    key: "sharpe_ratio",
+    label: "Sharpe",
+    sortable: true,
+    render: (item) => (
+      <span className="tabular-nums">{formatNumber(item.sharpe_ratio)}</span>
+    ),
+  },
+};
+
+// ── Tab presets ───────────────────────────────────────────────────────────────
+
+type TabKey = "overview" | "signals" | "performance";
+
+const TAB_COLUMNS: Record<TabKey, string[]> = {
+  overview: ["ticker", "name", "sector", "score"],
+  signals: ["ticker", "rsi", "macd", "sma", "bb", "score", "meter"],
+  performance: ["ticker", "annualReturn", "volatility", "sharpe", "score"],
+};
+
+const TABS: { key: TabKey; label: string }[] = [
+  { key: "overview", label: "Overview" },
+  { key: "signals", label: "Signals" },
+  { key: "performance", label: "Performance" },
+];
+
+// ── Props ─────────────────────────────────────────────────────────────────────
 
 interface ScreenerTableProps {
   items: BulkSignalItem[];
@@ -25,19 +172,9 @@ interface ScreenerTableProps {
   sortOrder: "asc" | "desc";
   onSort: (column: string) => void;
   isLoading: boolean;
+  activeTab: TabKey;
+  onTabChange: (tab: TabKey) => void;
 }
-
-const COLUMNS = [
-  { key: "ticker", label: "Ticker", sortable: true },
-  { key: "name", label: "Name", sortable: false },
-  { key: "sector", label: "Sector", sortable: false },
-  { key: "rsi_value", label: "RSI", sortable: true },
-  { key: "macd_signal", label: "MACD", sortable: false },
-  { key: "sma_signal", label: "SMA", sortable: false },
-  { key: "annual_return", label: "Return", sortable: true },
-  { key: "sharpe_ratio", label: "Sharpe", sortable: true },
-  { key: "composite_score", label: "Score", sortable: true },
-];
 
 function SortIcon({
   column,
@@ -56,106 +193,99 @@ function SortIcon({
   );
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export function ScreenerTable({
   items,
   sortBy,
   sortOrder,
   onSort,
   isLoading,
+  activeTab,
+  onTabChange,
 }: ScreenerTableProps) {
   const router = useRouter();
+  const { density } = useDensity();
 
-  if (isLoading) {
-    return (
-      <div className="space-y-2">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-10 w-full" />
-        ))}
-      </div>
-    );
-  }
+  const columns = TAB_COLUMNS[activeTab].map((k) => COL[k]);
+  const rowPadding = density === "compact" ? "py-1.5" : "py-3";
+  const textSize = density === "compact" ? "text-xs" : "text-sm";
 
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <Table>
-        <TableHeader className="sticky top-0 z-10 bg-background">
-          <TableRow>
-            {COLUMNS.map((col) => (
-              <TableHead
-                key={col.key}
-                className={cn(
-                  col.sortable && "cursor-pointer select-none hover:text-foreground",
-                  col.key === sortBy && "text-foreground"
-                )}
-                onClick={() => col.sortable && onSort(col.key)}
-              >
-                {col.label}
-                {col.sortable && (
-                  <SortIcon
-                    column={col.key}
-                    sortBy={sortBy}
-                    sortOrder={sortOrder}
-                  />
-                )}
-              </TableHead>
-            ))}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {items.map((item) => {
-            const sentiment = scoreToSentiment(item.composite_score);
-            const rowBg =
-              sentiment === "neutral" ? "" : SENTIMENT_BG_CLASSES[sentiment];
+    <div className="space-y-2">
+      <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as TabKey)}>
+        <TabsList className="h-8">
+          {TABS.map((t) => (
+            <TabsTrigger key={t.key} value={t.key} className="h-7 text-xs">
+              {t.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-            return (
-              <TableRow
-                key={item.ticker}
-                className={cn(rowBg, "cursor-pointer hover:bg-accent/50")}
-                onClick={() => router.push(`/stocks/${item.ticker}`)}
-              >
-                <TableCell className="font-mono font-semibold">
-                  <Link
-                    href={`/stocks/${item.ticker}`}
-                    className="hover:underline"
-                    onClick={(e) => e.stopPropagation()}
+      {isLoading ? (
+        <div className="space-y-2">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-10 w-full" />
+          ))}
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border">
+          <Table>
+            <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableRow>
+                {columns.map((col) => (
+                  <TableHead
+                    key={col.key}
+                    className={cn(
+                      textSize,
+                      col.sortable &&
+                        "cursor-pointer select-none hover:text-foreground",
+                      col.key === sortBy && "text-foreground"
+                    )}
+                    onClick={() => col.sortable && onSort(col.key)}
                   >
-                    {item.ticker}
-                  </Link>
-                </TableCell>
-                <TableCell className="max-w-[200px] truncate">
-                  {item.name}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {item.sector || "—"}
-                </TableCell>
-                <TableCell className="tabular-nums">
-                  {formatNumber(item.rsi_value, 1)}
-                  {item.rsi_signal && (
-                    <span className="ml-1">
-                      <SignalBadge signal={item.rsi_signal} type="rsi" />
-                    </span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <SignalBadge signal={item.macd_signal} type="macd" />
-                </TableCell>
-                <TableCell>
-                  <SignalBadge signal={item.sma_signal} type="sma" />
-                </TableCell>
-                <TableCell className="tabular-nums">
-                  {formatPercent(item.annual_return)}
-                </TableCell>
-                <TableCell className="tabular-nums">
-                  {formatNumber(item.sharpe_ratio)}
-                </TableCell>
-                <TableCell>
-                  <ScoreBadge score={item.composite_score} size="sm" />
-                </TableCell>
+                    {col.label}
+                    {col.sortable && (
+                      <SortIcon
+                        column={col.key}
+                        sortBy={sortBy}
+                        sortOrder={sortOrder}
+                      />
+                    )}
+                  </TableHead>
+                ))}
               </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+            </TableHeader>
+            <TableBody>
+              {items.map((item) => {
+                const sentiment = scoreToSentiment(item.composite_score);
+                const rowBg =
+                  sentiment === "neutral" ? "" : SENTIMENT_BG_CLASSES[sentiment];
+
+                return (
+                  <TableRow
+                    key={item.ticker}
+                    className={cn(rowBg, "cursor-pointer hover:bg-accent/50")}
+                    onClick={() => router.push(`/stocks/${item.ticker}`)}
+                  >
+                    {columns.map((col) => (
+                      <TableCell
+                        key={col.key}
+                        className={cn(rowPadding, textSize)}
+                      >
+                        {col.render(item)}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      )}
     </div>
   );
 }
+
+export type { TabKey };

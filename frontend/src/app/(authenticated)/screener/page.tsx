@@ -1,24 +1,47 @@
 "use client";
 
-import { Suspense, useCallback, useMemo } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { FilterIcon } from "lucide-react";
+import { FilterIcon, AlignJustifyIcon, LayoutListIcon } from "lucide-react";
 import { useIndexes, useBulkSignals } from "@/hooks/use-stocks";
 import {
   ScreenerFilters,
   type FilterValues,
 } from "@/components/screener-filters";
-import { ScreenerTable } from "@/components/screener-table";
+import { ScreenerTable, type TabKey } from "@/components/screener-table";
 import { PaginationControls } from "@/components/pagination-controls";
 import { EmptyState } from "@/components/empty-state";
+import { Button } from "@/components/ui/button";
+import { DensityProvider, useDensity } from "@/lib/density-context";
 
 const PAGE_SIZE = 50;
 
 export default function ScreenerPage() {
   return (
-    <Suspense>
-      <ScreenerContent />
-    </Suspense>
+    <DensityProvider>
+      <Suspense>
+        <ScreenerContent />
+      </Suspense>
+    </DensityProvider>
+  );
+}
+
+function DensityToggle() {
+  const { density, toggleDensity } = useDensity();
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0"
+      onClick={toggleDensity}
+      aria-label={`Switch to ${density === "comfortable" ? "compact" : "comfortable"} density`}
+    >
+      {density === "comfortable" ? (
+        <AlignJustifyIcon className="size-4" />
+      ) : (
+        <LayoutListIcon className="size-4" />
+      )}
+    </Button>
   );
 }
 
@@ -27,6 +50,7 @@ function ScreenerContent() {
   const router = useRouter();
   const pathname = usePathname();
   const { data: indexes } = useIndexes();
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   const filters: FilterValues = useMemo(
     () => ({
@@ -101,7 +125,10 @@ function ScreenerContent() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Screener</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight">Screener</h1>
+        <DensityToggle />
+      </div>
 
       <ScreenerFilters
         filters={filters}
@@ -123,6 +150,8 @@ function ScreenerContent() {
             sortOrder={sortOrder}
             onSort={handleSort}
             isLoading={isLoading}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
           />
           {data && data.total > 0 && (
             <PaginationControls

@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MetricCard } from "@/components/metric-card";
 
 interface IndexCardProps {
   name: string;
@@ -23,7 +24,7 @@ export function IndexCard({
 }: IndexCardProps) {
   return (
     <Link href={`/screener?index=${slug}`}>
-      <Card className="transition-colors hover:border-foreground/20 cursor-pointer">
+      <Card className="cursor-pointer transition-colors hover:border-foreground/20">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">{name}</CardTitle>
           {description && (
@@ -31,8 +32,11 @@ export function IndexCard({
           )}
         </CardHeader>
         <CardContent>
-          <p className="text-2xl font-semibold tabular-nums">{stockCount}</p>
-          <p className="text-xs text-muted-foreground">stocks</p>
+          <MetricCard
+            label="stocks"
+            value={stockCount}
+            valueClassName="text-2xl font-semibold tabular-nums"
+          />
         </CardContent>
       </Card>
     </Link>
