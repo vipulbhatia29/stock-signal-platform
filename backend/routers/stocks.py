@@ -27,7 +27,8 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import Float, delete, func, select
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
@@ -581,8 +582,34 @@ async def get_bulk_signals(
 
     latest = latest.subquery("latest")
 
+    # Correlated subquery: last 30 adj_close values per ticker (chronological ASC).
+    # Uses a nested subquery to pick the 30 most-recent dates (DESC limit),
+    # then array_agg with aggregate_order_by to return them sorted ASC.
+    _last_30_times = (
+        select(StockPrice.time)
+        .where(StockPrice.ticker == latest.c.ticker)
+        .order_by(StockPrice.time.desc())
+        .limit(30)
+        .correlate(latest)
+        .subquery()
+    )
+    price_sub = (
+        select(
+            func.array_agg(
+                aggregate_order_by(
+                    StockPrice.adj_close.cast(Float),
+                    StockPrice.time.asc(),
+                )
+            )
+        )
+        .where(StockPrice.ticker == latest.c.ticker)
+        .where(StockPrice.time.in_(select(_last_30_times)))
+        .correlate(latest)
+        .scalar_subquery()
+    )
+
     # Build main query filtering to rn=1 (most recent per ticker)
-    query = select(latest).where(latest.c.rn == 1)
+    query = select(latest, price_sub.label("price_history")).where(latest.c.rn == 1)
 
     # Apply filters
     if rsi_state is not None:
@@ -635,6 +662,7 @@ async def get_bulk_signals(
                 if row.computed_at
                 else True
             ),
+            price_history=row.price_history,
         )
         for row in rows
     ]

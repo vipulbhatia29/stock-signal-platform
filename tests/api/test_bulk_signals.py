@@ -1,5 +1,7 @@
 """Tests for bulk signals (screener) endpoint."""
 
+from datetime import datetime, timedelta, timezone
+
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -8,6 +10,7 @@ from tests.conftest import (
     StockFactory,
     StockIndexFactory,
     StockIndexMembershipFactory,
+    StockPriceFactory,
 )
 
 
@@ -169,3 +172,42 @@ class TestBulkSignals:
         items = response.json()["items"]
         assert items[0]["ticker"] == "SB01"
         assert items[1]["ticker"] == "SA01"
+
+    async def test_bulk_signals_includes_price_history(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """price_history field contains exactly 30 chronological adj_close floats."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="PH01", name="Price History Test")
+            session.add(stock)
+            await session.flush()
+
+            signal = SignalSnapshotFactory.build(ticker="PH01", composite_score=7.0)
+            session.add(signal)
+
+            base_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            for i in range(35):
+                price = StockPriceFactory.build(
+                    ticker="PH01",
+                    time=base_time + timedelta(days=i),
+                    adj_close=float(100 + i),
+                )
+                session.add(price)
+            await session.commit()
+        await engine.dispose()
+
+        response = await authenticated_client.get("/api/v1/stocks/signals/bulk")
+        assert response.status_code == 200
+        items = response.json()["items"]
+        assert len(items) == 1
+        ph = items[0]
+        assert ph["ticker"] == "PH01"
+        assert ph["price_history"] is not None
+        # 35 rows inserted, limit is 30 — must return exactly 30
+        assert len(ph["price_history"]) == 30
+        # Values should be floats
+        assert all(isinstance(v, float) for v in ph["price_history"])
+        # Must be in chronological (ascending) order — sparkline depends on this
+        assert ph["price_history"] == sorted(ph["price_history"])

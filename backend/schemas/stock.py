@@ -247,6 +247,7 @@ class BulkSignalItem(BaseModel):
     sharpe_ratio: float | None = None
     computed_at: datetime | None = None
     is_stale: bool = False
+    price_history: list[float] | None = None
 
 
 class BulkSignalsResponse(BaseModel):
