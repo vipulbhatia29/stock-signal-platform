@@ -505,3 +505,31 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 5. Conditionally render `ScreenerTable` or `ScreenerGrid` based on `viewMode`
 
 **Next:** Phase 3 planning (Agent/chat interface, portfolio tracking, LangChain/LangGraph integration) or chart grid view.
+
+---
+
+## Session 11 — Screener Grid View
+
+**Date:** 2026-03-10
+**Branch:** `feat/initial-scaffold`
+**What was done:**
+- [x] **Backend:** Added `price_history: list[float] | None = None` to `BulkSignalItem` Pydantic schema
+- [x] **Backend:** Added correlated subquery to `GET /api/v1/stocks/signals/bulk` — returns last 30 `adj_close` values per ticker in chronological order using `aggregate_order_by` (PostgreSQL-specific). Uses two-level pattern: `_last_30_times` inner subquery (DESC LIMIT 30) + `price_sub` scalar subquery (`array_agg` with ORDER BY ASC)
+- [x] **Test:** `test_bulk_signals_includes_price_history` — asserts exactly 30 values, all floats, ascending order. All 148 backend tests pass.
+- [x] **Frontend:** `frontend/src/hooks/use-container-width.ts` — `useContainerWidth(ref)` hook using `ResizeObserver` for responsive card widths (starts at 160px, corrects on first observe)
+- [x] **Frontend:** `frontend/src/components/screener-grid.tsx` — `ScreenerGrid` component: responsive CSS grid (2→3→4→5 cols), C2-style cards (full-width Sparkline top, ticker + signal badges + score below), loading skeleton, keyboard accessibility (Enter + Space)
+- [x] **Frontend:** `frontend/src/app/(authenticated)/screener/page.tsx` — `viewMode: "table" | "grid"` state + `ViewModeToggle` button; `DensityToggle` hidden in grid mode; `PaginationControls` rendered on both views
+- [x] `npm run lint` ✓, `npm run build` ✓
+
+**Key decisions:**
+- `aggregate_order_by` from `sqlalchemy.dialects.postgresql` is required for `array_agg(col ORDER BY ...)` — standard SQLAlchemy `func.array_agg` doesn't support inline ORDER BY
+- `useContainerWidth` uses `useState(160)` not lazy initializer — reading `ref.current` during render violates `react-hooks/refs` ESLint rule; ResizeObserver fires synchronously on first observe, so width is correct after mount
+- Pagination rendered outside view-mode conditionals (both views), guarded only by `data && data.total > 0`
+
+**Test count:** 148 backend / 75 frontend unit
+**Files created:** `use-container-width.ts`, `screener-grid.tsx`
+**Files changed:** `schemas/stock.py`, `routers/stocks.py`, `test_bulk_signals.py`, `types/api.ts`, `screener/page.tsx`
+
+**Next:** Phase 3 planning (agent/chat interface, LangChain/LangGraph integration, portfolio tracking)
+
+---
