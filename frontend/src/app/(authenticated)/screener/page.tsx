@@ -2,13 +2,14 @@
 
 import { Suspense, useCallback, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { FilterIcon, AlignJustifyIcon, LayoutListIcon } from "lucide-react";
+import { FilterIcon, AlignJustifyIcon, LayoutListIcon, LayoutGridIcon } from "lucide-react";
 import { useIndexes, useBulkSignals } from "@/hooks/use-stocks";
 import {
   ScreenerFilters,
   type FilterValues,
 } from "@/components/screener-filters";
 import { ScreenerTable, type TabKey } from "@/components/screener-table";
+import { ScreenerGrid } from "@/components/screener-grid";
 import { PaginationControls } from "@/components/pagination-controls";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,30 @@ export default function ScreenerPage() {
         <ScreenerContent />
       </Suspense>
     </DensityProvider>
+  );
+}
+
+function ViewModeToggle({
+  viewMode,
+  onChange,
+}: {
+  viewMode: "table" | "grid";
+  onChange: (mode: "table" | "grid") => void;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-8 w-8 p-0"
+      onClick={() => onChange(viewMode === "table" ? "grid" : "table")}
+      aria-label={`Switch to ${viewMode === "table" ? "grid" : "table"} view`}
+    >
+      {viewMode === "table" ? (
+        <LayoutGridIcon className="size-4" />
+      ) : (
+        <LayoutListIcon className="size-4" />
+      )}
+    </Button>
   );
 }
 
@@ -51,6 +76,7 @@ function ScreenerContent() {
   const pathname = usePathname();
   const { data: indexes } = useIndexes();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
   const filters: FilterValues = useMemo(
     () => ({
@@ -127,7 +153,10 @@ function ScreenerContent() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Screener</h1>
-        <DensityToggle />
+        <div className="flex items-center gap-1">
+          {viewMode === "table" && <DensityToggle />}
+          <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
       <ScreenerFilters
@@ -142,26 +171,26 @@ function ScreenerContent() {
           title="No stocks match your filters"
           description="Try broadening your search criteria"
         />
+      ) : viewMode === "grid" ? (
+        <ScreenerGrid items={data?.items ?? []} isLoading={isLoading} />
       ) : (
-        <>
-          <ScreenerTable
-            items={data?.items ?? []}
-            sortBy={sortBy}
-            sortOrder={sortOrder}
-            onSort={handleSort}
-            isLoading={isLoading}
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-          />
-          {data && data.total > 0 && (
-            <PaginationControls
-              page={page}
-              pageSize={PAGE_SIZE}
-              total={data.total}
-              onPageChange={handlePageChange}
-            />
-          )}
-        </>
+        <ScreenerTable
+          items={data?.items ?? []}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSort={handleSort}
+          isLoading={isLoading}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+      )}
+      {data && data.total > 0 && (
+        <PaginationControls
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={data.total}
+          onPageChange={handlePageChange}
+        />
       )}
     </div>
   );

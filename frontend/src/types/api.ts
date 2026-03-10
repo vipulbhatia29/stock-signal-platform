@@ -164,6 +164,7 @@ export interface BulkSignalItem {
   sharpe_ratio: number | null;
   computed_at: string | null;
   is_stale: boolean;
+  price_history: number[] | null;
 }
 
 export interface BulkSignalsResponse {
