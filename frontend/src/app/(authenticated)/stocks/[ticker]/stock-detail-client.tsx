@@ -8,6 +8,7 @@ import {
   useRemoveFromWatchlist,
   useIsInWatchlist,
   useIngestTicker,
+  useStockMeta,
 } from "@/hooks/use-stocks";
 import { StockHeader } from "@/components/stock-header";
 import { PriceChart } from "@/components/price-chart";
@@ -27,6 +28,7 @@ interface StockDetailClientProps {
 export function StockDetailClient({ ticker }: StockDetailClientProps) {
   const [period, setPeriod] = useState<PricePeriod>("1y");
   const { data: signals, isLoading: signalsLoading } = useSignals(ticker);
+  const { name, sector } = useStockMeta(ticker);
   const isInWatchlist = useIsInWatchlist(ticker);
   const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
@@ -85,8 +87,8 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
       ) : (
         <StockHeader
           ticker={ticker}
-          name={null}
-          sector={null}
+          name={name}
+          sector={sector}
           score={signals?.composite_score ?? null}
           isInWatchlist={isInWatchlist}
           onToggleWatchlist={handleToggleWatchlist}

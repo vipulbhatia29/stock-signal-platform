@@ -69,21 +69,33 @@ export default function DashboardPage() {
         <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">
           Market Indexes
         </h2>
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {indexesLoading
-            ? Array.from({ length: 3 }).map((_, i) => (
-                <IndexCardSkeleton key={i} />
-              ))
-            : indexes?.map((idx) => (
-                <IndexCard
-                  key={idx.slug}
-                  name={idx.name}
-                  slug={idx.slug}
-                  stockCount={idx.stock_count}
-                  description={idx.description}
-                />
-              ))}
-        </div>
+        {indexesLoading ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <IndexCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : !indexes?.length ? (
+          <p className="text-sm text-muted-foreground">
+            No indexes seeded yet. Run{" "}
+            <code className="font-mono text-xs">
+              uv run python scripts/sync_indexes.py
+            </code>{" "}
+            to populate.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            {indexes.map((idx) => (
+              <IndexCard
+                key={idx.slug}
+                name={idx.name}
+                slug={idx.slug}
+                stockCount={idx.stock_count}
+                description={idx.description}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Watchlist */}
@@ -126,6 +138,7 @@ export default function DashboardPage() {
                 ticker={item.ticker}
                 name={item.name}
                 sector={item.sector}
+                score={item.composite_score}
                 onRemove={() => removeFromWatchlist.mutate(item.ticker)}
               />
             ))}

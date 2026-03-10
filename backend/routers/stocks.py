@@ -259,12 +259,35 @@ async def get_watchlist(
     the stock name, sector, and when it was added. This endpoint is
     used by the dashboard to show the user's tracked stocks.
     """
-    # ── Join Watchlist with Stock to get stock details ────────────────
-    # We use a SQL JOIN to combine the watchlist entry (which has the
-    # user_id and ticker) with the stock record (which has name, sector).
+    # ── Subquery: latest composite_score per ticker ───────────────────
+    # Uses row_number() to get the most recent signal snapshot per ticker
+    # (same pattern as the bulk signals screener endpoint).
+    latest_signal = (
+        select(
+            SignalSnapshot.ticker.label("sig_ticker"),
+            SignalSnapshot.composite_score.label("composite_score"),
+            func.row_number()
+            .over(
+                partition_by=SignalSnapshot.ticker,
+                order_by=SignalSnapshot.computed_at.desc(),
+            )
+            .label("rn"),
+        )
+    ).subquery("latest_signal")
+
+    # ── Join Watchlist + Stock + latest signal score ───────────────────
     result = await db.execute(
-        select(Watchlist, Stock)
+        select(
+            Watchlist,
+            Stock,
+            latest_signal.c.composite_score,
+        )
         .join(Stock, Watchlist.ticker == Stock.ticker)
+        .outerjoin(
+            latest_signal,
+            (latest_signal.c.sig_ticker == Watchlist.ticker)
+            & (latest_signal.c.rn == 1),
+        )
         .where(Watchlist.user_id == current_user.id)
         .order_by(Watchlist.added_at.desc())
     )
@@ -277,9 +300,10 @@ async def get_watchlist(
             "ticker": watchlist.ticker,
             "name": stock.name,
             "sector": stock.sector,
+            "composite_score": composite_score,
             "added_at": watchlist.added_at,
         }
-        for watchlist, stock in rows
+        for watchlist, stock, composite_score in rows
     ]
 
 

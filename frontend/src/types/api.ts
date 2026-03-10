@@ -120,6 +120,7 @@ export interface WatchlistItem {
   ticker: string;
   name: string | null;
   sector: string | null;
+  composite_score: number | null;
   added_at: string;
 }
 

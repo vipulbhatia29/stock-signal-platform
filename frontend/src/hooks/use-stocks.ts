@@ -184,3 +184,14 @@ export function useIsInWatchlist(ticker: string): boolean {
   const { data } = useWatchlist();
   return data?.some((item) => item.ticker === ticker) ?? false;
 }
+
+// ── Stock meta (name/sector) derived from watchlist cache ─────────────────────
+
+export function useStockMeta(ticker: string): {
+  name: string | null;
+  sector: string | null;
+} {
+  const { data: watchlist } = useWatchlist();
+  const item = watchlist?.find((w) => w.ticker === ticker);
+  return { name: item?.name ?? null, sector: item?.sector ?? null };
+}

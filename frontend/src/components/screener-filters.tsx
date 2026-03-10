@@ -73,6 +73,18 @@ export function ScreenerFilters({
     });
   }
 
+  const indexLabel =
+    filters.index
+      ? (indexes.find((i) => i.slug === filters.index)?.name ?? filters.index)
+      : "Index: All";
+  const rsiLabel =
+    RSI_OPTIONS.find((o) => o.value === (filters.rsiState ?? "__all__"))
+      ?.label ?? "RSI: All";
+  const macdLabel =
+    MACD_OPTIONS.find((o) => o.value === (filters.macdState ?? "__all__"))
+      ?.label ?? "MACD: All";
+  const sectorLabel = filters.sector ?? "Sector: All";
+
   return (
     <div className="flex flex-wrap items-end gap-3">
       <Select
@@ -80,7 +92,7 @@ export function ScreenerFilters({
         onValueChange={(v) => update({ index: v === "__all__" ? null : v })}
       >
         <SelectTrigger size="sm" className="min-w-[140px]">
-          <SelectValue placeholder="Index: All" />
+          <SelectValue>{indexLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="__all__">All Indexes</SelectItem>
@@ -99,7 +111,7 @@ export function ScreenerFilters({
         }
       >
         <SelectTrigger size="sm" className="min-w-[140px]">
-          <SelectValue placeholder="RSI: All" />
+          <SelectValue>{rsiLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {RSI_OPTIONS.map((opt) => (
@@ -117,7 +129,7 @@ export function ScreenerFilters({
         }
       >
         <SelectTrigger size="sm" className="min-w-[140px]">
-          <SelectValue placeholder="MACD: All" />
+          <SelectValue>{macdLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           {MACD_OPTIONS.map((opt) => (
@@ -135,7 +147,7 @@ export function ScreenerFilters({
         }
       >
         <SelectTrigger size="sm" className="min-w-[140px]">
-          <SelectValue placeholder="Sector: All" />
+          <SelectValue>{sectorLabel}</SelectValue>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="__all__">All Sectors</SelectItem>

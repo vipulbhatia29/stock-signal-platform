@@ -181,6 +181,7 @@ class WatchlistItemResponse(BaseModel):
     ticker: str
     name: str | None = None
     sector: str | None = None
+    composite_score: float | None = None
     added_at: datetime
 
     model_config = {"from_attributes": True}

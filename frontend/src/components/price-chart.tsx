@@ -94,6 +94,7 @@ export function PriceChart({
               tickFormatter={(v: number) => `$${v.toFixed(0)}`}
               tick={{ fontSize: 11 }}
               width={60}
+              domain={["auto", "auto"]}
             />
             <YAxis
               yAxisId="volume"
