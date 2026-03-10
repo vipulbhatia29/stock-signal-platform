@@ -22,6 +22,7 @@ export function SignalBadge({ signal, type }: SignalBadgeProps) {
         SENTIMENT_BG_CLASSES[sentiment],
         SENTIMENT_CLASSES[sentiment]
       )}
+      aria-label={`${type.toUpperCase()} signal: ${label}, ${sentiment}`}
     >
       {label}
     </span>

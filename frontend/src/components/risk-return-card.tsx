@@ -16,8 +16,8 @@ export function RiskReturnCard({ returns }: RiskReturnCardProps) {
       value: formatPercent(returns.annual_return),
       color:
         returns.annual_return !== null && returns.annual_return >= 0
-          ? "text-emerald-600 dark:text-emerald-400"
-          : "text-red-600 dark:text-red-400",
+          ? "text-gain"
+          : "text-loss",
     },
     {
       label: "Volatility",
@@ -30,9 +30,9 @@ export function RiskReturnCard({ returns }: RiskReturnCardProps) {
       color:
         returns.sharpe !== null
           ? returns.sharpe > 1
-            ? "text-emerald-600 dark:text-emerald-400"
+            ? "text-gain"
             : returns.sharpe < 0
-              ? "text-red-600 dark:text-red-400"
+              ? "text-loss"
               : "text-foreground"
           : "text-foreground",
     },
@@ -46,7 +46,7 @@ export function RiskReturnCard({ returns }: RiskReturnCardProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           {metrics.map((m) => (
             <div key={m.label}>
               <p className="text-xs uppercase tracking-wider text-muted-foreground">

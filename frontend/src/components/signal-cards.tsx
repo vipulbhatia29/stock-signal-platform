@@ -19,7 +19,7 @@ interface SignalCardsProps {
 export function SignalCards({ signals, isLoading }: SignalCardsProps) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
           <Card key={i}>
             <CardHeader className="pb-2">
@@ -75,7 +75,7 @@ export function SignalCards({ signals, isLoading }: SignalCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map((card) => {
         const sentiment = signalToSentiment(card.signal, card.type);
         return (

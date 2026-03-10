@@ -23,6 +23,11 @@ export function ScoreBadge({ score, size = "default" }: ScoreBadgeProps) {
         size === "default" && "px-2 py-0.5 text-sm",
         size === "lg" && "px-3 py-1 text-lg"
       )}
+      aria-label={
+        score !== null
+          ? `Composite score ${score.toFixed(1)} out of 10, ${sentiment}`
+          : "Score not available"
+      }
     >
       {score !== null ? score.toFixed(1) : "N/A"}
     </span>

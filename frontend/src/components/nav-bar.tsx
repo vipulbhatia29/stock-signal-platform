@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
+import { SunIcon, MoonIcon } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -44,12 +45,12 @@ export function NavBar() {
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
             aria-label="Toggle theme"
           >
-            <span className="dark:hidden">Dark</span>
-            <span className="hidden dark:inline">Light</span>
+            <SunIcon className="size-4 dark:hidden" aria-hidden="true" />
+            <MoonIcon className="hidden size-4 dark:inline" aria-hidden="true" />
           </Button>
           <Button variant="ghost" size="sm" onClick={logout}>
             Logout

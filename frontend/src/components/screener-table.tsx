@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronUpIcon, ChevronDownIcon } from "lucide-react";
 import {
   Table,
@@ -62,6 +63,8 @@ export function ScreenerTable({
   onSort,
   isLoading,
 }: ScreenerTableProps) {
+  const router = useRouter();
+
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -75,13 +78,14 @@ export function ScreenerTable({
   return (
     <div className="overflow-x-auto rounded-lg border">
       <Table>
-        <TableHeader>
+        <TableHeader className="sticky top-0 z-10 bg-background">
           <TableRow>
             {COLUMNS.map((col) => (
               <TableHead
                 key={col.key}
                 className={cn(
-                  col.sortable && "cursor-pointer select-none hover:text-foreground"
+                  col.sortable && "cursor-pointer select-none hover:text-foreground",
+                  col.key === sortBy && "text-foreground"
                 )}
                 onClick={() => col.sortable && onSort(col.key)}
               >
@@ -104,11 +108,16 @@ export function ScreenerTable({
               sentiment === "neutral" ? "" : SENTIMENT_BG_CLASSES[sentiment];
 
             return (
-              <TableRow key={item.ticker} className={rowBg}>
+              <TableRow
+                key={item.ticker}
+                className={cn(rowBg, "cursor-pointer hover:bg-accent/50")}
+                onClick={() => router.push(`/stocks/${item.ticker}`)}
+              >
                 <TableCell className="font-mono font-semibold">
                   <Link
                     href={`/stocks/${item.ticker}`}
                     className="hover:underline"
+                    onClick={(e) => e.stopPropagation()}
                   >
                     {item.ticker}
                   </Link>

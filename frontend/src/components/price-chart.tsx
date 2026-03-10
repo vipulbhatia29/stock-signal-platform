@@ -13,6 +13,9 @@ import {
 import { usePrices } from "@/hooks/use-stocks";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { SectionHeading } from "@/components/section-heading";
+import { ChartTooltip } from "@/components/chart-tooltip";
+import { useChartColors, CHART_STYLE } from "@/lib/chart-theme";
 import { formatCurrency, formatVolume, formatChartDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PricePeriod } from "@/types/api";
@@ -31,79 +34,68 @@ interface PriceChartProps {
   onPeriodChange: (p: PricePeriod) => void;
 }
 
-export function PriceChart({
-  ticker,
-  period,
-  onPeriodChange,
-}: PriceChartProps) {
+export function PriceChart({ ticker, period, onPeriodChange }: PriceChartProps) {
   const { data: prices, isLoading } = usePrices(ticker, period);
+  const colors = useChartColors();
+
+  const periodSelector = (
+    <div className="flex gap-1">
+      {PERIODS.map((p) => (
+        <Button
+          key={p.value}
+          variant={period === p.value ? "secondary" : "ghost"}
+          size="sm"
+          className={cn("h-7 px-2.5 text-xs")}
+          onClick={() => onPeriodChange(p.value)}
+        >
+          {p.label}
+        </Button>
+      ))}
+    </div>
+  );
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-          Price History
-        </h2>
-        <div className="flex gap-1">
-          {PERIODS.map((p) => (
-            <Button
-              key={p.value}
-              variant={period === p.value ? "secondary" : "ghost"}
-              size="sm"
-              className={cn("h-7 px-2.5 text-xs")}
-              onClick={() => onPeriodChange(p.value)}
-            >
-              {p.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      <SectionHeading action={periodSelector}>Price History</SectionHeading>
 
       {isLoading ? (
-        <Skeleton className="h-[400px] w-full" />
+        <Skeleton className="h-[250px] w-full sm:h-[400px]" />
       ) : (
-        <ResponsiveContainer width="100%" height={400}>
-          <ComposedChart data={prices}>
+        <ResponsiveContainer width="100%" height="100%" minHeight={250} className="sm:min-h-[400px]">
+          <ComposedChart
+            data={prices}
+            role="img"
+            aria-label={`${ticker} price history chart`}
+          >
             <defs>
               <linearGradient id="priceGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop
-                  offset="5%"
-                  stopColor="hsl(var(--chart-1))"
-                  stopOpacity={0.3}
-                />
-                <stop
-                  offset="95%"
-                  stopColor="hsl(var(--chart-1))"
-                  stopOpacity={0}
-                />
+                <stop offset="5%" stopColor={colors.price} stopOpacity={0.3} />
+                <stop offset="95%" stopColor={colors.price} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              className="stroke-border/50"
-            />
+            <CartesianGrid {...CHART_STYLE.grid} />
             <XAxis
               dataKey="time"
               tickFormatter={formatChartDate}
-              tick={{ fontSize: 11 }}
-              className="text-muted-foreground"
+              {...CHART_STYLE.axis}
             />
             <YAxis
               yAxisId="price"
               orientation="left"
               tickFormatter={(v: number) => `$${v.toFixed(0)}`}
-              tick={{ fontSize: 11 }}
               width={60}
               domain={["auto", "auto"]}
+              {...CHART_STYLE.axis}
             />
             <YAxis
               yAxisId="volume"
               orientation="right"
               tickFormatter={formatVolume}
-              tick={{ fontSize: 11 }}
               width={50}
+              {...CHART_STYLE.axis}
             />
             <Tooltip
+              cursor={CHART_STYLE.tooltip.cursor}
               content={({ active, payload }) => {
                 if (!active || !payload?.length) return null;
                 const d = payload[0].payload as {
@@ -112,15 +104,14 @@ export function PriceChart({
                   volume: number;
                 };
                 return (
-                  <div className="rounded-lg border bg-popover px-3 py-2 text-sm shadow-md">
-                    <p className="font-medium">{formatChartDate(d.time)}</p>
-                    <p className="text-muted-foreground">
-                      Price: {formatCurrency(d.close)}
-                    </p>
-                    <p className="text-muted-foreground">
-                      Volume: {formatVolume(d.volume)}
-                    </p>
-                  </div>
+                  <ChartTooltip
+                    active={active}
+                    label={formatChartDate(d.time)}
+                    items={[
+                      { name: "Price", value: formatCurrency(d.close), color: colors.price },
+                      { name: "Volume", value: formatVolume(d.volume), color: colors.volume },
+                    ]}
+                  />
                 );
               }}
             />
@@ -128,15 +119,15 @@ export function PriceChart({
               yAxisId="price"
               type="monotone"
               dataKey="close"
-              stroke="hsl(var(--chart-1))"
+              stroke={colors.price}
               fill="url(#priceGradient)"
               strokeWidth={2}
             />
             <Bar
               yAxisId="volume"
               dataKey="volume"
-              fill="hsl(var(--chart-3))"
-              opacity={0.3}
+              fill={colors.volume}
+              opacity={0.4}
             />
           </ComposedChart>
         </ResponsiveContainer>

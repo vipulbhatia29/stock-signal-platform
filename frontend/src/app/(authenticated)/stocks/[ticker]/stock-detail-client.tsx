@@ -16,6 +16,8 @@ import { SignalCards } from "@/components/signal-cards";
 import { SignalHistoryChart } from "@/components/signal-history-chart";
 import { RiskReturnCard } from "@/components/risk-return-card";
 import { EmptyState } from "@/components/empty-state";
+import { Breadcrumbs } from "@/components/breadcrumbs";
+import { SectionHeading } from "@/components/section-heading";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -79,6 +81,13 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
 
   return (
     <div className="space-y-8">
+      <Breadcrumbs
+        items={[
+          { label: "Dashboard", href: "/dashboard" },
+          { label: ticker },
+        ]}
+      />
+
       {signalsLoading ? (
         <div className="space-y-2">
           <Skeleton className="h-8 w-32" />
@@ -100,16 +109,12 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">
-          Signal Breakdown
-        </h2>
+        <SectionHeading>Signal Breakdown</SectionHeading>
         <SignalCards signals={signals} isLoading={signalsLoading} />
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">
-          Signal History (90 days)
-        </h2>
+        <SectionHeading>Signal History (90 days)</SectionHeading>
         <SignalHistoryChart ticker={ticker} />
       </section>
 

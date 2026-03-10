@@ -14,6 +14,7 @@ import { IndexCard, IndexCardSkeleton } from "@/components/index-card";
 import { StockCard, StockCardSkeleton } from "@/components/stock-card";
 import { SectorFilter } from "@/components/sector-filter";
 import { EmptyState } from "@/components/empty-state";
+import { SectionHeading } from "@/components/section-heading";
 import { toast } from "sonner";
 
 export default function DashboardPage() {
@@ -66,9 +67,7 @@ export default function DashboardPage() {
 
       {/* Index Cards */}
       <section>
-        <h2 className="mb-3 text-sm font-medium uppercase tracking-wider text-muted-foreground">
-          Market Indexes
-        </h2>
+        <SectionHeading>Market Indexes</SectionHeading>
         {indexesLoading ? (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {Array.from({ length: 3 }).map((_, i) => (
@@ -100,23 +99,24 @@ export default function DashboardPage() {
 
       {/* Watchlist */}
       <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-muted-foreground">
-            Watchlist
-            {filteredWatchlist.length > 0 && (
-              <span className="ml-2 text-foreground">
-                ({filteredWatchlist.length})
-              </span>
-            )}
-          </h2>
-          {sectors.length > 1 && (
-            <SectorFilter
-              sectors={sectors}
-              selected={sectorFilter}
-              onChange={setSectorFilter}
-            />
+        <SectionHeading
+          action={
+            sectors.length > 1 ? (
+              <SectorFilter
+                sectors={sectors}
+                selected={sectorFilter}
+                onChange={setSectorFilter}
+              />
+            ) : undefined
+          }
+        >
+          Watchlist
+          {filteredWatchlist.length > 0 && (
+            <span className="ml-2 font-normal normal-case text-foreground tracking-normal">
+              ({filteredWatchlist.length})
+            </span>
           )}
-        </div>
+        </SectionHeading>
 
         {watchlistLoading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">

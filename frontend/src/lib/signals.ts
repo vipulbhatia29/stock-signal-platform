@@ -61,20 +61,22 @@ export function formatSignalLabel(signal: string | null): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// Theme-aware classes using CSS variable-based Tailwind utilities.
+// text-gain, text-loss, text-neutral-signal resolve from globals.css.
 export const SENTIMENT_CLASSES: Record<Sentiment, string> = {
-  bullish: "text-emerald-700 dark:text-emerald-400",
-  neutral: "text-amber-600 dark:text-amber-400",
-  bearish: "text-red-600 dark:text-red-400",
+  bullish: "text-gain",
+  neutral: "text-neutral-signal",
+  bearish: "text-loss",
 };
 
 export const SENTIMENT_BG_CLASSES: Record<Sentiment, string> = {
-  bullish: "bg-emerald-50 dark:bg-emerald-950/30",
-  neutral: "bg-amber-50 dark:bg-amber-950/30",
-  bearish: "bg-red-50 dark:bg-red-950/30",
+  bullish: "bg-gain/10",
+  neutral: "bg-neutral-signal/10",
+  bearish: "bg-loss/10",
 };
 
 export const SENTIMENT_BORDER_CLASSES: Record<Sentiment, string> = {
-  bullish: "border-emerald-500",
-  neutral: "border-amber-500",
-  bearish: "border-red-500",
+  bullish: "border-gain",
+  neutral: "border-neutral-signal",
+  bearish: "border-loss",
 };

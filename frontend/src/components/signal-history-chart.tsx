@@ -13,6 +13,8 @@ import {
 } from "recharts";
 import { useSignalHistory } from "@/hooks/use-stocks";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChartTooltip } from "@/components/chart-tooltip";
+import { useChartColors, CHART_STYLE } from "@/lib/chart-theme";
 import { formatChartDate, formatNumber } from "@/lib/format";
 
 interface SignalHistoryChartProps {
@@ -21,33 +23,42 @@ interface SignalHistoryChartProps {
 
 export function SignalHistoryChart({ ticker }: SignalHistoryChartProps) {
   const { data: history, isLoading } = useSignalHistory(ticker, 90);
+  const colors = useChartColors();
 
   if (isLoading) {
-    return <Skeleton className="h-[300px] w-full" />;
+    return <Skeleton className="h-[200px] w-full sm:h-[300px]" />;
   }
 
   if (!history || history.length === 0) {
     return (
-      <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+      <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground sm:h-[300px]">
         No signal history available
       </div>
     );
   }
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <ComposedChart data={history}>
-        <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+    <ResponsiveContainer
+      width="100%"
+      height="100%"
+      minHeight={200}
+      className="sm:min-h-[300px]"
+    >
+      <ComposedChart
+        data={history}
+        role="img"
+        aria-label={`${ticker} signal history chart`}
+      >
+        <CartesianGrid {...CHART_STYLE.grid} />
         <XAxis
           dataKey="computed_at"
           tickFormatter={formatChartDate}
-          tick={{ fontSize: 11 }}
+          {...CHART_STYLE.axis}
         />
         <YAxis
           yAxisId="score"
           orientation="left"
           domain={[0, 10]}
-          tick={{ fontSize: 11 }}
           width={35}
           label={{
             value: "Score",
@@ -55,12 +66,12 @@ export function SignalHistoryChart({ ticker }: SignalHistoryChartProps) {
             position: "insideLeft",
             style: { fontSize: 11 },
           }}
+          {...CHART_STYLE.axis}
         />
         <YAxis
           yAxisId="rsi"
           orientation="right"
           domain={[0, 100]}
-          tick={{ fontSize: 11 }}
           width={35}
           label={{
             value: "RSI",
@@ -68,8 +79,10 @@ export function SignalHistoryChart({ ticker }: SignalHistoryChartProps) {
             position: "insideRight",
             style: { fontSize: 11 },
           }}
+          {...CHART_STYLE.axis}
         />
         <Tooltip
+          cursor={CHART_STYLE.tooltip.cursor}
           content={({ active, payload }) => {
             if (!active || !payload?.length) return null;
             const d = payload[0].payload as {
@@ -78,15 +91,14 @@ export function SignalHistoryChart({ ticker }: SignalHistoryChartProps) {
               rsi_value: number | null;
             };
             return (
-              <div className="rounded-lg border bg-popover px-3 py-2 text-sm shadow-md">
-                <p className="font-medium">{formatChartDate(d.computed_at)}</p>
-                <p style={{ color: "hsl(var(--chart-1))" }}>
-                  Score: {formatNumber(d.composite_score, 1)}
-                </p>
-                <p style={{ color: "hsl(var(--chart-2))" }}>
-                  RSI: {formatNumber(d.rsi_value, 1)}
-                </p>
-              </div>
+              <ChartTooltip
+                active={active}
+                label={formatChartDate(d.computed_at)}
+                items={[
+                  { name: "Score", value: formatNumber(d.composite_score, 1), color: colors.chart1 },
+                  { name: "RSI", value: formatNumber(d.rsi_value, 1), color: colors.chart2 },
+                ]}
+              />
             );
           }}
         />
@@ -94,22 +106,22 @@ export function SignalHistoryChart({ ticker }: SignalHistoryChartProps) {
         <ReferenceLine
           yAxisId="rsi"
           y={70}
-          stroke="hsl(var(--destructive))"
+          stroke={colors.rsi}
           strokeDasharray="3 3"
-          strokeOpacity={0.5}
+          strokeOpacity={0.6}
         />
         <ReferenceLine
           yAxisId="rsi"
           y={30}
-          stroke="hsl(var(--chart-1))"
+          stroke={colors.chart1}
           strokeDasharray="3 3"
-          strokeOpacity={0.5}
+          strokeOpacity={0.6}
         />
         <Line
           yAxisId="score"
           type="monotone"
           dataKey="composite_score"
-          stroke="hsl(var(--chart-1))"
+          stroke={colors.chart1}
           strokeWidth={2}
           dot={false}
           name="Composite Score"
@@ -118,7 +130,7 @@ export function SignalHistoryChart({ ticker }: SignalHistoryChartProps) {
           yAxisId="rsi"
           type="monotone"
           dataKey="rsi_value"
-          stroke="hsl(var(--chart-2))"
+          stroke={colors.chart2}
           strokeWidth={1.5}
           strokeDasharray="4 2"
           dot={false}
