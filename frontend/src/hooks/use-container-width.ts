@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { type RefObject, useState, useEffect } from "react";
 
 /**
  * Returns the current pixel width of a DOM element via ResizeObserver.
@@ -9,7 +9,7 @@ import { useState, useEffect } from "react";
  * during render.
  */
 export function useContainerWidth(
-  ref: React.RefObject<HTMLDivElement | null>
+  ref: RefObject<HTMLDivElement | null>
 ): number {
   const [width, setWidth] = useState(160);
 

@@ -27,7 +27,12 @@ function StockCard({ item }: { item: BulkSignalItem }) {
       role="button"
       tabIndex={0}
       aria-label={`View ${item.ticker} — ${item.name}`}
-      onKeyDown={(e) => e.key === "Enter" && router.push(`/stocks/${item.ticker}`)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          router.push(`/stocks/${item.ticker}`);
+        }
+      }}
     >
       {/* Sparkline — full-width top half */}
       <div ref={chartRef} className="w-full border-b border-border/50">
@@ -106,6 +111,8 @@ function StockCardSkeleton() {
 
 // ── Grid ──────────────────────────────────────────────────────────────────────
 
+const GRID_CLASS = "grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3";
+
 interface ScreenerGridProps {
   items: BulkSignalItem[];
   isLoading: boolean;
@@ -114,7 +121,7 @@ interface ScreenerGridProps {
 export function ScreenerGrid({ items, isLoading }: ScreenerGridProps) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+      <div className={GRID_CLASS}>
         {Array.from({ length: 10 }).map((_, i) => (
           <StockCardSkeleton key={i} />
         ))}
@@ -123,7 +130,7 @@ export function ScreenerGrid({ items, isLoading }: ScreenerGridProps) {
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+    <div className={GRID_CLASS}>
       {items.map((item) => (
         <StockCard key={item.ticker} item={item} />
       ))}
