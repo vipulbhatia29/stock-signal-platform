@@ -1,7 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { StarIcon } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { StarIcon, RefreshCw } from "lucide-react";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   useIndexes,
   useWatchlist,
@@ -15,16 +20,82 @@ import { StockCard, StockCardSkeleton } from "@/components/stock-card";
 import { SectorFilter } from "@/components/sector-filter";
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeading } from "@/components/section-heading";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import * as api from "@/lib/api";
+import type { TaskStatus, RefreshTask } from "@/types/api";
+import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
+  const [refreshTasks, setRefreshTasks] = useState<Record<string, string>>({});
+
+  const queryClient = useQueryClient();
 
   const { data: indexes, isLoading: indexesLoading } = useIndexes();
   const { data: watchlist, isLoading: watchlistLoading } = useWatchlist();
   const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
   const ingestTicker = useIngestTicker();
+
+  // ── Refresh All mutation ────────────────────────────────────────────────────
+
+  const refreshAllMutation = useMutation({
+    mutationFn: () =>
+      api.post<RefreshTask[]>("/stocks/watchlist/refresh-all"),
+  });
+
+  // When refresh-all succeeds, populate the task map
+  useEffect(() => {
+    if (refreshAllMutation.data) {
+      const taskMap: Record<string, string> = {};
+      refreshAllMutation.data.forEach((t) => {
+        taskMap[t.ticker] = t.task_id;
+      });
+      setTimeout(() => setRefreshTasks(taskMap), 0);
+    }
+  }, [refreshAllMutation.data]);
+
+  // ── Per-task polling ────────────────────────────────────────────────────────
+
+  const hasInFlightTasks = Object.keys(refreshTasks).length > 0;
+
+  const taskPollQuery = useQuery({
+    queryKey: ["task-poll", refreshTasks],
+    queryFn: async () => {
+      const results = await Promise.all(
+        Object.entries(refreshTasks).map(async ([ticker, taskId]) => {
+          const res = await api.get<TaskStatus>(
+            `/tasks/${taskId}/status`
+          );
+          return { ticker, taskId, state: res.state };
+        })
+      );
+      return results;
+    },
+    enabled: hasInFlightTasks,
+    refetchInterval: hasInFlightTasks ? 2000 : false,
+  });
+
+  // Process completed tasks
+  useEffect(() => {
+    if (!taskPollQuery.data) return;
+    const stillPending: Record<string, string> = {};
+    taskPollQuery.data.forEach(({ ticker, taskId, state }) => {
+      if (state === "SUCCESS") {
+        queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+      } else if (state === "FAILURE") {
+        toast.error(
+          `Couldn't refresh ${ticker} — Yahoo Finance may be rate limited. Try again in a few minutes.`
+        );
+      } else {
+        stillPending[ticker] = taskId;
+      }
+    });
+    setTimeout(() => setRefreshTasks(stillPending), 0);
+  }, [taskPollQuery.data, queryClient]);
+
+  // ── Derived data ────────────────────────────────────────────────────────────
 
   const sectors = useMemo(() => {
     if (!watchlist) return [];
@@ -37,6 +108,8 @@ export default function DashboardPage() {
     if (!sectorFilter) return watchlist;
     return watchlist.filter((w) => w.sector === sectorFilter);
   }, [watchlist, sectorFilter]);
+
+  // ── Handlers ────────────────────────────────────────────────────────────────
 
   async function handleAddTicker(ticker: string) {
     const isInWatchlist = watchlist?.some((w) => w.ticker === ticker);
@@ -102,13 +175,29 @@ export default function DashboardPage() {
       <section>
         <SectionHeading
           action={
-            sectors.length > 1 ? (
-              <SectorFilter
-                sectors={sectors}
-                selected={sectorFilter}
-                onChange={setSectorFilter}
-              />
-            ) : undefined
+            <div className="flex items-center gap-2">
+              {sectors.length > 1 && (
+                <SectorFilter
+                  sectors={sectors}
+                  selected={sectorFilter}
+                  onChange={setSectorFilter}
+                />
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => refreshAllMutation.mutate()}
+                disabled={refreshAllMutation.isPending || hasInFlightTasks}
+              >
+                <RefreshCw
+                  className={cn(
+                    "h-4 w-4 mr-1.5",
+                    hasInFlightTasks && "animate-spin"
+                  )}
+                />
+                Refresh All
+              </Button>
+            </div>
           }
         >
           Watchlist
@@ -142,6 +231,13 @@ export default function DashboardPage() {
                 score={item.composite_score}
                 onRemove={() => removeFromWatchlist.mutate(item.ticker)}
                 animationDelay={Math.min(i, 7) * 60}
+                currentPrice={item.current_price}
+                priceUpdatedAt={item.price_updated_at}
+                isRefreshing={item.ticker in refreshTasks}
+                onRefresh={async (ticker) => {
+                  await api.post(`/stocks/${ticker}/ingest`);
+                  queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+                }}
               />
             ))}
           </div>
