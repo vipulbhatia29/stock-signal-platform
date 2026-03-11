@@ -35,7 +35,6 @@ export interface StockResponse {
   exchange: string | null;
   sector: string | null;
   industry: string | null;
-  is_in_universe: boolean;
   is_active: boolean;
 }
 

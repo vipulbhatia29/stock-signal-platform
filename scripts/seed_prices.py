@@ -29,6 +29,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import async_session_factory
+from backend.models.index import StockIndexMembership
 from backend.models.stock import Stock
 from backend.tools.market_data import ensure_stock_exists, fetch_prices, get_latest_price
 from backend.tools.recommendations import generate_recommendation
@@ -56,10 +57,18 @@ async def get_universe_tickers(db: AsyncSession) -> list[str]:
     Returns:
         List of ticker symbols.
     """
+    # Subquery: tickers that are current members of any index
+    current_members = (
+        select(StockIndexMembership.ticker)
+        .where(StockIndexMembership.removed_date.is_(None))
+        .distinct()
+        .subquery()
+    )
+
     result = await db.execute(
         select(Stock.ticker)
-        .where(Stock.is_in_universe.is_(True))
         .where(Stock.is_active.is_(True))
+        .where(Stock.ticker.in_(select(current_members.c.ticker)))
         .order_by(Stock.ticker)
     )
     return [row[0] for row in result.all()]

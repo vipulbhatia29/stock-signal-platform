@@ -652,3 +652,39 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Next:** Phase 3 planning (portfolio tracker, fundamentals, agent/chat, backlog B1-B8)
 
 ---
+
+## Session 15 — B-Sprint Planning (Brainstorming + Spec + Plan)
+
+**Date:** 2026-03-11
+**Branch:** `feat/phase-3`
+**What was done:**
+
+### Brainstorming + Design (no code changes)
+- [x] Reviewed B1-B8 backlog items collaboratively with user
+- [x] **Scoped B-sprint to 4 items** — B1 deferred, B6+B8 promoted to Phase 3
+- [x] **B3** — Add `removed_date` to `StockIndexMembership` (soft-delete instead of hard-delete)
+- [x] **B4** — Add `last_synced_at` to `StockIndex`, expose in API response
+- [x] **B5** — Clean break: drop `is_in_universe` column + sweep all references
+- [x] **B7** — Add `sharpe_min` filter to `GET /api/v1/stocks/signals/bulk`
+- [x] **B2** — Watchlist current price + freshness UI: `current_price` + `price_updated_at` in response, `RelativeTime` component, per-card refresh icon (amber when >1h stale), "Refresh All" button in watchlist section header with Celery async tasks + per-card spinner polling
+
+### Artifacts created
+- [x] Spec: `docs/superpowers/specs/2026-03-11-b-sprint-design.md` (committed `ec0e534`)
+- [x] Plan: `docs/superpowers/plans/2026-03-11-b-sprint.md` (committed `667c7f8`) — 4 chunks, 12 tasks, TDD throughout
+
+### Key decisions
+- Single Migration 003 covers B3+B4+B5 (atomic DB change)
+- Celery task `refresh_ticker_task` uses exponential backoff (5s→10s→20s→40s, max 4 retries)
+- `refresh_ticker_task` uses `asyncio.run()` bridge since Celery workers are sync
+- "Refresh All" uses live per-task polling (TanStack Query `refetchInterval: 2000`) rather than optimistic UI
+- `RelativeTime` format: <1h → "just now", 1-23h → "X hours ago", 1-6d → "X days ago", ≥7d → "Mar 4"
+- Task status router lives in `backend/routers/tasks.py` (not `stocks.py`)
+- `sync_sp500.py` is a significant rewrite — it currently doesn't touch `StockIndexMembership` at all
+
+**Test count:** 148 (unchanged — planning session only)
+**Files created:** spec + plan docs, `.gitignore` updated (added `.superpowers/`, `.serena/`)
+**Files changed:** none (planning session)
+
+**Next:** Execute B-sprint implementation plan (Session 16+)
+
+---

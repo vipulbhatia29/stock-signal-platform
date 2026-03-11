@@ -36,7 +36,6 @@ class StockResponse(BaseModel):
     exchange: str | None = None
     sector: str | None = None
     industry: str | None = None
-    is_in_universe: bool  # True if part of S&P 500
     is_active: bool
 
     model_config = {"from_attributes": True}

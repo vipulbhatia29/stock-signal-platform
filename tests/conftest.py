@@ -170,7 +170,6 @@ class StockFactory(factory.Factory):
     name = factory.Faker("company")
     exchange = "NASDAQ"
     sector = "Technology"
-    is_in_universe = True
     is_active = True
     created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
     updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))

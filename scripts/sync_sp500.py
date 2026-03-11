@@ -1,8 +1,9 @@
-"""Sync S&P 500 stock universe into the stocks table.
+"""Sync S&P 500 stock universe into the stocks and stock_index_membership tables.
 
 Fetches the current S&P 500 constituents from Wikipedia and upserts them
-into the database. Stocks already in the table are updated with latest
-sector/industry info; new stocks are inserted.
+into the database. Stock records are created/updated in the stocks table;
+index membership is tracked in stock_index_membership (linked to the
+"S&P 500" StockIndex record).
 
 Usage:
     uv run python -m scripts.sync_sp500
@@ -14,12 +15,14 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 import pandas as pd
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from backend.database import async_session_factory
+from backend.models.index import StockIndex, StockIndexMembership
 from backend.models.stock import Stock
 
 logging.basicConfig(
@@ -30,6 +33,10 @@ logger = logging.getLogger(__name__)
 
 # Wikipedia URL for the S&P 500 constituents table
 SP500_URL = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+
+# Canonical slug for the S&P 500 index
+SP500_SLUG = "sp500"
+SP500_NAME = "S&P 500"
 
 
 def fetch_sp500_tickers() -> pd.DataFrame:
@@ -58,7 +65,7 @@ def fetch_sp500_tickers() -> pd.DataFrame:
 
 
 async def sync_stocks(df: pd.DataFrame, dry_run: bool = False) -> dict[str, int]:
-    """Upsert S&P 500 stocks into the database.
+    """Upsert S&P 500 stocks and sync index membership into the database.
 
     Args:
         df: DataFrame from fetch_sp500_tickers().
@@ -76,7 +83,20 @@ async def sync_stocks(df: pd.DataFrame, dry_run: bool = False) -> dict[str, int]
         return {"inserted": 0, "updated": 0, "total": len(df)}
 
     async with async_session_factory() as db:
-        # Get existing tickers to distinguish inserts vs updates
+        # ── Ensure the S&P 500 index record exists ───────────────────
+        idx_result = await db.execute(select(StockIndex).where(StockIndex.slug == SP500_SLUG))
+        sp500_index = idx_result.scalar_one_or_none()
+        if sp500_index is None:
+            sp500_index = StockIndex(
+                name=SP500_NAME,
+                slug=SP500_SLUG,
+                description="S&P 500 index constituents",
+            )
+            db.add(sp500_index)
+            await db.flush()  # populate id without committing
+            logger.info("Created StockIndex record for %s", SP500_NAME)
+
+        # ── Get existing tickers to distinguish inserts vs updates ───
         result = await db.execute(select(Stock.ticker))
         existing_tickers = {row[0] for row in result.all()}
 
@@ -90,7 +110,6 @@ async def sync_stocks(df: pd.DataFrame, dry_run: bool = False) -> dict[str, int]
                 "sector": row["sector"],
                 "industry": row["industry"],
                 "exchange": row["exchange"],
-                "is_in_universe": True,
                 "is_active": True,
             }
 
@@ -101,7 +120,6 @@ async def sync_stocks(df: pd.DataFrame, dry_run: bool = False) -> dict[str, int]
                     "name": stmt.excluded.name,
                     "sector": stmt.excluded.sector,
                     "industry": stmt.excluded.industry,
-                    "is_in_universe": True,
                     "is_active": True,
                 },
             )
@@ -112,21 +130,44 @@ async def sync_stocks(df: pd.DataFrame, dry_run: bool = False) -> dict[str, int]
             else:
                 inserted += 1
 
-        # Mark stocks no longer in S&P 500 as not in universe
+        # ── Sync index membership ────────────────────────────────────
+        now = datetime.now(timezone.utc)
         sp500_tickers = set(df["ticker"].tolist())
+
+        # Upsert current memberships (re-add if previously removed)
+        for ticker in sp500_tickers:
+            membership_stmt = (
+                pg_insert(StockIndexMembership)
+                .values(
+                    ticker=ticker,
+                    index_id=sp500_index.id,
+                    added_at=now,
+                    removed_date=None,
+                )
+                .on_conflict_do_update(
+                    constraint="uq_ticker_index",
+                    set_={"removed_date": None},  # re-add if previously removed
+                )
+            )
+            await db.execute(membership_stmt)
+
+        # Mark stale memberships (tickers no longer in S&P 500) as removed
         stale_stmt = (
-            update(Stock)
-            .where(Stock.is_in_universe.is_(True))
-            .where(Stock.ticker.notin_(sp500_tickers))
-            .values(is_in_universe=False)
+            update(StockIndexMembership)
+            .where(StockIndexMembership.index_id == sp500_index.id)
+            .where(StockIndexMembership.ticker.notin_(sp500_tickers))
+            .where(StockIndexMembership.removed_date.is_(None))
+            .values(removed_date=now)
         )
         stale_result = await db.execute(stale_stmt)
         stale_count = stale_result.rowcount
+        if stale_count > 0:
+            logger.info("Marked %d stale S&P 500 membership records as removed", stale_count)
+
+        # Update last_synced_at on the index record
+        sp500_index.last_synced_at = now
 
         await db.commit()
-
-        if stale_count > 0:
-            logger.info("Marked %d stocks as no longer in S&P 500", stale_count)
 
         return {"inserted": inserted, "updated": updated, "total": len(df)}
 

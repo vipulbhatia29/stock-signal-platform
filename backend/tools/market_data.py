@@ -246,7 +246,6 @@ async def ensure_stock_exists(
         exchange=info.get("exchange"),
         sector=info.get("sector"),
         industry=info.get("industry"),
-        is_in_universe=False,  # user-added stocks aren't part of S&P 500
         is_active=True,
     )
     db.add(stock)
