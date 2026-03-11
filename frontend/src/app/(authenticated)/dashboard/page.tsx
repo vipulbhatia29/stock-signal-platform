@@ -84,13 +84,14 @@ export default function DashboardPage() {
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {indexes.map((idx) => (
+            {indexes.map((idx, i) => (
               <IndexCard
                 key={idx.slug}
                 name={idx.name}
                 slug={idx.slug}
                 stockCount={idx.stock_count}
                 description={idx.description}
+                animationDelay={i * 80}
               />
             ))}
           </div>
@@ -132,7 +133,7 @@ export default function DashboardPage() {
           />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredWatchlist.map((item) => (
+            {filteredWatchlist.map((item, i) => (
               <StockCard
                 key={item.ticker}
                 ticker={item.ticker}
@@ -140,6 +141,7 @@ export default function DashboardPage() {
                 sector={item.sector}
                 score={item.composite_score}
                 onRemove={() => removeFromWatchlist.mutate(item.ticker)}
+                animationDelay={Math.min(i, 7) * 60}
               />
             ))}
           </div>
