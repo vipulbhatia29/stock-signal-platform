@@ -213,6 +213,9 @@ stock-signal-platform/
 | Raw `fetch()` calls | `lib/api.ts` wrapper with cookie auth |
 | Inline styles | Tailwind utility classes |
 | `<img>` elements | `<Image />` from `next/image` |
+| `setState()` inside `useEffect` body (sync) | Lazy `useState(() => initialValue)` for one-time reads; callbacks only inside effects |
+| `hsl(var(--x))` in Recharts | `useChartColors()` hook — Recharts needs resolved color strings, not CSS var references |
+| New React context without lazy localStorage init | Use `useState<T>(() => { if (typeof window === "undefined") return default; return localStorage.getItem(key) ?? default; })` |
 
 ### Architecture
 
@@ -278,7 +281,9 @@ stock-signal-platform/
   architecture, API contracts, service layer design, integration patterns.
 - `docs/data-architecture.md` — Data architecture, entity model, TimescaleDB
   configuration, model versioning strategy, and data flow diagrams.
-- `docs/phase2-requirements.md` — Phase 2 Dashboard + Screener UI requirements.
+- `docs/phase2-requirements.md` — Phase 2 Dashboard + Screener UI requirements (COMPLETED).
+- `docs/workflow_phase2.md` — Phase 2 implementation workflow (COMPLETED).
+- `global-claude-md-for-home-dir/design-principles.md` — Reusable design principles for financial UIs (cross-project reference).
 - `project-plan.md` — Phased build plan with deliverables per phase.
 - `PROGRESS.md` — Session log tracking what was built and what's next.
 
@@ -294,6 +299,8 @@ stock-signal-platform/
 | Change architecture or conventions | This file (`CLAUDE.md`) |
 | Add a new env var | `backend/.env.example` + Environment Variables section in `CLAUDE.md` |
 | Complete a session | `PROGRESS.md` with what was done, key decisions, and what's next |
+| Ship a feature from an implementation plan | Delete or mark COMPLETED the plan/spec files (`.claude/plans/`, `docs/superpowers/`). Extract any reusable design principles to `global-claude-md-for-home-dir/design-principles.md` |
+| Delete a file referenced in `mkdocs.yml` | Update `mkdocs.yml` nav to remove or comment out the entry |
 
 **End-of-session checklist** — before wrapping up, verify these are current:
 1. `PROGRESS.md` — session entry added
@@ -327,3 +334,8 @@ Optional: GROQ_API_KEY, SERPAPI_API_KEY, FRED_API_KEY, OPENAI_API_KEY
 | yfinance returns empty DataFrame | Ticker invalid or rate-limited | Verify ticker on Yahoo Finance; wait and retry |
 | yfinance rate limiting in scripts | Too many requests too fast | Add 0.5s delay between tickers |
 | `VIRTUAL_ENV` warning from uv | System VIRTUAL_ENV conflicts | Ignore; uv uses `.venv/` correctly via `uv run` |
+| ESLint `react-hooks/set-state-in-effect` error | Calling `setState()` synchronously inside `useEffect` body | Use lazy `useState(() => ...)` initializer for one-time reads (e.g. localStorage); use `MutationObserver` callback (not effect body) for reactive updates |
+| Worktree subagents can't write files | Claude Code permission model restricts Write/Bash in isolated worktrees | Write files from the main session instead; use worktrees for research/read tasks only |
+| `gh auth login` fails with `permission denied` on `~/.config/gh` | Missing config directory | `sudo mkdir -p ~/.config/gh && sudo chown $USER ~/.config/gh` |
+| CSS var colors not resolving in Recharts | Recharts needs literal color strings, not `var(--x)` | Use `useChartColors()` hook (reads via `getComputedStyle`) or local `readCssVar()` for one-off reads |
+| Sparkline/chart colors wrong on initial render | CSS vars not yet resolved on first paint | Use lazy `useState(() => resolveColor(...))` initializer — reads CSS vars synchronously on mount |

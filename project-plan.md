@@ -171,8 +171,26 @@ Track actual positions and add fundamental analysis signals.
    - Fundamental deterioration flags (Piotroski drops below 4)
    - Cash reserve warnings (<10% cash)
 
+### Phase 1-2 Implementation Backlog (pre-requisites for Phase 3)
+
+These are specified features that were intentionally deferred or partially implemented
+during Phases 1-2. They should be addressed early in Phase 3 since several are
+prerequisites for portfolio-aware recommendations.
+
+| # | Item | Source | Why It Matters |
+|---|------|--------|----------------|
+| B1 | **Refresh token rotation** — invalidate old tokens via Redis/DB blacklist | FSD FR-1.3 | Security: old refresh tokens remain valid until expiry |
+| B2 | **Watchlist: return `current_price`** in watchlist endpoint | FSD FR-2.2 | Dashboard shows price; currently requires separate API call |
+| B3 | **StockIndexMembership: add `removed_date`** field | FSD FR-2.4 | Track when stocks leave an index (currently row is deleted) |
+| B4 | **StockIndex: add `last_synced_at`** field | FSD FR-2.4 | Know when index data was last refreshed |
+| B5 | **Remove `is_in_universe` from Stock model** | FSD FR-2.4 | Replaced by index membership; old boolean still exists |
+| B6 | **Staleness enforcement in recommendation engine** | FSD FR-3.3 | Recommendations can currently be generated from stale signals |
+| B7 | **Sharpe ratio filter** on bulk signals endpoint | FSD FR-7.2 | Currently sortable only, no `sharpe_min` filter param |
+| B8 | **`POST /recommendations/{id}/acknowledge`** endpoint | TDD 3.4 | Documented but not implemented; needed for "Action Required" panel |
+
 ### Success Criteria
 Can log transactions, see portfolio P&L, get rebalancing suggestions.
+Implementation backlog items B1-B8 addressed before portfolio-aware features.
 
 ---
 

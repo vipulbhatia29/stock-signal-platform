@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Draft
+**Status:** Living Document (Phase 1-2.5 complete)
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -67,7 +67,7 @@ does it.
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │ PostgreSQL   │  │ Redis 7      │  │ External     │
 │ + TimescaleDB│  │              │  │ APIs         │
-│ (port 5432)  │  │ (port 6379)  │  │              │
+│ (port 5433)  │  │ (port 6380)  │  │              │
 │              │  │ - Cache      │  │ - yfinance   │
 │ - OLTP data  │  │ - Celery     │  │ - FRED       │
 │ - Time-series│  │   broker     │  │ - Groq       │
@@ -137,6 +137,13 @@ POST /api/v1/auth/refresh
   Response: { access_token: string, refresh_token: string,
               token_type: "bearer", expires_in: int }
   Errors:   401 (invalid/expired refresh token)
+
+POST /api/v1/auth/logout
+  Response: 204
+  Behavior: Clears httpOnly cookies (Set-Cookie with Max-Age=0)
+
+Note: Login and refresh also set httpOnly cookies (access_token + refresh_token).
+Server reads tokens from cookies OR Authorization header (dual-mode auth).
 ```
 
 ### 3.3 Stock & Signal Endpoints
@@ -154,37 +161,36 @@ GET /api/v1/stocks/{ticker}/signals
               composite_score, is_stale }
   Errors:   404 (ticker not found)
 
-GET /api/v1/stocks/{ticker}/prices?period={1m|3m|6m|1y|5y|10y}
+GET /api/v1/stocks/{ticker}/prices?period={1mo|3mo|6mo|1y|2y|5y|10y}
   Response: [{ time, open, high, low, close, volume }]
   Errors:   404 (ticker not found)
 
 GET /api/v1/stocks/{ticker}/signals/history?period={1m|3m|6m|1y}
   Response: [{ computed_at, composite_score, rsi_value, macd_value }]
 
-POST /api/v1/watchlist
+POST /api/v1/stocks/watchlist
   Request:  { ticker: string }
   Response: { id, ticker, added_at }
   Errors:   404 (ticker unknown), 409 (already in watchlist)
 
-DELETE /api/v1/watchlist/{ticker}
+DELETE /api/v1/stocks/watchlist/{ticker}
   Response: 204
 
-GET /api/v1/watchlist
-  Response: [{ ticker, name, sector, latest_price, composite_score,
-               signal_summary, last_updated }]
+GET /api/v1/stocks/watchlist
+  Response: [{ id, ticker, name, sector, composite_score, added_at }]
 ```
 
 ### 3.4 Recommendation Endpoints
 
 ```
-GET /api/v1/recommendations?action={BUY|SELL|HOLD}&confidence={HIGH|MEDIUM|LOW}
+GET /api/v1/stocks/recommendations?action={BUY|WATCH|AVOID}&confidence={HIGH|MEDIUM|LOW}
   Response: [{ ticker, action, confidence, composite_score,
-               suggested_amount_usd, portfolio_weight_pct,
-               target_weight_pct, reasoning: { signals, factors },
+               price_at_recommendation, reasoning: dict,
                generated_at, is_actionable }]
+  Note: suggested_amount_usd, portfolio_weight_pct, target_weight_pct
+        are Phase 3 additions (requires portfolio context)
 
-POST /api/v1/recommendations/{id}/acknowledge
-  Response: 204
+POST /api/v1/recommendations/{id}/acknowledge — Planned for Phase 3
 ```
 
 ### 3.5 Portfolio Endpoints (Phase 3)
@@ -230,12 +236,12 @@ POST /api/v1/chat/stream
 
 ```
 GET /api/v1/indexes
-  Response: [{ id, name, description, stock_count, last_synced_at }]
+  Response: [{ id, name, slug, description, stock_count }]
   Auth:     Required
 
-GET /api/v1/indexes/{index_id}/stocks
-  Response: [{ ticker, name, sector, latest_price, composite_score,
-               signal_summary, last_updated }]
+GET /api/v1/indexes/{slug}/stocks
+  Response: { index_name, total, items: [{ ticker, name, sector, exchange,
+               latest_price, composite_score, rsi_signal, macd_signal }] }
   Auth:     Required
 ```
 
@@ -243,8 +249,7 @@ GET /api/v1/indexes/{index_id}/stocks
 
 ```
 POST /api/v1/stocks/{ticker}/ingest
-  Response: { ticker, name, sector, prices_fetched, signals_computed,
-              composite_score }
+  Response: { ticker, name, rows_fetched, composite_score, status: "created"|"updated" }
   Auth:     Required
   Rate:     5 requests/minute (expensive: yfinance + signal computation)
   Behavior: If ticker has no data → full 10Y fetch
@@ -257,16 +262,17 @@ POST /api/v1/stocks/{ticker}/ingest
 
 ```
 GET /api/v1/stocks/signals/bulk?index_id={uuid}
-                               &rsi={OVERSOLD|NEUTRAL|OVERBOUGHT}
-                               &macd={BULLISH|BEARISH}
+                               &rsi_state={OVERSOLD|NEUTRAL|OVERBOUGHT}
+                               &macd_state={BULLISH|BEARISH}
                                &sector={Technology|Healthcare|...}
                                &score_min={0-10}&score_max={0-10}
-                               &sort_by={composite_score|sharpe|annual_return}
+                               &sort_by={composite_score|sharpe_ratio|annual_return}
                                &sort_order={asc|desc}
                                &limit={50}&offset={0}
   Response: { total, items: [{ ticker, name, sector, rsi_value, rsi_signal,
-               macd_signal, sma_signal, bollinger_signal, annual_return,
-               volatility, sharpe, composite_score, computed_at, is_stale }] }
+               macd_signal, sma_signal, bb_position, annual_return,
+               volatility, sharpe_ratio, composite_score, computed_at, is_stale,
+               price_history: list[float] (last 30 daily closes, for sparkline charts) }] }
   Auth:     Required
   Query:    DISTINCT ON (ticker) ORDER BY computed_at DESC
   Perf:     <3 seconds for 500 stocks
@@ -285,6 +291,8 @@ GET /api/v1/stocks/{ticker}/signals/history?days={90}&limit={100}
 ---
 
 ## 4. Service Layer Design
+
+> **Implementation status:** The service layer pattern described below is ASPIRATIONAL. It is planned for Phase 3+. In the current implementation (Phases 1-2), routers call tools directly (e.g., `from backend.tools.signals import compute_signals`). The Redis caching strategy is also not yet implemented.
 
 ### 4.1 Service Pattern
 
@@ -362,6 +370,8 @@ async def get_signal_service(
 
 ## 5. Agent Architecture
 
+> **Implementation status:** The agent architecture described below is planned for Phase 4. The `AgentRegistry`, `ToolRegistry`, agentic loop, and LLM client with fallback are NOT yet implemented. The `backend/agents/` directory exists as a placeholder.
+
 ### 5.1 Agent Registry
 
 ```python
@@ -437,6 +447,8 @@ class LLMClient:
 ---
 
 ## 6. Background Job Design
+
+> **Implementation status:** Background jobs are planned for Phase 5. Celery configuration, beat schedule, and task error handling are NOT yet implemented.
 
 ### 6.1 Celery Configuration
 
@@ -520,38 +532,50 @@ def refresh_ticker(self, ticker: str):
 ```
 frontend/
 ├── app/
-│   ├── layout.tsx              # Root layout with providers
+│   ├── layout.tsx              # Root layout with providers + animate-fade-in on <main>
 │   ├── page.tsx                # Redirect to /dashboard
+│   ├── (authenticated)/        # Route group with auth guard
+│   │   ├── dashboard/page.tsx  # Index cards + watchlist + search
+│   │   ├── screener/page.tsx   # Table/grid views + filters + density toggle
+│   │   └── stocks/[ticker]/    # Stock detail (server + client components)
 │   ├── login/page.tsx
-│   ├── dashboard/page.tsx      # Watchlist + recommendations
-│   ├── screener/page.tsx
-│   ├── portfolio/page.tsx
-│   ├── stocks/[ticker]/page.tsx
-│   └── chat/page.tsx
+│   └── register/page.tsx
 ├── components/
-│   ├── ui/                     # shadcn/ui primitives
-│   ├── StockCard.tsx
-│   ├── SignalBadge.tsx
-│   ├── RecommendationPanel.tsx
-│   ├── PortfolioChart.tsx
-│   ├── AllocationPie.tsx
-│   ├── ScreenerTable.tsx
-│   ├── ChatMessage.tsx
-│   └── ChatInput.tsx
+│   ├── ui/                     # shadcn/ui v4 primitives (@base-ui/react, not Radix)
+│   ├── stock-card.tsx          # Watchlist card with score badge
+│   ├── signal-badge.tsx        # RSI/MACD/SMA label badge
+│   ├── score-badge.tsx         # Composite score 0-10 with color
+│   ├── screener-table.tsx      # TradingView-style tabs + sortable columns
+│   ├── screener-grid.tsx       # Sparkline card grid view
+│   ├── signal-cards.tsx        # RSI/MACD/SMA/Bollinger breakdown
+│   ├── price-chart.tsx         # Recharts line + sentiment gradient
+│   ├── signal-history-chart.tsx # Dual-axis composite + RSI over time
+│   ├── risk-return-card.tsx    # Annualized return, volatility, Sharpe
+│   ├── index-card.tsx          # S&P 500 / NASDAQ / Dow card
+│   ├── nav-bar.tsx             # Top nav with Sun/Moon theme toggle
+│   ├── change-indicator.tsx    # Gain/loss with arrow + sign + color
+│   ├── section-heading.tsx     # Semantic section label
+│   ├── chart-tooltip.tsx       # Reusable Recharts tooltip
+│   ├── error-state.tsx         # Error display with retry
+│   ├── breadcrumbs.tsx         # Back navigation on detail pages
+│   ├── sparkline.tsx           # Tiny inline chart (no axes)
+│   ├── signal-meter.tsx        # 10-segment horizontal score bar
+│   └── metric-card.tsx         # Standardized KPI block
 ├── hooks/
-│   ├── useAuth.ts
-│   ├── useWatchlist.ts
-│   ├── useSignals.ts
-│   ├── useRecommendations.ts
-│   ├── usePortfolio.ts
-│   └── useChat.ts
+│   ├── use-stocks.ts           # 12+ TanStack Query hooks (all API data)
+│   └── use-container-width.ts  # ResizeObserver for responsive grids
 ├── lib/
-│   ├── api.ts                  # Centralized fetch + JWT handling
-│   ├── auth.ts                 # Token storage + refresh logic
-│   └── types.ts                # Shared TypeScript types
-└── providers/
-    ├── AuthProvider.tsx
-    └── QueryProvider.tsx
+│   ├── api.ts                  # Centralized fetch with cookie auth + auto-refresh
+│   ├── auth.ts                 # AuthContext + useAuth hook
+│   ├── signals.ts              # Sentiment classification, CSS var color mappings
+│   ├── format.ts               # Currency, percent, volume, date formatters
+│   ├── design-tokens.ts        # CSS variable name constants
+│   ├── chart-theme.ts          # useChartColors() hook + CHART_STYLE constants
+│   ├── typography.ts           # Semantic type scale (PAGE_TITLE, METRIC_PRIMARY, etc.)
+│   └── density-context.tsx     # DensityProvider + useDensity() for screener
+├── types/
+│   └── api.ts                  # Shared TypeScript types
+└── middleware.ts               # Auth guard (checks access_token cookie)
 ```
 
 ### 7.2 State Management
@@ -559,6 +583,8 @@ frontend/
 - **Server state:** TanStack Query (React Query) for all API data
 - **Client state:** React useState/useReducer (minimal — most state is server-derived)
 - **Auth state:** React Context via AuthProvider
+- **Density state:** React Context via DensityProvider (comfortable/compact, persisted to localStorage)
+- **Theme state:** next-themes for dark/light mode (persisted to localStorage)
 - **No Redux, no Zustand** — complexity not justified for this scale
 
 ### 7.3 Data Fetching Pattern
@@ -685,8 +711,8 @@ async def chat_stream(request: Request): ...
 
 ```
 Docker Compose:
-  postgres (timescale/timescaledb:latest-pg16) → port 5432
-  redis (redis:7-alpine) → port 6379
+  postgres (timescale/timescaledb:latest-pg16) → port 5433
+  redis (redis:7-alpine) → port 6380
 
 Native (not containerized):
   FastAPI (uvicorn --reload) → port 8181
@@ -837,6 +863,41 @@ async def compute_signals(ticker: str) -> dict:
     """Compute all technical signals for a stock."""
     return await signal_tool.compute_all(ticker)
 ```
+
+---
+
+## 12a. Design System Architecture (Phase 2.5)
+
+### 12a.1 Color System
+- Financial semantic CSS variables in `globals.css`: `--gain`, `--loss`, `--neutral-signal`, `--chart-price`, `--chart-volume`, `--chart-sma-50`, `--chart-sma-200`, `--chart-rsi`
+- Defined in both `:root` (light) and `.dark` (dark) scopes using OKLCH color space
+- Registered in `@theme inline` for Tailwind utility class generation (`text-gain`, `bg-loss`, etc.)
+- Bloomberg-inspired dark mode: `oklch(0.145 0.005 250)` background with subtle blue undertone
+
+### 12a.2 Chart Color Resolution
+- Recharts cannot resolve CSS `var()` references — needs literal color strings
+- `useChartColors()` hook in `lib/chart-theme.ts` reads CSS variables via `getComputedStyle`
+- `MutationObserver` on `<html class>` attribute detects dark/light toggle, triggers re-read
+- `ChartColors` interface includes: `price`, `volume`, `sma50`, `sma200`, `rsi`, `gain`, `loss`
+
+### 12a.3 Component Library
+| Component | Purpose | Key Props |
+|-----------|---------|-----------|
+| `ChangeIndicator` | Gain/loss display | `value, format: percent\|currency, size` |
+| `SectionHeading` | Section label | `children, action?` |
+| `ChartTooltip` | Recharts tooltip | `label, items: {name, value, color}[]` |
+| `ErrorState` | Error with retry | `error, onRetry?` |
+| `Breadcrumbs` | Back navigation | `items: {label, href}[]` |
+| `Sparkline` | Inline mini chart | `data, width, height, sentiment` |
+| `SignalMeter` | Score bar (0-10) | `score, size` |
+| `MetricCard` | KPI block | `label, value, change?, sentiment?` |
+
+### 12a.4 Animation System
+- CSS keyframes: `fade-in` (opacity) and `fade-slide-up` (opacity + translateY)
+- Tailwind utilities: `animate-fade-in`, `animate-fade-slide-up`
+- Stagger via `--stagger-delay` CSS custom property (inline style)
+- First-12 cap: only items at index 0-11 get stagger animation
+- `@media (prefers-reduced-motion: reduce)` collapses all animations to 0.01ms
 
 ---
 

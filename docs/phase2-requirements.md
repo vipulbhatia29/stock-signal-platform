@@ -1,9 +1,9 @@
 # Phase 2 Requirements Specification — Dashboard + Screener UI
 
 **Date:** 2026-03-07
-**Status:** Draft
+**Status:** COMPLETED (Sessions 5-7, implemented on `feat/initial-scaffold`)
 **Prerequisite:** Phase 1 complete (signal engine, auth, seed scripts, 114 tests)
-**Branch:** `feat/dashboard` (to be created off `feat/initial-scaffold`)
+**Branch:** `feat/initial-scaffold` (originally planned as `feat/dashboard`, kept on main feature branch)
 
 ---
 

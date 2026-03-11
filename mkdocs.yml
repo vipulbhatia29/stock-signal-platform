@@ -27,15 +27,16 @@ nav:
   - PRD: PRD.md
   - Functional Spec: FSD.md
   - Technical Design: TDD.md
-  - Architecture: architecture.md
   - Data Architecture: data-architecture.md
-  - Getting Started: getting-started.md
-  - API Reference: api-reference.md
-  - Signals Guide: signals-guide.md
-  - Development:
-    - Setup: dev/setup.md
-    - Testing: dev/testing.md
-    - Changelog: dev/changelog.md
+  # TODO: Create these guides when MkDocs documentation becomes a priority
+  # - Architecture: architecture.md        (populate from TDD.md)
+  # - Getting Started: getting-started.md  (populate from CLAUDE.md Commands)
+  # - API Reference: api-reference.md      (link to FastAPI auto-docs /docs)
+  # - Signals Guide: signals-guide.md      (document RSI, MACD, SMA, Bollinger, composite)
+  # - Development:
+  #   - Setup: dev/setup.md               (populate from CLAUDE.md)
+  #   - Testing: dev/testing.md            (populate from .claude/rules/testing.md)
+  #   - Changelog: dev/changelog.md        (populate from PROGRESS.md)
 
 markdown_extensions:
   - pymdownx.highlight

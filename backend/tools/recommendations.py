@@ -274,9 +274,15 @@ def _build_reasoning(signal: SignalResult) -> dict:
 def _rsi_interpretation(value: float, label: str | None) -> str:
     """Generate a human-readable interpretation of the RSI value."""
     if label == "OVERSOLD":
-        return f"RSI at {value} — oversold territory. The stock may be undervalued, creating a potential buying opportunity."
+        return (
+            f"RSI at {value} — oversold territory."
+            " The stock may be undervalued, creating a potential buying opportunity."
+        )
     elif label == "OVERBOUGHT":
-        return f"RSI at {value} — overbought territory. The stock may be overvalued and due for a pullback."
+        return (
+            f"RSI at {value} — overbought territory."
+            " The stock may be overvalued and due for a pullback."
+        )
     else:
         return f"RSI at {value} — neutral range. No strong momentum signal."
 
@@ -284,16 +290,28 @@ def _rsi_interpretation(value: float, label: str | None) -> str:
 def _macd_interpretation(histogram: float | None, label: str | None) -> str:
     """Generate a human-readable interpretation of the MACD."""
     if label == "BULLISH":
-        return f"MACD histogram at {histogram:.4f} — positive momentum. Short-term trend is above long-term trend."
+        return (
+            f"MACD histogram at {histogram:.4f} — positive momentum."
+            " Short-term trend is above long-term trend."
+        )
     else:
-        return f"MACD histogram at {histogram:.4f} — negative momentum. Short-term trend is below long-term trend."
+        return (
+            f"MACD histogram at {histogram:.4f} — negative momentum."
+            " Short-term trend is below long-term trend."
+        )
 
 
 def _sma_interpretation(label: str | None) -> str:
     """Generate a human-readable interpretation of the SMA crossover."""
     interpretations = {
-        "GOLDEN_CROSS": "Golden Cross detected — the 50-day SMA just crossed above the 200-day SMA, a strong bullish signal.",
-        "DEATH_CROSS": "Death Cross detected — the 50-day SMA just crossed below the 200-day SMA, a strong bearish signal.",
+        "GOLDEN_CROSS": (
+            "Golden Cross detected — the 50-day SMA just crossed above"
+            " the 200-day SMA, a strong bullish signal."
+        ),
+        "DEATH_CROSS": (
+            "Death Cross detected — the 50-day SMA just crossed below"
+            " the 200-day SMA, a strong bearish signal."
+        ),
         "ABOVE_200": "Price is above the 200-day SMA, indicating a healthy uptrend.",
         "BELOW_200": "Price is below the 200-day SMA, indicating a potential downtrend.",
     }

@@ -286,8 +286,7 @@ async def get_watchlist(
         .join(Stock, Watchlist.ticker == Stock.ticker)
         .outerjoin(
             latest_signal,
-            (latest_signal.c.sig_ticker == Watchlist.ticker)
-            & (latest_signal.c.rn == 1),
+            (latest_signal.c.sig_ticker == Watchlist.ticker) & (latest_signal.c.rn == 1),
         )
         .where(Watchlist.user_id == current_user.id)
         .order_by(Watchlist.added_at.desc())

@@ -558,6 +558,57 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Test count:** 148 backend / 75 frontend unit (unchanged)
 **Files changed:** `globals.css`, `layout.tsx`, `index-card.tsx`, `stock-card.tsx`, `dashboard/page.tsx`, `screener-table.tsx`, `screener-grid.tsx`, `signal-cards.tsx`
 
-**Next:** Phase 3 planning (agent/chat interface, LangChain/LangGraph integration, portfolio tracking)
+**Next:** Session 13 — Verification, cleanup & doc sync
+
+---
+
+## Session 13 — Verification, Cleanup & Doc Sync
+
+**Date:** 2026-03-10
+**Branch:** `feat/initial-scaffold`
+**What was done:**
+
+### Stack Verification
+- [x] All 75 backend unit tests pass (4.4s)
+- [x] Ruff lint: 8 E501 line-too-long errors fixed (wrapped f-strings in `recommendations.py`, wrapped `create_index` in migration)
+- [x] Ruff format: 2 files reformatted (`stocks.py`, migration file)
+- [x] Frontend ESLint: zero errors
+- [x] Frontend build (Turbopack): all 8 routes compiled
+- [x] TypeScript `tsc --noEmit`: zero type errors
+- [x] FastAPI app import: loads cleanly
+
+### Markdown File Audit & Cleanup
+- [x] **Deleted 13 files + 2 directories:**
+  - `initial-prompt.md` (one-time bootstrap prompt)
+  - `frontend/README.md` (generic create-next-app boilerplate)
+  - `.claude/worktrees/` (stale worktree snapshots)
+  - `docs/superpowers/` (3 shipped plan/spec files)
+  - 7 MkDocs stub pages (all contained only "TODO: Write this page")
+  - `docs/dev/` (empty directory after stub deletion)
+- [x] **Marked COMPLETED:** `docs/phase2-requirements.md`, `docs/workflow_phase2.md`, `.claude/plans/cozy-wandering-backus.md`
+- [x] **Fixed:** `global-claude-md-for-home-dir/CLAUDE.md` (structlog → logging.getLogger), `.serena/memories/project_overview.md` (removed "(not yet built)")
+- [x] **Updated `mkdocs.yml`:** removed deleted pages from nav, added TODO comments for future guide creation
+
+### Design Principles Extraction
+- [x] **Created `global-claude-md-for-home-dir/design-principles.md`** — cross-project reference for financial UI patterns
+
+### PRD / FSD / TDD / Project Plan Sync
+- [x] **PRD.md** (9 edits): status, phase labels, composite score, recommendation status, screener, 3 new sections
+- [x] **FSD.md** (15 edits): corrected FRs, added 5 new FRs, updated Feature × Phase Matrix
+- [x] **TDD.md** (16 edits): fixed all API contracts, marked Sections 4/5/6 as aspirational, updated frontend structure, added Section 12a
+- [x] **project-plan.md**: added 8-item implementation backlog (B1-B8) to Phase 3
+- [x] **CLAUDE.md**: added doc triggers for plan cleanup and mkdocs updates
+
+**Key decisions:**
+- Unimplemented TDD sections kept as specs for future phases
+- Implementation gaps formalized as backlog items B1-B8 in project-plan.md
+- Design principles extracted to global reference file for cross-project reuse
+
+**Test count:** 75 unit (unchanged — lint fixes and doc updates only)
+**Files deleted:** 13 files + 2 directories
+**Files created:** 1 (`design-principles.md`)
+**Files changed:** 12 existing
+
+**Next:** Merge PR #1 (`feat/initial-scaffold` → `main`), then Phase 3 planning
 
 ---
