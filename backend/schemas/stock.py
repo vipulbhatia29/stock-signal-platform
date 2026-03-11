@@ -182,6 +182,8 @@ class WatchlistItemResponse(BaseModel):
     sector: str | None = None
     composite_score: float | None = None
     added_at: datetime
+    current_price: float | None = None
+    price_updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

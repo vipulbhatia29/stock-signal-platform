@@ -276,17 +276,38 @@ async def get_watchlist(
         )
     ).subquery("latest_signal")
 
-    # ── Join Watchlist + Stock + latest signal score ───────────────────
+    # ── Subquery: latest price per ticker ─────────────────────────────
+    latest_price = (
+        select(
+            StockPrice.ticker.label("price_ticker"),
+            StockPrice.adj_close.label("current_price"),
+            StockPrice.time.label("price_updated_at"),
+            func.row_number()
+            .over(
+                partition_by=StockPrice.ticker,
+                order_by=StockPrice.time.desc(),
+            )
+            .label("rn"),
+        )
+    ).subquery("latest_price")
+
+    # ── Join Watchlist + Stock + latest signal score + latest price ───
     result = await db.execute(
         select(
             Watchlist,
             Stock,
             latest_signal.c.composite_score,
+            latest_price.c.current_price,
+            latest_price.c.price_updated_at,
         )
         .join(Stock, Watchlist.ticker == Stock.ticker)
         .outerjoin(
             latest_signal,
             (latest_signal.c.sig_ticker == Watchlist.ticker) & (latest_signal.c.rn == 1),
+        )
+        .outerjoin(
+            latest_price,
+            (latest_price.c.price_ticker == Watchlist.ticker) & (latest_price.c.rn == 1),
         )
         .where(Watchlist.user_id == current_user.id)
         .order_by(Watchlist.added_at.desc())
@@ -302,8 +323,10 @@ async def get_watchlist(
             "sector": stock.sector,
             "composite_score": composite_score,
             "added_at": watchlist.added_at,
+            "current_price": float(current_price) if current_price is not None else None,
+            "price_updated_at": price_updated_at,
         }
-        for watchlist, stock, composite_score in rows
+        for watchlist, stock, composite_score, current_price, price_updated_at in rows
     ]
 
 
