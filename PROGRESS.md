@@ -533,3 +533,31 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Next:** Phase 3 planning (agent/chat interface, LangChain/LangGraph integration, portfolio tracking)
 
 ---
+
+## Session 12 — Entry Animations + prefers-reduced-motion
+
+**Date:** 2026-03-10
+**Branch:** `feat/initial-scaffold`
+**What was done:**
+- [x] **CSS foundation** (`globals.css`): Added `@keyframes fade-in` + `@keyframes fade-slide-up`, two Tailwind utility classes (`animate-fade-in`, `animate-fade-slide-up`), and a global `@media (prefers-reduced-motion: reduce)` rule collapsing all animation to `0.01ms`
+- [x] **Page transitions** (`layout.tsx`): Added `animate-fade-in` to `<main>` — CSS replays on every route change naturally, no client component or `usePathname` needed
+- [x] **IndexCard** (`index-card.tsx`): Added `animationDelay?: number` prop; animation applied to `<Card>` (block) not `<Link>` (inline)
+- [x] **StockCard** (`stock-card.tsx`): Added `animationDelay?: number` prop; animation on root `<Card>`
+- [x] **Dashboard** (`dashboard/page.tsx`): Index cards stagger at 0/80/160ms; watchlist cards at `Math.min(i,7)*60ms`
+- [x] **Screener table** (`screener-table.tsx`): First 12 rows stagger at 30ms each; rows 13+ no animation
+- [x] **Screener grid** (`screener-grid.tsx`): First 12 cards stagger at 40ms each; cards 13+ no animation
+- [x] **Signal cards** (`signal-cards.tsx`): RSI/MACD/SMA/Bollinger stagger at 0/80/160/240ms
+- [x] `npm run lint` ✓, `npm run build` ✓, 75 backend unit tests ✓
+
+**Key decisions:**
+- `animate-fade-in` on `<main>` (not a keyed client component) — prevents flash-of-empty-content on App Router navigation
+- Animation on `<Card>` not `<Link>` — `transform` ignored on inline `<a>` elements
+- `--stagger-delay` CSS custom property set as inline `style` — pure CSS stagger, no JS animation library
+- First-12 cap on table rows and grid cards — rows/cards beyond visible fold don't need animation
+
+**Test count:** 148 backend / 75 frontend unit (unchanged)
+**Files changed:** `globals.css`, `layout.tsx`, `index-card.tsx`, `stock-card.tsx`, `dashboard/page.tsx`, `screener-table.tsx`, `screener-grid.tsx`, `signal-cards.tsx`
+
+**Next:** Phase 3 planning (agent/chat interface, LangChain/LangGraph integration, portfolio tracking)
+
+---
