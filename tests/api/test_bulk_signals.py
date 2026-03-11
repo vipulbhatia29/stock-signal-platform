@@ -211,3 +211,37 @@ class TestBulkSignals:
         assert all(isinstance(v, float) for v in ph["price_history"])
         # Must be in chronological (ascending) order — sparkline depends on this
         assert ph["price_history"] == sorted(ph["price_history"])
+
+    async def test_bulk_signals_sharpe_filter(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """sharpe_min filter returns only stocks at or above the threshold."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            for ticker, sharpe in [("SH1", 1.5), ("SH2", 0.8), ("SH3", 0.3)]:
+                stock = StockFactory.build(ticker=ticker, name=f"Sharpe {ticker}")
+                session.add(stock)
+                await session.flush()
+                signal = SignalSnapshotFactory.build(ticker=ticker, sharpe_ratio=sharpe)
+                session.add(signal)
+            await session.commit()
+        await engine.dispose()
+
+        # With sharpe_min=0.7: only SH1 (1.5) and SH2 (0.8) qualify
+        response = await authenticated_client.get(
+            "/api/v1/stocks/signals/bulk",
+            params={"sharpe_min": 0.7},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        returned = [item["ticker"] for item in data["items"]]
+        assert "SH1" in returned
+        assert "SH2" in returned
+        assert "SH3" not in returned
+
+        # Without filter: SH3 also returned
+        response2 = await authenticated_client.get("/api/v1/stocks/signals/bulk")
+        assert response2.status_code == 200
+        returned2 = [item["ticker"] for item in response2.json()["items"]]
+        assert "SH3" in returned2

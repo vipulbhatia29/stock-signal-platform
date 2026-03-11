@@ -546,6 +546,7 @@ async def get_bulk_signals(
     sector: str | None = Query(default=None, description="Filter by sector"),
     score_min: float | None = Query(default=None, ge=0, le=10),
     score_max: float | None = Query(default=None, ge=0, le=10),
+    sharpe_min: float | None = Query(default=None, description="Minimum Sharpe ratio filter"),
     sort_by: str = Query(default="composite_score", description="Field to sort by"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
@@ -621,6 +622,8 @@ async def get_bulk_signals(
         query = query.where(latest.c.composite_score >= score_min)
     if score_max is not None:
         query = query.where(latest.c.composite_score <= score_max)
+    if sharpe_min is not None:
+        query = query.where(latest.c.sharpe_ratio >= sharpe_min)
 
     # Count total before pagination
     count_query = select(func.count()).select_from(query.subquery())
