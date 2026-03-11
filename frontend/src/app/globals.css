@@ -159,3 +159,34 @@
     @apply font-sans;
   }
 }
+
+/* ── Entry animation keyframes ─────────────────────────────────────────────── */
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fade-slide-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Utility classes for entry animations */
+@layer utilities {
+  .animate-fade-in {
+    animation: fade-in 0.4s ease both;
+  }
+  .animate-fade-slide-up {
+    animation: fade-slide-up 0.4s cubic-bezier(.22,.68,0,1.2) var(--stagger-delay, 0ms) both;
+  }
+}
+
+/* ── Accessibility: honour prefers-reduced-motion ───────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+  }
+}
