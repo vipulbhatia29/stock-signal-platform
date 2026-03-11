@@ -45,6 +45,14 @@ export default function DashboardPage() {
       api.post<RefreshTask[]>("/stocks/watchlist/refresh-all"),
   });
 
+  // ── Acknowledge stale price mutation ────────────────────────────────────────
+
+  const acknowledgeMutation = useMutation({
+    mutationFn: (ticker: string) =>
+      api.post(`/stocks/watchlist/${ticker}/acknowledge`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["watchlist"] }),
+  });
+
   // When refresh-all succeeds, populate the task map
   useEffect(() => {
     if (refreshAllMutation.data) {
@@ -233,11 +241,13 @@ export default function DashboardPage() {
                 animationDelay={Math.min(i, 7) * 60}
                 currentPrice={item.current_price}
                 priceUpdatedAt={item.price_updated_at}
+                priceAcknowledgedAt={item.price_acknowledged_at}
                 isRefreshing={item.ticker in refreshTasks}
                 onRefresh={async (ticker) => {
                   await api.post(`/stocks/${ticker}/ingest`);
                   queryClient.invalidateQueries({ queryKey: ["watchlist"] });
                 }}
+                onAcknowledge={(ticker) => acknowledgeMutation.mutate(ticker)}
               />
             ))}
           </div>

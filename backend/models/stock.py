@@ -52,6 +52,11 @@ class Watchlist(UUIDPrimaryKeyMixin, Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    price_acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
 
     # Relationships
     user: Mapped[User] = relationship(back_populates="watchlist_items")

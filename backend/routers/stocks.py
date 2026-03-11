@@ -17,6 +17,7 @@ API Endpoints:
   GET  /watchlist                      — user's watchlist with signal summaries
   POST /watchlist                      — add a ticker to watchlist
   DELETE /watchlist/{ticker}           — remove a ticker from watchlist
+  POST /watchlist/{ticker}/acknowledge  — acknowledge stale price data
   GET  /recommendations                — today's recommendations
 """
 
@@ -327,6 +328,7 @@ async def get_watchlist(
             "added_at": watchlist.added_at,
             "current_price": float(current_price) if current_price is not None else None,
             "price_updated_at": price_updated_at,
+            "price_acknowledged_at": watchlist.price_acknowledged_at,
         }
         for watchlist, stock, composite_score, current_price, price_updated_at in rows
     ]
@@ -429,6 +431,53 @@ async def remove_from_watchlist(
         )
     )
     await db.commit()
+
+
+@router.post("/watchlist/{ticker}/acknowledge", response_model=WatchlistItemResponse)
+async def acknowledge_watchlist_price(
+    ticker: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Acknowledge stale price data for a watchlist entry.
+
+    Sets price_acknowledged_at to now, clearing the stale-data amber
+    indicator in the UI until a newer price arrives.
+    Returns 404 if the ticker is not in the user's watchlist.
+    """
+    ticker = ticker.upper()
+
+    result = await db.execute(
+        select(Watchlist).where(
+            Watchlist.user_id == current_user.id,
+            Watchlist.ticker == ticker,
+        )
+    )
+    entry = result.scalar_one_or_none()
+
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="'{ticker}' is not in your watchlist.",
+        )
+
+    entry.price_acknowledged_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(entry)
+    logger.info("Acknowledged stale price for %s (user=%s)", ticker, current_user.id)
+
+    # Fetch stock info for full response shape
+    stock_result = await db.execute(select(Stock).where(Stock.ticker == ticker))
+    stock = stock_result.scalar_one()
+
+    return {
+        "id": entry.id,
+        "ticker": entry.ticker,
+        "name": stock.name,
+        "sector": stock.sector,
+        "added_at": entry.added_at,
+        "price_acknowledged_at": entry.price_acknowledged_at,
+    }
 
 
 @router.post("/watchlist/refresh-all")

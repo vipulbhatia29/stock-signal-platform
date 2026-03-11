@@ -25,3 +25,53 @@ def test_refresh_ticker_task_retries_on_exception():
 
         with pytest.raises(Exception, match="yfinance rate limit"):
             refresh_ticker_task.run("AAPL")
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_refresh_all_watchlist_tickers_task_dispatches_per_ticker():
+    """refresh_all_watchlist_tickers_task fans out one task per watchlisted ticker."""
+    with (
+        patch(
+            "asyncio.run",
+            return_value=["AAPL", "MSFT"],
+        ) as mock_run,
+        patch("backend.tasks.market_data.refresh_ticker_task") as mock_task,
+    ):
+        from backend.tasks.market_data import refresh_all_watchlist_tickers_task
+
+        result = refresh_all_watchlist_tickers_task.run()
+
+        mock_run.assert_called_once()
+        assert mock_task.delay.call_count == 2
+        mock_task.delay.assert_any_call("AAPL")
+        mock_task.delay.assert_any_call("MSFT")
+        assert result["dispatched"] == 2
+        assert result["tickers"] == ["AAPL", "MSFT"]
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_refresh_all_watchlist_tickers_task_handles_empty_watchlist():
+    """refresh_all_watchlist_tickers_task returns 0 dispatched when no tickers."""
+    with (
+        patch("asyncio.run", return_value=[]) as mock_run,
+        patch("backend.tasks.market_data.refresh_ticker_task") as mock_task,
+    ):
+        from backend.tasks.market_data import refresh_all_watchlist_tickers_task
+
+        result = refresh_all_watchlist_tickers_task.run()
+
+        mock_run.assert_called_once()
+        mock_task.delay.assert_not_called()
+        assert result["dispatched"] == 0
+        assert result["tickers"] == []
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_beat_schedule_contains_refresh_job():
+    """Celery beat_schedule includes the 30-minute watchlist refresh job."""
+    from backend.tasks import celery_app
+
+    assert "refresh-all-watchlist-tickers" in celery_app.conf.beat_schedule
+    entry = celery_app.conf.beat_schedule["refresh-all-watchlist-tickers"]
+    assert entry["task"] == "backend.tasks.market_data.refresh_all_watchlist_tickers_task"
+    assert entry["schedule"] == 30 * 60

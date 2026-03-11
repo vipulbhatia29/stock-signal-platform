@@ -184,6 +184,7 @@ class WatchlistItemResponse(BaseModel):
     added_at: datetime
     current_price: float | None = None
     price_updated_at: datetime | None = None
+    price_acknowledged_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

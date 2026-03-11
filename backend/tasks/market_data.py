@@ -66,3 +66,40 @@ def refresh_ticker_task(self, ticker: str) -> dict:
             self.max_retries + 1,
         )
         raise
+
+
+async def _get_all_watchlist_tickers() -> list[str]:
+    """Query DB for all distinct tickers currently in any user's watchlist.
+
+    Returns:
+        Sorted list of unique ticker symbols.
+    """
+    from sqlalchemy import distinct, select
+
+    from backend.models.stock import Watchlist
+
+    async with async_session_factory() as db:
+        result = await db.execute(select(distinct(Watchlist.ticker)))
+        return sorted(row[0] for row in result.all())
+
+
+@celery_app.task(
+    name="backend.tasks.market_data.refresh_all_watchlist_tickers_task",
+)
+def refresh_all_watchlist_tickers_task() -> dict:
+    """Fan-out: enqueue a refresh_ticker_task for every watchlisted ticker.
+
+    Runs on the Celery Beat schedule. Queries all unique tickers across all
+    user watchlists, then dispatches one refresh_ticker_task per ticker.
+
+    Returns:
+        A dict with the count of tasks dispatched.
+    """
+    tickers = asyncio.run(_get_all_watchlist_tickers())
+    dispatched = 0
+    for ticker in tickers:
+        refresh_ticker_task.delay(ticker)
+        dispatched += 1
+        logger.info("Beat: enqueued refresh for %s", ticker)
+    logger.info("Beat: dispatched %d refresh tasks", dispatched)
+    return {"dispatched": dispatched, "tickers": tickers}

@@ -9,9 +9,15 @@ import { ScoreBadge } from "@/components/score-badge";
 import { RelativeTime } from "./relative-time";
 import { cn } from "@/lib/utils";
 
-function isStale(dateStr: string): boolean {
-  const ageMs = Date.now() - new Date(dateStr).getTime();
-  return ageMs > 60 * 60 * 1000; // > 1 hour
+function isStale(priceUpdatedAt: string, acknowledgedAt: string | null | undefined): boolean {
+  // Stale if price is > 1 hour old AND not yet acknowledged (or acknowledged before this price arrived)
+  const priceDate = new Date(priceUpdatedAt).getTime();
+  const ageMs = Date.now() - priceDate;
+  const isOld = ageMs > 60 * 60 * 1000;
+  if (!isOld) return false;
+  if (!acknowledgedAt) return true;
+  // Re-show amber if price arrived after the last acknowledgement
+  return priceDate > new Date(acknowledgedAt).getTime();
 }
 
 interface StockCardProps {
@@ -25,6 +31,8 @@ interface StockCardProps {
   priceUpdatedAt?: string | null;
   onRefresh?: (ticker: string) => void;
   isRefreshing?: boolean;
+  priceAcknowledgedAt?: string | null;
+  onAcknowledge?: (ticker: string) => void;
 }
 
 export function StockCard({
@@ -38,6 +46,8 @@ export function StockCard({
   priceUpdatedAt,
   onRefresh,
   isRefreshing = false,
+  priceAcknowledgedAt,
+  onAcknowledge,
 }: StockCardProps) {
   return (
     <Card
@@ -81,13 +91,27 @@ export function StockCard({
                   className={cn(
                     "ml-1 rounded-full p-0.5 hover:bg-muted transition-colors",
                     isRefreshing && "animate-spin pointer-events-none",
-                    priceUpdatedAt && isStale(priceUpdatedAt)
+                    priceUpdatedAt && isStale(priceUpdatedAt, priceAcknowledgedAt)
                       ? "text-amber-500"
                       : "text-muted-foreground"
                   )}
                 >
                   <RefreshCw className="h-3 w-3" />
                 </button>
+                {priceUpdatedAt && isStale(priceUpdatedAt, priceAcknowledgedAt) && onAcknowledge && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onAcknowledge(ticker);
+                    }}
+                    aria-label={`Dismiss stale price alert for ${ticker}`}
+                    className="ml-0.5 rounded-full p-0.5 hover:bg-muted transition-colors text-amber-500 text-[10px] font-medium leading-none"
+                    title="Dismiss stale alert"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
             </div>
           )}

@@ -123,6 +123,7 @@ export interface WatchlistItem {
   added_at: string;
   current_price: number | null;
   price_updated_at: string | null;
+  price_acknowledged_at: string | null;
 }
 
 // ── Recommendations ───────────────────────────────────────────────────────────
