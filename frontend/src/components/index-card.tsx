@@ -14,6 +14,7 @@ interface IndexCardProps {
   slug: string;
   stockCount: number;
   description: string | null;
+  animationDelay?: number;
 }
 
 export function IndexCard({
@@ -21,10 +22,14 @@ export function IndexCard({
   slug,
   stockCount,
   description,
+  animationDelay = 0,
 }: IndexCardProps) {
   return (
     <Link href={`/screener?index=${slug}`}>
-      <Card className="cursor-pointer transition-colors hover:border-foreground/20">
+      <Card
+        className="cursor-pointer transition-colors hover:border-foreground/20 animate-fade-slide-up"
+        style={{ '--stagger-delay': `${animationDelay}ms` } as React.CSSProperties}
+      >
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">{name}</CardTitle>
           {description && (
