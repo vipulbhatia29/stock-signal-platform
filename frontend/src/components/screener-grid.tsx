@@ -14,7 +14,7 @@ import type { BulkSignalItem } from "@/types/api";
 
 // ── Stock card ────────────────────────────────────────────────────────────────
 
-function StockCard({ item }: { item: BulkSignalItem }) {
+function StockCard({ item, animationDelay = 0 }: { item: BulkSignalItem; animationDelay?: number }) {
   const router = useRouter();
   const chartRef = useRef<HTMLDivElement | null>(null);
   const chartWidth = useContainerWidth(chartRef);
@@ -22,7 +22,11 @@ function StockCard({ item }: { item: BulkSignalItem }) {
 
   return (
     <div
-      className="group rounded-lg border bg-card overflow-hidden cursor-pointer hover:border-primary/50 transition-colors"
+      className={cn(
+        "group rounded-lg border bg-card overflow-hidden cursor-pointer hover:border-primary/50 transition-colors",
+        "animate-fade-slide-up",
+      )}
+      style={{ '--stagger-delay': `${animationDelay}ms` } as React.CSSProperties}
       onClick={() => router.push(`/stocks/${item.ticker}`)}
       role="button"
       tabIndex={0}
@@ -131,8 +135,12 @@ export function ScreenerGrid({ items, isLoading }: ScreenerGridProps) {
 
   return (
     <div className={GRID_CLASS}>
-      {items.map((item) => (
-        <StockCard key={item.ticker} item={item} />
+      {items.map((item, i) => (
+        <StockCard
+          key={item.ticker}
+          item={item}
+          animationDelay={Math.min(i, 11) * 40}
+        />
       ))}
     </div>
   );
