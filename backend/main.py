@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import settings
 from backend.rate_limit import limiter
 from backend.routers import auth, indexes, stocks
+from backend.routers.tasks import router as tasks_router
 
 app = FastAPI(
     title="Stock Signal Platform",
@@ -39,3 +40,4 @@ async def health_check() -> dict[str, str]:
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(indexes.router, prefix="/api/v1/indexes", tags=["indexes"])
 app.include_router(stocks.router, prefix="/api/v1/stocks", tags=["stocks"])
+app.include_router(tasks_router, prefix="/api/v1")

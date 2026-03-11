@@ -26,7 +26,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import Float, delete, func, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +39,7 @@ from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
 from backend.models.stock import Stock, Watchlist
 from backend.models.user import User
+from backend.rate_limit import limiter
 from backend.schemas.stock import (
     BollingerResponse,
     BulkSignalItem,
@@ -57,6 +58,7 @@ from backend.schemas.stock import (
     WatchlistAddRequest,
     WatchlistItemResponse,
 )
+from backend.tasks.market_data import refresh_ticker_task
 
 logger = logging.getLogger(__name__)
 
@@ -427,6 +429,31 @@ async def remove_from_watchlist(
         )
     )
     await db.commit()
+
+
+@router.post("/watchlist/refresh-all")
+@limiter.limit("2/minute")
+async def refresh_all_watchlist(
+    request: Request,  # required by slowapi for rate limiting
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> list[dict]:
+    """Enqueue background refresh tasks for all tickers in user's watchlist.
+
+    Each ticker gets a Celery task to fetch latest prices and recompute signals.
+    Returns a list of {ticker, task_id} for the frontend to poll task status.
+    Rate limited to 2 requests/minute (expensive yfinance operation).
+    """
+    result = await db.execute(select(Watchlist.ticker).where(Watchlist.user_id == current_user.id))
+    tickers = [row[0] for row in result.all()]
+
+    tasks = []
+    for ticker in tickers:
+        task = refresh_ticker_task.delay(ticker)
+        tasks.append({"ticker": ticker, "task_id": task.id})
+        logger.info("Enqueued refresh for %s — task_id=%s", ticker, task.id)
+
+    return tasks
 
 
 # ─────────────────────────────────────────────────────────────────────────────
