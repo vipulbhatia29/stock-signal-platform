@@ -24,9 +24,9 @@ function StockCard({ item, animationDelay = 0 }: { item: BulkSignalItem; animati
     <div
       className={cn(
         "group rounded-lg border bg-card overflow-hidden cursor-pointer hover:border-primary/50 transition-colors",
-        "animate-fade-slide-up",
+        animationDelay !== undefined && "animate-fade-slide-up",
       )}
-      style={{ '--stagger-delay': `${animationDelay}ms` } as React.CSSProperties}
+      style={animationDelay !== undefined ? ({ '--stagger-delay': `${animationDelay}ms` } as React.CSSProperties) : undefined}
       onClick={() => router.push(`/stocks/${item.ticker}`)}
       role="button"
       tabIndex={0}
@@ -139,7 +139,7 @@ export function ScreenerGrid({ items, isLoading }: ScreenerGridProps) {
         <StockCard
           key={item.ticker}
           item={item}
-          animationDelay={Math.min(i, 11) * 40}
+          animationDelay={i < 12 ? i * 40 : undefined}
         />
       ))}
     </div>
