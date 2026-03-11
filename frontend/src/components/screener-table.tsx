@@ -258,7 +258,7 @@ export function ScreenerTable({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => {
+              {items.map((item, i) => {
                 const sentiment = scoreToSentiment(item.composite_score);
                 const rowBg =
                   sentiment === "neutral" ? "" : SENTIMENT_BG_CLASSES[sentiment];
@@ -266,7 +266,16 @@ export function ScreenerTable({
                 return (
                   <TableRow
                     key={item.ticker}
-                    className={cn(rowBg, "cursor-pointer hover:bg-accent/50")}
+                    className={cn(
+                      rowBg,
+                      "cursor-pointer hover:bg-accent/50",
+                      i < 12 && "animate-fade-slide-up",
+                    )}
+                    style={
+                      i < 12
+                        ? ({ '--stagger-delay': `${i * 30}ms` } as React.CSSProperties)
+                        : undefined
+                    }
                     onClick={() => router.push(`/stocks/${item.ticker}`)}
                   >
                     {columns.map((col) => (
