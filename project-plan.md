@@ -40,24 +40,94 @@ Fetch stock data, compute technical signals, store in database, expose via API.
 
 ### Goal
 Visual dashboard showing watchlist, signals, and a stock screener.
+Includes backend pre-requisites (cookie auth, index model, new endpoints).
 
-### Deliverables
-1. **Next.js app** with App Router, Tailwind, shadcn/ui
-2. **Login page** with JWT auth flow
-3. **Dashboard page** showing stock cards with:
-   - Ticker, price, sentiment badge (bullish/neutral/bearish)
-   - 10Y return, last updated date
-   - Sector filter toggle (Technology, Healthcare, Financials, etc.)
-4. **Screener page** with filterable table:
-   - Columns: Ticker, RSI Signal, MACD, vs SMA 200, Ann. Return, Volatility, Sharpe
-   - Filter by: RSI state (oversold/neutral/overbought), Sector, Composite Score range
-   - Sort by any column
-5. **Stock detail page** with signal history chart (Recharts)
-6. **Auth guard** — redirect to login if no valid token
-7. **API integration** via TanStack Query + centralized fetch wrapper
+### Deliverables — Backend Pre-requisites
+1. **httpOnly cookie auth** — login/refresh set Secure httpOnly cookies; dual-mode
+   auth dependency (cookie + header); `POST /auth/logout` clears cookies
+2. **Stock index membership model** — `StockIndex` + `StockIndexMembership` tables;
+   Alembic migration; `GET /api/v1/indexes`, `GET /api/v1/indexes/{id}/stocks` endpoints;
+   seed scripts for S&P 500, NASDAQ-100, Dow 30
+3. **On-demand data ingestion** — `POST /api/v1/stocks/{ticker}/ingest` endpoint;
+   delta fetch (only new data since `last_fetched_at`); signal computation after fetch
+4. **Bulk signals endpoint** — `GET /api/v1/stocks/signals/bulk` with index filter,
+   pagination, RSI/MACD/sector/score filters, sorting; `DISTINCT ON (ticker)` query
+5. **Signal history endpoint** — `GET /api/v1/stocks/{ticker}/signals/history`
+   returning chronological snapshots (default 90 days, max 365)
+
+### Deliverables — Frontend
+6. **Next.js app** with App Router, Tailwind, shadcn/ui, dark/light theme toggle
+7. **Login + Register pages** with cookie-based JWT auth flow
+8. **Dashboard page** showing:
+   - Major index cards (S&P 500, NASDAQ-100, Dow 30) — click navigates to screener
+   - User's watchlist as stock cards (ticker, price, sentiment badge, return, last updated)
+   - Inline search bar to add tickers to watchlist (triggers ingestion if needed)
+   - Sector filter toggle
+9. **Screener page** with filterable, sortable table:
+   - Columns: Ticker, RSI Signal, MACD, vs SMA 200, Ann. Return, Volatility, Sharpe, Score
+   - Filters: Index, RSI state, MACD state, Sector, Composite Score range
+   - Row color-coding: green (≥8), yellow (5-7), red (<5)
+   - Server-side pagination, URL state for shareable filters
+10. **Stock detail page** with:
+    - Price chart (Recharts) with 1M/3M/6M/1Y/5Y timeframe selector
+    - Signal breakdown cards (RSI, MACD, SMA, Bollinger)
+    - Signal history chart (composite score + RSI over time)
+    - Risk & return section (annualized return, volatility, Sharpe)
+11. **Auth guard** — redirect to login if no valid cookie; auto-refresh on 401
+12. **API integration** via TanStack Query + centralized fetch wrapper (cookie auth)
 
 ### Success Criteria
-Can log in, see watchlist dashboard, filter screener, click into stock detail.
+- Can register, log in (httpOnly cookies), and be redirected to dashboard
+- Dashboard shows index cards and watchlist with live signal data
+- Can search and add a new ticker — data is ingested on-demand
+- Screener loads 500 stocks in <3 seconds with working filters and sorting
+- Stock detail shows price chart + signal breakdown + signal history chart
+- Dark/light theme toggle works and persists
+
+---
+
+## Phase 2.5: Design System + UI Polish (Week 4)
+
+### Goal
+Establish a cohesive design system informed by TradingView, Robinhood, and
+Bloomberg Terminal UI patterns. Fix responsive layout issues, standardize
+color/typography tokens, and add financial-specific components.
+
+**Detailed plan:** `.claude/plans/cozy-wandering-backus.md`
+
+### Deliverables — Phase 2 Polish (do now)
+1. **Color system overhaul** — financial semantic CSS variables (gain/loss/neutral),
+   fix OKLCH/HSL chart color mismatch, migrate hardcoded sentiment classes to CSS vars
+2. **Typography tokens** — `lib/typography.ts` with semantic constants (PAGE_TITLE,
+   SECTION_HEADING, METRIC_PRIMARY, TICKER, TABLE_NUM)
+3. **Chart design system** — `lib/chart-theme.ts` with `useChartColors()` hook,
+   standardized `ChartTooltip` component, crosshair cursor
+4. **New components:** `ChangeIndicator` (gain/loss with icon+sign+color),
+   `SectionHeading`, `ChartTooltip`, `ErrorState`, `Breadcrumbs`
+5. **Responsive fixes** — signal cards grid (1/2/4 cols), risk/return grid (1/3 cols),
+   responsive chart heights, sticky screener table header
+6. **Dark mode tuning** — Bloomberg-inspired warm backgrounds, chart color brightness,
+   Sun/Moon toggle icons
+7. **Accessibility** — aria-labels on badges, color+icon+sign for all gain/loss
+   indicators (WCAG AA compliance)
+8. **Fix Session 7 UI bugs** — screener filter placeholders, watchlist score N/A,
+   stock detail name, market indexes rendering
+
+### Deliverables — Deferred Enhancements (Phase 2.5+)
+9. Screener column preset tabs (TradingView-inspired: Overview | Signals | Performance)
+10. `MetricCard`, `Sparkline`, `SignalMeter` components
+11. Sentiment-tinted chart gradient (Robinhood-style)
+12. Entry animations + `prefers-reduced-motion`
+13. DensityProvider (compact/comfortable toggle)
+14. Chart grid view toggle for screener
+
+### Success Criteria
+- All colors defined as CSS variables, no hardcoded Tailwind sentiment classes
+- Charts render correctly in both light and dark mode (OKLCH fix verified)
+- Signal cards and risk/return grids responsive at 375px, 768px, 1280px
+- All gain/loss indicators use color + icon + sign (accessibility)
+- `npm run build` and `npm run lint` pass with zero errors
+- Session 7 UI bugs all resolved
 
 ---
 
@@ -101,8 +171,26 @@ Track actual positions and add fundamental analysis signals.
    - Fundamental deterioration flags (Piotroski drops below 4)
    - Cash reserve warnings (<10% cash)
 
+### Phase 1-2 Implementation Backlog (pre-requisites for Phase 3)
+
+These are specified features that were intentionally deferred or partially implemented
+during Phases 1-2. They should be addressed early in Phase 3 since several are
+prerequisites for portfolio-aware recommendations.
+
+| # | Item | Source | Why It Matters |
+|---|------|--------|----------------|
+| B1 | **Refresh token rotation** — invalidate old tokens via Redis/DB blacklist | FSD FR-1.3 | Security: old refresh tokens remain valid until expiry |
+| B2 | **Watchlist: return `current_price`** in watchlist endpoint | FSD FR-2.2 | Dashboard shows price; currently requires separate API call |
+| B3 | **StockIndexMembership: add `removed_date`** field | FSD FR-2.4 | Track when stocks leave an index (currently row is deleted) |
+| B4 | **StockIndex: add `last_synced_at`** field | FSD FR-2.4 | Know when index data was last refreshed |
+| B5 | **Remove `is_in_universe` from Stock model** | FSD FR-2.4 | Replaced by index membership; old boolean still exists |
+| B6 | **Staleness enforcement in recommendation engine** | FSD FR-3.3 | Recommendations can currently be generated from stale signals |
+| B7 | **Sharpe ratio filter** on bulk signals endpoint | FSD FR-7.2 | Currently sortable only, no `sharpe_min` filter param |
+| B8 | **`POST /recommendations/{id}/acknowledge`** endpoint | TDD 3.4 | Documented but not implemented; needed for "Action Required" panel |
+
 ### Success Criteria
 Can log transactions, see portfolio P&L, get rebalancing suggestions.
+Implementation backlog items B1-B8 addressed before portfolio-aware features.
 
 ---
 

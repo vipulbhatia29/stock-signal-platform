@@ -11,7 +11,7 @@
 - Prefer async patterns where possible
 - Always include error handling — never let exceptions pass silently
 - Prefer explicit over implicit
-- Add logging with structlog, not print statements
+- Add logging with `logging.getLogger(__name__)`, not print statements
 
 ## When explaining things
 - I'm an experienced developer but new to some modern patterns (MCP, LangGraph)

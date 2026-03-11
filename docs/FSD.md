@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Draft
+**Status:** Living Document (Phase 1-2.5 complete)
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -44,19 +44,26 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 - Input: email, password
 - Output: { access_token, refresh_token, token_type, expires_in }
 - access_token: JWT, expires in ACCESS_TOKEN_EXPIRE_MINUTES (default 60)
-- refresh_token: opaque token, expires in REFRESH_TOKEN_EXPIRE_DAYS (default 7)
+- refresh_token: JWT (not opaque — rotation/invalidation NOT implemented, see backlog), expires in REFRESH_TOKEN_EXPIRE_DAYS (default 7)
 - Error: 401 if credentials invalid
 
 **FR-1.3: Token Refresh**
 - Input: refresh_token
 - Output: new { access_token, refresh_token } pair
-- Old refresh_token is invalidated (rotation)
+- **Note:** Token rotation (invalidation of old refresh tokens) is NOT implemented in Phase 1. Both old and new refresh JWTs remain valid until expiry. A server-side blacklist (Redis or DB) is needed — see Phase 3 backlog.
 - Error: 401 if refresh_token expired or invalid
 
 **FR-1.4: User Preferences**
 - Users can update: timezone, notification settings, composite score weights,
   position/sector caps, stop-loss defaults
 - Preferences used by recommendation engine, alert system, and background jobs
+
+**FR-1.5: httpOnly Cookie Authentication (Phase 2)**
+- Login and refresh endpoints set JWT tokens as httpOnly, Secure, SameSite=Lax cookies
+- Frontend cannot access tokens via JavaScript (XSS protection)
+- Server reads tokens from cookies OR `Authorization: Bearer` header (dual-mode)
+- `POST /api/v1/auth/logout` clears cookies (Set-Cookie with Max-Age=0)
+- CORS must set `allow_credentials=True` with explicit `allow_origins` (no wildcard)
 
 ### FR-2: Stock Universe & Watchlist
 
@@ -68,13 +75,32 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 **FR-2.2: Watchlist Management**
 - Add ticker to watchlist: ticker must exist in Stock table
 - Remove ticker from watchlist
-- List watchlist with current price + latest signal summary
+- List watchlist with composite_score (joined from latest signal snapshot). Note: `current_price` and full signal summary are NOT returned — see Phase 3 backlog.
 - Maximum 100 tickers per user watchlist
 
 **FR-2.3: Stock Lookup**
 - Search stocks by ticker or name (prefix match)
 - If ticker not in database, attempt to add via yfinance lookup
 - Return: ticker, name, exchange, sector, industry
+
+**FR-2.4: Stock Index Management (Phase 2)**
+- System maintains multiple stock indexes: S&P 500, NASDAQ-100, Dow 30
+- Each index is a `StockIndex` record with name, description, last sync timestamp
+- Stocks belong to indexes via `StockIndexMembership` (many-to-many with dates)
+- Membership tracks `added_date` and `removed_date` (null = still a member)
+- Dashboard groups stocks by index; screener can filter by index
+- Replaces the `is_in_universe` boolean approach with proper index membership
+- Seed scripts sync membership from public sources (Wikipedia, etc.)
+
+> **Implementation note:** `removed_date` and `last_synced_at` fields were NOT implemented. The `is_in_universe` boolean on `Stock` model was NOT removed — it coexists with the new index membership system. These are tracked in the Phase 3 backlog.
+
+**FR-2.5: On-Demand Data Ingestion (Phase 2)**
+- When user searches for a ticker not yet in the system, UI can trigger ingestion
+- `POST /api/v1/stocks/{ticker}/ingest` fetches 10Y of OHLCV data from yfinance
+- If ticker already has data: delta fetch only (from `last_fetched_at` to today)
+- After price fetch: compute signals and store snapshot
+- Upsert logic (ON CONFLICT DO NOTHING) ensures idempotent re-runs
+- Rate-limited aggressively (5 requests/minute) — yfinance calls are expensive
 
 ### FR-3: Signal Engine
 
@@ -107,7 +133,7 @@ elif RSI > 70: +0     # overbought = risky
 else: +1.0            # neutral
 
 # MACD contribution (0-2.5 points)
-if MACD histogram > 0 and increasing: +2.5
+if MACD histogram > 0 and magnitude > 0.5: +2.5  # Uses magnitude as proxy for 'increasing' (only latest value available, not series)
 elif MACD histogram > 0: +1.5
 elif MACD histogram < 0 and decreasing: +0
 else: +0.5
@@ -132,12 +158,19 @@ Phase 3 adds fundamental signals (see FR-5) and rebalances to 50/50 weight.
 
 **FR-3.3: Signal Staleness**
 - Signals older than 24 hours are flagged as STALE
-- Stale signals cannot generate recommendations
+- Stale signals are flagged in API responses (`is_stale` field). **Note:** Staleness is NOT enforced in the recommendation engine — recommendations can still be generated from stale signals. Enforcement planned for Phase 3.
 - Dashboard shows "last updated" timestamp prominently
 
 ### FR-4: Recommendation Engine
 
 **FR-4.1: Decision Rules**
+
+> **Phase 1 Implementation:** Basic score-threshold rules only:
+> - Score >=9 → BUY (HIGH confidence); >=8 → BUY (MEDIUM)
+> - Score >=6.5 → WATCH (MEDIUM); >=5 → WATCH (LOW)
+> - Score <2 → AVOID (HIGH); <5 → AVOID (MEDIUM)
+>
+> Actions HOLD and SELL are defined but require portfolio context (Phase 3). No portfolio awareness, no position sizing, no macro regime in Phase 1.
 
 Run daily after signal computation. For each stock in watchlist + universe:
 
@@ -205,8 +238,8 @@ calculate_position_size(ticker, portfolio):
 ```
 
 **FR-4.3: Recommendation Surfacing**
-- `GET /api/v1/recommendations` returns today's actionable items
-- Sorted by: confidence DESC, then composite_score DESC
+- `GET /api/v1/stocks/recommendations` returns today's actionable items
+- Sorted by: composite_score DESC (confidence is not part of sort order in Phase 1)
 - Filterable by: action (BUY/SELL/HOLD), confidence level
 - "Action Required" panel on dashboard shows only BUY and SELL with HIGH confidence
 - User can acknowledge a recommendation (marks acknowledged=True)
@@ -266,24 +299,70 @@ Users can override weights via UserPreference.composite_weights.
 ### FR-7: Screener (Phase 2)
 
 **FR-7.1: Stock Universe**
-- Operates on all stocks where is_in_universe=True (S&P 500)
+- Operates on stocks belonging to a selected index (S&P 500, NASDAQ-100, Dow 30)
 - Uses pre-computed signals (not live computation)
+- Default view: all indexes combined
 
 **FR-7.2: Filtering**
+- Index: S&P 500 / NASDAQ-100 / Dow 30 / All
 - RSI state: OVERSOLD / NEUTRAL / OVERBOUGHT
 - MACD state: BULLISH / BEARISH
 - Sector: multi-select from GICS sectors
 - Composite score: range slider (0-10)
-- Sharpe ratio: minimum threshold
+- Sharpe ratio: sortable (no dedicated filter param in Phase 1 — see backlog)
 
 **FR-7.3: Sorting**
 - Default: composite_score DESC
 - Sortable by any visible column
-- Client-side sorting (data pre-loaded)
+- Server-side sorting via query params
 
 **FR-7.4: Display**
 - Color coding: ≥8 green, 5-7 amber, <5 red
 - Click row → navigate to stock detail page
+- Server-side pagination using offset-based approach (limit + offset params; default limit=50, max 200)
+- URL state: filters + sort + offset reflected in query params. Note: column tab selection and view mode (table/grid) are ephemeral UI state, not in URL.
+
+**FR-7.5: Bulk Signals Endpoint**
+- `GET /api/v1/stocks/signals/bulk` returns latest signal snapshot per stock
+- Supports index, RSI, MACD, sector, and score range filters via query params
+- Sortable by any numeric field (composite_score, sharpe, annual_return, etc.)
+- Paginated response with total count for UI pagination controls
+- Performance target: 500 stocks in <3 seconds
+
+**FR-7.6: Signal History**
+- `GET /api/v1/stocks/{ticker}/signals/history` returns chronological snapshots
+- Default: last 90 days; configurable up to 365 days
+- Used by stock detail page to render signal trend charts (composite score, RSI over time)
+
+**FR-7.7: Screener Column Preset Tabs (Phase 2.5)**
+- TradingView-style tab bar above screener table: Overview | Signals | Performance
+- Each tab shows a different column set (column definitions in `COL` record + `TAB_COLUMNS` presets)
+- Tab selection is ephemeral UI state (not URL-persisted)
+
+**FR-7.8: Screener Grid View (Phase 2.5)**
+- Toggle between table view and chart grid view (miniature sparkline cards per stock)
+- Grid cards show: full-width Sparkline, ticker, signal badges, composite score
+- `price_history: list[float]` (last 30 daily closes) returned in bulk signals endpoint
+- Grid/table toggle via `viewMode` state; density toggle hidden in grid mode
+
+**FR-7.9: Screener Density Toggle (Phase 2.5)**
+- Comfortable (default) and compact row padding modes
+- Persisted to localStorage via `DensityProvider` context
+- Toggle visible only in table view
+
+**FR-7.10: Dashboard Composition (Phase 2)**
+- Index cards: S&P 500, NASDAQ-100, Dow 30 with stock count, displayed at top
+- Watchlist section: stock cards with ticker, price, sentiment badge, composite score
+- Ticker search bar triggering on-demand ingestion
+- Sector filter toggle
+- Staggered fade-in entry animations
+
+**FR-7.11: Stock Detail Page (Phase 2)**
+- Breadcrumb navigation (Dashboard > TICKER)
+- Price chart (Recharts) with sentiment-tinted gradient, 1M/3M/6M/1Y/2Y/5Y timeframe selector
+- Signal breakdown cards: RSI, MACD, SMA, Bollinger (staggered animation)
+- Signal history chart (dual-axis: composite score + RSI over time)
+- Risk & return section: annualized return, volatility, Sharpe ratio
 
 ### FR-8: AI Chatbot (Phase 4)
 
@@ -435,8 +514,9 @@ After 3+ months of data accumulation, the following metrics become available:
 - All API endpoints require JWT (except /auth/login, /auth/register, /health)
 - Password hashing: bcrypt with cost factor 12
 - JWT tokens: RS256 or HS256, short-lived access (60 min), rotating refresh (7 days)
-- Rate limiting: 60 requests/minute per user (configurable)
-- CORS: whitelist frontend origin only
+- JWT storage: httpOnly, Secure, SameSite=Lax cookies (Phase 2+)
+- Rate limiting: 60 requests/minute per user (configurable); 5/min for data ingestion
+- CORS: whitelist frontend origin only, `allow_credentials=True`
 - Secrets: environment variables only, never in code or git
 - HTTPS: enforced in production via reverse proxy
 - SQL injection: prevented by SQLAlchemy parameterized queries
@@ -452,7 +532,7 @@ After 3+ months of data accumulation, the following metrics become available:
 
 ### NFR-6: Observability
 
-- Structured logging: structlog with JSON output
+- Structured logging: `logging.getLogger(__name__)` (stdlib; structlog for production later)
 - Request tracing: correlation ID on every API request
 - Background job monitoring: TaskLog table + dashboard widget
 - LLM usage tracking: tokens_used and model_used on every ChatMessage
@@ -514,9 +594,9 @@ After 3+ months of data accumulation, the following metrics become available:
 
 | Feature | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 |
 |---------|---------|---------|---------|---------|---------|---------|
-| Auth + JWT refresh | ✓ | | | | | |
+| Auth + JWT refresh | ✓ | httpOnly cookies | | | | |
 | User preferences | ✓ | | Enhanced | | Enhanced | |
-| Stock universe + watchlist | ✓ | | | | | |
+| Stock universe + watchlist | ✓ | Index membership | | | | |
 | Technical signals | ✓ | | | | | |
 | Composite score (tech only) | ✓ | | Upgraded 50/50 | | | |
 | Basic recommendations | ✓ | | Portfolio-aware | | Macro-aware | |
@@ -524,6 +604,10 @@ After 3+ months of data accumulation, the following metrics become available:
 | Dashboard UI | | ✓ | Enhanced | | Enhanced | |
 | Screener UI | | ✓ | | | | |
 | Stock detail page | | ✓ | Enhanced | | | |
+| Screener column tabs | | ✓ (Phase 2.5) | | | | |
+| Screener grid view | | ✓ (Phase 2.5) | | | | |
+| Design system (colors, components) | | ✓ (Phase 2.5) | | | | |
+| Entry animations | | ✓ (Phase 2.5) | | | | |
 | Fundamental signals | | | ✓ | | | |
 | Portfolio tracker | | | ✓ | | | |
 | Dividends + splits | | | ✓ | | | |

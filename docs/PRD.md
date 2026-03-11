@@ -5,7 +5,7 @@
 **Version:** 1.0
 **Author:** Vipul Bhatia
 **Date:** March 2026
-**Status:** Draft
+**Status:** Living Document (Phase 1-2 complete, Phase 2.5 complete)
 
 ---
 
@@ -82,12 +82,14 @@ much to allocate
 
 ## 4. Product Vision
 
-### Phase 1 Vision (MVP)
+### Phase 1-2 Vision (Current State)
 A dashboard that shows me computed signals for my watchlist stocks and a screener
 that ranks the broader universe by a composite score. I can see at a glance which
 stocks are bullish and which are deteriorating.
 
-### Phase 2 Vision (Full Product)
+> **Implemented in Sessions 1-12.** Dashboard, screener, stock detail page, and design system are built.
+
+### Phase 3+ Vision (Full Product)
 An intelligent system that knows my portfolio, monitors the market continuously,
 and proactively tells me: "AAPL hit oversold with bullish MACD divergence.
 You're underweight in Tech sector. Consider adding $5K. Here's why." I review for
@@ -121,6 +123,8 @@ across US markets.
 
 **Fundamental Signals:**
 
+> **Status:** Not yet implemented. Planned for Phase 3 (see FSD FR-5.1).
+
 | Signal | Threshold | Interpretation |
 |--------|----------|----------------|
 | P/E Ratio | vs 5Y avg and sector | Undervalued / Fair / Overvalued |
@@ -133,7 +137,7 @@ across US markets.
 **Composite Score:**
 
 A single 0-10 score combining technical and fundamental signals with
-configurable weights. Default weights: Technical 50%, Fundamental 50%.
+configurable weights. Phase 1 implementation: 100% technical signals (4 indicators at 2.5 points each, 0-10 scale). Phase 3 will add fundamental signals and rebalance to configurable weights (see FSD FR-5.2).
 Signal confluence (when multiple signals agree) amplifies the score.
 
 **Acceptance Criteria:**
@@ -144,6 +148,8 @@ Signal confluence (when multiple signals agree) amplifies the score.
 - Computation completes in <5 seconds per ticker
 
 ### 5.2 Recommendation Engine (P0 — Must Have)
+
+> **Implementation status:** Phase 1 delivers basic score-threshold recommendations only: Score ≥8 → BUY, 5-7 → WATCH, <5 → AVOID. No portfolio awareness, no position sizing, no macro regime. Full portfolio-aware recommendations planned for Phase 3.
 
 **Description:** Transform raw signals into actionable buy/hold/sell decisions
 that factor in portfolio context, macro regime, and position sizing.
@@ -191,7 +197,7 @@ the platform is just another dashboard showing data.
 
 **Requirements:**
 - Watchlist view with stock cards showing: ticker, price, sentiment badge,
-  10Y return, last updated
+  composite score, last updated
 - Sector filter toggle (Technology, Healthcare, Financials, etc.)
 - Click-through to detailed signal view per stock
 - Signal history chart showing how signals changed over time
@@ -207,9 +213,8 @@ the platform is just another dashboard showing data.
 **Description:** Filter and rank the stock universe by signal criteria.
 
 **Requirements:**
-- Table with columns: Ticker, RSI Signal, MACD, vs SMA 200, Ann. Return,
-  Volatility, Sharpe, Composite Score
-- Filter by: RSI state, MACD state, Sector, Composite Score range
+- TradingView-style column preset tabs: Overview (Ticker, Name, Sector, Price, Change%, Score), Signals (Ticker, RSI, MACD, SMA, Bollinger, Score), Performance (Ticker, Return, Volatility, Sharpe, Score). Also includes grid view with sparkline cards.
+- Filter by: RSI state, MACD state, Sector, Composite Score range, Index
 - Sort by any column
 - Highlight rows based on composite score thresholds:
   - Green (≥8): Strong buy candidate
@@ -217,9 +222,21 @@ the platform is just another dashboard showing data.
   - Red (<5): Avoid or sell
 
 **Acceptance Criteria:**
-- Screener filters and sorts are instant (client-side on pre-computed data)
+- Screener uses server-side pagination and filtering via `GET /api/v1/stocks/signals/bulk`. Supports index, RSI, MACD, sector, and composite score range filters.
 - Can screen at least 200 stocks
 - Results match manual signal computation
+
+### 5.4a Stock Index Management (Built in Phase 2)
+
+System maintains S&P 500, NASDAQ-100, and Dow 30 as first-class `StockIndex` entities with membership tracking. Dashboard shows index cards; screener filters by index.
+
+### 5.4b On-Demand Data Ingestion (Built in Phase 2)
+
+`POST /api/v1/stocks/{ticker}/ingest` fetches OHLCV data from yfinance, computes signals, and stores results. Delta fetch if data exists. Rate-limited to 5 requests/minute.
+
+### 5.4c Design System (Built in Phase 2.5)
+
+Bloomberg-inspired dark mode, semantic color tokens (OKLCH), financial-specific components (Sparkline, SignalMeter, MetricCard, ChangeIndicator, Breadcrumbs), chart design system with `useChartColors()` hook, responsive layouts, and entry animations with `prefers-reduced-motion` support.
 
 ### 5.5 Portfolio Tracker (P1 — Should Have)
 
@@ -459,3 +476,4 @@ See `CLAUDE.md` for detailed technical stack and conventions.
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | March 2026 | Vipul Bhatia | Initial draft |
+| 1.1 | March 2026 | Claude (Session 13) | Synced with implementation reality (Phases 1-2.5 complete) |
