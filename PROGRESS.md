@@ -612,3 +612,43 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Next:** Merge PR #1 (`feat/initial-scaffold` → `main`), then Phase 3 planning
 
 ---
+
+## Session 14 — Security Hardening, Accessibility & Visual Testing
+
+**Date:** 2026-03-11
+**Branch:** `feat/phase-3`
+**What was done:**
+
+### Code Analysis & Improvements
+- [x] `/sc:analyze` — comprehensive code quality, security, performance, and architecture audit
+- [x] **Security: JWT startup validation** (`config.py`) — `validate_production_settings()` warns in dev, raises `RuntimeError` in prod/staging for insecure JWT default or disabled `COOKIE_SECURE`
+- [x] **Security: Rate limiting on auth** (`routers/auth.py`) — register 3/min, login 5/min, refresh 5/min via slowapi `@limiter.limit()` decorators
+- [x] **Security: Shared rate_limit.py** — extracted `limiter` instance to avoid circular imports (main.py ↔ auth.py)
+- [x] **Security: CORS restriction** (`main.py`) — replaced `allow_methods=["*"]` / `allow_headers=["*"]` with explicit allowlists
+- [x] **Security: Sort column whitelist** (`routers/stocks.py`) — `_ALLOWED_SORT` set prevents column enumeration via `getattr()`
+- [x] **Performance: Alembic migration 002** — 5 indexes on `watchlist.user_id`, `recommendation_snapshots.user_id`, `recommendation_snapshots.generated_at`, `signal_snapshots.computed_at`, `stocks.sector`
+- [x] **Accessibility: ChangeIndicator** (`screener-grid.tsx`, `screener-table.tsx`) — replaced color-only annual return text with `ChangeIndicator` component (icon + sign + color for color-blind safety)
+- [x] **Test fix:** disabled rate limiter in `conftest.py` test client fixture to prevent flaky auth tests
+
+### Full Visual Testing (Playwright MCP)
+- [x] 13 screenshots captured across all pages and modes:
+  - Login (dark), Register (light), Dashboard (empty/with-data/light), Stock Detail (AAPL)
+  - Screener: Table (Overview), Grid (sparklines), Signals tab, Performance tab
+  - Light mode: screener, dashboard, register, login
+- [x] Theme toggle (dark ↔ light) verified working
+- [x] All screener tab presets (Overview, Signals, Performance) render correctly
+- [x] ChangeIndicator accessibility fix confirmed (trending icon + signed value + color)
+- [x] No console errors (only cosmetic Recharts width warnings)
+
+**Key decisions:**
+- Extracted `rate_limit.py` to break circular import chain (main.py creates app, auth.py imports limiter → both import from shared module)
+- Rate limiter disabled during tests via `app.state.limiter.enabled = False` (simpler than per-test override)
+- Sort whitelist falls back to `composite_score` for invalid sort columns (graceful degradation, not 400 error)
+
+**Test count:** 148 backend (all passing)
+**Files created:** `backend/rate_limit.py`, `backend/migrations/versions/002_add_performance_indexes.py`
+**Files changed:** `config.py`, `main.py`, `auth.py`, `stocks.py`, `screener-grid.tsx`, `screener-table.tsx`, `conftest.py`
+
+**Next:** Phase 3 planning (portfolio tracker, fundamentals, agent/chat, backlog B1-B8)
+
+---
