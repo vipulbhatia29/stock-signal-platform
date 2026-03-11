@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SignalBadge } from "@/components/signal-badge";
@@ -76,15 +77,16 @@ export function SignalCards({ signals, isLoading }: SignalCardsProps) {
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      {cards.map((card) => {
+      {cards.map((card, i) => {
         const sentiment = signalToSentiment(card.signal, card.type);
         return (
           <Card
             key={card.title}
             className={cn(
-              "border-l-4",
+              "border-l-4 animate-fade-slide-up",
               SENTIMENT_BORDER_CLASSES[sentiment]
             )}
+            style={{ '--stagger-delay': `${i * 80}ms` } as React.CSSProperties}
           >
             <CardHeader className="pb-1">
               <CardTitle className="text-sm font-medium text-muted-foreground">
