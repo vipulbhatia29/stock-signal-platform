@@ -688,3 +688,61 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Next:** Execute B-sprint implementation plan (Session 16+)
 
 ---
+
+## Session 16 — B-Sprint Implementation (B3/B4/B5/B7/B2)
+
+**Date:** 2026-03-11
+**Branch:** `feat/phase-3`
+**What was done:**
+
+### Chunk 1: Migration 003 (B3 + B4 + B5)
+- [x] **B3** — Added `removed_date: Mapped[datetime | None]` to `StockIndexMembership` (soft-delete instead of hard-delete when stock leaves index)
+- [x] **B4** — Added `last_synced_at: Mapped[datetime | None]` to `StockIndex`, exposed in `IndexResponse` schema
+- [x] **B5** — Removed `is_in_universe` from `Stock` model, `StockResponse` schema, `ensure_stock_exists()`, `frontend/src/types/api.ts`, `StockFactory`, `sync_sp500.py`, `seed_prices.py`
+- [x] Alembic migration `003_index_cleanup` (rev `9e985ae6a70f`) — 3 ops: ADD removed_date, ADD last_synced_at, DROP is_in_universe
+- [x] `sync_sp500.py` rewritten: now manages `StockIndexMembership` upsert + `removed_date` soft-delete + `last_synced_at` update
+- [x] `seed_prices.py` updated: uses index membership subquery instead of `is_in_universe` filter (distinct subquery pattern to avoid duplicates from multi-index membership)
+
+### Chunk 2: B7 — Sharpe Ratio Filter
+- [x] Added `sharpe_min: float | None = Query(...)` to `get_bulk_signals()` endpoint
+- [x] Filter applied as `WHERE sharpe_ratio >= sharpe_min` when provided
+- [x] `test_bulk_signals_sharpe_filter` added inside `TestBulkSignals` class
+
+### Chunk 3: B2 — Watchlist Price + Freshness (Backend)
+- [x] `WatchlistItemResponse` schema: added `current_price: float | None` + `price_updated_at: datetime | None`
+- [x] Watchlist endpoint: added `latest_price` window function subquery (mirrors `latest_signal` pattern)
+- [x] `StockPriceFactory` added to `tests/conftest.py`
+- [x] `test_watchlist_returns_price` added to `tests/api/test_watchlist.py`
+- [x] `backend/tasks/__init__.py`: bootstrapped Celery app with Redis broker/backend, JSON serializers
+- [x] `backend/tasks/market_data.py`: `refresh_ticker_task` with `bind=True`, exponential backoff (4 retries, max 60s), `asyncio.run()` bridge pattern
+- [x] `backend/routers/tasks.py`: `GET /api/v1/tasks/{task_id}/status` using `celery.result.AsyncResult`
+- [x] `backend/routers/stocks.py`: `POST /api/v1/stocks/watchlist/refresh-all` with `@limiter.limit("2/minute")`
+- [x] `backend/main.py`: tasks router mounted at `/api/v1`
+- [x] `tests/unit/test_tasks.py` + `tests/api/test_tasks.py` added (4 + 2 = 6 new tests)
+
+### Chunk 4: B2 — Frontend
+- [x] `frontend/src/components/relative-time.tsx` — pure `RelativeTime` component: <1h→"just now", 1-23h→"X hours ago", 1-6d→"X days ago", ≥7d→"Mar 4"
+- [x] `frontend/src/components/stock-card.tsx` — new props: `currentPrice`, `priceUpdatedAt`, `onRefresh`, `isRefreshing`; price + refresh icon row; amber icon when >1h stale
+- [x] `frontend/src/types/api.ts` — added `TaskStatus`, `RefreshTask` types; `WatchlistItem` updated
+- [x] Dashboard — "Refresh All" button in watchlist header; `useMutation` + `useEffect` (TanStack Query v5 pattern); per-task polling with `refetchInterval: 2000`; SUCCESS → invalidate watchlist, FAILURE → sonner toast
+
+### Success Checklist Verification
+- [x] `grep is_in_universe` → zero results (outside migrations)
+- [x] `alembic current` → `9e985ae6a70f (head)`
+- [x] `uv run pytest tests/` → 156 passed, 1 warning
+- [x] `ruff check` → all checks passed
+- [x] `npm run lint` → zero errors
+- [x] `npm run build` → zero errors
+
+**Key decisions:**
+- `asyncio.run()` bridge in Celery task (Celery workers are sync, tool functions are async)
+- Separate `backend/routers/tasks.py` router (task status is not semantically related to stocks)
+- No `onSuccess` in TanStack Query v5 — all post-mutation effects via `useEffect` watching `.data`
+- Ticker VARCHAR(10) constraint: test tickers kept to ≤10 chars (e.g. "RFRSH" not "REFRESHTEST")
+
+**Test count:** 156 backend (was 148 → +8 new tests)
+**Commits:** 6 feature commits on `feat/phase-3`
+
+**Next:** Phase 3 main features (portfolio tracker, fundamentals, agent/chat, B6 auto-refresh, B8 acknowledge endpoint) — or PR for B-sprint if desired
+
+---
