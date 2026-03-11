@@ -1,11 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { XIcon } from "lucide-react";
+import { XIcon, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge } from "@/components/score-badge";
+import { RelativeTime } from "./relative-time";
+import { cn } from "@/lib/utils";
+
+function isStale(dateStr: string): boolean {
+  const ageMs = Date.now() - new Date(dateStr).getTime();
+  return ageMs > 60 * 60 * 1000; // > 1 hour
+}
 
 interface StockCardProps {
   ticker: string;
@@ -14,6 +21,10 @@ interface StockCardProps {
   score?: number | null;
   onRemove: () => void;
   animationDelay?: number;
+  currentPrice?: number | null;
+  priceUpdatedAt?: string | null;
+  onRefresh?: (ticker: string) => void;
+  isRefreshing?: boolean;
 }
 
 export function StockCard({
@@ -23,6 +34,10 @@ export function StockCard({
   score,
   onRemove,
   animationDelay = 0,
+  currentPrice,
+  priceUpdatedAt,
+  onRefresh,
+  isRefreshing = false,
 }: StockCardProps) {
   return (
     <Card
@@ -47,6 +62,35 @@ export function StockCard({
             <span className="font-mono text-base font-semibold">{ticker}</span>
             <ScoreBadge score={score ?? null} size="sm" />
           </div>
+          {currentPrice != null && (
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-lg font-semibold">
+                ${currentPrice.toFixed(2)}
+              </span>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                {priceUpdatedAt && (
+                  <RelativeTime date={priceUpdatedAt} prefix="Refreshed" />
+                )}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRefresh?.(ticker);
+                  }}
+                  aria-label={`Refresh ${ticker} price data`}
+                  className={cn(
+                    "ml-1 rounded-full p-0.5 hover:bg-muted transition-colors",
+                    isRefreshing && "animate-spin pointer-events-none",
+                    priceUpdatedAt && isStale(priceUpdatedAt)
+                      ? "text-amber-500"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-1">
           <p className="truncate text-sm text-muted-foreground">
