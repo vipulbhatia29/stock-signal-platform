@@ -13,6 +13,7 @@ interface StockCardProps {
   sector: string | null;
   score?: number | null;
   onRemove: () => void;
+  animationDelay?: number;
 }
 
 export function StockCard({
@@ -21,9 +22,13 @@ export function StockCard({
   sector,
   score,
   onRemove,
+  animationDelay = 0,
 }: StockCardProps) {
   return (
-    <Card className="group relative transition-colors hover:border-foreground/20">
+    <Card
+      className="group relative transition-colors hover:border-foreground/20 animate-fade-slide-up"
+      style={{ '--stagger-delay': `${animationDelay}ms` } as React.CSSProperties}
+    >
       <Button
         variant="ghost"
         size="icon"
