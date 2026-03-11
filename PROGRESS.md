@@ -746,3 +746,51 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Next:** Phase 3 main features (portfolio tracker, fundamentals, agent/chat, B6 auto-refresh, B8 acknowledge endpoint) — or PR for B-sprint if desired
 
 ---
+
+## Session 17 — B6 Auto-refresh + B8 Acknowledge + PR #2
+
+**Date:** 2026-03-11
+**Branch:** `feat/phase-3`
+**What was done:**
+
+### PR #2 — B-sprint merge
+- [x] Pushed `feat/phase-3` to remote (11 commits ahead of origin)
+- [x] Opened PR #2: "feat: B-sprint — data model cleanup, Sharpe filter, watchlist price freshness"
+  - Covers B2/B3/B4/B5/B7 (Sessions 15-16 work)
+
+### B8 — Acknowledge Stale Price
+- [x] `price_acknowledged_at: Mapped[datetime | None]` added to `Watchlist` model
+- [x] Alembic migration `004_watchlist_acknowledge` (rev `9c7b7e9860b1`) — single ADD column op
+- [x] `POST /api/v1/stocks/watchlist/{ticker}/acknowledge` — sets `price_acknowledged_at = now()`
+- [x] `WatchlistItemResponse` + `GET /watchlist` now include `price_acknowledged_at`
+- [x] Frontend `isStale()` updated: amber shows only when `price_updated_at > price_acknowledged_at`
+- [x] `StockCard`: new `priceAcknowledgedAt` + `onAcknowledge` props; dismiss ✕ button when stale
+- [x] Dashboard `acknowledgeMutation` wired; invalidates watchlist query on success
+- [x] 4 new API tests: happy path, 404, 401, field presence
+
+### B6 — Celery Beat Auto-refresh
+- [x] `refresh_all_watchlist_tickers_task`: fan-out coordinator — queries all distinct tickers
+  across all user watchlists, dispatches `refresh_ticker_task.delay(ticker)` per ticker
+- [x] `beat_schedule` added to `tasks/__init__.py`: fires every 30 minutes
+- [x] 3 new unit tests: dispatch count, empty watchlist, beat_schedule config assertion
+
+### Verification
+- [x] `alembic current` → `9c7b7e9860b1 (head)`
+- [x] `uv run pytest tests/` → 163 passed (was 156 → +7 new tests)
+- [x] `ruff check` → zero errors
+- [x] `npm run lint` → zero errors
+- [x] `npm run build` → clean
+
+**Key decisions:**
+- B8: `price_acknowledged_at` stored on `Watchlist` row (no separate table) — single UPDATE, no join
+- B8: Amber indicator logic: stale if `price_updated_at > price_acknowledged_at` (re-appears when new price arrives)
+- B6: Coordinator-then-workers pattern (single Beat task fans out N Celery tasks) — idiomatic Celery
+- B6: 30-minute interval (configurable via beat_schedule if needed)
+
+**Test count:** 163 backend (was 156 → +7)
+**Alembic head:** `9c7b7e9860b1`
+**Commits:** 1 feature commit on `feat/phase-3`, PR #2 open
+
+**Next:** Merge PR #2 (B-sprint) → Phase 3 main features: portfolio tracker, fundamentals, agent/chat
+
+---
