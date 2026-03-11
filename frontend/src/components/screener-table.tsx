@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChangeIndicator } from "@/components/change-indicator";
 import { ScoreBadge } from "@/components/score-badge";
 import { SignalBadge } from "@/components/signal-badge";
 import { SignalMeter } from "@/components/signal-meter";
@@ -118,16 +119,7 @@ const COL: Record<string, Column> = {
     label: "Annual Return",
     sortable: true,
     render: (item) => (
-      <span
-        className={cn(
-          "tabular-nums",
-          item.annual_return !== null && item.annual_return >= 0
-            ? "text-gain"
-            : "text-loss"
-        )}
-      >
-        {formatPercent(item.annual_return)}
-      </span>
+      <ChangeIndicator value={item.annual_return} format="percent" size="sm" />
     ),
   },
   volatility: {

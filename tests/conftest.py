@@ -98,10 +98,14 @@ async def client(db_url) -> AsyncGenerator[AsyncClient, None]:
 
     app.dependency_overrides[get_async_session] = _override_session
 
+    # Disable rate limiting during tests
+    app.state.limiter.enabled = False
+
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
+    app.state.limiter.enabled = True
     app.dependency_overrides.clear()
 
     # Clean up all data after each test

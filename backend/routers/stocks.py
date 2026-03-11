@@ -627,7 +627,21 @@ async def get_bulk_signals(
     count_result = await db.execute(count_query)
     total = count_result.scalar_one()
 
-    # Apply sorting
+    # Apply sorting (whitelist to prevent column enumeration)
+    _ALLOWED_SORT = {
+        "composite_score",
+        "ticker",
+        "rsi_value",
+        "macd_value",
+        "sma_50",
+        "sma_200",
+        "annual_return",
+        "volatility",
+        "sharpe_ratio",
+        "stock_sector",
+    }
+    if sort_by not in _ALLOWED_SORT:
+        sort_by = "composite_score"
     sort_column = getattr(latest.c, sort_by, latest.c.composite_score)
     if sort_order == "asc":
         query = query.order_by(sort_column.asc().nulls_last())

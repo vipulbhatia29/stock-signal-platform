@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge } from "@/components/score-badge";
 import { SignalBadge } from "@/components/signal-badge";
 import { Sparkline } from "@/components/sparkline";
-import { formatPercent } from "@/lib/format";
+import { ChangeIndicator } from "@/components/change-indicator";
 import { scoreToSentiment } from "@/lib/signals";
 import { useContainerWidth } from "@/hooks/use-container-width";
 import { cn } from "@/lib/utils";
@@ -79,17 +79,7 @@ function StockCard({ item, animationDelay = 0 }: { item: BulkSignalItem; animati
 
         {/* Right: annual return + score */}
         <div className="text-right flex-shrink-0">
-          {item.annual_return !== null && (
-            <div
-              className={cn(
-                "text-[10px] font-medium tabular-nums",
-                item.annual_return >= 0 ? "text-gain" : "text-loss"
-              )}
-            >
-              {item.annual_return >= 0 ? "+" : ""}
-              {formatPercent(item.annual_return)}
-            </div>
-          )}
+          <ChangeIndicator value={item.annual_return} format="percent" size="sm" />
           <div className="mt-0.5">
             <ScoreBadge score={item.composite_score} size="sm" />
           </div>
