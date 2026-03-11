@@ -36,7 +36,6 @@ class StockResponse(BaseModel):
     exchange: str | None = None
     sector: str | None = None
     industry: str | None = None
-    is_in_universe: bool  # True if part of S&P 500
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -183,6 +182,9 @@ class WatchlistItemResponse(BaseModel):
     sector: str | None = None
     composite_score: float | None = None
     added_at: datetime
+    current_price: float | None = None
+    price_updated_at: datetime | None = None
+    price_acknowledged_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

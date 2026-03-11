@@ -1,6 +1,7 @@
 """Pydantic v2 schemas for stock index endpoints."""
 
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -13,6 +14,7 @@ class IndexResponse(BaseModel):
     slug: str
     description: str | None = None
     stock_count: int = Field(description="Number of stocks in this index")
+    last_synced_at: datetime | None = Field(None, description="When index data was last synced")
 
     model_config = {"from_attributes": True}
 

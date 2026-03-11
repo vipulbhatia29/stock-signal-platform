@@ -612,3 +612,185 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Next:** Merge PR #1 (`feat/initial-scaffold` → `main`), then Phase 3 planning
 
 ---
+
+## Session 14 — Security Hardening, Accessibility & Visual Testing
+
+**Date:** 2026-03-11
+**Branch:** `feat/phase-3`
+**What was done:**
+
+### Code Analysis & Improvements
+- [x] `/sc:analyze` — comprehensive code quality, security, performance, and architecture audit
+- [x] **Security: JWT startup validation** (`config.py`) — `validate_production_settings()` warns in dev, raises `RuntimeError` in prod/staging for insecure JWT default or disabled `COOKIE_SECURE`
+- [x] **Security: Rate limiting on auth** (`routers/auth.py`) — register 3/min, login 5/min, refresh 5/min via slowapi `@limiter.limit()` decorators
+- [x] **Security: Shared rate_limit.py** — extracted `limiter` instance to avoid circular imports (main.py ↔ auth.py)
+- [x] **Security: CORS restriction** (`main.py`) — replaced `allow_methods=["*"]` / `allow_headers=["*"]` with explicit allowlists
+- [x] **Security: Sort column whitelist** (`routers/stocks.py`) — `_ALLOWED_SORT` set prevents column enumeration via `getattr()`
+- [x] **Performance: Alembic migration 002** — 5 indexes on `watchlist.user_id`, `recommendation_snapshots.user_id`, `recommendation_snapshots.generated_at`, `signal_snapshots.computed_at`, `stocks.sector`
+- [x] **Accessibility: ChangeIndicator** (`screener-grid.tsx`, `screener-table.tsx`) — replaced color-only annual return text with `ChangeIndicator` component (icon + sign + color for color-blind safety)
+- [x] **Test fix:** disabled rate limiter in `conftest.py` test client fixture to prevent flaky auth tests
+
+### Full Visual Testing (Playwright MCP)
+- [x] 13 screenshots captured across all pages and modes:
+  - Login (dark), Register (light), Dashboard (empty/with-data/light), Stock Detail (AAPL)
+  - Screener: Table (Overview), Grid (sparklines), Signals tab, Performance tab
+  - Light mode: screener, dashboard, register, login
+- [x] Theme toggle (dark ↔ light) verified working
+- [x] All screener tab presets (Overview, Signals, Performance) render correctly
+- [x] ChangeIndicator accessibility fix confirmed (trending icon + signed value + color)
+- [x] No console errors (only cosmetic Recharts width warnings)
+
+**Key decisions:**
+- Extracted `rate_limit.py` to break circular import chain (main.py creates app, auth.py imports limiter → both import from shared module)
+- Rate limiter disabled during tests via `app.state.limiter.enabled = False` (simpler than per-test override)
+- Sort whitelist falls back to `composite_score` for invalid sort columns (graceful degradation, not 400 error)
+
+**Test count:** 148 backend (all passing)
+**Files created:** `backend/rate_limit.py`, `backend/migrations/versions/002_add_performance_indexes.py`
+**Files changed:** `config.py`, `main.py`, `auth.py`, `stocks.py`, `screener-grid.tsx`, `screener-table.tsx`, `conftest.py`
+
+**Next:** Phase 3 planning (portfolio tracker, fundamentals, agent/chat, backlog B1-B8)
+
+---
+
+## Session 15 — B-Sprint Planning (Brainstorming + Spec + Plan)
+
+**Date:** 2026-03-11
+**Branch:** `feat/phase-3`
+**What was done:**
+
+### Brainstorming + Design (no code changes)
+- [x] Reviewed B1-B8 backlog items collaboratively with user
+- [x] **Scoped B-sprint to 4 items** — B1 deferred, B6+B8 promoted to Phase 3
+- [x] **B3** — Add `removed_date` to `StockIndexMembership` (soft-delete instead of hard-delete)
+- [x] **B4** — Add `last_synced_at` to `StockIndex`, expose in API response
+- [x] **B5** — Clean break: drop `is_in_universe` column + sweep all references
+- [x] **B7** — Add `sharpe_min` filter to `GET /api/v1/stocks/signals/bulk`
+- [x] **B2** — Watchlist current price + freshness UI: `current_price` + `price_updated_at` in response, `RelativeTime` component, per-card refresh icon (amber when >1h stale), "Refresh All" button in watchlist section header with Celery async tasks + per-card spinner polling
+
+### Artifacts created
+- [x] Spec: `docs/superpowers/specs/2026-03-11-b-sprint-design.md` (committed `ec0e534`)
+- [x] Plan: `docs/superpowers/plans/2026-03-11-b-sprint.md` (committed `667c7f8`) — 4 chunks, 12 tasks, TDD throughout
+
+### Key decisions
+- Single Migration 003 covers B3+B4+B5 (atomic DB change)
+- Celery task `refresh_ticker_task` uses exponential backoff (5s→10s→20s→40s, max 4 retries)
+- `refresh_ticker_task` uses `asyncio.run()` bridge since Celery workers are sync
+- "Refresh All" uses live per-task polling (TanStack Query `refetchInterval: 2000`) rather than optimistic UI
+- `RelativeTime` format: <1h → "just now", 1-23h → "X hours ago", 1-6d → "X days ago", ≥7d → "Mar 4"
+- Task status router lives in `backend/routers/tasks.py` (not `stocks.py`)
+- `sync_sp500.py` is a significant rewrite — it currently doesn't touch `StockIndexMembership` at all
+
+**Test count:** 148 (unchanged — planning session only)
+**Files created:** spec + plan docs, `.gitignore` updated (added `.superpowers/`, `.serena/`)
+**Files changed:** none (planning session)
+
+**Next:** Execute B-sprint implementation plan (Session 16+)
+
+---
+
+## Session 16 — B-Sprint Implementation (B3/B4/B5/B7/B2)
+
+**Date:** 2026-03-11
+**Branch:** `feat/phase-3`
+**What was done:**
+
+### Chunk 1: Migration 003 (B3 + B4 + B5)
+- [x] **B3** — Added `removed_date: Mapped[datetime | None]` to `StockIndexMembership` (soft-delete instead of hard-delete when stock leaves index)
+- [x] **B4** — Added `last_synced_at: Mapped[datetime | None]` to `StockIndex`, exposed in `IndexResponse` schema
+- [x] **B5** — Removed `is_in_universe` from `Stock` model, `StockResponse` schema, `ensure_stock_exists()`, `frontend/src/types/api.ts`, `StockFactory`, `sync_sp500.py`, `seed_prices.py`
+- [x] Alembic migration `003_index_cleanup` (rev `9e985ae6a70f`) — 3 ops: ADD removed_date, ADD last_synced_at, DROP is_in_universe
+- [x] `sync_sp500.py` rewritten: now manages `StockIndexMembership` upsert + `removed_date` soft-delete + `last_synced_at` update
+- [x] `seed_prices.py` updated: uses index membership subquery instead of `is_in_universe` filter (distinct subquery pattern to avoid duplicates from multi-index membership)
+
+### Chunk 2: B7 — Sharpe Ratio Filter
+- [x] Added `sharpe_min: float | None = Query(...)` to `get_bulk_signals()` endpoint
+- [x] Filter applied as `WHERE sharpe_ratio >= sharpe_min` when provided
+- [x] `test_bulk_signals_sharpe_filter` added inside `TestBulkSignals` class
+
+### Chunk 3: B2 — Watchlist Price + Freshness (Backend)
+- [x] `WatchlistItemResponse` schema: added `current_price: float | None` + `price_updated_at: datetime | None`
+- [x] Watchlist endpoint: added `latest_price` window function subquery (mirrors `latest_signal` pattern)
+- [x] `StockPriceFactory` added to `tests/conftest.py`
+- [x] `test_watchlist_returns_price` added to `tests/api/test_watchlist.py`
+- [x] `backend/tasks/__init__.py`: bootstrapped Celery app with Redis broker/backend, JSON serializers
+- [x] `backend/tasks/market_data.py`: `refresh_ticker_task` with `bind=True`, exponential backoff (4 retries, max 60s), `asyncio.run()` bridge pattern
+- [x] `backend/routers/tasks.py`: `GET /api/v1/tasks/{task_id}/status` using `celery.result.AsyncResult`
+- [x] `backend/routers/stocks.py`: `POST /api/v1/stocks/watchlist/refresh-all` with `@limiter.limit("2/minute")`
+- [x] `backend/main.py`: tasks router mounted at `/api/v1`
+- [x] `tests/unit/test_tasks.py` + `tests/api/test_tasks.py` added (4 + 2 = 6 new tests)
+
+### Chunk 4: B2 — Frontend
+- [x] `frontend/src/components/relative-time.tsx` — pure `RelativeTime` component: <1h→"just now", 1-23h→"X hours ago", 1-6d→"X days ago", ≥7d→"Mar 4"
+- [x] `frontend/src/components/stock-card.tsx` — new props: `currentPrice`, `priceUpdatedAt`, `onRefresh`, `isRefreshing`; price + refresh icon row; amber icon when >1h stale
+- [x] `frontend/src/types/api.ts` — added `TaskStatus`, `RefreshTask` types; `WatchlistItem` updated
+- [x] Dashboard — "Refresh All" button in watchlist header; `useMutation` + `useEffect` (TanStack Query v5 pattern); per-task polling with `refetchInterval: 2000`; SUCCESS → invalidate watchlist, FAILURE → sonner toast
+
+### Success Checklist Verification
+- [x] `grep is_in_universe` → zero results (outside migrations)
+- [x] `alembic current` → `9e985ae6a70f (head)`
+- [x] `uv run pytest tests/` → 156 passed, 1 warning
+- [x] `ruff check` → all checks passed
+- [x] `npm run lint` → zero errors
+- [x] `npm run build` → zero errors
+
+**Key decisions:**
+- `asyncio.run()` bridge in Celery task (Celery workers are sync, tool functions are async)
+- Separate `backend/routers/tasks.py` router (task status is not semantically related to stocks)
+- No `onSuccess` in TanStack Query v5 — all post-mutation effects via `useEffect` watching `.data`
+- Ticker VARCHAR(10) constraint: test tickers kept to ≤10 chars (e.g. "RFRSH" not "REFRESHTEST")
+
+**Test count:** 156 backend (was 148 → +8 new tests)
+**Commits:** 6 feature commits on `feat/phase-3`
+
+**Next:** Phase 3 main features (portfolio tracker, fundamentals, agent/chat, B6 auto-refresh, B8 acknowledge endpoint) — or PR for B-sprint if desired
+
+---
+
+## Session 17 — B6 Auto-refresh + B8 Acknowledge + PR #2
+
+**Date:** 2026-03-11
+**Branch:** `feat/phase-3`
+**What was done:**
+
+### PR #2 — B-sprint merge
+- [x] Pushed `feat/phase-3` to remote (11 commits ahead of origin)
+- [x] Opened PR #2: "feat: B-sprint — data model cleanup, Sharpe filter, watchlist price freshness"
+  - Covers B2/B3/B4/B5/B7 (Sessions 15-16 work)
+
+### B8 — Acknowledge Stale Price
+- [x] `price_acknowledged_at: Mapped[datetime | None]` added to `Watchlist` model
+- [x] Alembic migration `004_watchlist_acknowledge` (rev `9c7b7e9860b1`) — single ADD column op
+- [x] `POST /api/v1/stocks/watchlist/{ticker}/acknowledge` — sets `price_acknowledged_at = now()`
+- [x] `WatchlistItemResponse` + `GET /watchlist` now include `price_acknowledged_at`
+- [x] Frontend `isStale()` updated: amber shows only when `price_updated_at > price_acknowledged_at`
+- [x] `StockCard`: new `priceAcknowledgedAt` + `onAcknowledge` props; dismiss ✕ button when stale
+- [x] Dashboard `acknowledgeMutation` wired; invalidates watchlist query on success
+- [x] 4 new API tests: happy path, 404, 401, field presence
+
+### B6 — Celery Beat Auto-refresh
+- [x] `refresh_all_watchlist_tickers_task`: fan-out coordinator — queries all distinct tickers
+  across all user watchlists, dispatches `refresh_ticker_task.delay(ticker)` per ticker
+- [x] `beat_schedule` added to `tasks/__init__.py`: fires every 30 minutes
+- [x] 3 new unit tests: dispatch count, empty watchlist, beat_schedule config assertion
+
+### Verification
+- [x] `alembic current` → `9c7b7e9860b1 (head)`
+- [x] `uv run pytest tests/` → 163 passed (was 156 → +7 new tests)
+- [x] `ruff check` → zero errors
+- [x] `npm run lint` → zero errors
+- [x] `npm run build` → clean
+
+**Key decisions:**
+- B8: `price_acknowledged_at` stored on `Watchlist` row (no separate table) — single UPDATE, no join
+- B8: Amber indicator logic: stale if `price_updated_at > price_acknowledged_at` (re-appears when new price arrives)
+- B6: Coordinator-then-workers pattern (single Beat task fans out N Celery tasks) — idiomatic Celery
+- B6: 30-minute interval (configurable via beat_schedule if needed)
+
+**Test count:** 163 backend (was 156 → +7)
+**Alembic head:** `9c7b7e9860b1`
+**Commits:** 1 feature commit on `feat/phase-3`, PR #2 open
+
+**Next:** Merge PR #2 (B-sprint) → Phase 3 main features: portfolio tracker, fundamentals, agent/chat
+
+---

@@ -19,6 +19,11 @@ class StockIndex(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     slug: Mapped[str] = mapped_column(String(50), unique=True, nullable=False, index=True)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
 
     memberships: Mapped[list[StockIndexMembership]] = relationship(
         back_populates="index", cascade="all, delete-orphan"
@@ -50,6 +55,11 @@ class StockIndexMembership(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+    removed_date: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
     )
 
     index: Mapped[StockIndex] = relationship(back_populates="memberships")

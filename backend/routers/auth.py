@@ -2,7 +2,7 @@
 
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from backend.dependencies import (
     verify_password,
 )
 from backend.models.user import User, UserPreference
+from backend.rate_limit import limiter
 from backend.schemas.auth import (
     TokenRefreshRequest,
     TokenResponse,
@@ -72,7 +73,9 @@ def _clear_auth_cookies(response: Response) -> None:
     response_model=UserRegisterResponse,
     status_code=status.HTTP_201_CREATED,
 )
+@limiter.limit("3/minute")
 async def register(
+    request: Request,
     body: UserRegisterRequest,
     db: AsyncSession = Depends(get_async_session),
 ) -> User:
@@ -113,7 +116,9 @@ async def register(
 
 
 @router.post("/login", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def login(
+    request: Request,
     body: UserLoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_async_session),
@@ -151,7 +156,9 @@ async def login(
 
 
 @router.post("/refresh", response_model=TokenResponse)
+@limiter.limit("5/minute")
 async def refresh_token(
+    request: Request,
     body: TokenRefreshRequest,
     response: Response,
     db: AsyncSession = Depends(get_async_session),

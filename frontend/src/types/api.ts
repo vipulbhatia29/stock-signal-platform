@@ -35,7 +35,6 @@ export interface StockResponse {
   exchange: string | null;
   sector: string | null;
   industry: string | null;
-  is_in_universe: boolean;
   is_active: boolean;
 }
 
@@ -122,6 +121,9 @@ export interface WatchlistItem {
   sector: string | null;
   composite_score: number | null;
   added_at: string;
+  current_price: number | null;
+  price_updated_at: string | null;
+  price_acknowledged_at: string | null;
 }
 
 // ── Recommendations ───────────────────────────────────────────────────────────
@@ -210,6 +212,18 @@ export interface IndexStocksResponse {
   index_name: string;
   total: number;
   items: IndexStockItem[];
+}
+
+// ── Task / Refresh ────────────────────────────────────────────────────────────
+
+export interface TaskStatus {
+  task_id: string;
+  state: "PENDING" | "STARTED" | "SUCCESS" | "FAILURE";
+}
+
+export interface RefreshTask {
+  ticker: string;
+  task_id: string;
 }
 
 // ── API Error ─────────────────────────────────────────────────────────────────

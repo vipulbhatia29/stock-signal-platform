@@ -30,7 +30,6 @@ class Stock(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     exchange: Mapped[str | None] = mapped_column(String(20), nullable=True)
     sector: Mapped[str | None] = mapped_column(String(100), nullable=True)
     industry: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    is_in_universe: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -52,6 +51,11 @@ class Watchlist(UUIDPrimaryKeyMixin, Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
+    )
+    price_acknowledged_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
     )
 
     # Relationships

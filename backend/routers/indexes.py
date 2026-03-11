@@ -37,6 +37,7 @@ async def list_indexes(
             StockIndex.name,
             StockIndex.slug,
             StockIndex.description,
+            StockIndex.last_synced_at,
             func.count(StockIndexMembership.id).label("stock_count"),
         )
         .outerjoin(StockIndexMembership, StockIndex.id == StockIndexMembership.index_id)
@@ -52,6 +53,7 @@ async def list_indexes(
             "name": row.name,
             "slug": row.slug,
             "description": row.description,
+            "last_synced_at": row.last_synced_at,
             "stock_count": row.stock_count,
         }
         for row in rows

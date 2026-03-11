@@ -1,6 +1,12 @@
 """Application settings loaded from environment variables via Pydantic Settings."""
 
+import logging
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+_INSECURE_JWT_DEFAULT = "change-me-in-production"
 
 
 class Settings(BaseSettings):
@@ -20,13 +26,16 @@ class Settings(BaseSettings):
     # --- Required ---
     DATABASE_URL: str = "postgresql+asyncpg://stocksignal:stocksignal@localhost:5432/stocksignal"
     REDIS_URL: str = "redis://localhost:6379/0"
-    JWT_SECRET_KEY: str = "change-me-in-production"
+    JWT_SECRET_KEY: str = _INSECURE_JWT_DEFAULT
     JWT_ALGORITHM: str = "HS256"
 
     # --- Auth ---
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     COOKIE_SECURE: bool = False  # Set True in production (requires HTTPS)
+
+    # --- Environment ---
+    ENVIRONMENT: str = "development"  # development | staging | production
 
     # --- App ---
     CORS_ORIGINS: str = "http://localhost:3000"
@@ -48,5 +57,26 @@ class Settings(BaseSettings):
         """Parse comma-separated CORS origins into a list."""
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
+    def validate_production_settings(self) -> None:
+        """Validate security-critical settings.
+
+        Raises RuntimeError in production if JWT secret is the default
+        or COOKIE_SECURE is disabled. Logs warnings in development.
+        """
+        is_prod = self.ENVIRONMENT in ("production", "staging")
+
+        if self.JWT_SECRET_KEY == _INSECURE_JWT_DEFAULT:
+            msg = (
+                "JWT_SECRET_KEY is using the insecure default. "
+                "Set a strong secret (32+ chars) via environment variable."
+            )
+            if is_prod:
+                raise RuntimeError(msg)
+            logger.warning(msg)
+
+        if not self.COOKIE_SECURE and is_prod:
+            raise RuntimeError("COOKIE_SECURE must be True in production (requires HTTPS).")
+
 
 settings = Settings()
+settings.validate_production_settings()

@@ -1,11 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { XIcon } from "lucide-react";
+import { XIcon, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScoreBadge } from "@/components/score-badge";
+import { RelativeTime } from "./relative-time";
+import { cn } from "@/lib/utils";
+
+function isStale(priceUpdatedAt: string, acknowledgedAt: string | null | undefined): boolean {
+  // Stale if price is > 1 hour old AND not yet acknowledged (or acknowledged before this price arrived)
+  const priceDate = new Date(priceUpdatedAt).getTime();
+  const ageMs = Date.now() - priceDate;
+  const isOld = ageMs > 60 * 60 * 1000;
+  if (!isOld) return false;
+  if (!acknowledgedAt) return true;
+  // Re-show amber if price arrived after the last acknowledgement
+  return priceDate > new Date(acknowledgedAt).getTime();
+}
 
 interface StockCardProps {
   ticker: string;
@@ -14,6 +27,12 @@ interface StockCardProps {
   score?: number | null;
   onRemove: () => void;
   animationDelay?: number;
+  currentPrice?: number | null;
+  priceUpdatedAt?: string | null;
+  onRefresh?: (ticker: string) => void;
+  isRefreshing?: boolean;
+  priceAcknowledgedAt?: string | null;
+  onAcknowledge?: (ticker: string) => void;
 }
 
 export function StockCard({
@@ -23,6 +42,12 @@ export function StockCard({
   score,
   onRemove,
   animationDelay = 0,
+  currentPrice,
+  priceUpdatedAt,
+  onRefresh,
+  isRefreshing = false,
+  priceAcknowledgedAt,
+  onAcknowledge,
 }: StockCardProps) {
   return (
     <Card
@@ -47,6 +72,49 @@ export function StockCard({
             <span className="font-mono text-base font-semibold">{ticker}</span>
             <ScoreBadge score={score ?? null} size="sm" />
           </div>
+          {currentPrice != null && (
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-lg font-semibold">
+                ${currentPrice.toFixed(2)}
+              </span>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                {priceUpdatedAt && (
+                  <RelativeTime date={priceUpdatedAt} prefix="Refreshed" />
+                )}
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onRefresh?.(ticker);
+                  }}
+                  aria-label={`Refresh ${ticker} price data`}
+                  className={cn(
+                    "ml-1 rounded-full p-0.5 hover:bg-muted transition-colors",
+                    isRefreshing && "animate-spin pointer-events-none",
+                    priceUpdatedAt && isStale(priceUpdatedAt, priceAcknowledgedAt)
+                      ? "text-amber-500"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </button>
+                {priceUpdatedAt && isStale(priceUpdatedAt, priceAcknowledgedAt) && onAcknowledge && (
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onAcknowledge(ticker);
+                    }}
+                    aria-label={`Dismiss stale price alert for ${ticker}`}
+                    className="ml-0.5 rounded-full p-0.5 hover:bg-muted transition-colors text-amber-500 text-[10px] font-medium leading-none"
+                    title="Dismiss stale alert"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-1">
           <p className="truncate text-sm text-muted-foreground">

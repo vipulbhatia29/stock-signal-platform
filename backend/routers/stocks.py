@@ -17,6 +17,7 @@ API Endpoints:
   GET  /watchlist                      — user's watchlist with signal summaries
   POST /watchlist                      — add a ticker to watchlist
   DELETE /watchlist/{ticker}           — remove a ticker from watchlist
+  POST /watchlist/{ticker}/acknowledge  — acknowledge stale price data
   GET  /recommendations                — today's recommendations
 """
 
@@ -26,7 +27,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import Float, delete, func, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,6 +40,7 @@ from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
 from backend.models.stock import Stock, Watchlist
 from backend.models.user import User
+from backend.rate_limit import limiter
 from backend.schemas.stock import (
     BollingerResponse,
     BulkSignalItem,
@@ -57,6 +59,7 @@ from backend.schemas.stock import (
     WatchlistAddRequest,
     WatchlistItemResponse,
 )
+from backend.tasks.market_data import refresh_ticker_task
 
 logger = logging.getLogger(__name__)
 
@@ -276,17 +279,38 @@ async def get_watchlist(
         )
     ).subquery("latest_signal")
 
-    # ── Join Watchlist + Stock + latest signal score ───────────────────
+    # ── Subquery: latest price per ticker ─────────────────────────────
+    latest_price = (
+        select(
+            StockPrice.ticker.label("price_ticker"),
+            StockPrice.adj_close.label("current_price"),
+            StockPrice.time.label("price_updated_at"),
+            func.row_number()
+            .over(
+                partition_by=StockPrice.ticker,
+                order_by=StockPrice.time.desc(),
+            )
+            .label("rn"),
+        )
+    ).subquery("latest_price")
+
+    # ── Join Watchlist + Stock + latest signal score + latest price ───
     result = await db.execute(
         select(
             Watchlist,
             Stock,
             latest_signal.c.composite_score,
+            latest_price.c.current_price,
+            latest_price.c.price_updated_at,
         )
         .join(Stock, Watchlist.ticker == Stock.ticker)
         .outerjoin(
             latest_signal,
             (latest_signal.c.sig_ticker == Watchlist.ticker) & (latest_signal.c.rn == 1),
+        )
+        .outerjoin(
+            latest_price,
+            (latest_price.c.price_ticker == Watchlist.ticker) & (latest_price.c.rn == 1),
         )
         .where(Watchlist.user_id == current_user.id)
         .order_by(Watchlist.added_at.desc())
@@ -302,8 +326,11 @@ async def get_watchlist(
             "sector": stock.sector,
             "composite_score": composite_score,
             "added_at": watchlist.added_at,
+            "current_price": float(current_price) if current_price is not None else None,
+            "price_updated_at": price_updated_at,
+            "price_acknowledged_at": watchlist.price_acknowledged_at,
         }
-        for watchlist, stock, composite_score in rows
+        for watchlist, stock, composite_score, current_price, price_updated_at in rows
     ]
 
 
@@ -404,6 +431,78 @@ async def remove_from_watchlist(
         )
     )
     await db.commit()
+
+
+@router.post("/watchlist/{ticker}/acknowledge", response_model=WatchlistItemResponse)
+async def acknowledge_watchlist_price(
+    ticker: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    """Acknowledge stale price data for a watchlist entry.
+
+    Sets price_acknowledged_at to now, clearing the stale-data amber
+    indicator in the UI until a newer price arrives.
+    Returns 404 if the ticker is not in the user's watchlist.
+    """
+    ticker = ticker.upper()
+
+    result = await db.execute(
+        select(Watchlist).where(
+            Watchlist.user_id == current_user.id,
+            Watchlist.ticker == ticker,
+        )
+    )
+    entry = result.scalar_one_or_none()
+
+    if entry is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="'{ticker}' is not in your watchlist.",
+        )
+
+    entry.price_acknowledged_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(entry)
+    logger.info("Acknowledged stale price for %s (user=%s)", ticker, current_user.id)
+
+    # Fetch stock info for full response shape
+    stock_result = await db.execute(select(Stock).where(Stock.ticker == ticker))
+    stock = stock_result.scalar_one()
+
+    return {
+        "id": entry.id,
+        "ticker": entry.ticker,
+        "name": stock.name,
+        "sector": stock.sector,
+        "added_at": entry.added_at,
+        "price_acknowledged_at": entry.price_acknowledged_at,
+    }
+
+
+@router.post("/watchlist/refresh-all")
+@limiter.limit("2/minute")
+async def refresh_all_watchlist(
+    request: Request,  # required by slowapi for rate limiting
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> list[dict]:
+    """Enqueue background refresh tasks for all tickers in user's watchlist.
+
+    Each ticker gets a Celery task to fetch latest prices and recompute signals.
+    Returns a list of {ticker, task_id} for the frontend to poll task status.
+    Rate limited to 2 requests/minute (expensive yfinance operation).
+    """
+    result = await db.execute(select(Watchlist.ticker).where(Watchlist.user_id == current_user.id))
+    tickers = [row[0] for row in result.all()]
+
+    tasks = []
+    for ticker in tickers:
+        task = refresh_ticker_task.delay(ticker)
+        tasks.append({"ticker": ticker, "task_id": task.id})
+        logger.info("Enqueued refresh for %s — task_id=%s", ticker, task.id)
+
+    return tasks
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -546,6 +645,7 @@ async def get_bulk_signals(
     sector: str | None = Query(default=None, description="Filter by sector"),
     score_min: float | None = Query(default=None, ge=0, le=10),
     score_max: float | None = Query(default=None, ge=0, le=10),
+    sharpe_min: float | None = Query(default=None, description="Minimum Sharpe ratio filter"),
     sort_by: str = Query(default="composite_score", description="Field to sort by"),
     sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(default=50, ge=1, le=200),
@@ -621,13 +721,29 @@ async def get_bulk_signals(
         query = query.where(latest.c.composite_score >= score_min)
     if score_max is not None:
         query = query.where(latest.c.composite_score <= score_max)
+    if sharpe_min is not None:
+        query = query.where(latest.c.sharpe_ratio >= sharpe_min)
 
     # Count total before pagination
     count_query = select(func.count()).select_from(query.subquery())
     count_result = await db.execute(count_query)
     total = count_result.scalar_one()
 
-    # Apply sorting
+    # Apply sorting (whitelist to prevent column enumeration)
+    _ALLOWED_SORT = {
+        "composite_score",
+        "ticker",
+        "rsi_value",
+        "macd_value",
+        "sma_50",
+        "sma_200",
+        "annual_return",
+        "volatility",
+        "sharpe_ratio",
+        "stock_sector",
+    }
+    if sort_by not in _ALLOWED_SORT:
+        sort_by = "composite_score"
     sort_column = getattr(latest.c, sort_by, latest.c.composite_score)
     if sort_order == "asc":
         query = query.order_by(sort_column.asc().nulls_last())
