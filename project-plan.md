@@ -154,12 +154,12 @@ Track actual positions and add fundamental analysis signals.
 6. ✅ **Updated composite score** merging technical (50%) + fundamental (50%) (Session 21)
    - `GET /api/v1/stocks/{ticker}/fundamentals` endpoint added
    - `FundamentalsCard` on stock detail page (P/E, PEG, FCF yield, D/E, Piotroski bar)
-   - **Pending:** wire Piotroski into ingest endpoint so composite score uses fundamentals at ingest time
+   - ✅ Piotroski wired into ingest endpoint for 50/50 blending at ingest time (Session 22)
 
 ### Deliverables — Phase 3.5 (deferred — next sprint after core)
 
-7. Portfolio value history chart (Celery daily PortfolioSnapshot hypertable)
-8. Dividend tracking (DividendPayment model)
+7. ✅ **Portfolio value history** — PortfolioSnapshot hypertable, Celery Beat daily task, `GET /portfolio/history`, PortfolioValueChart (Session 22)
+8. 🔧 Dividend tracking (DividendPayment model + tool created, migration/schema/endpoint/tests pending)
 9. **Divestment rules engine:**
    - Trailing stop-loss alerts
    - Position concentration warnings (>5%)

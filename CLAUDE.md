@@ -340,3 +340,5 @@ Optional: GROQ_API_KEY, SERPAPI_API_KEY, FRED_API_KEY, OPENAI_API_KEY
 | `gh auth login` fails with `permission denied` on `~/.config/gh` | Missing config directory | `sudo mkdir -p ~/.config/gh && sudo chown $USER ~/.config/gh` |
 | CSS var colors not resolving in Recharts | Recharts needs literal color strings, not `var(--x)` | Use `useChartColors()` hook (reads via `getComputedStyle`) or local `readCssVar()` for one-off reads |
 | Sparkline/chart colors wrong on initial render | CSS vars not yet resolved on first paint | Use lazy `useState(() => resolveColor(...))` initializer — reads CSS vars synchronously on mount |
+| TimescaleDB hypertable PK uses `ON CONFLICT ... DO UPDATE` | Composite PK `(id, time)` means upsert needs named constraint | Use `constraint="tablename_pkey"` in `on_conflict_do_update()` |
+| Python heredoc/script inserts escaped backticks in JS | Template literals get backslash-escaped through shell layers | Use the Edit tool or Write tool for JS/TS files with template literals — never use Python string replacement via Bash for template literal content |

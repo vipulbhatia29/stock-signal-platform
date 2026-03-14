@@ -979,3 +979,52 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 - Phase 4: Agent/chat interface — ChatSession + ChatMessage models, LangChain/LangGraph loop, streaming NDJSON, chat UI
 
 ---
+
+## Session 22 — Piotroski Ingest Wiring + Phase 3.5 Start
+
+**Date:** 2026-03-14
+**Branch:** `feat/phase-3-fundamentals` → merged (PR #4); new branch `feat/phase-3.5-portfolio-advanced`
+
+**What was done:**
+- [x] Wired Piotroski F-Score into ingest endpoint so composite score uses 50/50 blending at data ingestion time (not just the standalone /fundamentals endpoint)
+  - `compute_signals()` gains optional `piotroski_score` param
+  - Ingest endpoint calls `fetch_fundamentals()` via `run_in_executor` before computing signals
+  - 2 new ingest API tests + 2 new signal unit tests
+- [x] PR #4 merged: `feat/phase-3-fundamentals` → `main`
+- [x] Phase 3.5 item 7: Portfolio value history
+  - `PortfolioSnapshot` model (TimescaleDB hypertable) + migration 006 (`3247ef3a73ee`)
+  - `snapshot_portfolio_value()` tool with upsert (idempotent daily re-runs)
+  - `get_portfolio_history()` tool for querying time series
+  - `get_all_portfolio_ids()` tool for finding portfolios with open positions
+  - Celery Beat task: `snapshot_all_portfolios_task` at 9 PM UTC (4 PM ET market close)
+  - `GET /api/v1/portfolio/history` endpoint with `?days=` param
+  - `PortfolioValueChart` frontend component (area chart: value line + cost basis dashed line)
+  - Wired into portfolio page between KPI row and positions table
+  - 3 new Celery task tests + 4 portfolio history API tests
+- [x] Phase 3.5 item 8 (WIP): Dividend tracking started
+  - `DividendPayment` model created
+  - `backend/tools/dividends.py` — fetch_dividends, store_dividends, get_dividends
+  - Still needs: migration, schema, endpoint, tests, UI
+
+**Key decisions:**
+- PortfolioSnapshot uses composite PK (portfolio_id, snapshot_date) with upsert on conflict
+- Celery Beat schedule: daily at 21:00 UTC ≈ 4 PM ET (after market close)
+- Chart shows value (solid area) + cost basis (dashed line) for easy comparison
+- Gradient color follows overall trend (gain/loss based on first vs last data point)
+
+**Gotchas discovered:**
+- Python heredoc/shell string replacement escapes backticks in JS template literals — use Edit/Write tools for JS/TS files, not Python string ops via Bash
+- TimescaleDB hypertable upsert needs `constraint="tablename_pkey"` (named constraint)
+- Context eviction: for files read multiple times, prefer Bash append or Write over Edit when context window pressure is high
+
+**Test count:** 109 unit + 109 API = 218 total (109 unit verified, API verified at 105 + 4 new = 109)
+**Alembic head:** `3247ef3a73ee` (migration 006)
+**Current branch:** `feat/phase-3.5-portfolio-advanced` (pushed)
+
+**Next session — Phase 3.5 continued:**
+- Finish dividend tracking: migration, DividendResponse schema, GET endpoint, tests, UI
+- Phase 3.5 item 9: Divestment rules engine (stop-loss, concentration warnings, fundamental deterioration)
+- Phase 3.5 item 10: Portfolio-aware recommendations upgrade
+- Phase 3.5 item 11: Rebalancing suggestions
+
+---
