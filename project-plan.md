@@ -159,13 +159,15 @@ Track actual positions and add fundamental analysis signals.
 ### Deliverables — Phase 3.5 (deferred — next sprint after core)
 
 7. ✅ **Portfolio value history** — PortfolioSnapshot hypertable, Celery Beat daily task, `GET /portfolio/history`, PortfolioValueChart (Session 22)
-8. 🔧 Dividend tracking (DividendPayment model + tool created, migration/schema/endpoint/tests pending)
-9. **Divestment rules engine:**
-   - Trailing stop-loss alerts
-   - Position concentration warnings (>5%)
-   - Sector concentration warnings (>30%)
-   - Fundamental deterioration flags
-   - Cash reserve warnings (<10%)
+8. ✅ **Dividend tracking** — DividendPayment model, migration 007, summary tool, GET endpoint, unit+API tests, DividendCard UI (Session 23)
+9. 🔧 **Divestment rules engine** (design complete, implementation plan ready — `.claude/plans/divestment-rules-implementation.md`):
+   - Trailing stop-loss alerts (configurable via UserPreference)
+   - Position concentration warnings (configurable, default >5%)
+   - Sector concentration warnings (configurable, default >30%)
+   - Fundamental deterioration: composite_score < 3 (Piotroski deferred until persisted)
+   - Cash reserve warnings deferred to Phase 4
+   - Preferences router (GET/PATCH /preferences)
+   - Settings sheet UI on portfolio page
 10. **`backend/tools/recommendations.py`** — UPGRADE to portfolio-aware:
     - Factor in current holdings, position sizing, sector caps
     - Decision reasoning in JSONB

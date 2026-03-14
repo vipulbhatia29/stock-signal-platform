@@ -220,9 +220,14 @@ GET /api/v1/portfolio/summary                [200 OK]
               unrealized_pnl_pct, position_count,
               sectors: [{ sector, market_value, pct, over_limit }] }
 
---- Deferred to Phase 3.5 ---
-GET /api/v1/portfolio/history?period={1m|3m|6m|1y|all}   (value history chart)
-GET /api/v1/portfolio/dividends?period={1y|all}           (dividend tracking)
+--- Phase 3.5 (implemented) ---
+GET /api/v1/portfolio/history?days={N}                    (value history chart) ✅
+GET /api/v1/portfolio/dividends/{ticker}                  (dividend summary + history) ✅
+
+--- Phase 3.5 (pending — divestment rules) ---
+GET /api/v1/preferences                                   (user threshold preferences)
+PATCH /api/v1/preferences                                 (update threshold preferences)
+GET /portfolio/positions now returns alerts[] per position (divestment alerts)
 ```
 
 **Tool:** `backend/tools/portfolio.py`
@@ -232,6 +237,17 @@ GET /api/v1/portfolio/dividends?period={1y|all}           (dividend tracking)
 - `recompute_position(portfolio_id, ticker, db)` — full FIFO recompute after every write; preserves `opened_at`
 - `get_positions_with_pnl(portfolio_id, db)` — fetches latest price per position from StockPrice
 - `get_portfolio_summary(portfolio_id, db)` — aggregates KPIs + sector breakdown
+- `snapshot_portfolio_value(portfolio_id, db)` — daily snapshot with upsert
+- `get_portfolio_history(portfolio_id, db, days)` — fetch time series snapshots
+
+**Tool:** `backend/tools/dividends.py`
+- `fetch_dividends(ticker)` — fetch from yfinance, returns list of {ex_date, amount}
+- `store_dividends(ticker, dividends, db)` — upsert to DividendPayment table (ON CONFLICT DO NOTHING)
+- `get_dividends(ticker, db)` — query stored dividend payments
+- `get_dividend_summary(ticker, db, current_price)` — aggregate stats: total received, annual, yield, history
+
+**Tool (pending):** `backend/tools/divestment.py`
+- `check_divestment_rules(position, sector_allocations, signal, prefs)` — pure function, returns list of alert dicts
 
 ### 3.6 Chat Endpoint (Phase 4)
 

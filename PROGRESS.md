@@ -1028,3 +1028,57 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 - Phase 3.5 item 11: Rebalancing suggestions
 
 ---
+
+## Session 23 — Dividend Tracking + Divestment Rules Design
+
+**Date:** 2026-03-14
+**Branch:** `feat/phase-3.5-portfolio-advanced`
+
+**What was done:**
+
+### Phase 3.5 Item 8: Dividend Tracking (COMPLETED)
+- [x] `backend/migrations/versions/821eb511d146_007_dividend_payments.py` — TimescaleDB hypertable, composite PK (ticker, ex_date), FK to stocks.ticker, ON CONFLICT DO NOTHING for idempotent upserts
+- [x] `backend/schemas/portfolio.py` — `DividendResponse` + `DividendSummaryResponse` schemas
+- [x] `backend/tools/dividends.py` — `get_dividend_summary()` async function (total received, trailing-12-month, yield calculation)
+- [x] `backend/routers/portfolio.py` — `GET /api/v1/portfolio/dividends/{ticker}` endpoint
+- [x] `tests/unit/test_dividends.py` — 9 tests (fetch, normalization, empty/None, exceptions, summary)
+- [x] `tests/api/test_dividends.py` — 4 tests (auth, happy path, empty, case-insensitive)
+- [x] `frontend/src/types/api.ts` — `DividendPayment` + `DividendSummary` interfaces
+- [x] `frontend/src/hooks/use-stocks.ts` — `useDividends()` hook (30-min stale time)
+- [x] `frontend/src/components/dividend-card.tsx` — KPI row (Yield, Annual, Total, Payments) + collapsible payment history table
+- [x] Stock detail page wired up with `DividendCard` section
+
+### Phase 3.5 Item 9: Divestment Rules Engine (DESIGN COMPLETE)
+- [x] Brainstorming: 6 clarifying questions resolved with user
+  - On-demand computation (not Celery pre-computed)
+  - Alerts bundled into positions endpoint (3 queries total)
+  - Inline badges on positions table (no separate alert panel)
+  - `composite_score < 3` only (Piotroski not persisted in DB)
+  - All thresholds from `UserPreference` model (not hardcoded)
+  - Cash reserve deferred to Phase 4
+- [x] Design spec: `docs/superpowers/specs/2026-03-14-divestment-rules-engine-design.md`
+- [x] Spec review: 2 critical + 6 important issues found and resolved:
+  - Piotroski score not in DB → use `composite_score` only
+  - Missing `sector` on `PositionResponse` → must add + update `get_positions_with_pnl()`
+  - Preferences moved to dedicated `backend/routers/preferences.py`
+  - `Field(gt=0, le=100)` validation added
+  - `Literal` types for `rule`/`severity`
+  - Null safety documented + edge case tests added
+- [x] Implementation plan: `.claude/plans/divestment-rules-implementation.md` (10 steps)
+
+**Key decisions:**
+- User thresholds stored in `UserPreference` model (already exists with default values: stop-loss 20%, position 5%, sector 30%)
+- Settings accessible via gear icon → shadcn Sheet on portfolio page (not a separate settings page)
+- Preferences endpoints at `/api/v1/preferences` in dedicated router (not auth router)
+- `_group_sectors()` hardcoded `over_limit: pct > 30` to be updated to use user's `max_sector_pct`
+
+**Test count:** 122 unit + 113 API = 235 total (was 218 → +13 dividend tests + 4 dividend API tests)
+**Alembic head:** `821eb511d146` (migration 007 — dividend_payments)
+**Current branch:** `feat/phase-3.5-portfolio-advanced`
+
+**Next session — Implement divestment rules engine:**
+- Follow `.claude/plans/divestment-rules-implementation.md` (10 steps)
+- Pure rule checker → schemas → sector on positions → preferences router → wire alerts → frontend
+- Then: Phase 3.5 items 10-11 (portfolio-aware recommendations, rebalancing)
+
+---

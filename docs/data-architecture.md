@@ -108,7 +108,7 @@ ratio: e.g. 1→4 for         │ portfolio_id (FK)       │
                              │ transaction_type (enum: BUY|SELL)
 ┌─────────────────────┐      │ shares (NUMERIC 12,4)   │
 │ DividendPayment     │      │ price_per_share(NUMERIC 12,4)
-│ (Phase 3.5)         │      │ transacted_at (TSTZ)    │
+│ ✅ IMPLEMENTED      │      │ transacted_at (TSTZ)    │
 │─────────────────────│      │ notes (TEXT)            │
 │ id (PK, UUID)       │      │ created_at              │
 │ portfolio_id (FK)   │      └───────────┬─────────────┘
