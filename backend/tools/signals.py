@@ -153,6 +153,7 @@ def compute_signals(
     ticker: str,
     df: pd.DataFrame,
     risk_free_rate: float = DEFAULT_RISK_FREE_RATE,
+    piotroski_score: int | None = None,
 ) -> SignalResult:
     """Compute all technical signals for a stock from its price history.
 
@@ -166,6 +167,9 @@ def compute_signals(
             a DatetimeIndex. Should have 200+ rows for SMA calculations.
         risk_free_rate: Annual risk-free rate for Sharpe ratio calculation.
             Default 4.5% — this approximates the current US Treasury yield.
+        piotroski_score: Optional Piotroski F-Score (0-9) for fundamental
+            blending. When provided, composite score uses 50% technical +
+            50% fundamental. When None, falls back to 100% technical.
 
     Returns:
         A SignalResult dataclass with all indicator values and labels.
@@ -218,6 +222,7 @@ def compute_signals(
         macd_sig,
         sma_sig,
         sharpe,
+        piotroski_score=piotroski_score,
     )
 
     return SignalResult(

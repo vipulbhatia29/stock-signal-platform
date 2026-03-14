@@ -24,6 +24,7 @@ API Endpoints:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timedelta, timezone
@@ -584,6 +585,7 @@ async def ingest_ticker(
             detail="Invalid ticker format. Use alphanumeric characters, dots, and hyphens only.",
         )
 
+    from backend.tools.fundamentals import fetch_fundamentals
     from backend.tools.market_data import (
         ensure_stock_exists,
         fetch_prices_delta,
@@ -617,10 +619,15 @@ async def ingest_ticker(
     # Load full history from DB for signal computation (delta may be too small)
     full_df = await load_prices_df(ticker, db)
 
+    # Fetch fundamental data for composite score blending
+    loop = asyncio.get_event_loop()
+    fundamentals = await loop.run_in_executor(None, fetch_fundamentals, ticker)
+    piotroski = fundamentals.piotroski_score
+
     # Compute signals if we have enough data
     composite_score = None
     if not full_df.empty:
-        result = compute_signals(ticker, full_df)
+        result = compute_signals(ticker, full_df, piotroski_score=piotroski)
         if result.composite_score is not None:
             await store_signal_snapshot(result, db)
             composite_score = result.composite_score
