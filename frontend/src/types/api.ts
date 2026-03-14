@@ -226,6 +226,56 @@ export interface RefreshTask {
   task_id: string;
 }
 
+// ── Portfolio ─────────────────────────────────────────────────────────────────
+
+export interface Transaction {
+  id: string;
+  portfolio_id: string;
+  ticker: string;
+  transaction_type: "BUY" | "SELL";
+  shares: number;
+  price_per_share: number;
+  transacted_at: string;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface TransactionCreate {
+  ticker: string;
+  transaction_type: "BUY" | "SELL";
+  shares: string;
+  price_per_share: string;
+  transacted_at: string;
+  notes?: string;
+}
+
+export interface Position {
+  ticker: string;
+  shares: number;
+  avg_cost_basis: number;
+  current_price: number | null;
+  market_value: number | null;
+  unrealized_pnl: number | null;
+  unrealized_pnl_pct: number | null;
+  allocation_pct: number | null;
+}
+
+export interface SectorAllocation {
+  sector: string;
+  market_value: number;
+  pct: number;
+  over_limit: boolean;
+}
+
+export interface PortfolioSummary {
+  total_value: number;
+  total_cost_basis: number;
+  unrealized_pnl: number;
+  unrealized_pnl_pct: number;
+  position_count: number;
+  sectors: SectorAllocation[];
+}
+
 // ── API Error ─────────────────────────────────────────────────────────────────
 
 export interface ApiError {

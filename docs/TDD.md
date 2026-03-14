@@ -193,32 +193,45 @@ GET /api/v1/stocks/recommendations?action={BUY|WATCH|AVOID}&confidence={HIGH|MED
 POST /api/v1/recommendations/{id}/acknowledge — Planned for Phase 3
 ```
 
-### 3.5 Portfolio Endpoints (Phase 3)
+### 3.5 Portfolio Endpoints (Phase 3) ✅ IMPLEMENTED
 
 ```
-POST /api/v1/portfolio/transactions
-  Request:  { ticker, action: BUY|SELL, quantity, price_per_share,
-              fees, transacted_at, notes? }
-  Response: { id, ticker, action, quantity, price_per_share, ... }
-  Errors:   400 (SELL > holdings), 404 (ticker)
+POST /api/v1/portfolio/transactions          [201 Created]
+  Request:  { ticker: str, transaction_type: "BUY"|"SELL",
+              shares: Decimal, price_per_share: Decimal,
+              transacted_at: datetime, notes?: str }
+  Response: TransactionResponse
+  Errors:   422 (SELL > held shares | ticker not in stocks table)
 
-GET /api/v1/portfolio/positions
-  Response: [{ ticker, quantity, avg_cost, current_price,
-               unrealized_pnl, unrealized_pnl_pct, allocation_pct,
-               target_allocation_pct, sector }]
+GET /api/v1/portfolio/transactions           [200 OK]
+  Query:    ?ticker=AAPL (optional filter)
+  Response: [TransactionResponse] sorted by transacted_at desc
 
-GET /api/v1/portfolio/allocation
-  Response: { by_stock: [{ ticker, pct }],
-              by_sector: [{ sector, pct }],
-              cash_pct, total_value }
+DELETE /api/v1/portfolio/transactions/{id}  [204 No Content]
+  Errors:   404 (not found or not owned), 422 (would strand a SELL)
 
-GET /api/v1/portfolio/history?period={1m|3m|6m|1y|all}
-  Response: [{ date, total_value, day_pnl, total_pnl_pct }]
+GET /api/v1/portfolio/positions              [200 OK]
+  Response: [{ ticker, shares, avg_cost_basis, current_price,
+               market_value, unrealized_pnl, unrealized_pnl_pct,
+               allocation_pct }]  — open positions only (closed_at IS NULL)
 
-GET /api/v1/portfolio/dividends?period={1y|all}
-  Response: { total_income, trailing_12m_yield,
-              payments: [{ ticker, pay_date, amount }] }
+GET /api/v1/portfolio/summary                [200 OK]
+  Response: { total_value, total_cost_basis, unrealized_pnl,
+              unrealized_pnl_pct, position_count,
+              sectors: [{ sector, market_value, pct, over_limit }] }
+
+--- Deferred to Phase 3.5 ---
+GET /api/v1/portfolio/history?period={1m|3m|6m|1y|all}   (value history chart)
+GET /api/v1/portfolio/dividends?period={1y|all}           (dividend tracking)
 ```
+
+**Tool:** `backend/tools/portfolio.py`
+- `_run_fifo(transactions)` — pure function, no DB, O(1) lot consumption via `deque`
+- `_group_sectors(positions, total_value)` — pure function, groups by sector (null → "Unknown")
+- `get_or_create_portfolio(user_id, db)` — lazy portfolio creation on first use
+- `recompute_position(portfolio_id, ticker, db)` — full FIFO recompute after every write; preserves `opened_at`
+- `get_positions_with_pnl(portfolio_id, db)` — fetches latest price per position from StockPrice
+- `get_portfolio_summary(portfolio_id, db)` — aggregates KPIs + sector breakdown
 
 ### 3.6 Chat Endpoint (Phase 4)
 

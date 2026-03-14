@@ -794,3 +794,116 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Next:** Merge PR #2 (B-sprint) → Phase 3 main features: portfolio tracker, fundamentals, agent/chat
 
 ---
+
+## Session 18 — Portfolio Tracker Design + Plan
+
+**Date:** 2026-03-13
+**Branch:** `feat/phase-3-portfolio`
+**What was done:**
+
+### Brainstorming + Design
+- [x] Reviewed project context: Phase 3 deliverables, existing models, patterns
+- [x] Scoped Phase 3 portfolio tracker sprint collaboratively:
+  - **In scope:** Transaction log, FIFO positions + P&L, Allocation view (sector pie)
+  - **Deferred to Phase 3.5:** Value history chart, dividends, alerts, portfolio-aware recs, rebalancing
+  - **Deferred to Phase 4:** Schwab OAuth sync, multi-account (Fidelity/IRA)
+- [x] Data source decision: manual entry (B), Schwab OAuth sync deferred
+- [x] Single portfolio model (one Schwab taxable account)
+- [x] Layout A selected: KPI row + positions table (3fr) + allocation pie (2fr) side-by-side
+
+### Spec + Review
+- [x] Wrote design spec: `docs/superpowers/specs/2026-03-13-portfolio-tracker-design.md`
+- [x] Spec review: 3 blocking issues fixed:
+  - `positions` model clarified to use `TimestampMixin`; `transactions` intentionally omits `updated_at`
+  - DELETE transaction pre-validation logic specified (simulate FIFO, reject 422 if strands SELL)
+  - Ticker FK error → 422 with helpful message (not 500)
+  - Plus: `opened_at` upsert safety, NULL sector → "Unknown", full schema fields enumerated, extra unit test cases
+
+### Implementation Plan
+- [x] Wrote 5-chunk implementation plan: `docs/superpowers/plans/2026-03-13-portfolio-tracker.md`
+- [x] Plan reviewed by subagent — all issues fixed:
+  - Removed spurious `TransactionType` non-enum class
+  - `user.py` `TYPE_CHECKING` block guidance clarified (no duplicate blocks)
+  - `__init__.py` `__all__` update specified
+  - `TransactionCreate` uses `@field_validator` not `model_post_init`
+  - `_get_transactions_for_ticker` now returns `"id"` key; delete simulation uses ID-based exclusion
+  - `auth_client` fixture uses correct `create_access_token(user.id)` signature
+  - Unused `client` params removed from all authenticated test methods
+  - Fixed broken `uv run grep` → bare `grep` in verification checklist
+
+**Key decisions:**
+- `_run_fifo()` is a pure function (no DB) — testable without async/SQLAlchemy
+- `positions` is a DB table not a SQL view — queryable, indexable
+- `opened_at` preserved on upsert via explicit SELECT + UPDATE (never ON CONFLICT overwrite)
+- FIFO recomputed from scratch on every transaction write/delete (personal portfolio is small)
+- Ticker FK error caught in router, returned as 422 not 500
+
+**Test count:** 163 backend (no new tests this session — implementation in next session)
+**Alembic head:** `9c7b7e9860b1` (unchanged — migration 005 to be created in next session)
+**Commits:** 3 doc commits on `feat/phase-3-portfolio`
+
+**Deferred items logged for Phase 3.5:**
+- Portfolio value history chart (Celery daily snapshots)
+- Dividend tracking
+- Divestment alerts (stop-loss, concentration warnings)
+- Portfolio-aware recommendations upgrade
+- Rebalancing suggestions
+
+**Next:** Execute implementation plan (`docs/superpowers/plans/2026-03-13-portfolio-tracker.md`) — Chunk 1 (models + migration) → Chunk 2 (FIFO tool) → Chunk 3 (router + tests) → Chunk 4 (frontend) → Chunk 5 (doc sync)
+
+---
+
+## Session 19 — Portfolio Tracker Implementation
+
+**Date:** 2026-03-14
+**Branch:** `feat/phase-3-portfolio`
+**What was done:**
+
+### Chunk 1: Data Model + Migration
+- [x] `backend/models/portfolio.py` — Portfolio, Transaction, Position ORM models
+- [x] `backend/models/user.py` — added `portfolio` back-reference to User
+- [x] `backend/models/__init__.py` — registered Portfolio, Transaction, Position
+- [x] `backend/migrations/versions/2c45d28eade6_005_portfolio_tables.py` — migration applied
+  - Check constraints: `ck_transactions_shares_positive`, `ck_transactions_price_positive`
+  - Composite indexes: `ix_transactions_portfolio_ticker_date`, `ix_positions_portfolio_ticker`
+  - Removed spurious TimescaleDB-managed `drop_index` lines from autogenerate
+
+### Chunk 2: Schemas + FIFO Tool
+- [x] `backend/schemas/portfolio.py` — TransactionCreate, TransactionResponse, PositionResponse, SectorAllocation, PortfolioSummaryResponse
+- [x] `backend/tools/portfolio.py` — pure `_run_fifo()` (deque-based FIFO), `_group_sectors()`, `get_or_create_portfolio()`, `recompute_position()`, `get_positions_with_pnl()`, `get_portfolio_summary()`
+- [x] `tests/unit/test_portfolio.py` — 9 unit tests for FIFO + sector grouping (all pass)
+
+### Chunk 3: Router + API Tests
+- [x] `backend/routers/portfolio.py` — 5 endpoints: POST /transactions, GET /transactions, DELETE /transactions/{id}, GET /positions, GET /summary
+- [x] `backend/main.py` — portfolio router mounted at `/api/v1`
+- [x] `tests/conftest.py` — PortfolioFactory, TransactionFactory added
+- [x] `tests/api/test_portfolio.py` — 16 API tests: auth (4), create (4), list (2), delete (3), positions (2), summary (1)
+
+### Chunk 4: Frontend
+- [x] `frontend/src/app/(authenticated)/portfolio/page.tsx` — server component shell
+- [x] `frontend/src/app/(authenticated)/portfolio/portfolio-client.tsx` — full client: KPI row (MetricCard), positions table, transaction history (collapsible), sector allocation PieChart, delete button
+- [x] `frontend/src/components/log-transaction-dialog.tsx` — BUY/SELL form dialog (base-ui DialogTrigger with `render` prop)
+- [x] `frontend/src/components/nav-bar.tsx` — "Portfolio" nav link added
+- [x] `frontend/src/types/api.ts` — Transaction, TransactionCreate, Position, SectorAllocation, PortfolioSummary types
+
+### Chunk 5: Doc Sync
+- [x] PROGRESS.md updated
+- [x] Serena project memory updated
+
+**Key decisions:**
+- `_run_fifo()` is pure (no DB) — uses `deque` for O(1) lot consumption, testable without async
+- `recompute_position()` does SELECT before upsert to preserve `opened_at` (never overwritten)
+- Delete validation: ID-based exclusion of the target transaction → simulate FIFO → 422 if invalid
+- Frontend KPI row uses `MetricCard` with `change` + `formatChange` props (MetricCard.value is `string | number`, not ReactNode)
+- shadcn v4 / base-ui: `DialogTrigger` uses `render={<Button />}` not `asChild`
+- Test fixed: `_group_sectors` Technology sector at 66.7% correctly sets `over_limit=True` (plan had wrong assertion)
+
+**Test count:** 188 backend (was 163 → +25 new: 9 unit + 16 API)
+**Alembic head:** `2c45d28eade6`
+**Commits:** 4 feature commits on `feat/phase-3-portfolio`
+
+**Next:** 
+- Phase 3 continued: fundamentals tool + dashboard integration
+- Or: PR this portfolio tracker branch → main
+
+---

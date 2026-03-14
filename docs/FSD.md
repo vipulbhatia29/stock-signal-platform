@@ -265,17 +265,32 @@ composite = (technical_score * 0.5) + (fundamental_score * 0.5)
 ```
 Users can override weights via UserPreference.composite_weights.
 
-### FR-6: Portfolio Management (Phase 3)
+### FR-6: Portfolio Management (Phase 3) ✅ IMPLEMENTED
 
-**FR-6.1: Transaction Logging**
-- Input: ticker, action (BUY/SELL), quantity, price_per_share, fees, date, notes
-- Validation: SELL quantity cannot exceed current holdings
-- Side effect: Position table updated (recalculate avg_cost, quantity)
+**FR-6.1: Transaction Logging** ✅
+- Input: ticker, transaction_type (BUY/SELL), shares, price_per_share, transacted_at, notes
+- Validation: SELL shares cannot exceed current FIFO-computed holdings (422 if exceeded)
+- Ticker FK validation: unknown ticker returns 422 with "Add to watchlist first" message
+- Side effect: Position table recomputed via `recompute_position()` after every write
+- Endpoint: `POST /api/v1/portfolio/transactions`
 
-**FR-6.2: Position Calculation (FIFO)**
-- When selling, cost basis uses First-In-First-Out
-- Realized P&L = (sell_price - cost_basis) × quantity - fees
-- Unrealized P&L = (current_price - avg_cost) × current_quantity
+**FR-6.2: Position Calculation (FIFO)** ✅
+- `_run_fifo()` is a pure function (no DB) — takes list of transaction dicts, returns {shares, avg_cost_basis, closed_at}
+- Transactions sorted by `transacted_at` before processing (handles back-dated entries)
+- Positions stored in `positions` table (recomputed from scratch on each write — personal portfolio is small)
+- `opened_at` preserved on upsert (never overwritten by ON CONFLICT)
+- `closed_at` set when shares reach 0; cleared when new BUY restores position
+- Unrealized P&L = (current_price − avg_cost_basis) × shares
+- Endpoint: `GET /api/v1/portfolio/positions`
+
+**FR-6.2a: Transaction Deletion** ✅
+- Pre-delete simulation: run FIFO excluding target transaction (ID-based) → 422 if it would strand a SELL
+- Endpoint: `DELETE /api/v1/portfolio/transactions/{id}`
+
+**FR-6.2b: Portfolio Summary** ✅
+- Aggregates: total_value, total_cost_basis, unrealized_pnl, unrealized_pnl_pct, position_count
+- Sector allocation: grouped by Stock.sector (null → "Unknown"), with over_limit flag (>30%)
+- Endpoint: `GET /api/v1/portfolio/summary`
 
 **FR-6.3: Stock Split Handling**
 - On split detection (via yfinance): create CorporateAction record

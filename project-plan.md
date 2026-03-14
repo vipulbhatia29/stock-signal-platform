@@ -136,40 +136,39 @@ color/typography tokens, and add financial-specific components.
 ### Goal
 Track actual positions and add fundamental analysis signals.
 
-### Deliverables
-1. **Database models:** Portfolio, Transaction, Position (materialized), DividendPayment,
-   CorporateAction, AlertRule, AlertLog, FundamentalSnapshot (hypertable),
-   RecommendationSnapshot (hypertable — upgrade from Phase 1 basic version),
-   PortfolioSnapshot (hypertable)
-2. **`backend/tools/fundamentals.py`** — P/E, PEG, FCF yield, debt-to-equity, Piotroski F-Score
-3. **`backend/tools/portfolio.py`** — position tracking, cost basis (FIFO), P&L, allocation %,
-   dividend tracking, stock split adjustment
-4. **`backend/tools/recommendations.py`** — UPGRADE to portfolio-aware:
-   - Factor in current portfolio weight → BUY only if not overweight
-   - Position sizing: suggest dollar amounts based on target allocation (5% cap)
-   - Cash reserve enforcement (10% minimum)
-   - Sector concentration check (30% cap)
-   - Decision reasoning stored in JSONB
-5. **Portfolio API endpoints:**
-   - `POST /api/v1/portfolio/transactions` — log a buy/sell
-   - `GET /api/v1/portfolio/positions` — current holdings with P&L
-   - `GET /api/v1/portfolio/allocation` — sector/stock allocation breakdown
-   - `GET /api/v1/portfolio/history` — portfolio value over time
-   - `GET /api/v1/portfolio/dividends` — dividend income history
-   - `GET /api/v1/recommendations` — UPGRADED with position sizing and reasoning
-6. **Updated composite score** merging technical (50%) + fundamental (50%) signals
-7. **Portfolio UI pages:**
-   - Holdings table with P&L, allocation bars, vs target allocation
-   - Allocation pie chart by sector
-   - Portfolio value chart over time
-   - Rebalancing suggestions with specific dollar amounts
-   - "Action Required" panel showing today's recommendations
-8. **Divestment rules engine:**
-   - Trailing stop-loss alerts (configurable %, default from UserPreference)
-   - Position concentration warnings (>5% of portfolio)
-   - Sector concentration warnings (>30% of portfolio)
-   - Fundamental deterioration flags (Piotroski drops below 4)
-   - Cash reserve warnings (<10% cash)
+### Deliverables — Phase 3 Core (portfolio tracker COMPLETE ✅)
+
+**Spec:** `docs/superpowers/specs/2026-03-13-portfolio-tracker-design.md`
+**Plan:** `docs/superpowers/plans/2026-03-13-portfolio-tracker.md` ✅ IMPLEMENTED
+
+1. ✅ **Database models:** Portfolio, Transaction, Position — `backend/models/portfolio.py` + migration 005 (`2c45d28eade6`)
+2. ✅ **`backend/tools/portfolio.py`** — `_run_fifo()` pure FIFO engine, position recompute, P&L, sector allocation
+3. ✅ **Portfolio API endpoints (5):**
+   - `POST /api/v1/portfolio/transactions` — log a BUY/SELL (validates SELL ≤ held shares, ticker FK → 422)
+   - `GET /api/v1/portfolio/transactions` — history with optional `?ticker=` filter
+   - `DELETE /api/v1/portfolio/transactions/{id}` — pre-validates FIFO integrity before deleting
+   - `GET /api/v1/portfolio/positions` — current holdings with live P&L
+   - `GET /api/v1/portfolio/summary` — KPI totals + sector allocation breakdown
+4. ✅ **Portfolio page** (`/portfolio`): KPI row + positions table (3fr) + allocation pie (2fr), "Log Transaction" dialog
+5. **`backend/tools/fundamentals.py`** — P/E, PEG, FCF yield, debt-to-equity, Piotroski F-Score *(next)*
+6. **Updated composite score** merging technical (50%) + fundamental (50%) *(next)*
+
+### Deliverables — Phase 3.5 (deferred — next sprint after core)
+
+7. Portfolio value history chart (Celery daily PortfolioSnapshot hypertable)
+8. Dividend tracking (DividendPayment model)
+9. **Divestment rules engine:**
+   - Trailing stop-loss alerts
+   - Position concentration warnings (>5%)
+   - Sector concentration warnings (>30%)
+   - Fundamental deterioration flags
+   - Cash reserve warnings (<10%)
+10. **`backend/tools/recommendations.py`** — UPGRADE to portfolio-aware:
+    - Factor in current holdings, position sizing, sector caps
+    - Decision reasoning in JSONB
+11. Rebalancing suggestions with specific dollar amounts
+12. **Schwab OAuth sync** — Phase 4 dedicated feature
+13. **Multi-account support** (Fidelity/IRA) — Phase 4
 
 ### Phase 1-2 Implementation Backlog (pre-requisites for Phase 3)
 

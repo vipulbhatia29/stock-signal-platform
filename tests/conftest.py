@@ -22,6 +22,7 @@ from backend.dependencies import create_access_token, hash_password
 from backend.main import app
 from backend.models import Base
 from backend.models.index import StockIndex, StockIndexMembership
+from backend.models.portfolio import Portfolio, Transaction
 from backend.models.price import StockPrice
 from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
@@ -301,3 +302,37 @@ class StockIndexMembershipFactory(factory.Factory):
     ticker = "AAPL"
     index_id = factory.LazyFunction(uuid.uuid4)
     added_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+
+
+# ---------------------------------------------------------------------------
+# Additional factories for Phase 3 (portfolio)
+# ---------------------------------------------------------------------------
+class PortfolioFactory(factory.Factory):
+    """Factory for Portfolio model instances."""
+
+    class Meta:
+        model = Portfolio
+
+    id = factory.LazyFunction(uuid.uuid4)
+    user_id = factory.LazyFunction(uuid.uuid4)
+    name = "My Portfolio"
+    description = None
+    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+
+
+class TransactionFactory(factory.Factory):
+    """Factory for Transaction model instances."""
+
+    class Meta:
+        model = Transaction
+
+    id = factory.LazyFunction(uuid.uuid4)
+    portfolio_id = factory.LazyFunction(uuid.uuid4)
+    ticker = "AAPL"
+    transaction_type = "BUY"
+    shares = 10
+    price_per_share = 150
+    transacted_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    notes = None
+    created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
