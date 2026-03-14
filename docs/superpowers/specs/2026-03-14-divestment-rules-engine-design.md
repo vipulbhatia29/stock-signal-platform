@@ -20,7 +20,9 @@ defaults pre-filled.
 | Frontend placement | Inline badges on position rows | No separate alert panel; keeps portfolio page focused |
 | Threshold source | `UserPreference` model (already exists) | Fields already defined: `default_stop_loss_pct`, `max_position_pct`, `max_sector_pct`, `min_cash_reserve_pct` |
 | Cash reserve rule | Deferred to Phase 4 | Requires cash tracking which doesn't exist yet |
-| Fundamentals thresholds | Absolute (Piotroski < 4, composite < 3) | Simpler than historical-drop detection; no extra DB queries |
+| Fundamentals thresholds | `composite_score < 3` only | Piotroski is not persisted in DB (computed on-the-fly via yfinance); `composite_score` already blends Piotroski when available via 50/50 weighting. Standalone Piotroski check deferred until a `FundamentalSnapshot` table exists |
+| Preferences router | New `backend/routers/preferences.py` | Keeps auth router focused on auth; preferences will grow with future settings |
+| `sector` on positions | Add `sector` field to `PositionResponse` | Rule checker needs it; `get_positions_with_pnl()` must join `Stock` table |
 
 ## Scope
 
@@ -57,15 +59,19 @@ def check_divestment_rules(
     Args:
         position: Dict with keys: ticker, shares, avg_cost_basis,
             current_price, unrealized_pnl_pct, allocation_pct, sector.
+            Values may be None (e.g. current_price unavailable).
         sector_allocations: List of dicts with keys: sector, pct.
-        signal: Dict with keys: composite_score, piotroski_score.
-            None if no signal data available.
+            Built from the same positions list by the caller (see
+            _build_sector_allocations helper).
+        signal: Dict with key: composite_score (float | None).
+            None if no signal data available for this ticker.
         prefs: User's preference record with threshold fields.
 
     Returns:
         List of alert dicts, each with keys:
             rule (str), severity (str), message (str),
             value (float), threshold (float).
+        Empty list if no rules fire.
     """
 ```
 
@@ -76,7 +82,11 @@ def check_divestment_rules(
 | `stop_loss` | `unrealized_pnl_pct <= -prefs.default_stop_loss_pct` | `critical` | "Down 23.4% (limit: 20%)" |
 | `position_concentration` | `allocation_pct > prefs.max_position_pct` | `warning` | "7.2% of portfolio (limit: 5%)" |
 | `sector_concentration` | position's sector `pct > prefs.max_sector_pct` | `warning` | "Technology at 35.1% (limit: 30%)" |
-| `weak_fundamentals` | `piotroski_score < 4` or `composite_score < 3` | `warning` | "Piotroski F-Score: 2" or "Composite: 1.8" |
+| `weak_fundamentals` | `composite_score < 3` | `warning` | "Composite: 1.8" |
+
+**Null safety:** Rules that depend on nullable values (`unrealized_pnl_pct`,
+`allocation_pct`, `composite_score`) skip silently when the value is `None`.
+No TypeError, no false alerts.
 
 The function is pure — no DB calls, no side effects. It receives all data it
 needs as arguments.
@@ -86,9 +96,18 @@ needs as arguments.
 **File:** `backend/schemas/portfolio.py` (additions)
 
 ```python
+from typing import Literal
+from pydantic import Field
+
+AlertRule = Literal[
+    "stop_loss", "position_concentration",
+    "sector_concentration", "weak_fundamentals",
+]
+AlertSeverity = Literal["critical", "warning"]
+
 class DivestmentAlert(BaseModel):
-    rule: str           # "stop_loss" | "position_concentration" | "sector_concentration" | "weak_fundamentals"
-    severity: str       # "critical" | "warning"
+    rule: AlertRule
+    severity: AlertSeverity
     message: str
     value: float
     threshold: float
@@ -104,11 +123,15 @@ class UserPreferenceResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 class UserPreferenceUpdate(BaseModel):
-    default_stop_loss_pct: float | None = None
-    max_position_pct: float | None = None
-    max_sector_pct: float | None = None
-    min_cash_reserve_pct: float | None = None
+    default_stop_loss_pct: float | None = Field(None, gt=0, le=100)
+    max_position_pct: float | None = Field(None, gt=0, le=100)
+    max_sector_pct: float | None = Field(None, gt=0, le=100)
+    min_cash_reserve_pct: float | None = Field(None, gt=0, le=100)
 ```
+
+**Note:** `PositionResponse` must gain a `sector: str | None` field.
+`get_positions_with_pnl()` must be updated to join the `Stock` table and
+populate it.
 
 ### 3. Positions Endpoint Enhancement
 
@@ -119,20 +142,26 @@ from `list[PositionResponse]` to `list[PositionWithAlerts]`.
 
 **Query plan (3 queries total):**
 
-1. Fetch positions (existing query — unchanged)
+1. Fetch positions with sector (existing query, updated to join `Stock` table)
 2. Fetch `UserPreference` for current user (1 query, create with defaults if missing)
-3. Fetch latest signals for all held tickers (1 bulk query)
+3. Fetch latest signals for all held tickers (1 bulk query — `composite_score` only)
 
-Then for each position, call `check_divestment_rules()` in-memory and attach
-the resulting alerts list.
+Then in-memory:
+- Build `sector_allocations` from positions (pure helper, no query)
+- For each position, call `check_divestment_rules()` and attach alerts
+
+**Also update:** The existing `_group_sectors()` in `backend/tools/portfolio.py`
+currently hardcodes `over_limit: pct > 30`. Update it to accept the user's
+`max_sector_pct` preference so the pie chart warnings stay consistent with
+divestment alerts.
 
 ### 4. Preferences Endpoints
 
-**File:** `backend/routers/auth.py` (additions)
+**File:** `backend/routers/preferences.py` (new)
 
 ```
-GET  /api/v1/auth/preferences  → UserPreferenceResponse
-PATCH /api/v1/auth/preferences → UserPreferenceResponse
+GET  /api/v1/preferences  → UserPreferenceResponse
+PATCH /api/v1/preferences → UserPreferenceResponse
 ```
 
 - GET creates a `UserPreference` row with defaults if none exists (idempotent)
@@ -174,8 +203,8 @@ Contents:
 **File:** `frontend/src/hooks/use-stocks.ts` (additions)
 
 ```typescript
-function usePreferences()    // GET /auth/preferences
-function useUpdatePreferences()  // PATCH /auth/preferences mutation
+function usePreferences()    // GET /preferences
+function useUpdatePreferences()  // PATCH /preferences mutation
 ```
 
 ### 4. Types
@@ -184,7 +213,7 @@ function useUpdatePreferences()  // PATCH /auth/preferences mutation
 
 ```typescript
 interface DivestmentAlert {
-  rule: string;
+  rule: "stop_loss" | "position_concentration" | "sector_concentration" | "weak_fundamentals";
   severity: "critical" | "warning";
   message: string;
   value: number;
@@ -221,11 +250,12 @@ interface UserPreferencesUpdate {
 | `test_stop_loss_at_boundary` | Exactly at threshold → alert fires (<=) |
 | `test_position_concentration_fires` | Allocation above limit → warning |
 | `test_sector_concentration_fires` | Sector above limit → warning |
-| `test_weak_piotroski_fires` | Piotroski < 4 → warning |
 | `test_weak_composite_fires` | Composite < 3 → warning |
 | `test_multiple_alerts_stack` | Position with 3 violations → 3 alerts |
 | `test_null_signal_skips_fundamentals` | No signal data → no fundamentals alert |
 | `test_custom_thresholds` | Non-default prefs → alerts use custom values |
+| `test_null_pnl_skips_stop_loss` | `unrealized_pnl_pct` is None → no stop-loss alert |
+| `test_null_allocation_skips_concentration` | `allocation_pct` is None → no concentration alert |
 
 ### API Tests (`tests/api/test_preferences.py`)
 
@@ -236,6 +266,7 @@ interface UserPreferencesUpdate {
 | `test_get_preferences_returns_existing` | Returns previously set values |
 | `test_patch_preferences_partial_update` | Only updates supplied fields |
 | `test_patch_preferences_unauthenticated` | 401 without token |
+| `test_patch_preferences_validation_error` | Negative or >100 values → 422 |
 
 ### API Tests (`tests/api/test_portfolio.py` — additions)
 
