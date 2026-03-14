@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from backend.models.portfolio import Portfolio
     from backend.models.stock import Watchlist
 
 
@@ -56,6 +57,7 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
+    portfolio: Mapped[Portfolio | None] = relationship(back_populates="user", uselist=False)
 
 
 class UserPreference(UUIDPrimaryKeyMixin, Base):
