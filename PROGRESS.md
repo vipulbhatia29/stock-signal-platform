@@ -852,3 +852,58 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Next:** Execute implementation plan (`docs/superpowers/plans/2026-03-13-portfolio-tracker.md`) — Chunk 1 (models + migration) → Chunk 2 (FIFO tool) → Chunk 3 (router + tests) → Chunk 4 (frontend) → Chunk 5 (doc sync)
 
 ---
+
+## Session 19 — Portfolio Tracker Implementation
+
+**Date:** 2026-03-14
+**Branch:** `feat/phase-3-portfolio`
+**What was done:**
+
+### Chunk 1: Data Model + Migration
+- [x] `backend/models/portfolio.py` — Portfolio, Transaction, Position ORM models
+- [x] `backend/models/user.py` — added `portfolio` back-reference to User
+- [x] `backend/models/__init__.py` — registered Portfolio, Transaction, Position
+- [x] `backend/migrations/versions/2c45d28eade6_005_portfolio_tables.py` — migration applied
+  - Check constraints: `ck_transactions_shares_positive`, `ck_transactions_price_positive`
+  - Composite indexes: `ix_transactions_portfolio_ticker_date`, `ix_positions_portfolio_ticker`
+  - Removed spurious TimescaleDB-managed `drop_index` lines from autogenerate
+
+### Chunk 2: Schemas + FIFO Tool
+- [x] `backend/schemas/portfolio.py` — TransactionCreate, TransactionResponse, PositionResponse, SectorAllocation, PortfolioSummaryResponse
+- [x] `backend/tools/portfolio.py` — pure `_run_fifo()` (deque-based FIFO), `_group_sectors()`, `get_or_create_portfolio()`, `recompute_position()`, `get_positions_with_pnl()`, `get_portfolio_summary()`
+- [x] `tests/unit/test_portfolio.py` — 9 unit tests for FIFO + sector grouping (all pass)
+
+### Chunk 3: Router + API Tests
+- [x] `backend/routers/portfolio.py` — 5 endpoints: POST /transactions, GET /transactions, DELETE /transactions/{id}, GET /positions, GET /summary
+- [x] `backend/main.py` — portfolio router mounted at `/api/v1`
+- [x] `tests/conftest.py` — PortfolioFactory, TransactionFactory added
+- [x] `tests/api/test_portfolio.py` — 16 API tests: auth (4), create (4), list (2), delete (3), positions (2), summary (1)
+
+### Chunk 4: Frontend
+- [x] `frontend/src/app/(authenticated)/portfolio/page.tsx` — server component shell
+- [x] `frontend/src/app/(authenticated)/portfolio/portfolio-client.tsx` — full client: KPI row (MetricCard), positions table, transaction history (collapsible), sector allocation PieChart, delete button
+- [x] `frontend/src/components/log-transaction-dialog.tsx` — BUY/SELL form dialog (base-ui DialogTrigger with `render` prop)
+- [x] `frontend/src/components/nav-bar.tsx` — "Portfolio" nav link added
+- [x] `frontend/src/types/api.ts` — Transaction, TransactionCreate, Position, SectorAllocation, PortfolioSummary types
+
+### Chunk 5: Doc Sync
+- [x] PROGRESS.md updated
+- [x] Serena project memory updated
+
+**Key decisions:**
+- `_run_fifo()` is pure (no DB) — uses `deque` for O(1) lot consumption, testable without async
+- `recompute_position()` does SELECT before upsert to preserve `opened_at` (never overwritten)
+- Delete validation: ID-based exclusion of the target transaction → simulate FIFO → 422 if invalid
+- Frontend KPI row uses `MetricCard` with `change` + `formatChange` props (MetricCard.value is `string | number`, not ReactNode)
+- shadcn v4 / base-ui: `DialogTrigger` uses `render={<Button />}` not `asChild`
+- Test fixed: `_group_sectors` Technology sector at 66.7% correctly sets `over_limit=True` (plan had wrong assertion)
+
+**Test count:** 188 backend (was 163 → +25 new: 9 unit + 16 API)
+**Alembic head:** `2c45d28eade6`
+**Commits:** 4 feature commits on `feat/phase-3-portfolio`
+
+**Next:** 
+- Phase 3 continued: fundamentals tool + dashboard integration
+- Or: PR this portfolio tracker branch → main
+
+---
