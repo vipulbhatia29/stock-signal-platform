@@ -1,0 +1,303 @@
+"""API tests for portfolio endpoints."""
+
+from __future__ import annotations
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from tests.conftest import StockFactory
+
+
+@pytest.mark.asyncio
+class TestPortfolioAuth:
+    """Unauthenticated requests return 401."""
+
+    async def test_create_transaction_requires_auth(self, client: AsyncClient) -> None:
+        """POST /portfolio/transactions without token returns 401."""
+        resp = await client.post("/api/v1/portfolio/transactions", json={})
+        assert resp.status_code == 401
+
+    async def test_list_transactions_requires_auth(self, client: AsyncClient) -> None:
+        """GET /portfolio/transactions without token returns 401."""
+        resp = await client.get("/api/v1/portfolio/transactions")
+        assert resp.status_code == 401
+
+    async def test_positions_requires_auth(self, client: AsyncClient) -> None:
+        """GET /portfolio/positions without token returns 401."""
+        resp = await client.get("/api/v1/portfolio/positions")
+        assert resp.status_code == 401
+
+    async def test_summary_requires_auth(self, client: AsyncClient) -> None:
+        """GET /portfolio/summary without token returns 401."""
+        resp = await client.get("/api/v1/portfolio/summary")
+        assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+class TestCreateTransaction:
+    """Tests for POST /api/v1/portfolio/transactions."""
+
+    async def test_log_buy_returns_201(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """BUY transaction logged successfully returns 201 with transaction data."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="AAPL", name="Apple Inc.")
+            session.add(stock)
+            await session.commit()
+        await engine.dispose()
+
+        resp = await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "AAPL",
+                "transaction_type": "BUY",
+                "shares": "10",
+                "price_per_share": "182.50",
+                "transacted_at": "2026-01-15T00:00:00Z",
+            },
+        )
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["ticker"] == "AAPL"
+        assert data["transaction_type"] == "BUY"
+        assert float(data["shares"]) == 10.0
+
+    async def test_log_buy_unknown_ticker_returns_422(
+        self, authenticated_client: AsyncClient
+    ) -> None:
+        """BUY for ticker not in stocks table returns 422 with clear message."""
+        resp = await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "ZZZZZ",
+                "transaction_type": "BUY",
+                "shares": "5",
+                "price_per_share": "100.00",
+                "transacted_at": "2026-01-15T00:00:00Z",
+            },
+        )
+        assert resp.status_code == 422
+        assert "not found" in resp.json()["detail"].lower()
+
+    async def test_oversell_returns_422(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """SELL exceeding held shares returns 422."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="MSFT", name="Microsoft")
+            session.add(stock)
+            await session.commit()
+        await engine.dispose()
+
+        # Buy 5 shares first
+        await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "MSFT",
+                "transaction_type": "BUY",
+                "shares": "5",
+                "price_per_share": "300.00",
+                "transacted_at": "2026-01-15T00:00:00Z",
+            },
+        )
+
+        # Try to sell 10
+        resp = await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "MSFT",
+                "transaction_type": "SELL",
+                "shares": "10",
+                "price_per_share": "320.00",
+                "transacted_at": "2026-01-20T00:00:00Z",
+            },
+        )
+        assert resp.status_code == 422
+
+    async def test_invalid_payload_returns_422(self, authenticated_client: AsyncClient) -> None:
+        """Missing required fields returns 422."""
+        resp = await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={"ticker": "AAPL"},
+        )
+        assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestListTransactions:
+    """Tests for GET /api/v1/portfolio/transactions."""
+
+    async def test_empty_returns_empty_list(self, authenticated_client: AsyncClient) -> None:
+        """No transactions returns empty list."""
+        resp = await authenticated_client.get("/api/v1/portfolio/transactions")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_filter_by_ticker(self, authenticated_client: AsyncClient, db_url: str) -> None:
+        """?ticker=AAPL filters to only AAPL transactions."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            for ticker in ("AAPL", "MSFT"):
+                stock = StockFactory.build(ticker=ticker, name=ticker)
+                session.add(stock)
+            await session.commit()
+        await engine.dispose()
+
+        for ticker in ("AAPL", "MSFT"):
+            await authenticated_client.post(
+                "/api/v1/portfolio/transactions",
+                json={
+                    "ticker": ticker,
+                    "transaction_type": "BUY",
+                    "shares": "5",
+                    "price_per_share": "100.00",
+                    "transacted_at": "2026-01-15T00:00:00Z",
+                },
+            )
+
+        resp = await authenticated_client.get("/api/v1/portfolio/transactions?ticker=AAPL")
+        assert resp.status_code == 200
+        tickers = [t["ticker"] for t in resp.json()]
+        assert all(t == "AAPL" for t in tickers)
+
+
+@pytest.mark.asyncio
+class TestDeleteTransaction:
+    """Tests for DELETE /api/v1/portfolio/transactions/{id}."""
+
+    async def test_delete_buy_with_no_sells_succeeds(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """DELETE a BUY with no associated SELLs returns 204."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="NVDA", name="NVIDIA")
+            session.add(stock)
+            await session.commit()
+        await engine.dispose()
+
+        create_resp = await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "NVDA",
+                "transaction_type": "BUY",
+                "shares": "10",
+                "price_per_share": "500.00",
+                "transacted_at": "2026-01-15T00:00:00Z",
+            },
+        )
+        txn_id = create_resp.json()["id"]
+
+        resp = await authenticated_client.delete(f"/api/v1/portfolio/transactions/{txn_id}")
+        assert resp.status_code == 204
+
+    async def test_delete_buy_underlying_sell_returns_422(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """DELETE BUY that underlies a SELL returns 422."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="TSLA", name="Tesla")
+            session.add(stock)
+            await session.commit()
+        await engine.dispose()
+
+        buy_resp = await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "TSLA",
+                "transaction_type": "BUY",
+                "shares": "10",
+                "price_per_share": "200.00",
+                "transacted_at": "2026-01-15T00:00:00Z",
+            },
+        )
+        buy_id = buy_resp.json()["id"]
+
+        await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "TSLA",
+                "transaction_type": "SELL",
+                "shares": "10",
+                "price_per_share": "250.00",
+                "transacted_at": "2026-01-20T00:00:00Z",
+            },
+        )
+
+        resp = await authenticated_client.delete(f"/api/v1/portfolio/transactions/{buy_id}")
+        assert resp.status_code == 422
+
+    async def test_delete_nonexistent_returns_404(self, authenticated_client: AsyncClient) -> None:
+        """DELETE unknown transaction ID returns 404."""
+        import uuid
+
+        resp = await authenticated_client.delete(f"/api/v1/portfolio/transactions/{uuid.uuid4()}")
+        assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+class TestPositions:
+    """Tests for GET /api/v1/portfolio/positions."""
+
+    async def test_empty_portfolio_returns_empty_list(
+        self, authenticated_client: AsyncClient
+    ) -> None:
+        """No transactions → empty positions list."""
+        resp = await authenticated_client.get("/api/v1/portfolio/positions")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_buy_creates_position(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """BUY transaction creates a position with correct shares and cost basis."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="GOOG", name="Alphabet")
+            session.add(stock)
+            await session.commit()
+        await engine.dispose()
+
+        await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "GOOG",
+                "transaction_type": "BUY",
+                "shares": "5",
+                "price_per_share": "150.00",
+                "transacted_at": "2026-01-15T00:00:00Z",
+            },
+        )
+
+        resp = await authenticated_client.get("/api/v1/portfolio/positions")
+        assert resp.status_code == 200
+        positions = resp.json()
+        goog = next((p for p in positions if p["ticker"] == "GOOG"), None)
+        assert goog is not None
+        assert float(goog["shares"]) == 5.0
+        assert float(goog["avg_cost_basis"]) == pytest.approx(150.0, abs=0.01)
+
+
+@pytest.mark.asyncio
+class TestPortfolioSummary:
+    """Tests for GET /api/v1/portfolio/summary."""
+
+    async def test_empty_portfolio_summary(self, authenticated_client: AsyncClient) -> None:
+        """Empty portfolio summary returns zero totals."""
+        resp = await authenticated_client.get("/api/v1/portfolio/summary")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total_value"] == 0.0
+        assert data["position_count"] == 0
+        assert data["sectors"] == []
