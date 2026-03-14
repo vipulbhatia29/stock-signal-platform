@@ -75,3 +75,15 @@ class PortfolioSummaryResponse(BaseModel):
     unrealized_pnl_pct: float
     position_count: int
     sectors: list[SectorAllocation]
+
+
+class PortfolioSnapshotResponse(BaseModel):
+    """A single daily portfolio value snapshot."""
+
+    snapshot_date: datetime
+    total_value: float
+    total_cost_basis: float
+    unrealized_pnl: float
+    position_count: int
+
+    model_config = {"from_attributes": True}

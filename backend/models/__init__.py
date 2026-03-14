@@ -2,7 +2,12 @@
 
 from backend.models.base import Base
 from backend.models.index import StockIndex, StockIndexMembership
-from backend.models.portfolio import Portfolio, Position, Transaction  # noqa: F401
+from backend.models.portfolio import (  # noqa: F401
+    Portfolio,
+    PortfolioSnapshot,
+    Position,
+    Transaction,
+)
 from backend.models.price import StockPrice
 from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
@@ -12,6 +17,7 @@ from backend.models.user import User, UserPreference, UserRole
 __all__ = [
     "Base",
     "Portfolio",
+    "PortfolioSnapshot",
     "Position",
     "RecommendationSnapshot",
     "SignalSnapshot",

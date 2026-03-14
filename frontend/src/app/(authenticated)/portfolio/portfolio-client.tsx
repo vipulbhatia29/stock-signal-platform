@@ -25,9 +25,11 @@ import { SectionHeading } from "@/components/section-heading";
 import { MetricCard } from "@/components/metric-card";
 import { ChangeIndicator } from "@/components/change-indicator";
 import { LogTransactionDialog } from "@/components/log-transaction-dialog";
+import { PortfolioValueChart } from "@/components/portfolio-value-chart";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
   Position,
+  PortfolioSnapshot,
   PortfolioSummary,
   Transaction,
   TransactionCreate,
@@ -56,6 +58,15 @@ function useTransactions() {
     queryKey: ["portfolio", "transactions"],
     queryFn: () => get<Transaction[]>("/portfolio/transactions"),
     staleTime: 60 * 1000,
+  });
+}
+
+function usePortfolioHistory(days = 365) {
+  return useQuery<PortfolioSnapshot[]>({
+    queryKey: ["portfolio", "history", days],
+    queryFn: () =>
+      get<PortfolioSnapshot[]>(`/portfolio/history?days=${days}`),
+    staleTime: 15 * 60 * 1000,
   });
 }
 
@@ -334,6 +345,7 @@ function AllocationPie({ sectors }: { summary: PortfolioSummary; sectors: Portfo
 export function PortfolioClient() {
   const { data: summary } = usePortfolioSummary();
   const { data: positions } = usePositions();
+  const { data: history } = usePortfolioHistory();
   const logTransaction = useLogTransaction();
   const deleteTransaction = useDeleteTransaction();
 
@@ -349,6 +361,16 @@ export function PortfolioClient() {
 
       {/* KPI row */}
       {summary && <KpiRow summary={summary} />}
+
+      {/* Value history chart */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Value History
+        </h2>
+        <div className="rounded-lg border p-4">
+          <PortfolioValueChart snapshots={history ?? []} />
+        </div>
+      </div>
 
       {/* Positions + allocation */}
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">

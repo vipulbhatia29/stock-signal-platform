@@ -15,6 +15,7 @@ from backend.dependencies import get_current_user
 from backend.models.portfolio import Transaction
 from backend.models.user import User
 from backend.schemas.portfolio import (
+    PortfolioSnapshotResponse,
     PortfolioSummaryResponse,
     PositionResponse,
     TransactionCreate,
@@ -24,6 +25,7 @@ from backend.tools.portfolio import (
     _get_transactions_for_ticker,
     _run_fifo,
     get_or_create_portfolio,
+    get_portfolio_history,
     get_portfolio_summary,
     get_positions_with_pnl,
     recompute_position,
@@ -209,3 +211,23 @@ async def get_summary(
     """Return total value, cost basis, unrealized P&L, and sector breakdown."""
     portfolio = await get_or_create_portfolio(current_user.id, db)
     return await get_portfolio_summary(portfolio.id, db)
+
+
+@router.get(
+    "/history",
+    response_model=list[PortfolioSnapshotResponse],
+    summary="Get portfolio value history",
+)
+async def get_history(
+    days: int = Query(365, ge=1, le=3650, description="Days of history to return"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> list[PortfolioSnapshotResponse]:
+    """Return daily portfolio value snapshots for the chart.
+
+    Captured by the Celery Beat daily snapshot task. Returns empty list
+    if no snapshots exist yet.
+    """
+    portfolio = await get_or_create_portfolio(current_user.id, db)
+    snapshots = await get_portfolio_history(portfolio.id, db, days=days)
+    return [PortfolioSnapshotResponse.model_validate(s) for s in snapshots]

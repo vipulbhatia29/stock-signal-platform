@@ -112,3 +112,32 @@ class Position(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     def __repr__(self) -> str:
         avg = self.avg_cost_basis
         return f"<Position ticker={self.ticker} shares={self.shares} avg_cost={avg}>"
+
+
+class PortfolioSnapshot(Base):
+    """Daily snapshot of portfolio value — TimescaleDB hypertable.
+
+    Append-only time-series: one row per portfolio per day, captured by
+    Celery Beat. Used for the portfolio value history chart.
+    """
+
+    __tablename__ = "portfolio_snapshots"
+
+    portfolio_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("portfolios.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    snapshot_date: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        primary_key=True,
+    )
+    total_value: Mapped[Decimal] = mapped_column(sa.Numeric(14, 2), nullable=False)
+    total_cost_basis: Mapped[Decimal] = mapped_column(sa.Numeric(14, 2), nullable=False)
+    unrealized_pnl: Mapped[Decimal] = mapped_column(sa.Numeric(14, 2), nullable=False)
+    position_count: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
+
+    def __repr__(self) -> str:
+        return (
+            f"<PortfolioSnapshot portfolio_id={self.portfolio_id} "
+            f"date={self.snapshot_date} value={self.total_value}>"
+        )

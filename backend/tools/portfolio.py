@@ -5,13 +5,13 @@ from __future__ import annotations
 import logging
 import uuid
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.portfolio import Portfolio, Position, Transaction
+from backend.models.portfolio import Portfolio, PortfolioSnapshot, Position, Transaction
 from backend.models.price import StockPrice
 from backend.models.stock import Stock
 from backend.schemas.portfolio import PortfolioSummaryResponse, PositionResponse, SectorAllocation
@@ -324,3 +324,113 @@ async def get_portfolio_summary(
         position_count=len(positions_with_pnl),
         sectors=sectors,
     )
+
+
+# ---------------------------------------------------------------------------
+# Portfolio snapshot (daily value history)
+# ---------------------------------------------------------------------------
+
+
+async def snapshot_portfolio_value(
+    portfolio_id: uuid.UUID, db: AsyncSession
+) -> PortfolioSnapshot | None:
+    """Capture the current portfolio value as a daily snapshot.
+
+    Computes the portfolio summary and inserts a PortfolioSnapshot row.
+    Skips if the portfolio has no open positions (nothing to snapshot).
+    Uses an upsert (ON CONFLICT ... DO UPDATE) so re-running the same day
+    overwrites stale values instead of failing on the unique constraint.
+
+    Args:
+        portfolio_id: The portfolio's UUID.
+        db: Async SQLAlchemy session.
+
+    Returns:
+        The inserted PortfolioSnapshot, or None if no positions.
+    """
+    summary = await get_portfolio_summary(portfolio_id, db)
+    if summary.position_count == 0:
+        logger.info("Portfolio %s has no positions — skipping snapshot", portfolio_id)
+        return None
+
+    now = datetime.now(timezone.utc)
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    stmt = pg_insert(PortfolioSnapshot).values(
+        portfolio_id=portfolio_id,
+        snapshot_date=now,
+        total_value=Decimal(str(round(summary.total_value, 2))),
+        total_cost_basis=Decimal(str(round(summary.total_cost_basis, 2))),
+        unrealized_pnl=Decimal(str(round(summary.unrealized_pnl, 2))),
+        position_count=summary.position_count,
+    )
+    stmt = stmt.on_conflict_do_update(
+        constraint="portfolio_snapshots_pkey",
+        set_={
+            "total_value": stmt.excluded.total_value,
+            "total_cost_basis": stmt.excluded.total_cost_basis,
+            "unrealized_pnl": stmt.excluded.unrealized_pnl,
+            "position_count": stmt.excluded.position_count,
+        },
+    )
+    await db.execute(stmt)
+    await db.commit()
+
+    logger.info(
+        "Snapshot captured for portfolio %s: value=%.2f pnl=%.2f",
+        portfolio_id,
+        summary.total_value,
+        summary.unrealized_pnl,
+    )
+
+    # Return the row we just inserted/updated
+    result = await db.execute(
+        select(PortfolioSnapshot).where(
+            PortfolioSnapshot.portfolio_id == portfolio_id,
+            PortfolioSnapshot.snapshot_date == now,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_portfolio_history(
+    portfolio_id: uuid.UUID,
+    db: AsyncSession,
+    days: int = 365,
+) -> list[PortfolioSnapshot]:
+    """Fetch the portfolio value history over the last N days.
+
+    Args:
+        portfolio_id: The portfolio's UUID.
+        db: Async SQLAlchemy session.
+        days: Number of days of history to return (default 365).
+
+    Returns:
+        List of PortfolioSnapshot rows, ordered by snapshot_date ascending.
+    """
+    from datetime import timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    result = await db.execute(
+        select(PortfolioSnapshot)
+        .where(
+            PortfolioSnapshot.portfolio_id == portfolio_id,
+            PortfolioSnapshot.snapshot_date >= cutoff,
+        )
+        .order_by(PortfolioSnapshot.snapshot_date.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def get_all_portfolio_ids(db: AsyncSession) -> list[uuid.UUID]:
+    """Return all portfolio IDs that have at least one open position.
+
+    Args:
+        db: Async SQLAlchemy session.
+
+    Returns:
+        List of portfolio UUIDs with open positions.
+    """
+    result = await db.execute(select(Position.portfolio_id).where(Position.shares > 0).distinct())
+    return [row[0] for row in result.all()]

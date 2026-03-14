@@ -301,3 +301,32 @@ class TestPortfolioSummary:
         assert data["total_value"] == 0.0
         assert data["position_count"] == 0
         assert data["sectors"] == []
+
+
+@pytest.mark.asyncio
+class TestPortfolioHistory:
+    """Tests for GET /api/v1/portfolio/history."""
+
+    async def test_history_requires_auth(self, client: AsyncClient) -> None:
+        """Unauthenticated request returns 401."""
+        resp = await client.get("/api/v1/portfolio/history")
+        assert resp.status_code == 401
+
+    async def test_history_empty_returns_list(self, authenticated_client: AsyncClient) -> None:
+        """Empty history returns an empty list (no snapshots yet)."""
+        resp = await authenticated_client.get("/api/v1/portfolio/history")
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    async def test_history_respects_days_param(self, authenticated_client: AsyncClient) -> None:
+        """Days parameter is accepted and validated."""
+        resp = await authenticated_client.get("/api/v1/portfolio/history?days=30")
+        assert resp.status_code == 200
+        assert isinstance(resp.json(), list)
+
+    async def test_history_invalid_days_returns_422(
+        self, authenticated_client: AsyncClient
+    ) -> None:
+        """Invalid days param returns 422."""
+        resp = await authenticated_client.get("/api/v1/portfolio/history?days=0")
+        assert resp.status_code == 422

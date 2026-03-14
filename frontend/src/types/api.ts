@@ -276,6 +276,14 @@ export interface PortfolioSummary {
   sectors: SectorAllocation[];
 }
 
+export interface PortfolioSnapshot {
+  snapshot_date: string;
+  total_value: number;
+  total_cost_basis: number;
+  unrealized_pnl: number;
+  position_count: number;
+}
+
 // ── Fundamentals ─────────────────────────────────────────────────────────────
 
 export interface PiotroskiBreakdown {
