@@ -275,3 +275,37 @@ class SignalHistoryItem(BaseModel):
     macd_signal: str | None = None
     sma_signal: str | None = None
     bb_position: str | None = None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fundamentals schemas
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PiotroskiBreakdown(BaseModel):
+    """Binary Piotroski F-Score criteria (each 0 or 1)."""
+
+    positive_roa: int | None = None
+    positive_cfo: int | None = None
+    improving_roa: int | None = None
+    accruals: int | None = None
+    decreasing_leverage: int | None = None
+    improving_liquidity: int | None = None
+    no_dilution: int | None = None
+    improving_gross_margin: int | None = None
+    improving_asset_turnover: int | None = None
+
+
+class FundamentalsResponse(BaseModel):
+    """Response for GET /stocks/{ticker}/fundamentals."""
+
+    ticker: str
+    pe_ratio: float | None = Field(None, description="Price-to-Earnings ratio")
+    peg_ratio: float | None = Field(None, description="Price/Earnings-to-Growth ratio")
+    fcf_yield: float | None = Field(None, description="Free Cash Flow yield (FCF / market cap)")
+    debt_to_equity: float | None = Field(None, description="Total debt / shareholders equity")
+    piotroski_score: int | None = Field(None, description="Piotroski F-Score (0-9)")
+    piotroski_breakdown: PiotroskiBreakdown = Field(
+        default_factory=PiotroskiBreakdown,
+        description="Per-criterion breakdown of the Piotroski score",
+    )

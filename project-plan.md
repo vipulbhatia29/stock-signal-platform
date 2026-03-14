@@ -150,8 +150,11 @@ Track actual positions and add fundamental analysis signals.
    - `GET /api/v1/portfolio/positions` — current holdings with live P&L
    - `GET /api/v1/portfolio/summary` — KPI totals + sector allocation breakdown
 4. ✅ **Portfolio page** (`/portfolio`): KPI row + positions table (3fr) + allocation pie (2fr), "Log Transaction" dialog
-5. **`backend/tools/fundamentals.py`** — P/E, PEG, FCF yield, debt-to-equity, Piotroski F-Score *(next)*
-6. **Updated composite score** merging technical (50%) + fundamental (50%) *(next)*
+5. ✅ **`backend/tools/fundamentals.py`** — P/E, PEG, FCF yield, debt-to-equity, Piotroski F-Score (Session 21)
+6. ✅ **Updated composite score** merging technical (50%) + fundamental (50%) (Session 21)
+   - `GET /api/v1/stocks/{ticker}/fundamentals` endpoint added
+   - `FundamentalsCard` on stock detail page (P/E, PEG, FCF yield, D/E, Piotroski bar)
+   - **Pending:** wire Piotroski into ingest endpoint so composite score uses fundamentals at ingest time
 
 ### Deliverables — Phase 3.5 (deferred — next sprint after core)
 

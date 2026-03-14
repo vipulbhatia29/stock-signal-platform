@@ -581,22 +581,26 @@ def compute_composite_score(
     macd_signal: str | None,
     sma_signal: str | None,
     sharpe: float | None,
+    piotroski_score: int | None = None,
 ) -> tuple[float | None, dict | None]:
-    """Compute the composite score (0-10) from individual signal values.
+    """Compute the composite score (0-10) from technical and fundamental signals.
 
-    The composite score boils down all our technical indicators into one
-    number that's easy to act on:
+    The composite score boils down all indicators into one number:
       - 8-10: Strong BUY signal
       - 5-7:  WATCH (monitor closely)
-      - 0-4:  AVOID (weak technicals)
+      - 0-4:  AVOID (weak signals)
 
-    Each indicator contributes up to 2.5 points (4 indicators × 2.5 = 10 max).
+    Blending strategy (FSD FR-3.2):
+      - When piotroski_score is provided: 50% technical + 50% fundamental
+      - When piotroski_score is None: 100% technical (fallback for ETFs,
+        new listings, or tickers with no earnings data)
 
-    Phase 1 uses 100% technical weights. In Phase 3, we'll add fundamental
-    analysis (P/E ratio, Piotroski score, etc.) and split the weight 50/50.
+    Technical score (0-10): 4 indicators × 2.5 points each.
+    Fundamental score (0-10): Piotroski F-Score (0-9) scaled to 0-10
+      via `piotroski / 9 * 10`.
 
-    The weights dict records exactly how many points each indicator
-    contributed, which is stored in the database for transparency.
+    The weights dict records the full breakdown for transparency and is
+    stored in the database alongside the score.
 
     Args:
         rsi_value: RSI numeric value (0-100).
@@ -605,16 +609,17 @@ def compute_composite_score(
         macd_signal: MACD label (BULLISH/BEARISH).
         sma_signal: SMA label (GOLDEN_CROSS/DEATH_CROSS/ABOVE_200/BELOW_200).
         sharpe: Sharpe ratio value.
+        piotroski_score: Piotroski F-Score (0-9). None → 100% technical mode.
 
     Returns:
         Tuple of (composite_score, weights_dict).
-        weights_dict shows the point breakdown, e.g. {"rsi": 2.5, "macd": 1.5, ...}
+        weights_dict shows the breakdown, e.g. {"rsi": 2.5, "macd": 1.5, ...}
     """
     # If we don't have enough data for any indicator, we can't score
     if all(v is None for v in [rsi_value, macd_histogram, sma_signal, sharpe]):
         return None, None
 
-    score = 0.0
+    technical_score = 0.0
     weights = {}
 
     # ── RSI contribution: 0 to 2.5 points ───────────────────────────
@@ -629,22 +634,19 @@ def compute_composite_score(
             rsi_points = 0.0  # Overbought → risky to buy now
         else:
             rsi_points = 1.0  # Neutral zone
-        score += rsi_points
+        technical_score += rsi_points
         weights["rsi"] = rsi_points
 
     # ── MACD contribution: 0 to 2.5 points ──────────────────────────
     # Positive and increasing histogram = strong upward momentum.
     if macd_histogram is not None and macd_signal is not None:
         if macd_signal == MACDSignal.BULLISH and macd_histogram > 0:
-            # Check if histogram is increasing (comparing last 2 values isn't
-            # available here since we only get the latest value — we use the
-            # histogram value magnitude as a proxy for strength).
             macd_points = 2.5 if macd_histogram > 0.5 else 1.5
         elif macd_signal == MACDSignal.BEARISH and macd_histogram < -0.5:
             macd_points = 0.0  # Strong bearish momentum
         else:
             macd_points = 0.5  # Weak or transitional
-        score += macd_points
+        technical_score += macd_points
         weights["macd"] = macd_points
 
     # ── SMA contribution: 0 to 2.5 points ───────────────────────────
@@ -657,7 +659,7 @@ def compute_composite_score(
             SMASignal.DEATH_CROSS: 0.0,  # 50-day crossed below 200-day
         }
         sma_points = sma_points_map.get(sma_signal, 0.5)
-        score += sma_points
+        technical_score += sma_points
         weights["sma"] = sma_points
 
     # ── Sharpe contribution: 0 to 2.5 points ────────────────────────
@@ -673,10 +675,23 @@ def compute_composite_score(
             sharpe_points = 0.5  # Positive but low
         else:
             sharpe_points = 0.0  # Negative → losing money after risk adjustment
-        score += sharpe_points
+        technical_score += sharpe_points
         weights["sharpe"] = sharpe_points
 
-    composite = round(score, 2)
+    # ── Blend technical + fundamental ───────────────────────────────
+    # When Piotroski data is available: 50% technical + 50% fundamental.
+    # Piotroski (0-9) is scaled to 0-10 so both halves contribute equally.
+    # When unavailable (ETFs, new listings): fall back to 100% technical.
+    if piotroski_score is not None:
+        fundamental_score_10 = round(piotroski_score / 9 * 10, 2)
+        composite = round(technical_score * 0.5 + fundamental_score_10 * 0.5, 2)
+        weights["piotroski"] = piotroski_score
+        weights["fundamental_score_10"] = fundamental_score_10
+        weights["mode"] = "50/50"
+    else:
+        composite = round(technical_score, 2)
+        weights["mode"] = "technical_only"
+
     weights["total"] = composite
 
     return composite, weights

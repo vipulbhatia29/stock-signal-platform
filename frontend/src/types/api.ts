@@ -276,6 +276,30 @@ export interface PortfolioSummary {
   sectors: SectorAllocation[];
 }
 
+// ── Fundamentals ─────────────────────────────────────────────────────────────
+
+export interface PiotroskiBreakdown {
+  positive_roa: number | null;
+  positive_cfo: number | null;
+  improving_roa: number | null;
+  accruals: number | null;
+  decreasing_leverage: number | null;
+  improving_liquidity: number | null;
+  no_dilution: number | null;
+  improving_gross_margin: number | null;
+  improving_asset_turnover: number | null;
+}
+
+export interface FundamentalsResponse {
+  ticker: string;
+  pe_ratio: number | null;
+  peg_ratio: number | null;
+  fcf_yield: number | null;
+  debt_to_equity: number | null;
+  piotroski_score: number | null;
+  piotroski_breakdown: PiotroskiBreakdown;
+}
+
 // ── API Error ─────────────────────────────────────────────────────────────────
 
 export interface ApiError {

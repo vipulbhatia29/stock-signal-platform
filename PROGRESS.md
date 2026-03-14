@@ -942,3 +942,40 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 - Frontend: add Fundamentals tab/section to stock detail page
 
 ---
+
+## Session 21 — Fundamentals Tool + Composite Score Rebalancing
+
+**Date:** 2026-03-14
+**Branch:** `feat/phase-3-fundamentals`
+
+**What was done:**
+- [x] `backend/tools/fundamentals.py` — new tool with `FundamentalResult` dataclass, `compute_piotroski()` (9 binary criteria), `fetch_fundamentals()` (yfinance `.info`)
+- [x] `backend/tools/signals.py` — `compute_composite_score()` gains optional `piotroski_score` param; blends 50% technical + 50% fundamental when present; falls back to 100% technical when None (ETFs, new listings)
+- [x] `backend/schemas/stock.py` — `PiotroskiBreakdown` + `FundamentalsResponse` Pydantic schemas added
+- [x] `backend/routers/stocks.py` — `GET /api/v1/stocks/{ticker}/fundamentals` endpoint (runs `fetch_fundamentals` in thread pool via `run_in_executor`)
+- [x] `tests/unit/test_fundamentals.py` — 15 unit tests (strong/weak Piotroski, partial data, FCF yield math, exception handling)
+- [x] `tests/api/test_fundamentals.py` — 5 API tests (401 unauth, 200 happy path, null fields, 404 unknown ticker)
+- [x] `frontend/src/types/api.ts` — `PiotroskiBreakdown` + `FundamentalsResponse` types
+- [x] `frontend/src/hooks/use-stocks.ts` — `useFundamentals()` hook (15-min stale time)
+- [x] `frontend/src/components/fundamentals-card.tsx` — new component: 4 valuation MetricCards (P/E, PEG, FCF yield, D/E) + segmented Piotroski bar with color-coded groups (profitability/leverage/efficiency)
+- [x] `frontend/src/app/(authenticated)/stocks/[ticker]/stock-detail-client.tsx` — `FundamentalsCard` wired in below Risk & Return section
+- [x] All lint clean: `ruff check --fix + ruff format` (2 auto-fixes), `npm run lint` zero errors
+- [x] 104 unit tests passing (was 104, +15 new fundamentals tests)
+
+**Key decisions:**
+- Fundamentals data comes from yfinance `.info` dict — free, no new dependency, already used for prices
+- Piotroski F-Score uses prior-year comparison fields from `.info` directly (e.g. `returnOnAssets`, `returnOnAssetsPrior`) — avoids parsing raw financial statement DataFrames
+- Composite score blending: `technical * 0.5 + (piotroski/9*10) * 0.5` — Piotroski 0-9 scaled to 0-10 for equal weight contribution
+- `fetch_fundamentals` is synchronous (yfinance) — called via `asyncio.get_event_loop().run_in_executor(None, ...)` in the router to avoid blocking the FastAPI event loop
+- `FundamentalsCard` shows "N/A" for missing fields gracefully; hides entirely if all fields null; shows friendly message for ETFs/SPACs
+
+**Test count:** 104 unit tests (API tests require Docker — not run this session)
+**Alembic head:** `2c45d28eade6` (no migration needed — no new DB model)
+**Current branch:** `feat/phase-3-fundamentals` (uncommitted — ready to commit)
+
+**Next session — Phase 3 wrap-up + Phase 4 start**
+- Commit + PR `feat/phase-3-fundamentals` → `main`
+- Consider: wire `piotroski_score` into `compute_signals()` call in the ingest endpoint (currently only the standalone fundamentals endpoint fetches it)
+- Phase 4: Agent/chat interface — ChatSession + ChatMessage models, LangChain/LangGraph loop, streaming NDJSON, chat UI
+
+---

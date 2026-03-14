@@ -19,6 +19,7 @@ API Endpoints:
   DELETE /watchlist/{ticker}           — remove a ticker from watchlist
   POST /watchlist/{ticker}/acknowledge  — acknowledge stale price data
   GET  /recommendations                — today's recommendations
+  GET  /stocks/{ticker}/fundamentals   — P/E, PEG, FCF yield, Piotroski F-Score
 """
 
 from __future__ import annotations
@@ -45,8 +46,10 @@ from backend.schemas.stock import (
     BollingerResponse,
     BulkSignalItem,
     BulkSignalsResponse,
+    FundamentalsResponse,
     IngestResponse,
     MACDResponse,
+    PiotroskiBreakdown,
     PricePeriod,
     PricePointResponse,
     RecommendationResponse,
@@ -60,6 +63,7 @@ from backend.schemas.stock import (
     WatchlistItemResponse,
 )
 from backend.tasks.market_data import refresh_ticker_task
+from backend.tools.fundamentals import fetch_fundamentals
 
 logger = logging.getLogger(__name__)
 
@@ -828,6 +832,48 @@ async def get_signal_history(
         }
         for s in snapshots
     ]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Fundamentals
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get("/{ticker}/fundamentals", response_model=FundamentalsResponse)
+async def get_fundamentals(
+    ticker: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> FundamentalsResponse:
+    """Get fundamental financial metrics for a stock.
+
+    Fetches live fundamental data from yfinance including:
+      - P/E ratio: How much investors pay per dollar of earnings.
+      - PEG ratio: P/E adjusted for earnings growth rate.
+      - FCF yield: Free cash flow as a fraction of market cap (>5% is healthy).
+      - Debt-to-equity: Financial leverage ratio.
+      - Piotroski F-Score (0-9): Composite financial health score with
+        per-criterion breakdown across profitability, leverage, and efficiency.
+
+    Note: yfinance data may be missing for ETFs, SPACs, or very new listings.
+    Missing fields are returned as null — the frontend should handle this gracefully.
+    """
+    await _require_stock(ticker, db)
+    ticker = ticker.upper().strip()
+
+    import asyncio
+
+    result = await asyncio.get_event_loop().run_in_executor(None, fetch_fundamentals, ticker)
+
+    return FundamentalsResponse(
+        ticker=result.ticker,
+        pe_ratio=result.pe_ratio,
+        peg_ratio=result.peg_ratio,
+        fcf_yield=result.fcf_yield,
+        debt_to_equity=result.debt_to_equity,
+        piotroski_score=result.piotroski_score,
+        piotroski_breakdown=PiotroskiBreakdown(**(result.piotroski_breakdown or {})),
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
