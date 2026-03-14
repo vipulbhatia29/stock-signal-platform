@@ -45,19 +45,19 @@ One row per user. Created automatically on first use (or on registration).
 
 ### 2.2 `transactions`
 
-Append-only ledger. Never updated — delete and re-enter if correction needed.
+Append-only ledger. Never updated — delete and re-enter if correction needed. Uses `UUIDPrimaryKeyMixin` only (no `TimestampMixin` — `updated_at` is meaningless on an immutable ledger row; `created_at` is declared explicitly).
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | UUID PK | |
 | `portfolio_id` | UUID FK → portfolios.id | CASCADE delete |
-| `ticker` | VARCHAR(10) FK → stocks.ticker | Must exist in stocks table |
+| `ticker` | VARCHAR(10) FK → stocks.ticker | Must exist in stocks table — see §4.2 for FK error handling |
 | `transaction_type` | ENUM('BUY', 'SELL') | |
 | `shares` | NUMERIC(12, 4) | Fractional shares supported |
 | `price_per_share` | NUMERIC(12, 4) | Price at time of trade |
 | `transacted_at` | TIMESTAMPTZ | User-supplied trade date |
 | `notes` | TEXT \| NULL | Optional |
-| `created_at` | TIMESTAMPTZ | When the record was logged |
+| `created_at` | TIMESTAMPTZ | When the record was logged (auto) |
 
 **Constraints:**
 - `shares > 0` check constraint
@@ -66,18 +66,19 @@ Append-only ledger. Never updated — delete and re-enter if correction needed.
 
 ### 2.3 `positions`
 
-Materialized/computed view of current holdings. Recomputed from transactions on every write using FIFO.
+Materialized/computed view of current holdings. Recomputed from transactions on every write using FIFO. Uses `UUIDPrimaryKeyMixin` + `TimestampMixin` (adds `created_at` + `updated_at`).
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | UUID PK | |
 | `portfolio_id` | UUID FK → portfolios.id | CASCADE delete |
 | `ticker` | VARCHAR(10) FK → stocks.ticker | |
-| `shares` | NUMERIC(12, 4) | Current open shares |
-| `avg_cost_basis` | NUMERIC(12, 4) | FIFO-computed average cost |
-| `opened_at` | TIMESTAMPTZ | Date of first BUY |
+| `shares` | NUMERIC(12, 4) | Current open shares (0 when closed) |
+| `avg_cost_basis` | NUMERIC(12, 4) | Weighted average cost of *remaining* FIFO lots (display only — not tax-lot ACB) |
+| `opened_at` | TIMESTAMPTZ | Date of first BUY — **never overwritten on upsert** (see §3) |
 | `closed_at` | TIMESTAMPTZ \| NULL | Set when shares = 0 (position fully sold) |
-| `updated_at` | TIMESTAMPTZ | Last recompute time |
+| `created_at` | TIMESTAMPTZ | Auto via TimestampMixin |
+| `updated_at` | TIMESTAMPTZ | Auto-updated on every FIFO recompute via TimestampMixin |
 
 **Design note:** `positions` is a DB table (not a SQL view) so it can be queried efficiently. It is always authoritative — recomputed from the full transaction log whenever a transaction is added or deleted.
 
@@ -85,15 +86,31 @@ Materialized/computed view of current holdings. Recomputed from transactions on 
 
 ## 3. FIFO Cost Basis Algorithm
 
-When a transaction is written:
+### On transaction write (BUY or SELL)
 
-1. Load all BUY transactions for the ticker in `transacted_at` ASC order (the FIFO queue)
-2. Load all SELL transactions for the ticker in `transacted_at` ASC order
-3. Walk the FIFO queue consuming sells against oldest buys first
-4. Remaining BUY lots → `shares` and `avg_cost_basis` (weighted average of remaining lots)
-5. Upsert the `positions` row (or set `closed_at` if `shares == 0`)
+1. Load all transactions for the ticker in `transacted_at` ASC order (BUYs and SELLs interleaved)
+2. Walk chronologically, maintaining a deque of BUY lots `[(shares, price), ...]`
+3. On each SELL: consume from the front of the deque (FIFO); if the deque runs out before the sell is satisfied → raise `ValueError("Insufficient shares")` (router returns 422)
+4. After the full walk: remaining lots in deque → compute `shares` (sum) and `avg_cost_basis` (weighted average)
+5. Upsert the `positions` row:
+   - `INSERT ... ON CONFLICT (portfolio_id, ticker) DO UPDATE SET shares=..., avg_cost_basis=..., closed_at=..., updated_at=now()`
+   - **`opened_at` is explicitly excluded from the UPDATE clause** — it preserves the original first-BUY date on every recompute
+   - Set `closed_at = transacted_at of final SELL` if remaining `shares == 0`; otherwise `closed_at = NULL`
 
-For SELL validation: before writing, check that open shares ≥ shares being sold. Return HTTP 422 if not.
+### On transaction delete (DELETE `/api/v1/portfolio/transactions/{id}`)
+
+**Pre-delete validation:** Simulate removal by running the FIFO walk over all remaining transactions (excluding the target). If the walk raises `ValueError` at any point (a SELL becomes short after removing a BUY), return HTTP 422 with message `"Cannot delete: removing this transaction would leave a later SELL without sufficient shares"`. Only proceed with DELETE if the simulation succeeds.
+
+After deleting, run a full FIFO recompute and upsert positions as above.
+
+### Edge cases
+
+| Case | Behaviour |
+|---|---|
+| SELL exact remaining shares | `closed_at` set, `shares = 0` — position marked closed |
+| BUY entered with a past `transacted_at` | FIFO walk re-runs from scratch in chronological order; downstream SELLs may now match different lots |
+| Ticker with `NULL` sector | Bucketed as `"Unknown"` in sector allocation breakdown |
+| Empty portfolio (no transactions) | `GET /positions` returns `[]`; `GET /summary` returns all KPIs as 0 |
 
 ---
 
@@ -116,9 +133,11 @@ All endpoints require JWT auth (`get_current_user` dependency).
 |---|---|---|
 | `POST` | `/api/v1/portfolio/transactions` | Log a BUY or SELL. Recomputes positions. Returns created transaction. |
 | `GET` | `/api/v1/portfolio/transactions` | Full transaction history, sorted `transacted_at DESC`. Supports `?ticker=AAPL` filter. |
-| `DELETE` | `/api/v1/portfolio/transactions/{id}` | Remove a transaction and recompute positions. |
+| `DELETE` | `/api/v1/portfolio/transactions/{id}` | Simulate removal; reject 422 if it would invalidate a SELL. Then delete + recompute. |
 | `GET` | `/api/v1/portfolio/positions` | Current open positions with live P&L. |
 | `GET` | `/api/v1/portfolio/summary` | KPI totals + sector allocation breakdown. |
+
+**Ticker FK error handling:** If the user submits a ticker not in the `stocks` table, the router catches the FK integrity error and returns HTTP 422 with `{"detail": "Ticker 'XYZ' not found. Add it to your watchlist first to ingest it."}` — do not let the DB error bubble as a 500.
 
 Router mounted in `backend/main.py` at `/api/v1`.
 
@@ -126,9 +145,9 @@ Router mounted in `backend/main.py` at `/api/v1`.
 
 - `TransactionCreate` — request body for POST
 - `TransactionResponse` — response for single transaction
-- `PositionResponse` — position with P&L fields
-- `SectorAllocation` — `{sector: str, value: float, pct: float, over_limit: bool}`
-- `PortfolioSummaryResponse` — KPIs + `list[SectorAllocation]`
+- `PositionResponse` — position with P&L fields: `ticker`, `shares`, `avg_cost_basis`, `current_price`, `market_value`, `unrealized_pnl`, `unrealized_pnl_pct`, `allocation_pct`
+- `SectorAllocation` — `{sector: str, market_value: float, pct: float, over_limit: bool}`
+- `PortfolioSummaryResponse` — fields: `total_value: float`, `total_cost_basis: float`, `unrealized_pnl: float`, `unrealized_pnl_pct: float`, `position_count: int`, `sectors: list[SectorAllocation]`
 
 ### 4.4 Migration
 
@@ -196,9 +215,13 @@ shadcn `Dialog` containing a form:
 ### Unit tests — `tests/unit/test_portfolio.py`
 
 - FIFO cost basis: single BUY, multiple BUYs, partial SELL, full SELL, multiple tickers
+- FIFO: SELL exact remaining shares → `closed_at` set, `shares = 0`
+- FIFO: BUY entered with past `transacted_at` after a SELL → walk re-orders correctly
+- FIFO: two tickers, SELL overdraft on one but not the other (isolation)
+- DELETE pre-validation: removing BUY that underlies a SELL → raises `ValueError`
 - P&L computation: gain, loss, zero
 - SELL validation: insufficient shares raises `ValueError`
-- `get_portfolio_summary`: sector grouping and concentration flag
+- `get_portfolio_summary`: sector grouping, concentration flag, NULL sector → "Unknown"
 
 ### API tests — `tests/api/test_portfolio.py`
 
