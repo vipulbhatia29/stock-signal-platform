@@ -1,6 +1,7 @@
 """Database models package — import all models so Alembic can discover them."""
 
 from backend.models.base import Base
+from backend.models.dividend import DividendPayment
 from backend.models.index import StockIndex, StockIndexMembership
 from backend.models.portfolio import (  # noqa: F401
     Portfolio,
@@ -16,6 +17,7 @@ from backend.models.user import User, UserPreference, UserRole
 
 __all__ = [
     "Base",
+    "DividendPayment",
     "Portfolio",
     "PortfolioSnapshot",
     "Position",
