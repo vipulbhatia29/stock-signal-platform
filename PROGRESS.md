@@ -902,8 +902,43 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Alembic head:** `2c45d28eade6`
 **Commits:** 4 feature commits on `feat/phase-3-portfolio`
 
-**Next:** 
+**Next:**
 - Phase 3 continued: fundamentals tool + dashboard integration
 - Or: PR this portfolio tracker branch → main
+
+---
+
+## Session 20 — Portfolio Tracker Wrap-up + PR #3
+
+**Date:** 2026-03-14
+**Branch:** `feat/phase-3-portfolio` → merged to `main`; new branch `feat/phase-3-fundamentals`
+
+**What was done:**
+- [x] Completed verification checklist from implementation plan:
+  - `alembic current` → `2c45d28eade6 (head)` ✓
+  - All 188 tests pass ✓
+  - `ruff check + format` — fixed 2 lint errors (long Enum column line in migration, long `__repr__` in Position model) ✓
+  - `npm run build` — clean, `/portfolio` route included ✓
+  - `npm run lint` — zero errors ✓
+  - `grep -r "is_in_universe" backend/` — only in old migration history, not live code ✓
+- [x] Committed doc sync (FSD.md, TDD.md, data-architecture.md, project-plan.md)
+- [x] PR #3 created and merged: `feat/phase-3-portfolio` → `main`
+- [x] New feature branch created: `feat/phase-3-fundamentals`
+- [x] Serena memory + PROGRESS.md updated
+
+**Key fixes in this session:**
+- Migration lint: wrapped `sa.Enum('BUY', 'SELL', ...)` column def across 4 lines
+- Model lint: extracted `avg_cost_basis` to local var in `Position.__repr__` to shorten line
+
+**Test count:** 188 (unchanged)
+**Alembic head:** `2c45d28eade6`
+**Current branch:** `feat/phase-3-fundamentals` (clean, no commits)
+
+**Next session — Phase 3: Fundamentals Tool**
+- `backend/tools/fundamentals.py` — fetch P/E, PEG, FCF yield, Piotroski F-Score via yfinance
+- `backend/schemas/fundamentals.py` — FundamentalSnapshot schema
+- `backend/routers/fundamentals.py` — GET /stocks/{ticker}/fundamentals endpoint
+- Unit + API tests
+- Frontend: add Fundamentals tab/section to stock detail page
 
 ---
