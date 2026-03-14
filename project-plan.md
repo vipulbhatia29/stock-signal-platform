@@ -178,14 +178,14 @@ prerequisites for portfolio-aware recommendations.
 
 | # | Item | Source | Why It Matters |
 |---|------|--------|----------------|
-| B1 | **Refresh token rotation** — invalidate old tokens via Redis/DB blacklist | FSD FR-1.3 | Security: old refresh tokens remain valid until expiry |
-| B2 | **Watchlist: return `current_price`** in watchlist endpoint | FSD FR-2.2 | Dashboard shows price; currently requires separate API call |
-| B3 | **StockIndexMembership: add `removed_date`** field | FSD FR-2.4 | Track when stocks leave an index (currently row is deleted) |
-| B4 | **StockIndex: add `last_synced_at`** field | FSD FR-2.4 | Know when index data was last refreshed |
-| B5 | **Remove `is_in_universe` from Stock model** | FSD FR-2.4 | Replaced by index membership; old boolean still exists |
-| B6 | **Staleness enforcement in recommendation engine** | FSD FR-3.3 | Recommendations can currently be generated from stale signals |
-| B7 | **Sharpe ratio filter** on bulk signals endpoint | FSD FR-7.2 | Currently sortable only, no `sharpe_min` filter param |
-| B8 | **`POST /recommendations/{id}/acknowledge`** endpoint | TDD 3.4 | Documented but not implemented; needed for "Action Required" panel |
+| B1 | **Refresh token rotation** — invalidate old tokens via Redis/DB blacklist | FSD FR-1.3 | Deferred — security improvement, not blocking Phase 3 |
+| B2 | ✅ **Watchlist: return `current_price` + freshness** | FSD FR-2.2 | Done (Session 16) |
+| B3 | ✅ **StockIndexMembership: add `removed_date`** field | FSD FR-2.4 | Done (Session 16, migration 003) |
+| B4 | ✅ **StockIndex: add `last_synced_at`** field | FSD FR-2.4 | Done (Session 16, migration 003) |
+| B5 | ✅ **Remove `is_in_universe` from Stock model** | FSD FR-2.4 | Done (Session 16, migration 003) |
+| B6 | ✅ **Celery Beat 30-min auto-refresh fan-out** | FSD FR-3.3 | Done (Session 17) |
+| B7 | ✅ **Sharpe ratio filter** on bulk signals endpoint | FSD FR-7.2 | Done (Session 16) |
+| B8 | ✅ **`POST /watchlist/{ticker}/acknowledge`** stale price dismiss | TDD 3.4 | Done (Session 17) |
 
 ### Success Criteria
 Can log transactions, see portfolio P&L, get rebalancing suggestions.
