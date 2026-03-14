@@ -79,7 +79,7 @@ async def test_get_fundamentals_unauthenticated(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_get_fundamentals_returns_200(
-    auth_client: AsyncClient,
+    authenticated_client: AsyncClient,
     db_url: str,
 ):
     """GET /stocks/{ticker}/fundamentals returns 200 with correct payload."""
@@ -87,7 +87,7 @@ async def test_get_fundamentals_returns_200(
     result = _make_fundamental_result("FUND1")
 
     with patch("backend.routers.stocks.fetch_fundamentals", return_value=result):
-        response = await auth_client.get("/api/v1/stocks/FUND1/fundamentals")
+        response = await authenticated_client.get("/api/v1/stocks/FUND1/fundamentals")
 
     assert response.status_code == 200
     data = response.json()
@@ -101,7 +101,7 @@ async def test_get_fundamentals_returns_200(
 
 @pytest.mark.asyncio
 async def test_get_fundamentals_includes_piotroski_breakdown(
-    auth_client: AsyncClient,
+    authenticated_client: AsyncClient,
     db_url: str,
 ):
     """Response must include piotroski_breakdown with 9 criteria."""
@@ -109,7 +109,7 @@ async def test_get_fundamentals_includes_piotroski_breakdown(
     result = _make_fundamental_result("FUND2")
 
     with patch("backend.routers.stocks.fetch_fundamentals", return_value=result):
-        response = await auth_client.get("/api/v1/stocks/FUND2/fundamentals")
+        response = await authenticated_client.get("/api/v1/stocks/FUND2/fundamentals")
 
     assert response.status_code == 200
     breakdown = response.json()["piotroski_breakdown"]
@@ -120,7 +120,7 @@ async def test_get_fundamentals_includes_piotroski_breakdown(
 
 @pytest.mark.asyncio
 async def test_get_fundamentals_null_fields_when_data_missing(
-    auth_client: AsyncClient,
+    authenticated_client: AsyncClient,
     db_url: str,
 ):
     """When yfinance returns no data, all fields are null — must not crash."""
@@ -136,7 +136,7 @@ async def test_get_fundamentals_null_fields_when_data_missing(
     )
 
     with patch("backend.routers.stocks.fetch_fundamentals", return_value=result):
-        response = await auth_client.get("/api/v1/stocks/FUND3/fundamentals")
+        response = await authenticated_client.get("/api/v1/stocks/FUND3/fundamentals")
 
     assert response.status_code == 200
     data = response.json()
@@ -151,8 +151,8 @@ async def test_get_fundamentals_null_fields_when_data_missing(
 
 @pytest.mark.asyncio
 async def test_get_fundamentals_unknown_ticker_returns_404(
-    auth_client: AsyncClient,
+    authenticated_client: AsyncClient,
 ):
     """Ticker not in the DB must return 404."""
-    response = await auth_client.get("/api/v1/stocks/ZZZZ99/fundamentals")
+    response = await authenticated_client.get("/api/v1/stocks/ZZZZ99/fundamentals")
     assert response.status_code == 404
