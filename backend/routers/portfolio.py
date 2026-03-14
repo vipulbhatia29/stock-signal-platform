@@ -15,12 +15,15 @@ from backend.dependencies import get_current_user
 from backend.models.portfolio import Transaction
 from backend.models.user import User
 from backend.schemas.portfolio import (
+    DividendSummaryResponse,
     PortfolioSnapshotResponse,
     PortfolioSummaryResponse,
     PositionResponse,
     TransactionCreate,
     TransactionResponse,
 )
+from backend.tools.dividends import get_dividend_summary
+from backend.tools.market_data import get_latest_price
 from backend.tools.portfolio import (
     _get_transactions_for_ticker,
     _run_fifo,
@@ -231,3 +234,23 @@ async def get_history(
     portfolio = await get_or_create_portfolio(current_user.id, db)
     snapshots = await get_portfolio_history(portfolio.id, db, days=days)
     return [PortfolioSnapshotResponse.model_validate(s) for s in snapshots]
+
+
+@router.get(
+    "/dividends/{ticker}",
+    response_model=DividendSummaryResponse,
+    summary="Get dividend history and summary for a ticker",
+)
+async def get_dividends_for_ticker(
+    ticker: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> DividendSummaryResponse:
+    """Return dividend payment history and summary stats for a ticker.
+
+    Includes total received, trailing-12-month annual dividends,
+    dividend yield (if price data available), and full payment history.
+    """
+    price = await get_latest_price(ticker, db)
+    summary = await get_dividend_summary(ticker, db, current_price=price)
+    return DividendSummaryResponse(**summary)

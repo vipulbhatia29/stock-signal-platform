@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { get, post, del } from "@/lib/api";
 import { toast } from "sonner";
 import type {
+  DividendSummary,
   IndexResponse,
   WatchlistItem,
   StockSearchResponse,
@@ -204,6 +205,17 @@ export function useFundamentals(ticker: string) {
     queryKey: ["fundamentals", ticker],
     queryFn: () => get<FundamentalsResponse>(`/stocks/${ticker}/fundamentals`),
     staleTime: 15 * 60 * 1000, // Fundamentals change slowly — cache 15 min
+    retry: 1,
+  });
+}
+
+// ── Dividends ────────────────────────────────────────────────────────────────
+
+export function useDividends(ticker: string) {
+  return useQuery({
+    queryKey: ["dividends", ticker],
+    queryFn: () => get<DividendSummary>(`/portfolio/dividends/${ticker}`),
+    staleTime: 30 * 60 * 1000, // Dividends change infrequently — cache 30 min
     retry: 1,
   });
 }

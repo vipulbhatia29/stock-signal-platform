@@ -284,6 +284,24 @@ export interface PortfolioSnapshot {
   position_count: number;
 }
 
+// ── Dividends ───────────────────────────────────────────────────────────────
+
+export interface DividendPayment {
+  ticker: string;
+  ex_date: string;
+  amount: number;
+}
+
+export interface DividendSummary {
+  ticker: string;
+  total_received: number;
+  annual_dividends: number;
+  dividend_yield: number | null;
+  last_ex_date: string | null;
+  payment_count: number;
+  history: DividendPayment[];
+}
+
 // ── Fundamentals ─────────────────────────────────────────────────────────────
 
 export interface PiotroskiBreakdown {

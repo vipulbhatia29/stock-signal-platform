@@ -87,3 +87,25 @@ class PortfolioSnapshotResponse(BaseModel):
     position_count: int
 
     model_config = {"from_attributes": True}
+
+
+class DividendResponse(BaseModel):
+    """A single dividend payment record."""
+
+    ticker: str
+    ex_date: datetime
+    amount: float
+
+    model_config = {"from_attributes": True}
+
+
+class DividendSummaryResponse(BaseModel):
+    """Dividend summary for a ticker: history + aggregated stats."""
+
+    ticker: str
+    total_received: float
+    annual_dividends: float
+    dividend_yield: float | None
+    last_ex_date: datetime | None
+    payment_count: int
+    history: list[DividendResponse]
