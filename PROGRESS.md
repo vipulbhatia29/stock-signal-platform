@@ -794,3 +794,61 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Next:** Merge PR #2 (B-sprint) → Phase 3 main features: portfolio tracker, fundamentals, agent/chat
 
 ---
+
+## Session 18 — Portfolio Tracker Design + Plan
+
+**Date:** 2026-03-13
+**Branch:** `feat/phase-3-portfolio`
+**What was done:**
+
+### Brainstorming + Design
+- [x] Reviewed project context: Phase 3 deliverables, existing models, patterns
+- [x] Scoped Phase 3 portfolio tracker sprint collaboratively:
+  - **In scope:** Transaction log, FIFO positions + P&L, Allocation view (sector pie)
+  - **Deferred to Phase 3.5:** Value history chart, dividends, alerts, portfolio-aware recs, rebalancing
+  - **Deferred to Phase 4:** Schwab OAuth sync, multi-account (Fidelity/IRA)
+- [x] Data source decision: manual entry (B), Schwab OAuth sync deferred
+- [x] Single portfolio model (one Schwab taxable account)
+- [x] Layout A selected: KPI row + positions table (3fr) + allocation pie (2fr) side-by-side
+
+### Spec + Review
+- [x] Wrote design spec: `docs/superpowers/specs/2026-03-13-portfolio-tracker-design.md`
+- [x] Spec review: 3 blocking issues fixed:
+  - `positions` model clarified to use `TimestampMixin`; `transactions` intentionally omits `updated_at`
+  - DELETE transaction pre-validation logic specified (simulate FIFO, reject 422 if strands SELL)
+  - Ticker FK error → 422 with helpful message (not 500)
+  - Plus: `opened_at` upsert safety, NULL sector → "Unknown", full schema fields enumerated, extra unit test cases
+
+### Implementation Plan
+- [x] Wrote 5-chunk implementation plan: `docs/superpowers/plans/2026-03-13-portfolio-tracker.md`
+- [x] Plan reviewed by subagent — all issues fixed:
+  - Removed spurious `TransactionType` non-enum class
+  - `user.py` `TYPE_CHECKING` block guidance clarified (no duplicate blocks)
+  - `__init__.py` `__all__` update specified
+  - `TransactionCreate` uses `@field_validator` not `model_post_init`
+  - `_get_transactions_for_ticker` now returns `"id"` key; delete simulation uses ID-based exclusion
+  - `auth_client` fixture uses correct `create_access_token(user.id)` signature
+  - Unused `client` params removed from all authenticated test methods
+  - Fixed broken `uv run grep` → bare `grep` in verification checklist
+
+**Key decisions:**
+- `_run_fifo()` is a pure function (no DB) — testable without async/SQLAlchemy
+- `positions` is a DB table not a SQL view — queryable, indexable
+- `opened_at` preserved on upsert via explicit SELECT + UPDATE (never ON CONFLICT overwrite)
+- FIFO recomputed from scratch on every transaction write/delete (personal portfolio is small)
+- Ticker FK error caught in router, returned as 422 not 500
+
+**Test count:** 163 backend (no new tests this session — implementation in next session)
+**Alembic head:** `9c7b7e9860b1` (unchanged — migration 005 to be created in next session)
+**Commits:** 3 doc commits on `feat/phase-3-portfolio`
+
+**Deferred items logged for Phase 3.5:**
+- Portfolio value history chart (Celery daily snapshots)
+- Dividend tracking
+- Divestment alerts (stop-loss, concentration warnings)
+- Portfolio-aware recommendations upgrade
+- Rebalancing suggestions
+
+**Next:** Execute implementation plan (`docs/superpowers/plans/2026-03-13-portfolio-tracker.md`) — Chunk 1 (models + migration) → Chunk 2 (FIFO tool) → Chunk 3 (router + tests) → Chunk 4 (frontend) → Chunk 5 (doc sync)
+
+---
