@@ -29,7 +29,7 @@ defaults pre-filled.
 ### In Scope
 
 - Pure function `check_divestment_rules()` with 4 rule types
-- `GET /api/v1/auth/preferences` and `PATCH /api/v1/auth/preferences` endpoints
+- `GET /api/v1/preferences` and `PATCH /api/v1/preferences` endpoints
 - Enhanced positions endpoint returning alerts per position
 - Portfolio page: alert badges column + settings sheet for thresholds
 - Unit tests (rule logic) + API tests (endpoints)
