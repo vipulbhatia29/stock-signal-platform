@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/screener", label: "Screener" },
+  { href: "/portfolio", label: "Portfolio" },
 ] as const;
 
 export function NavBar() {
