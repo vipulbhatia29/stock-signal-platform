@@ -536,3 +536,33 @@ class TestComputeSignalsEndToEnd:
 
         # If Adj Close is used, the signals will differ from Close-based ones
         assert result.composite_score is not None
+
+    def test_compute_signals_with_piotroski_blends_score(self) -> None:
+        """When piotroski_score is provided, composite uses 50/50 blending."""
+        closes = _make_price_series(num_days=300, noise=0.005)
+        df = _make_ohlcv_df(closes)
+
+        result_no_fund = compute_signals("AAPL", df)
+        result_with_fund = compute_signals("AAPL", df, piotroski_score=9)
+
+        # Both should produce a score
+        assert result_no_fund.composite_score is not None
+        assert result_with_fund.composite_score is not None
+
+        # Scores should differ since blending changes the formula
+        assert result_no_fund.composite_score != result_with_fund.composite_score
+
+        # With piotroski, weights should record fundamental_score
+        assert result_with_fund.composite_weights is not None
+        assert "fundamental_score_10" in result_with_fund.composite_weights
+
+    def test_compute_signals_none_piotroski_uses_technical_only(self) -> None:
+        """When piotroski_score is None, composite uses 100% technical."""
+        closes = _make_price_series(num_days=300, noise=0.005)
+        df = _make_ohlcv_df(closes)
+
+        result_default = compute_signals("AAPL", df)
+        result_explicit_none = compute_signals("AAPL", df, piotroski_score=None)
+
+        # Should produce identical scores
+        assert result_default.composite_score == result_explicit_none.composite_score

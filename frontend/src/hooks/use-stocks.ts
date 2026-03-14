@@ -9,6 +9,7 @@ import type {
   StockSearchResponse,
   IngestResponse,
   BulkSignalsResponse,
+  FundamentalsResponse,
   PricePoint,
   SignalResponse,
   SignalHistoryItem,
@@ -194,4 +195,15 @@ export function useStockMeta(ticker: string): {
   const { data: watchlist } = useWatchlist();
   const item = watchlist?.find((w) => w.ticker === ticker);
   return { name: item?.name ?? null, sector: item?.sector ?? null };
+}
+
+// ── Fundamentals ──────────────────────────────────────────────────────────────
+
+export function useFundamentals(ticker: string) {
+  return useQuery({
+    queryKey: ["fundamentals", ticker],
+    queryFn: () => get<FundamentalsResponse>(`/stocks/${ticker}/fundamentals`),
+    staleTime: 15 * 60 * 1000, // Fundamentals change slowly — cache 15 min
+    retry: 1,
+  });
 }

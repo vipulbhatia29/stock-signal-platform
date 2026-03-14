@@ -305,7 +305,7 @@ stock-signal-platform/
 **End-of-session checklist** — before wrapping up, verify these are current:
 1. `PROGRESS.md` — session entry added
 2. `CLAUDE.md` — updated if conventions/architecture changed
-3. `project-plan.md` — updated if deliverables changed
+3. `project-plan.md` — **ALWAYS** mark completed deliverables with ✅ and session number; add any new pending items
 4. `docs/FSD.md` — updated if functional requirements changed
 5. `docs/TDD.md` — updated if API contracts or technical design changed
 6. `docs/data-architecture.md` — updated if data model changed
@@ -314,6 +314,7 @@ stock-signal-platform/
    - `style_and_conventions` — update if conventions or gotchas changed
    - `suggested_commands` — update if new scripts or commands were added
    - This is the primary way context persists across sessions — do not skip
+8. Auto-memory `MEMORY.md` — update Project State section to reflect current branch, test count, resume point
 
 ## Environment Variables
 

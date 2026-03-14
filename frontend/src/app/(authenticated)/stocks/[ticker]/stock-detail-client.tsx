@@ -9,12 +9,14 @@ import {
   useIsInWatchlist,
   useIngestTicker,
   useStockMeta,
+  useFundamentals,
 } from "@/hooks/use-stocks";
 import { StockHeader } from "@/components/stock-header";
 import { PriceChart } from "@/components/price-chart";
 import { SignalCards } from "@/components/signal-cards";
 import { SignalHistoryChart } from "@/components/signal-history-chart";
 import { RiskReturnCard } from "@/components/risk-return-card";
+import { FundamentalsCard } from "@/components/fundamentals-card";
 import { EmptyState } from "@/components/empty-state";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { SectionHeading } from "@/components/section-heading";
@@ -35,6 +37,7 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
   const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
   const ingestTicker = useIngestTicker();
+  const { data: fundamentals, isLoading: fundLoading } = useFundamentals(ticker);
 
   function handleToggleWatchlist() {
     if (isInWatchlist) {
@@ -120,6 +123,10 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
 
       <section>
         <RiskReturnCard returns={signals?.returns} />
+      </section>
+
+      <section>
+        <FundamentalsCard fundamentals={fundamentals} isLoading={fundLoading} />
       </section>
     </div>
   );

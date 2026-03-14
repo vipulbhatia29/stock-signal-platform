@@ -22,6 +22,7 @@ class TestIngestTicker:
 
     @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
     @patch("backend.tools.signals.compute_signals")
+    @patch("backend.tools.fundamentals.fetch_fundamentals")
     @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
     @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
     @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
@@ -32,6 +33,7 @@ class TestIngestTicker:
         mock_fetch: AsyncMock,
         mock_load: AsyncMock,
         mock_update: AsyncMock,
+        mock_fundamentals: MagicMock,
         mock_compute: MagicMock,
         mock_store_signal: AsyncMock,
         authenticated_client: AsyncClient,
@@ -48,6 +50,10 @@ class TestIngestTicker:
         full_df = pd.DataFrame({"Close": [148.0, 149.0, 150.0, 151.0]})
         mock_load.return_value = full_df
 
+        mock_fund_result = MagicMock()
+        mock_fund_result.piotroski_score = 7
+        mock_fundamentals.return_value = mock_fund_result
+
         mock_result = MagicMock()
         mock_result.composite_score = 7.5
         mock_compute.return_value = mock_result
@@ -59,6 +65,54 @@ class TestIngestTicker:
         assert data["name"] == "Apple Inc"
         assert data["rows_fetched"] == 2
         assert data["composite_score"] == 7.5
+
+        # Verify compute_signals was called with piotroski_score
+        mock_compute.assert_called_once()
+        call_kwargs = mock_compute.call_args
+        assert call_kwargs.kwargs.get("piotroski_score") == 7
+
+    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.tools.signals.compute_signals")
+    @patch("backend.tools.fundamentals.fetch_fundamentals")
+    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    async def test_ingest_passes_none_piotroski_when_fundamentals_unavailable(
+        self,
+        mock_ensure: AsyncMock,
+        mock_fetch: AsyncMock,
+        mock_load: AsyncMock,
+        mock_update: AsyncMock,
+        mock_fundamentals: MagicMock,
+        mock_compute: MagicMock,
+        mock_store_signal: AsyncMock,
+        authenticated_client: AsyncClient,
+    ) -> None:
+        """When fundamentals return no Piotroski, composite uses 100% technical."""
+        mock_stock = MagicMock()
+        mock_stock.name = "SPDR ETF"
+        mock_stock.last_fetched_at = None
+        mock_ensure.return_value = mock_stock
+
+        mock_fetch.return_value = pd.DataFrame({"Close": [400.0, 401.0]})
+        mock_load.return_value = pd.DataFrame({"Close": [398.0, 399.0, 400.0, 401.0]})
+
+        mock_fund_result = MagicMock()
+        mock_fund_result.piotroski_score = None
+        mock_fundamentals.return_value = mock_fund_result
+
+        mock_result = MagicMock()
+        mock_result.composite_score = 6.0
+        mock_compute.return_value = mock_result
+
+        response = await authenticated_client.post("/api/v1/stocks/SPY/ingest")
+        assert response.status_code == 200
+
+        # Verify compute_signals was called with piotroski_score=None
+        mock_compute.assert_called_once()
+        call_kwargs = mock_compute.call_args
+        assert call_kwargs.kwargs.get("piotroski_score") is None
 
     @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
     async def test_ingest_unknown_ticker_returns_404(
