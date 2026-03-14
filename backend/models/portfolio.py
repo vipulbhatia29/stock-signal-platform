@@ -61,9 +61,7 @@ class Transaction(UUIDPrimaryKeyMixin, Base):
     )
     shares: Mapped[Decimal] = mapped_column(sa.Numeric(12, 4), nullable=False)
     price_per_share: Mapped[Decimal] = mapped_column(sa.Numeric(12, 4), nullable=False)
-    transacted_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False
-    )
+    transacted_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
     notes: Mapped[str | None] = mapped_column(sa.Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True),
@@ -102,9 +100,7 @@ class Position(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     shares: Mapped[Decimal] = mapped_column(sa.Numeric(12, 4), nullable=False)
     avg_cost_basis: Mapped[Decimal] = mapped_column(sa.Numeric(12, 4), nullable=False)
     opened_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False)
-    closed_at: Mapped[datetime | None] = mapped_column(
-        sa.DateTime(timezone=True), nullable=True
-    )
+    closed_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         sa.UniqueConstraint("portfolio_id", "ticker", name="uq_positions_portfolio_ticker"),
@@ -114,4 +110,5 @@ class Position(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     portfolio: Mapped[Portfolio] = relationship(back_populates="positions")
 
     def __repr__(self) -> str:
-        return f"<Position ticker={self.ticker} shares={self.shares} avg_cost={self.avg_cost_basis}>"
+        avg = self.avg_cost_basis
+        return f"<Position ticker={self.ticker} shares={self.shares} avg_cost={avg}>"
