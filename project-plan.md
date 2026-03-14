@@ -136,20 +136,20 @@ color/typography tokens, and add financial-specific components.
 ### Goal
 Track actual positions and add fundamental analysis signals.
 
-### Deliverables — Phase 3 Core (in progress)
+### Deliverables — Phase 3 Core (portfolio tracker COMPLETE ✅)
 
 **Spec:** `docs/superpowers/specs/2026-03-13-portfolio-tracker-design.md`
-**Plan:** `docs/superpowers/plans/2026-03-13-portfolio-tracker.md`
+**Plan:** `docs/superpowers/plans/2026-03-13-portfolio-tracker.md` ✅ IMPLEMENTED
 
-1. **Database models:** Portfolio, Transaction, Position — `backend/models/portfolio.py` + migration 005
-2. **`backend/tools/portfolio.py`** — `_run_fifo()` pure FIFO engine, position recompute, P&L, sector allocation
-3. **Portfolio API endpoints (5):**
+1. ✅ **Database models:** Portfolio, Transaction, Position — `backend/models/portfolio.py` + migration 005 (`2c45d28eade6`)
+2. ✅ **`backend/tools/portfolio.py`** — `_run_fifo()` pure FIFO engine, position recompute, P&L, sector allocation
+3. ✅ **Portfolio API endpoints (5):**
    - `POST /api/v1/portfolio/transactions` — log a BUY/SELL (validates SELL ≤ held shares, ticker FK → 422)
    - `GET /api/v1/portfolio/transactions` — history with optional `?ticker=` filter
    - `DELETE /api/v1/portfolio/transactions/{id}` — pre-validates FIFO integrity before deleting
    - `GET /api/v1/portfolio/positions` — current holdings with live P&L
    - `GET /api/v1/portfolio/summary` — KPI totals + sector allocation breakdown
-4. **Portfolio page** (`/portfolio`): KPI row + positions table (3fr) + allocation pie (2fr), "Log Transaction" dialog
+4. ✅ **Portfolio page** (`/portfolio`): KPI row + positions table (3fr) + allocation pie (2fr), "Log Transaction" dialog
 5. **`backend/tools/fundamentals.py`** — P/E, PEG, FCF yield, debt-to-equity, Piotroski F-Score *(next)*
 6. **Updated composite score** merging technical (50%) + fundamental (50%) *(next)*
 

@@ -90,43 +90,46 @@ compression on time-series data older than 30 days.
 Names: "S&P 500",           Index: (index_id, removed_date)
   "NASDAQ-100", "Dow 30"      for current-members query
                              ┌─────────────────────────┐
-┌─────────────────────┐      │ Portfolio               │
+┌─────────────────────┐      │ Portfolio ✅ IMPLEMENTED│
 │ CorporateAction     │      │─────────────────────────│
 │─────────────────────│      │ id (PK, UUID)           │
 │ id (PK, UUID)       │      │ user_id (FK → User)     │
-│ ticker (FK → Stock) │      │ name                    │
-│ action_type (enum)  │      │ created_at              │
-│ ex_date (DATE)      │      └───────────┬─────────────┘
-│ ratio_from (INT)    │                  │
-│ ratio_to (INT)      │      ┌───────────▼─────────────┐
-│ created_at          │      │ Transaction             │
-└─────────────────────┘      │─────────────────────────│
-action_type: SPLIT,          │ id (PK, UUID)           │
-  REVERSE_SPLIT              │ portfolio_id (FK)       │
-ratio: e.g. 1→4 for         │ ticker (FK → Stock)     │
-  4:1 split                  │ action (BUY/SELL)       │
-                             │ quantity (NUMERIC)      │
-┌─────────────────────┐      │ price_per_share(NUMERIC)│
-│ DividendPayment     │      │ fees (NUMERIC)          │
-│─────────────────────│      │ transacted_at (TSTZ)    │
-│ id (PK, UUID)       │      │ notes (TEXT)            │
-│ portfolio_id (FK)   │      │ created_at              │
-│ ticker (FK → Stock) │      └─────────────────────────┘
-│ ex_date (DATE)      │
-│ pay_date (DATE)     │      ┌─────────────────────────┐
-│ amount_per_share    │      │ Position (MATERIALIZED) │
-│ shares_held (NUM)   │      │─────────────────────────│
-│ total_amount (NUM)  │      │ portfolio_id (FK)       │
-│ created_at          │      │ ticker (FK → Stock)     │
-└─────────────────────┘      │ quantity (NUMERIC)      │
-                             │ avg_cost (NUMERIC)      │
-┌─────────────────────┐      │ total_invested (NUM)    │
-│ AlertRule           │      │ realized_pnl (NUMERIC)  │
-│─────────────────────│      │ last_updated (TSTZ)     │
-│ id (PK, UUID)       │      └─────────────────────────┘
-│ user_id (FK)        │      Refreshed on every transaction
-│ ticker (FK → Stock) │      insert via DB trigger or
-│ rule_type (enum)    │      application-level update
+│ ticker (FK → Stock) │      │ name (VARCHAR 100)      │
+│ action_type (enum)  │      │ description (TEXT)      │
+│ ex_date (DATE)      │      │ created_at / updated_at │
+│ ratio_from (INT)    │      └───────────┬─────────────┘
+│ ratio_to (INT)      │                  │
+│ created_at          │      ┌───────────▼─────────────┐
+└─────────────────────┘      │ Transaction ✅ IMPLEMENTED
+action_type: SPLIT,          │─────────────────────────│
+  REVERSE_SPLIT              │ id (PK, UUID)           │
+ratio: e.g. 1→4 for         │ portfolio_id (FK)       │
+  4:1 split                  │ ticker (FK → Stock, RESTRICT)
+                             │ transaction_type (enum: BUY|SELL)
+┌─────────────────────┐      │ shares (NUMERIC 12,4)   │
+│ DividendPayment     │      │ price_per_share(NUMERIC 12,4)
+│ (Phase 3.5)         │      │ transacted_at (TSTZ)    │
+│─────────────────────│      │ notes (TEXT)            │
+│ id (PK, UUID)       │      │ created_at              │
+│ portfolio_id (FK)   │      └───────────┬─────────────┘
+│ ticker (FK → Stock) │                  │ recomputed after
+│ ex_date (DATE)      │      ┌───────────▼─────────────┐
+│ pay_date (DATE)     │      │ Position ✅ IMPLEMENTED  │
+│ amount_per_share    │      │─────────────────────────│
+│ shares_held (NUM)   │      │ portfolio_id (FK)       │
+│ total_amount (NUM)  │      │ ticker (FK → Stock)     │
+│ created_at          │      │ shares (NUMERIC 12,4)   │
+└─────────────────────┘      │ avg_cost_basis (NUMERIC)│
+                             │ opened_at (TSTZ)        │ ← never overwritten
+┌─────────────────────┐      │ closed_at (TSTZ, null)  │ ← set when shares→0
+│ AlertRule           │      │ UQ(portfolio_id, ticker)│
+│ (Phase 3.5)         │      └─────────────────────────┘
+│─────────────────────│      FIFO recomputed from Transaction
+│ id (PK, UUID)       │      log on every write (pure function).
+│ user_id (FK)        │      Append-only transactions; Position
+│ ticker (FK → Stock) │      is the derived materialized state.
+│ rule_type (enum)    │
+│ params (JSONB)      │
 │ params (JSONB)      │
 │ is_active           │      ┌─────────────────────────┐
 │ created_at          │      │ AlertLog                │
