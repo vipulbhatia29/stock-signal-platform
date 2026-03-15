@@ -2,22 +2,27 @@
 
 import Link from "next/link";
 import { XIcon, RefreshCw } from "lucide-react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ScoreBadge } from "@/components/score-badge";
 import { RelativeTime } from "./relative-time";
 import { cn } from "@/lib/utils";
 
-function isStale(priceUpdatedAt: string, acknowledgedAt: string | null | undefined): boolean {
-  // Stale if price is > 1 hour old AND not yet acknowledged (or acknowledged before this price arrived)
+function isStale(
+  priceUpdatedAt: string,
+  acknowledgedAt: string | null | undefined
+): boolean {
   const priceDate = new Date(priceUpdatedAt).getTime();
   const ageMs = Date.now() - priceDate;
   const isOld = ageMs > 60 * 60 * 1000;
   if (!isOld) return false;
   if (!acknowledgedAt) return true;
-  // Re-show amber if price arrived after the last acknowledgement
   return priceDate > new Date(acknowledgedAt).getTime();
+}
+
+function scoreToSignal(score: number | null | undefined): "BUY" | "HOLD" | "SELL" {
+  if (score == null) return "HOLD";
+  if (score >= 0.6) return "BUY";
+  if (score >= 0.4) return "HOLD";
+  return "SELL";
 }
 
 interface StockCardProps {
@@ -38,7 +43,7 @@ interface StockCardProps {
 export function StockCard({
   ticker,
   name,
-  sector,
+  sector, // eslint-disable-line @typescript-eslint/no-unused-vars
   score,
   onRemove,
   animationDelay = 0,
@@ -49,101 +54,144 @@ export function StockCard({
   priceAcknowledgedAt,
   onAcknowledge,
 }: StockCardProps) {
+  const signal = scoreToSignal(score);
+  const scoreBarPct = score != null ? Math.round(score * 100) : 0;
+  const scoreBarColor =
+    signal === "BUY"
+      ? "var(--gain)"
+      : signal === "SELL"
+        ? "var(--loss)"
+        : "var(--cyan)";
+  const stale =
+    priceUpdatedAt ? isStale(priceUpdatedAt, priceAcknowledgedAt) : false;
+
+  const signalClasses =
+    signal === "BUY"
+      ? "text-[var(--gain)] bg-[var(--gain)]/10"
+      : signal === "SELL"
+        ? "text-[var(--loss)] bg-[var(--loss)]/10"
+        : "text-[var(--cyan)] bg-[var(--cdim)]";
+
   return (
-    <Card
-      className="group relative transition-colors hover:border-foreground/20 animate-fade-slide-up"
-      style={{ '--stagger-delay': `${animationDelay}ms` } as React.CSSProperties}
+    <div
+      className="group relative rounded-[var(--radius)] border border-border bg-card p-[12px_13px] flex flex-col gap-2.5 cursor-pointer transition-colors hover:border-[var(--bhi)] hover:bg-[var(--hov)] animate-fade-slide-up"
+      style={{ "--stagger-delay": `${animationDelay}ms` } as React.CSSProperties}
     >
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute top-2 right-2 size-6 opacity-0 group-hover:opacity-100 transition-opacity"
+      {/* Remove button */}
+      <button
+        className="absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
         onClick={(e) => {
           e.preventDefault();
           onRemove();
         }}
         aria-label={`Remove ${ticker}`}
       >
-        <XIcon className="size-3.5" />
-      </Button>
-      <Link href={`/stocks/${ticker}`}>
-        <CardHeader className="pb-1">
-          <div className="flex items-center justify-between pr-6">
-            <span className="font-mono text-base font-semibold">{ticker}</span>
-            <ScoreBadge score={score ?? null} size="sm" />
-          </div>
-          {currentPrice != null && (
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-lg font-semibold">
-                ${currentPrice.toFixed(2)}
-              </span>
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                {priceUpdatedAt && (
-                  <RelativeTime date={priceUpdatedAt} prefix="Refreshed" />
-                )}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    onRefresh?.(ticker);
-                  }}
-                  aria-label={`Refresh ${ticker} price data`}
-                  className={cn(
-                    "ml-1 rounded-full p-0.5 hover:bg-muted transition-colors",
-                    isRefreshing && "animate-spin pointer-events-none",
-                    priceUpdatedAt && isStale(priceUpdatedAt, priceAcknowledgedAt)
-                      ? "text-amber-500"
-                      : "text-muted-foreground"
-                  )}
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </button>
-                {priceUpdatedAt && isStale(priceUpdatedAt, priceAcknowledgedAt) && onAcknowledge && (
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onAcknowledge(ticker);
-                    }}
-                    aria-label={`Dismiss stale price alert for ${ticker}`}
-                    className="ml-0.5 rounded-full p-0.5 hover:bg-muted transition-colors text-amber-500 text-[10px] font-medium leading-none"
-                    title="Dismiss stale alert"
-                  >
-                    ✕
-                  </button>
-                )}
-              </div>
+        <XIcon size={11} />
+      </button>
+
+      <Link href={`/stocks/${ticker}`} className="flex flex-col gap-2.5">
+        {/* Top row: ticker + price */}
+        <div className="flex items-start justify-between pr-5">
+          <div>
+            <div className="font-mono text-[14px] font-semibold text-foreground">
+              {ticker}
             </div>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-1">
-          <p className="truncate text-sm text-muted-foreground">
-            {name || "—"}
-          </p>
-          {sector && (
-            <span className="inline-flex rounded-md border px-1.5 py-0.5 text-xs text-muted-foreground">
-              {sector}
+            <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[120px]">
+              {name || "—"}
+            </div>
+          </div>
+          <div className="text-right">
+            {currentPrice != null ? (
+              <div className="font-mono text-[14px] font-semibold text-foreground">
+                ${currentPrice.toFixed(2)}
+              </div>
+            ) : (
+              <div className="text-[10px] text-muted-foreground">—</div>
+            )}
+          </div>
+        </div>
+
+        {/* Bottom row: signal badge + score bar + refresh */}
+        <div className="flex items-center justify-between">
+          <span
+            className={cn(
+              "inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide",
+              signalClasses
+            )}
+          >
+            {signal}
+          </span>
+
+          <div className="flex items-center gap-2 flex-1 mx-3">
+            <div className="flex-1 h-[3px] rounded-full bg-[var(--cdim)]">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${scoreBarPct}%`, background: scoreBarColor }}
+              />
+            </div>
+            <span className="font-mono text-[9.5px] text-muted-foreground">
+              {scoreBarPct}
             </span>
-          )}
-        </CardContent>
+          </div>
+
+          {/* Refresh controls */}
+          <div className="flex items-center gap-0.5">
+            {priceUpdatedAt && (
+              <span className="text-[9px] text-muted-foreground hidden group-hover:block">
+                <RelativeTime date={priceUpdatedAt} />
+              </span>
+            )}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onRefresh?.(ticker);
+              }}
+              aria-label={`Refresh ${ticker}`}
+              className={cn(
+                "p-0.5 rounded-full transition-colors",
+                isRefreshing && "animate-spin pointer-events-none",
+                stale
+                  ? "text-[var(--warning)]"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <RefreshCw size={10} />
+            </button>
+            {stale && onAcknowledge && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onAcknowledge(ticker);
+                }}
+                aria-label={`Dismiss stale alert for ${ticker}`}
+                className="p-0.5 text-[var(--warning)] hover:text-muted-foreground text-[9px] leading-none"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
       </Link>
-    </Card>
+    </div>
   );
 }
 
 export function StockCardSkeleton() {
   return (
-    <Card>
-      <CardHeader className="pb-1">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-5 w-16" />
-          <Skeleton className="h-5 w-10" />
+    <div className="rounded-[var(--radius)] border border-border bg-card p-[12px_13px] flex flex-col gap-2.5">
+      <div className="flex items-start justify-between">
+        <div>
+          <Skeleton className="h-4 w-14 mb-1" />
+          <Skeleton className="h-3 w-20" />
         </div>
-      </CardHeader>
-      <CardContent className="space-y-1">
-        <Skeleton className="h-4 w-28" />
-        <Skeleton className="h-5 w-16" />
-      </CardContent>
-    </Card>
+        <Skeleton className="h-4 w-16" />
+      </div>
+      <div className="flex items-center gap-2">
+        <Skeleton className="h-4 w-10" />
+        <Skeleton className="h-[3px] flex-1" />
+      </div>
+    </div>
   );
 }
