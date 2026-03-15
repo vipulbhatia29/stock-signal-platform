@@ -10,11 +10,8 @@ import {
 import {
   useIndexes,
   useWatchlist,
-  useAddToWatchlist,
   useRemoveFromWatchlist,
-  useIngestTicker,
 } from "@/hooks/use-stocks";
-import { TickerSearch } from "@/components/ticker-search";
 import { IndexCard, IndexCardSkeleton } from "@/components/index-card";
 import { StockCard, StockCardSkeleton } from "@/components/stock-card";
 import { SectorFilter } from "@/components/sector-filter";
@@ -34,9 +31,7 @@ export default function DashboardPage() {
 
   const { data: indexes, isLoading: indexesLoading } = useIndexes();
   const { data: watchlist, isLoading: watchlistLoading } = useWatchlist();
-  const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
-  const ingestTicker = useIngestTicker();
 
   // ── Refresh All mutation ────────────────────────────────────────────────────
 
@@ -117,35 +112,8 @@ export default function DashboardPage() {
     return watchlist.filter((w) => w.sector === sectorFilter);
   }, [watchlist, sectorFilter]);
 
-  // ── Handlers ────────────────────────────────────────────────────────────────
-
-  async function handleAddTicker(ticker: string) {
-    const isInWatchlist = watchlist?.some((w) => w.ticker === ticker);
-    if (isInWatchlist) {
-      toast.info(`${ticker} is already in your watchlist`);
-      return;
-    }
-
-    toast.loading(`Fetching data for ${ticker}...`, { id: `ingest-${ticker}` });
-    try {
-      await ingestTicker.mutateAsync(ticker);
-      toast.success(`${ticker} data loaded`, { id: `ingest-${ticker}` });
-      addToWatchlist.mutate(ticker);
-    } catch {
-      toast.error(`Failed to fetch data for ${ticker}`, {
-        id: `ingest-${ticker}`,
-      });
-    }
-  }
-
   return (
     <div className="space-y-8">
-      {/* Header + Search */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
-        <TickerSearch onSelect={handleAddTicker} />
-      </div>
-
       {/* Index Cards */}
       <section>
         <SectionHeading>Market Indexes</SectionHeading>
