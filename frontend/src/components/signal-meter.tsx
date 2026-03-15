@@ -29,7 +29,7 @@ export function SignalMeter({ score, size = "default" }: SignalMeterProps) {
             : i <= 5
               ? "bg-neutral-signal"
               : "bg-gain"
-          : "bg-muted/40";
+          : "bg-card2";
 
         return (
           <div
