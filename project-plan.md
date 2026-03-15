@@ -198,32 +198,56 @@ Implementation backlog items B1-B8 addressed before portfolio-aware features.
 
 ---
 
-## Phase 4: Chatbot + AI Agent (Weeks 7-8)
+## Phase 4: UI Redesign + Chatbot + AI Agent (Weeks 7-8)
 
 ### Goal
-Natural language interface that orchestrates all tools.
+Command-center dark UI shell + natural language AI interface that orchestrates all tools.
 
 ### Deliverables
-1. **Database models:** ChatSession, ChatMessage
-2. **`backend/agents/base.py`** — BaseAgent ABC with tool binding
-2. **`backend/agents/general_agent.py`** — general Q&A + web search
-3. **`backend/agents/stock_agent.py`** — stock analysis orchestrating all tools
-4. **`backend/agents/loop.py`** — agentic tool-calling loop (max 15 iterations)
-5. **`backend/agents/stream.py`** — NDJSON streaming to frontend
-6. **`backend/routers/chat.py`** — `POST /api/v1/chat/stream` with SSE
-7. **LLM fallback:** Groq primary for tool loops, Claude Sonnet for synthesis
-8. **Chat UI in frontend:**
-   - Message bubbles with markdown rendering
-   - Streaming response display
-   - Agent selector (General / Stock Analysis)
-   - Tool execution status indicators
-9. **Example queries that should work:**
-   - "Analyse AAPL — give me technicals, fundamentals, and recommendation"
-   - "How is my portfolio doing? Am I overexposed to any sector?"
-   - "What are my top 3 buy candidates in Technology right now?"
+
+#### Phase 4A — UI Redesign (Sessions 28–29) ✅ COMPLETE
+- ✅ **Spec:** `docs/superpowers/specs/2026-03-15-ui-redesign-phase-4-shell-design.md`
+- ✅ **Plan:** `docs/superpowers/plans/2026-03-15-ui-redesign-implementation.md`
+- ✅ **Design tokens** — navy dark palette replacing OKLCH shadcn defaults, dark-only (`forcedTheme="dark"`)
+- ✅ **Typography** — Sora (UI) + JetBrains Mono (numbers) via `next/font/google`; `--font-sora`, `--font-jetbrains-mono` CSS vars
+- ✅ **Shell layout** — 54px icon `SidebarNav` + `Topbar` + resizable `ChatPanel` (stub, drag-resize, persisted width)
+- ✅ **New components** — `StatTile`, `AllocationDonut`, `PortfolioDrawer`
+- ✅ **Dashboard Overview row** — 5 stat tiles with portfolio/signals/allocation data
+- ✅ **All component restyling** — screener, stock detail, portfolio, shared atoms updated to navy tokens
+- ✅ **SVG Sparkline** — raw `<polyline>` replacing Recharts (jagged financial chart feel)
+- ✅ **Frontend tests** — 20 component tests in `frontend/src/__tests__/components/`; Jest upgraded to jsdom env
+
+#### Phase 4B — AI Backend (Session 30+)
+- [ ] **Database models:** ChatSession, ChatMessage
+- [ ] **`backend/agents/base.py`** — BaseAgent ABC with tool binding
+- [ ] **`backend/agents/general_agent.py`** — general Q&A + web search
+- [ ] **`backend/agents/stock_agent.py`** — stock analysis orchestrating all tools
+- [ ] **`backend/agents/loop.py`** — agentic tool-calling loop (max 15 iterations)
+- [ ] **`backend/agents/stream.py`** — NDJSON streaming to frontend
+- [ ] **`backend/routers/chat.py`** — `POST /api/v1/chat/stream` with SSE
+- [ ] **LLM:** Groq primary for tool loops, Claude Sonnet for synthesis
+- [ ] **Wire `ChatPanel`** — connect stub UI to streaming backend
+- [ ] **Example queries that should work:**
+  - "Analyse AAPL — give me technicals, fundamentals, and recommendation"
+  - "How is my portfolio doing? Am I overexposed to any sector?"
+  - "What are my top 3 buy candidates in Technology right now?"
 
 ### Success Criteria
-Can ask natural language questions and get tool-backed, synthesized answers.
+Dark command-center UI live. Can ask natural language questions and get tool-backed, synthesized answers via the docked chat panel.
+
+### Phase 4 Pre-flight Bug & UX Backlog (found in Session 26 QA) — ✅ COMPLETE (Session 27)
+
+**Bugs**
+- ✅ `GET /portfolio/dividends/{ticker}` — set `retry: 0` on `useDividends`; 404 for unheld tickers no longer retried/noisy
+
+**UX Improvements**
+- ✅ **"Add any ticker" open-world search** — `TickerSearch` now shows "Add [TICKER]" fallback item with `PlusCircleIcon` when query matches no DB results and looks like a valid ticker (`TICKER_RE`)
+- ✅ **Search empty-state messaging** — "No stocks found" shown when no DB results; "Add new ticker" group shown simultaneously for valid-looking queries
+
+**Polish**
+- ✅ Add `--color-warning` CSS var to design system — OKLCH amber in `:root` + `.dark`; `--color-warning` in `@theme`; AT_CAP badge updated to `text-warning border-warning`
+- ✅ Signal History x-axis: dynamic `interval={Math.max(0, Math.floor(history.length / 5) - 1)}` — caps at ~5 ticks regardless of data density
+- ✅ Price history chart: `interval="preserveStartEnd"` + `minTickGap={60}` — prevents crowded/stale-looking dates on short periods
 
 ---
 

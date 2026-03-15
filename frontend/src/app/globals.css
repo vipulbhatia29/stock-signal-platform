@@ -5,147 +5,142 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Core surfaces */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
-  /* Financial semantic colors — Tailwind generates text-gain, bg-loss, etc. */
+  --color-card2: var(--card2);
+  --color-hov: var(--hov);
+  --color-card-foreground: var(--card-foreground);
+
+  /* Borders & inputs */
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Text hierarchy */
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle: var(--subtle);
+
+  /* Accent */
+  --color-cyan: var(--cyan);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  /* Secondary */
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  /* Semantic financial */
   --color-gain: var(--gain);
   --color-gain-foreground: var(--gain-foreground);
   --color-loss: var(--loss);
   --color-loss-foreground: var(--loss-foreground);
-  --color-neutral-signal: var(--neutral-signal);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-destructive: var(--destructive);
+
+  /* Sidebar (kept for shadcn compatibility) */
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Typography */
+  --font-sans: var(--font-sora);
+  --font-mono: var(--font-jetbrains-mono);
+
+  /* Radii */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
 }
 
+/* ── Dark-only navy palette ─────────────────────────────────────────────── */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
-  /* Financial semantic colors (light mode) */
-  --gain: oklch(0.55 0.17 145);
-  --gain-foreground: oklch(0.25 0.08 145);
-  --loss: oklch(0.55 0.20 25);
-  --loss-foreground: oklch(0.25 0.10 25);
-  --neutral-signal: oklch(0.65 0.15 80);
-  /* Chart-specific semantic colors */
-  --chart-price: oklch(0.55 0.22 264);
-  --chart-volume: oklch(0.65 0.05 250);
-  --chart-sma-50: oklch(0.65 0.18 55);
-  --chart-sma-200: oklch(0.55 0.18 300);
-  --chart-rsi: oklch(0.60 0.18 15);
-}
+  /* Surfaces */
+  --background: #070d18;
+  --foreground: #e8f0ff;
+  --card: #0b1525;
+  --card2: #0f1d32;
+  --hov: #121f33;
+  --card-foreground: #e8f0ff;
 
-.dark {
-  /* Bloomberg-inspired dark mode: subtle blue undertone, not pure black */
-  --background: oklch(0.145 0.005 250);
-  --foreground: oklch(0.93 0 0);
-  --card: oklch(0.195 0.005 250);
-  --card-foreground: oklch(0.93 0 0);
-  --popover: oklch(0.195 0.005 250);
-  --popover-foreground: oklch(0.93 0 0);
-  --primary: oklch(0.87 0.00 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.371 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  /* Chart colors boosted for dark mode (L >= 0.70 so they pop) */
-  --chart-1: oklch(0.75 0.14 255);
-  --chart-2: oklch(0.72 0.18 260);
-  --chart-3: oklch(0.70 0.20 262);
-  --chart-4: oklch(0.68 0.19 264);
-  --chart-5: oklch(0.65 0.16 266);
-  --sidebar: oklch(0.195 0.005 250);
-  --sidebar-foreground: oklch(0.93 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.556 0 0);
-  /* Financial semantic colors (dark mode) — cyan-green/orange-red for contrast */
-  --gain: oklch(0.72 0.18 148);
-  --gain-foreground: oklch(0.95 0.05 148);
-  --loss: oklch(0.72 0.19 22);
-  --loss-foreground: oklch(0.95 0.05 22);
-  --neutral-signal: oklch(0.78 0.14 82);
-  /* Chart-specific semantic colors (brighter for dark bg) */
-  --chart-price: oklch(0.72 0.22 264);
-  --chart-volume: oklch(0.60 0.06 250);
-  --chart-sma-50: oklch(0.78 0.18 55);
-  --chart-sma-200: oklch(0.70 0.18 300);
-  --chart-rsi: oklch(0.75 0.18 15);
+  /* Borders */
+  --border: rgba(255, 255, 255, 0.07);
+  --bhi: rgba(56, 189, 248, 0.22);
+  --input: rgba(255, 255, 255, 0.07);
+  --ring: rgba(56, 189, 248, 0.4);
+
+  /* Text */
+  --muted: #0b1525;
+  --muted-foreground: #6a80a8;
+  --subtle: #2d3e5a;
+
+  /* Cyan accent */
+  --cyan: #38bdf8;
+  --cdim: rgba(56, 189, 248, 0.12);
+  --cg: rgba(56, 189, 248, 0.35);
+  --primary: #38bdf8;
+  --primary-foreground: #070d18;
+
+  /* Secondary / Accent surfaces */
+  --secondary: #0f1d32;
+  --secondary-foreground: #e8f0ff;
+  --accent: #121f33;
+  --accent-foreground: #e8f0ff;
+  --popover: #0b1525;
+  --popover-foreground: #e8f0ff;
+
+  /* Financial semantic */
+  --gain: #22d3a0;
+  --gain-foreground: #070d18;
+  --gdim: rgba(34, 211, 160, 0.11);
+  --loss: #f87171;
+  --loss-foreground: #070d18;
+  --ldim: rgba(248, 113, 113, 0.11);
+  --warning: #fbbf24;
+  --warning-foreground: #070d18;
+  --wdim: rgba(251, 191, 36, 0.09);
+  --destructive: #f87171;
+
+  /* Chart semantic */
+  --chart-price: #38bdf8;
+  --chart-volume: rgba(56, 189, 248, 0.35);
+  --chart-sma-50: #fbbf24;
+  --chart-sma-200: #a78bfa;
+  --chart-rsi: #f87171;
+  --chart-1: #38bdf8;
+  --chart-2: #22d3a0;
+  --chart-3: #a78bfa;
+  --chart-4: #fbbf24;
+  --chart-5: #f87171;
+  --neutral-signal: #6a80a8;
+
+  /* Sidebar (shadcn compat) */
+  --sidebar: #0b1525;
+  --sidebar-foreground: #e8f0ff;
+  --sidebar-primary: #38bdf8;
+  --sidebar-primary-foreground: #070d18;
+  --sidebar-accent: #121f33;
+  --sidebar-accent-foreground: #e8f0ff;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-ring: rgba(56, 189, 248, 0.4);
+
+  /* Layout */
+  --sw: 54px;
+  --cp: 280px;
+  --radius: 0.625rem;
 }
 
 @layer base {
@@ -160,8 +155,7 @@
   }
 }
 
-/* ── Entry animation keyframes ─────────────────────────────────────────────── */
-
+/* ── Entry animations ───────────────────────────────────────────────────── */
 @keyframes fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
@@ -172,7 +166,6 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Utility classes for entry animations */
 @layer utilities {
   .animate-fade-in {
     animation: fade-in 0.4s ease both;
@@ -180,9 +173,12 @@
   .animate-fade-slide-up {
     animation: fade-slide-up 0.4s cubic-bezier(.22,.68,0,1.2) var(--stagger-delay, 0ms) both;
   }
+  /* Panel resize cursor helper */
+  body.resizing {
+    user-select: none;
+    cursor: col-resize;
+  }
 }
-
-/* ── Accessibility: honour prefers-reduced-motion ───────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {

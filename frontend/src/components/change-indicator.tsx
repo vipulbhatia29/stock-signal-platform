@@ -20,7 +20,7 @@ export function ChangeIndicator({
 }: ChangeIndicatorProps) {
   if (value === null) {
     return (
-      <span className={cn("text-muted-foreground", className)}>—</span>
+      <span className={cn("text-subtle", className)}>—</span>
     );
   }
 
@@ -37,7 +37,7 @@ export function ChangeIndicator({
     ? "text-gain"
     : isNegative
       ? "text-loss"
-      : "text-muted-foreground";
+      : "text-subtle";
 
   const Icon = isPositive
     ? TrendingUpIcon
@@ -47,7 +47,7 @@ export function ChangeIndicator({
 
   return (
     <span
-      className={cn("inline-flex items-center gap-1 font-medium tabular-nums", textSize, colorClass, className)}
+      className={cn("inline-flex items-center gap-1 font-mono font-medium tabular-nums", textSize, colorClass, className)}
       aria-label={`${isPositive ? "up" : isNegative ? "down" : "unchanged"} ${sign}${formatted}`}
     >
       <Icon className={iconSize} aria-hidden="true" />

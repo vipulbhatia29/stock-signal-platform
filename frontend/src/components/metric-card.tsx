@@ -27,12 +27,12 @@ export function MetricCard({
   const displayValue = value === null || value === undefined ? "—" : value;
 
   return (
-    <div className={cn("flex flex-col gap-1", className)}>
-      <p className="flex items-center gap-1 text-xs uppercase tracking-wider text-muted-foreground">
+    <div className={cn("bg-card2 border border-border rounded-[var(--radius)] p-[10px_13px]", className)}>
+      <p className="flex items-center gap-1 text-[9px] uppercase tracking-[0.08em] text-subtle mb-1">
         {icon && <span aria-hidden="true">{icon}</span>}
         {label}
       </p>
-      <p className={cn("text-xl font-semibold tabular-nums", valueClassName)}>
+      <p className={cn("font-mono text-[16px] font-semibold text-foreground", valueClassName)}>
         {displayValue}
       </p>
       {change != null && (

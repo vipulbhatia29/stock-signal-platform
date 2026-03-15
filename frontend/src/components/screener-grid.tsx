@@ -23,7 +23,7 @@ function StockCard({ item, animationDelay = 0 }: { item: BulkSignalItem; animati
   return (
     <div
       className={cn(
-        "group rounded-lg border bg-card overflow-hidden cursor-pointer hover:border-primary/50 transition-colors",
+        "group rounded-lg border border-border bg-card overflow-hidden cursor-pointer hover:bg-hov hover:border-[var(--bhi)] transition-colors",
         animationDelay !== undefined && "animate-fade-slide-up",
       )}
       style={animationDelay !== undefined ? ({ '--stagger-delay': `${animationDelay}ms` } as React.CSSProperties) : undefined}

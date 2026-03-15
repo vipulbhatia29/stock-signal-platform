@@ -32,6 +32,7 @@ export function PaginationControls({
           size="sm"
           disabled={page === 0}
           onClick={() => onPageChange(page - 1)}
+          className="bg-card2 border-border hover:bg-hov"
         >
           Previous
         </Button>
@@ -40,6 +41,7 @@ export function PaginationControls({
           size="sm"
           disabled={page >= totalPages - 1}
           onClick={() => onPageChange(page + 1)}
+          className="bg-card2 border-border hover:bg-hov"
         >
           Next
         </Button>

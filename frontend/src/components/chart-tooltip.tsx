@@ -17,7 +17,7 @@ export function ChartTooltip({ active, label, items }: ChartTooltipProps) {
   if (!active || !items.length) return null;
 
   return (
-    <div className="rounded-lg border bg-popover px-3 py-2 text-sm shadow-md">
+    <div className="rounded-lg border border-border bg-card2 px-3 py-2 text-sm shadow-md">
       <p className="mb-1.5 font-medium">{label}</p>
       {items.map((item) => (
         <div key={item.name} className="flex items-center gap-2">
@@ -28,8 +28,8 @@ export function ChartTooltip({ active, label, items }: ChartTooltipProps) {
               aria-hidden="true"
             />
           )}
-          <span className="text-muted-foreground">{item.name}:</span>
-          <span className="tabular-nums">{item.value}</span>
+          <span className="text-subtle">{item.name}:</span>
+          <span className="font-mono tabular-nums text-foreground">{item.value}</span>
         </div>
       ))}
     </div>

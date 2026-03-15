@@ -53,6 +53,7 @@ export function SignalHistoryChart({ ticker }: SignalHistoryChartProps) {
         <XAxis
           dataKey="computed_at"
           tickFormatter={formatChartDate}
+          interval={Math.max(0, Math.floor(history.length / 5) - 1)}
           {...CHART_STYLE.axis}
         />
         <YAxis

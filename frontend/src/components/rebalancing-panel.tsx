@@ -33,10 +33,10 @@ export function RebalancingPanel({ suggestions }: Props) {
           {subtitle}
         </span>
       </SectionHeading>
-      <div className="rounded-lg border border-border overflow-hidden mt-3">
+      <div className="rounded-lg border border-border bg-card overflow-hidden mt-3">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-muted/30">
+            <tr className="border-b border-border bg-card2">
               <th className="text-left px-4 py-2 font-medium text-muted-foreground">
                 Ticker
               </th>
@@ -59,7 +59,7 @@ export function RebalancingPanel({ suggestions }: Props) {
               <tr
                 key={s.ticker}
                 className={cn(
-                  "border-b border-border last:border-0 transition-colors hover:bg-muted/20",
+                  "border-b border-border last:border-0 transition-colors hover:bg-hov",
                   s.action === "BUY_MORE" &&
                     "border-l-2 border-l-[var(--color-gain)]"
                 )}
@@ -86,7 +86,7 @@ export function RebalancingPanel({ suggestions }: Props) {
                     }
                     className={cn(
                       s.action === "AT_CAP" &&
-                        "text-amber-500 border-amber-500"
+                        "text-warning border-warning"
                     )}
                   >
                     {ACTION_LABEL[s.action]}

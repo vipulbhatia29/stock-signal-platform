@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StockSignal — UI Prototype v5</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:    #070d18;  --card:  #0b1525;  --card2: #0f1d32;  --hov:   #121f33;
+      --b:     rgba(255,255,255,0.07);  --bhi: rgba(56,189,248,0.22);
+      --t1:#e8f0ff; --t2:#6a80a8; --t3:#2d3e5a;
+      --cyan:#38bdf8; --cdim:rgba(56,189,248,.12); --cg:rgba(56,189,248,.35);
+      --gain:#22d3a0; --gdim:rgba(34,211,160,.11);
+      --loss:#f87171; --ldim:rgba(248,113,113,.11);
+      --warn:#fbbf24; --wdim:rgba(251,191,36,.09);
+      --sw:54px; --cp:280px; --cp-min:240px; --cp-max:520px;
+      --fu:'Sora',sans-serif; --fm:'JetBrains Mono',monospace;
+      --r:10px;
+    }
+    html,body { height:100%; background:var(--bg); color:var(--t1); font-family:var(--fu); font-size:13px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+
+    /* ── Shell ── */
+    .app { display:flex; height:100vh; overflow:hidden; }
+
+    /* ── Sidebar ── */
+    .sb { width:var(--sw); min-width:var(--sw); background:var(--card); border-right:1px solid var(--b); display:flex; flex-direction:column; align-items:center; padding:14px 0 12px; z-index:20; flex-shrink:0; }
+    .sb-logo { width:28px; height:28px; background:var(--cyan); border-radius:7px; display:flex; align-items:center; justify-content:center; margin-bottom:20px; box-shadow:0 0 18px var(--cg); }
+    .sb-logo svg { color:#070d18; }
+    .sb-nav { display:flex; flex-direction:column; align-items:center; gap:1px; flex:1; width:100%; }
+    .sb-bot { display:flex; flex-direction:column; align-items:center; gap:1px; width:100%; }
+    .si { position:relative; width:100%; height:40px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--t3); transition:color .15s; }
+    .si:hover { color:var(--t2); }
+    .si.on { color:var(--cyan); }
+    .si.on::before { content:''; position:absolute; left:0; top:50%; transform:translateY(-50%); width:2px; height:20px; background:var(--cyan); border-radius:0 2px 2px 0; box-shadow:0 0 8px var(--cg); }
+    .si-ic { width:32px; height:32px; border-radius:7px; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+    .si:hover .si-ic { background:var(--hov); }
+    .si.on .si-ic { background:var(--cdim); }
+    .si .tip { position:absolute; left:calc(100% + 8px); top:50%; transform:translateY(-50%); background:var(--card2); border:1px solid var(--b); color:var(--t1); padding:3px 8px; border-radius:5px; font-size:11px; white-space:nowrap; pointer-events:none; opacity:0; transition:opacity .12s; z-index:100; }
+    .si:hover .tip { opacity:1; }
+    .av { width:26px; height:26px; border-radius:50%; background:linear-gradient(135deg,#38bdf8,#6366f1); display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; color:#fff; cursor:pointer; }
+
+    /* ── Center ── */
+    .center { flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+
+    /* ── Topbar ── */
+    .tb { display:flex; align-items:center; justify-content:space-between; padding:0 18px; height:46px; border-bottom:1px solid var(--b); background:var(--bg); flex-shrink:0; z-index:10; }
+    .tb-l { display:flex; align-items:center; gap:5px; }
+    .tb-br { font-size:11.5px; color:var(--t3); font-weight:500; }
+    .tb-sp { color:var(--t3); }
+    .tb-pg { font-size:13px; font-weight:600; color:var(--t1); }
+    .tb-s { position:relative; display:flex; align-items:center; }
+    .tb-s input { background:var(--card); border:1px solid var(--b); border-radius:7px; padding:5px 46px 5px 28px; color:var(--t1); font-family:var(--fu); font-size:12px; width:200px; outline:none; transition:border-color .15s,width .2s; }
+    .tb-s input:focus { border-color:var(--bhi); width:250px; }
+    .tb-s input::placeholder { color:var(--t3); }
+    .tb-si { position:absolute; left:9px; color:var(--t3); pointer-events:none; }
+    .tb-k { position:absolute; right:7px; background:var(--hov); border:1px solid var(--b); color:var(--t3); font-size:9.5px; font-family:var(--fm); padding:1px 5px; border-radius:4px; pointer-events:none; }
+    .tb-r { display:flex; align-items:center; gap:8px; }
+    .chip { display:flex; align-items:center; gap:5px; background:var(--card); border:1px solid var(--b); border-radius:20px; padding:3px 9px; font-size:11px; color:var(--t2); cursor:pointer; }
+    .dot { width:5px; height:5px; border-radius:50%; }
+    .dot-g { background:var(--gain); box-shadow:0 0 5px var(--gain); }
+    /* AI chat toggle btn */
+    .chat-btn { display:flex; align-items:center; gap:5px; background:var(--cdim); border:1px solid var(--bhi); border-radius:20px; padding:3px 11px; font-size:11px; color:var(--cyan); cursor:pointer; font-weight:500; transition:background .15s; }
+    .chat-btn:hover { background:rgba(56,189,248,.2); }
+    .chat-btn.on { background:var(--cyan); color:#070d18; }
+
+    /* ── Main area (scrollable) ── */
+    .main { flex:1; overflow-y:auto; display:flex; flex-direction:column; }
+    .content { padding:14px 18px; display:flex; flex-direction:column; gap:12px; flex:1; }
+
+    /* ── Section ── */
+    .sec { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
+    .sec-l { font-size:9.5px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:var(--t3); }
+    .sec-r { font-size:10.5px; color:var(--t3); }
+
+    /* ── Card base ── */
+    .card { background:var(--card); border:1px solid var(--b); border-radius:var(--r); position:relative; overflow:hidden; }
+    .ac::after { content:''; position:absolute; top:0; left:0; right:0; height:1px; }
+    .ac-c::after { background:linear-gradient(90deg,var(--cyan) 0%,transparent 55%); }
+    .ac-g::after { background:linear-gradient(90deg,var(--gain) 0%,transparent 55%); }
+    .ac-l::after { background:linear-gradient(90deg,var(--loss) 0%,transparent 55%); }
+
+    /* ── Index grid ── */
+    .idx-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:9px; }
+    .idx-card { padding:11px 13px 9px; }
+    .idx-top { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:4px; }
+    .idx-name { font-size:10px; font-weight:600; color:var(--t2); text-transform:uppercase; letter-spacing:.07em; }
+    .idx-val { font-family:var(--fm); font-size:17px; font-weight:600; color:var(--t1); letter-spacing:-.02em; }
+    .cg { font-family:var(--fm); font-size:11px; font-weight:600; color:var(--gain); }
+    .cl { font-family:var(--fm); font-size:11px; font-weight:600; color:var(--loss); }
+
+    /* ── Stat tiles row ── */
+    .tiles { display:grid; grid-template-columns:repeat(5,1fr); gap:9px; }
+    .tile { padding:13px 14px 13px; cursor:pointer; transition:border-color .15s; }
+    .tile:hover { border-color:var(--bhi); }
+    .tile-lbl { font-size:9.5px; font-weight:500; text-transform:uppercase; letter-spacing:.09em; color:var(--t3); margin-bottom:5px; }
+    .tile-val { font-family:var(--fm); font-size:20px; font-weight:700; letter-spacing:-.02em; color:var(--t1); line-height:1; }
+    .tile-sub { display:flex; align-items:center; gap:6px; margin-top:5px; flex-wrap:wrap; }
+    .tile-meta { font-size:10px; font-family:var(--fm); color:var(--t3); margin-top:4px; line-height:1.7; }
+
+    /* Signals 3-cell */
+    .sig3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:5px; margin-top:7px; }
+    .sc { text-align:center; border-radius:6px; padding:7px 4px; }
+    .sn { font-family:var(--fm); font-size:20px; font-weight:700; line-height:1; }
+    .sx { font-size:9px; font-weight:600; letter-spacing:.07em; text-transform:uppercase; margin-top:2px; }
+    .cb { background:var(--gdim); } .cb .sn,.cb .sx { color:var(--gain); }
+    .ch { background:var(--wdim); }  .ch .sn,.ch .sx { color:var(--warn); }
+    .cs { background:var(--ldim); } .cs .sn,.cs .sx { color:var(--loss); }
+
+    /* Donut */
+    .donut-wrap { display:flex; align-items:center; gap:10px; margin-top:8px; }
+    .donut { width:72px; height:72px; border-radius:50%; flex-shrink:0;
+      background:conic-gradient(var(--cyan) 0% 58%, var(--warn) 58% 80%, #a78bfa 80% 100%);
+      display:flex; align-items:center; justify-content:center; }
+    .donut-hole { width:46px; height:46px; border-radius:50%; background:var(--card); display:flex; align-items:center; justify-content:center; }
+    .donut-ctr { font-size:9px; text-align:center; color:var(--t2); font-weight:500; line-height:1.4; }
+    .dl { display:flex; flex-direction:column; gap:4px; flex:1; }
+    .dl-r { display:flex; align-items:center; gap:5px; }
+    .dl-d { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+    .dl-n { font-size:10px; color:var(--t2); flex:1; }
+    .dl-p { font-size:10px; font-family:var(--fm); color:var(--t3); }
+
+    /* ── Watchlist ── */
+    .wl-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; }
+    .wl-card { background:var(--card); border:1px solid var(--b); border-radius:var(--r); padding:12px 13px; display:flex; flex-direction:column; gap:9px; cursor:pointer; transition:border-color .15s,background .15s; position:relative; overflow:hidden; }
+    .wl-card:hover { border-color:var(--bhi); background:var(--hov); }
+    .wl-top { display:flex; align-items:flex-start; justify-content:space-between; }
+    .wl-t { font-family:var(--fm); font-size:14px; font-weight:600; color:var(--t1); }
+    .wl-n { font-size:10px; color:var(--t3); margin-top:2px; }
+    .wl-p { font-family:var(--fm); font-size:14px; font-weight:600; color:var(--t1); text-align:right; }
+    .wl-bot { display:flex; align-items:center; justify-content:space-between; }
+    .sc-w { display:flex; align-items:center; gap:5px; }
+    .sc-tr { width:48px; height:3px; background:rgba(255,255,255,.06); border-radius:2px; overflow:hidden; }
+    .sc-fi { height:100%; border-radius:2px; }
+    .sc-v { font-size:9.5px; font-family:var(--fm); color:var(--t3); }
+
+    /* ── Badges ── */
+    .b { display:inline-flex; align-items:center; padding:2px 6px; border-radius:4px; font-size:10px; font-weight:600; font-family:var(--fm); }
+    .bg { background:var(--gdim); color:var(--gain); }
+    .bl { background:var(--ldim); color:var(--loss); }
+    .bc { background:var(--cdim); color:var(--cyan); }
+    .bw { background:var(--wdim); color:var(--warn); }
+
+    .sp { display:inline-flex; align-items:center; padding:2px 8px; border-radius:20px; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; }
+    .sp-b { background:var(--gdim); color:var(--gain); border:1px solid rgba(34,211,160,.2); }
+    .sp-h { background:var(--wdim); color:var(--warn); border:1px solid rgba(251,191,36,.18); }
+    .sp-s { background:var(--ldim); color:var(--loss); border:1px solid rgba(248,113,113,.2); }
+
+    /* ── Buttons ── */
+    .btn { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; font-family:var(--fu); font-size:11px; font-weight:500; cursor:pointer; border:none; }
+    .btn-o { background:transparent; color:var(--t3); border:1px solid var(--b); }
+    .btn-o:hover { background:var(--hov); color:var(--t2); }
+    .btn-c { background:var(--cdim); color:var(--cyan); border:1px solid rgba(56,189,248,.18); }
+    .btn-c:hover { background:rgba(56,189,248,.2); }
+
+    /* ── Time filters ── */
+    .tfs { display:flex; gap:1px; }
+    .tf { padding:2px 7px; border-radius:4px; font-size:9.5px; font-family:var(--fm); cursor:pointer; color:var(--t3); }
+    .tf:hover { color:var(--t2); }
+    .tf.on { background:var(--cdim); color:var(--cyan); font-weight:600; }
+
+    /* ── AI Chat Panel ── */
+    .chat-panel {
+      width:var(--cp); min-width:var(--cp);
+      background:var(--card); border-left:1px solid var(--b);
+      display:flex; flex-direction:column;
+      transform:translateX(100%);
+      transition:transform .25s cubic-bezier(.22,.68,0,1.1);
+      flex-shrink:0; overflow:hidden; position:relative;
+    }
+    .chat-panel.open { transform:translateX(0); }
+    /* Drag-resize handle */
+    .cp-resize {
+      position:absolute; left:0; top:0; bottom:0; width:5px;
+      cursor:col-resize; z-index:10;
+      background:transparent;
+      transition:background .15s;
+    }
+    .cp-resize:hover, .cp-resize.dragging { background:var(--bhi); }
+    /* Prevent text selection while dragging */
+    body.resizing { user-select:none; cursor:col-resize; }
+    .cp-head { padding:14px 16px 12px; border-bottom:1px solid var(--b); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+    .cp-title { font-size:13px; font-weight:600; color:var(--t1); display:flex; align-items:center; gap:7px; }
+    .cp-dot { width:7px; height:7px; border-radius:50%; background:var(--gain); box-shadow:0 0 5px var(--gain); }
+    .cp-sub { font-size:10px; color:var(--t3); margin-top:1px; }
+    .cp-close { width:24px; height:24px; border-radius:5px; background:var(--hov); border:1px solid var(--b); color:var(--t2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:12px; }
+    .cp-close:hover { color:var(--t1); }
+    .cp-msgs { flex:1; overflow-y:auto; padding:14px 14px 8px; display:flex; flex-direction:column; gap:10px; }
+    .cp-msg { display:flex; flex-direction:column; gap:2px; }
+    .cp-msg.user { align-items:flex-end; }
+    .cp-bubble {
+      max-width:85%; padding:8px 11px; border-radius:10px;
+      font-size:12px; line-height:1.5;
+    }
+    .cp-msg.bot .cp-bubble { background:var(--card2); border:1px solid var(--b); color:var(--t1); border-radius:10px 10px 10px 3px; }
+    .cp-msg.user .cp-bubble { background:var(--cyan); color:#070d18; font-weight:500; border-radius:10px 10px 3px 10px; }
+    .cp-time { font-size:9.5px; color:var(--t3); padding:0 4px; }
+    .cp-suggest { display:flex; flex-wrap:wrap; gap:5px; padding:8px 14px; border-top:1px solid var(--b); flex-shrink:0; }
+    .cp-pill { background:var(--card2); border:1px solid var(--b); color:var(--t2); padding:4px 9px; border-radius:20px; font-size:10.5px; cursor:pointer; transition:border-color .12s,color .12s; white-space:nowrap; }
+    .cp-pill:hover { border-color:var(--bhi); color:var(--cyan); }
+    .cp-input-wrap { display:flex; align-items:center; gap:8px; padding:10px 14px; border-top:1px solid var(--b); flex-shrink:0; }
+    .cp-input { flex:1; background:var(--card2); border:1px solid var(--b); border-radius:8px; padding:7px 12px; color:var(--t1); font-family:var(--fu); font-size:12px; outline:none; resize:none; transition:border-color .15s; }
+    .cp-input:focus { border-color:var(--bhi); }
+    .cp-input::placeholder { color:var(--t3); }
+    .cp-send { width:32px; height:32px; border-radius:8px; background:var(--cyan); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:opacity .15s; }
+    .cp-send:hover { opacity:.85; }
+    .cp-send svg { color:#070d18; }
+
+    /* ── Portfolio bottom drawer ── */
+    .drawer-backdrop {
+      display:none; position:fixed; inset:0;
+      background:rgba(7,13,24,.7); backdrop-filter:blur(3px);
+      z-index:40;
+    }
+    .drawer-backdrop.open { display:block; }
+    .drawer {
+      position:fixed; left:var(--sw); right:0; bottom:0;
+      height:0; overflow:hidden;
+      background:var(--card); border-top:1px solid var(--bhi);
+      border-radius:14px 14px 0 0;
+      z-index:50;
+      transition:height .3s cubic-bezier(.22,.68,0,1.1), right .25s cubic-bezier(.22,.68,0,1.1);
+      box-shadow:0 -20px 60px rgba(56,189,248,.08);
+    }
+    .drawer.open { height:62vh; overflow:auto; }
+    /* When chat panel is open, drawer stops before the panel */
+    body.chat-open .drawer { right:var(--cp); }
+    .drawer-inner { padding:20px 28px 28px; }
+    .drawer-handle { width:36px; height:4px; background:var(--b); border-radius:2px; margin:0 auto 18px; cursor:pointer; }
+    .drawer-close { position:absolute; top:16px; right:20px; width:28px; height:28px; border-radius:6px; background:var(--hov); border:1px solid var(--b); color:var(--t2); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:13px; }
+    .drawer-close:hover { color:var(--t1); }
+    .drawer-head { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:16px; padding-right:40px; }
+    .drawer-val { font-family:var(--fm); font-size:30px; font-weight:700; letter-spacing:-.03em; color:var(--t1); }
+    .drawer-stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-top:20px; }
+    .dstat { background:var(--card2); border-radius:8px; padding:10px 13px; }
+    .dstat-l { font-size:9px; text-transform:uppercase; letter-spacing:.08em; color:var(--t3); margin-bottom:4px; }
+    .dstat-v { font-family:var(--fm); font-size:16px; font-weight:600; color:var(--t1); }
+
+    ::-webkit-scrollbar { width:3px; }
+    ::-webkit-scrollbar-thumb { background:rgba(255,255,255,.06); border-radius:4px; }
+
+    @keyframes fu { from{opacity:0;transform:translateY(5px)} to{opacity:1;transform:translateY(0)} }
+    .wl-card { animation:fu .25s ease both; }
+    .wl-card:nth-child(1){animation-delay:0ms} .wl-card:nth-child(2){animation-delay:30ms}
+    .wl-card:nth-child(3){animation-delay:60ms} .wl-card:nth-child(4){animation-delay:90ms}
+    .wl-card:nth-child(5){animation-delay:50ms} .wl-card:nth-child(6){animation-delay:80ms}
+    .wl-card:nth-child(7){animation-delay:110ms} .wl-card:nth-child(8){animation-delay:140ms}
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sb">
+    <div class="sb-logo">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>
+      </svg>
+    </div>
+    <nav class="sb-nav">
+      <div class="si on"><div class="si-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></div><span class="tip">Dashboard</span></div>
+      <div class="si"><div class="si-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3" cy="6" r="1"/><circle cx="3" cy="12" r="1"/><circle cx="3" cy="18" r="1"/></svg></div><span class="tip">Screener</span></div>
+      <div class="si"><div class="si-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div><span class="tip">Portfolio</span></div>
+      <div class="si"><div class="si-ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div><span class="tip">AI Analyst</span></div>
+    </nav>
+    <div class="sb-bot">
+      <div class="si"><div class="si-ic"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/></svg></div><span class="tip">Theme</span></div>
+      <div class="si"><div class="av">V</div><span class="tip">Vipul</span></div>
+    </div>
+  </aside>
+
+  <!-- ── Center column ── -->
+  <div class="center">
+
+    <!-- Topbar -->
+    <div class="tb">
+      <div class="tb-l">
+        <span class="tb-br">StockSignal</span><span class="tb-sp">/</span><span class="tb-pg">Dashboard</span>
+      </div>
+      <div class="tb-s">
+        <svg class="tb-si" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" placeholder="Search ticker…" />
+        <span class="tb-k">⌘K</span>
+      </div>
+      <div class="tb-r">
+        <div class="chip"><span class="dot dot-g"></span>Market Open</div>
+        <div class="chip">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          3 signals
+        </div>
+        <div class="chat-btn" id="chatToggle" onclick="toggleChat()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          AI Analyst
+        </div>
+        <div class="av" style="width:28px;height:28px;font-size:11px;">V</div>
+      </div>
+    </div>
+
+    <!-- Scrollable main -->
+    <div class="main">
+      <div class="content">
+
+        <!-- ── Market Indexes ── -->
+        <div>
+          <div class="sec"><span class="sec-l">Market Indexes</span><span class="sec-r">Updated 2 min ago</span></div>
+          <div class="idx-grid">
+            <div class="card ac ac-g idx-card">
+              <div class="idx-top"><span class="idx-name">S&amp;P 500</span><span class="cg">+0.74%</span></div>
+              <div class="idx-val">5,842.47</div>
+              <svg viewBox="0 0 200 36" width="100%" height="36" preserveAspectRatio="none" style="margin-top:7px;display:block;">
+                <defs><linearGradient id="ig1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#22d3a0" stop-opacity="0.2"/><stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/></linearGradient></defs>
+                <polyline points="0,27 8,25 14,28 20,23 26,26 32,21 38,24 44,19 52,22 58,17 64,20 70,15 76,18 82,13 88,16 94,12 100,15 108,10 114,13 120,9 126,12 132,8 138,11 144,7 150,10 156,6 162,9 168,5 176,8 182,5 190,3 200,1" fill="none" stroke="#22d3a0" stroke-width="1.5" stroke-linejoin="round"/>
+                <polygon points="0,27 8,25 14,28 20,23 26,26 32,21 38,24 44,19 52,22 58,17 64,20 70,15 76,18 82,13 88,16 94,12 100,15 108,10 114,13 120,9 126,12 132,8 138,11 144,7 150,10 156,6 162,9 168,5 176,8 182,5 190,3 200,1 200,30 0,30" fill="url(#ig1)"/>
+                <rect x="0" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="8" y="30" width="5" height="4" fill="rgba(34,211,160,.28)" rx="1"/><rect x="16" y="31" width="5" height="3" fill="rgba(34,211,160,.18)" rx="1"/><rect x="24" y="29" width="5" height="5" fill="rgba(34,211,160,.32)" rx="1"/><rect x="32" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="40" y="30" width="5" height="4" fill="rgba(34,211,160,.25)" rx="1"/><rect x="48" y="31" width="5" height="3" fill="rgba(34,211,160,.18)" rx="1"/><rect x="56" y="29" width="5" height="5" fill="rgba(34,211,160,.35)" rx="1"/><rect x="64" y="30" width="5" height="4" fill="rgba(34,211,160,.22)" rx="1"/><rect x="72" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="80" y="29" width="5" height="5" fill="rgba(34,211,160,.3)" rx="1"/><rect x="88" y="30" width="5" height="4" fill="rgba(34,211,160,.25)" rx="1"/><rect x="96" y="31" width="5" height="3" fill="rgba(34,211,160,.18)" rx="1"/><rect x="104" y="29" width="5" height="5" fill="rgba(34,211,160,.32)" rx="1"/><rect x="112" y="30" width="5" height="4" fill="rgba(34,211,160,.22)" rx="1"/><rect x="120" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="128" y="29" width="5" height="5" fill="rgba(34,211,160,.28)" rx="1"/><rect x="136" y="31" width="5" height="3" fill="rgba(34,211,160,.18)" rx="1"/><rect x="144" y="30" width="5" height="4" fill="rgba(34,211,160,.25)" rx="1"/><rect x="152" y="29" width="5" height="5" fill="rgba(34,211,160,.35)" rx="1"/><rect x="160" y="30" width="5" height="4" fill="rgba(34,211,160,.22)" rx="1"/><rect x="168" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="176" y="29" width="5" height="5" fill="rgba(34,211,160,.3)" rx="1"/><rect x="184" y="30" width="5" height="4" fill="rgba(34,211,160,.25)" rx="1"/><rect x="192" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/>
+              </svg>
+            </div>
+            <div class="card ac ac-g idx-card">
+              <div class="idx-top"><span class="idx-name">NASDAQ 100</span><span class="cg">+1.12%</span></div>
+              <div class="idx-val">20,381.10</div>
+              <svg viewBox="0 0 200 36" width="100%" height="36" preserveAspectRatio="none" style="margin-top:7px;display:block;">
+                <defs><linearGradient id="ig2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#22d3a0" stop-opacity="0.2"/><stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/></linearGradient></defs>
+                <polyline points="0,29 6,27 12,30 18,24 24,27 30,21 36,25 42,19 50,22 56,16 62,20 68,14 74,18 80,12 86,16 92,10 98,14 106,8 112,12 118,6 124,10 130,4 136,8 142,3 150,7 156,2 162,6 168,1 176,5 182,2 192,0 200,0" fill="none" stroke="#22d3a0" stroke-width="1.5" stroke-linejoin="round"/>
+                <polygon points="0,29 6,27 12,30 18,24 24,27 30,21 36,25 42,19 50,22 56,16 62,20 68,14 74,18 80,12 86,16 92,10 98,14 106,8 112,12 118,6 124,10 130,4 136,8 142,3 150,7 156,2 162,6 168,1 176,5 182,2 192,0 200,0 200,30 0,30" fill="url(#ig2)"/>
+                <rect x="0" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="8" y="29" width="5" height="5" fill="rgba(34,211,160,.3)" rx="1"/><rect x="16" y="31" width="5" height="3" fill="rgba(34,211,160,.18)" rx="1"/><rect x="24" y="30" width="5" height="4" fill="rgba(34,211,160,.25)" rx="1"/><rect x="32" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="40" y="29" width="5" height="5" fill="rgba(34,211,160,.35)" rx="1"/><rect x="48" y="30" width="5" height="4" fill="rgba(34,211,160,.25)" rx="1"/><rect x="56" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="64" y="29" width="5" height="5" fill="rgba(34,211,160,.3)" rx="1"/><rect x="72" y="30" width="5" height="4" fill="rgba(34,211,160,.25)" rx="1"/><rect x="80" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="88" y="29" width="5" height="5" fill="rgba(34,211,160,.32)" rx="1"/><rect x="96" y="30" width="5" height="4" fill="rgba(34,211,160,.25)" rx="1"/><rect x="104" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="112" y="29" width="5" height="5" fill="rgba(34,211,160,.35)" rx="1"/><rect x="120" y="30" width="5" height="4" fill="rgba(34,211,160,.3)" rx="1"/><rect x="128" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="136" y="29" width="5" height="5" fill="rgba(34,211,160,.3)" rx="1"/><rect x="144" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="152" y="30" width="5" height="4" fill="rgba(34,211,160,.25)" rx="1"/><rect x="160" y="29" width="5" height="5" fill="rgba(34,211,160,.35)" rx="1"/><rect x="168" y="31" width="5" height="3" fill="rgba(34,211,160,.2)" rx="1"/><rect x="176" y="30" width="5" height="4" fill="rgba(34,211,160,.3)" rx="1"/><rect x="184" y="31" width="5" height="3" fill="rgba(34,211,160,.25)" rx="1"/><rect x="192" y="29" width="5" height="5" fill="rgba(34,211,160,.3)" rx="1"/>
+              </svg>
+            </div>
+            <div class="card ac ac-l idx-card">
+              <div class="idx-top"><span class="idx-name">Dow Jones</span><span class="cl">−0.28%</span></div>
+              <div class="idx-val">43,191.22</div>
+              <svg viewBox="0 0 200 36" width="100%" height="36" preserveAspectRatio="none" style="margin-top:7px;display:block;">
+                <defs><linearGradient id="ig3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f87171" stop-opacity="0.18"/><stop offset="100%" stop-color="#f87171" stop-opacity="0"/></linearGradient></defs>
+                <polyline points="0,7 6,9 12,6 18,10 24,8 30,12 36,9 42,13 48,11 54,15 60,12 66,16 70,14 76,18 82,15 88,19 94,16 100,20 108,17 114,21 120,18 126,22 132,19 138,23 144,20 150,24 156,21 162,25 168,22 176,25 182,23 190,26 200,28" fill="none" stroke="#f87171" stroke-width="1.5" stroke-linejoin="round"/>
+                <polygon points="0,7 6,9 12,6 18,10 24,8 30,12 36,9 42,13 48,11 54,15 60,12 66,16 70,14 76,18 82,15 88,19 94,16 100,20 108,17 114,21 120,18 126,22 132,19 138,23 144,20 150,24 156,21 162,25 168,22 176,25 182,23 190,26 200,28 200,30 0,30" fill="url(#ig3)"/>
+                <rect x="0" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="8" y="30" width="5" height="4" fill="rgba(248,113,113,.25)" rx="1"/><rect x="16" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="24" y="29" width="5" height="5" fill="rgba(248,113,113,.3)" rx="1"/><rect x="32" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="40" y="30" width="5" height="4" fill="rgba(248,113,113,.25)" rx="1"/><rect x="48" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="56" y="29" width="5" height="5" fill="rgba(248,113,113,.35)" rx="1"/><rect x="64" y="30" width="5" height="4" fill="rgba(248,113,113,.25)" rx="1"/><rect x="72" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="80" y="29" width="5" height="5" fill="rgba(248,113,113,.3)" rx="1"/><rect x="88" y="30" width="5" height="4" fill="rgba(248,113,113,.25)" rx="1"/><rect x="96" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="104" y="29" width="5" height="5" fill="rgba(248,113,113,.35)" rx="1"/><rect x="112" y="30" width="5" height="4" fill="rgba(248,113,113,.25)" rx="1"/><rect x="120" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="128" y="29" width="5" height="5" fill="rgba(248,113,113,.3)" rx="1"/><rect x="136" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="144" y="30" width="5" height="4" fill="rgba(248,113,113,.25)" rx="1"/><rect x="152" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="160" y="29" width="5" height="5" fill="rgba(248,113,113,.35)" rx="1"/><rect x="168" y="30" width="5" height="4" fill="rgba(248,113,113,.3)" rx="1"/><rect x="176" y="31" width="5" height="3" fill="rgba(248,113,113,.2)" rx="1"/><rect x="184" y="29" width="5" height="5" fill="rgba(248,113,113,.3)" rx="1"/><rect x="192" y="31" width="5" height="3" fill="rgba(248,113,113,.25)" rx="1"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Stat tiles (5 across) ── -->
+        <div>
+          <div class="sec"><span class="sec-l">Overview</span></div>
+          <div class="tiles">
+
+            <!-- Portfolio value — clickable → drawer -->
+            <div class="card ac ac-c tile" onclick="openDrawer()" style="cursor:pointer;">
+              <div class="tile-lbl">Portfolio Value</div>
+              <div class="tile-val">$124,830</div>
+              <div class="tile-sub"><span class="b bg">+$2,140</span><span style="font-size:10px;font-family:var(--fm);color:var(--t3);">today</span></div>
+              <div class="tile-meta">+18.4% all time</div>
+              <div style="display:flex;align-items:center;gap:4px;margin-top:6px;font-size:9.5px;color:var(--t3);">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                Expand chart
+              </div>
+            </div>
+
+            <!-- Unrealized P&L -->
+            <div class="card ac ac-g tile">
+              <div class="tile-lbl">Unrealized P&amp;L</div>
+              <div class="tile-val" style="color:var(--gain);">+$22,940</div>
+              <div class="tile-sub"><span class="b bg">+22.5%</span></div>
+              <div class="tile-meta">Day +$2,140<br>Week +$4,280</div>
+            </div>
+
+            <!-- Signals summary -->
+            <div class="card tile" style="padding-bottom:13px;">
+              <div class="tile-lbl">Signals</div>
+              <div class="sig3">
+                <div class="sc cb"><div class="sn">4</div><div class="sx">Buy</div></div>
+                <div class="sc ch"><div class="sn">7</div><div class="sx">Hold</div></div>
+                <div class="sc cs"><div class="sn">1</div><div class="sx">Sell</div></div>
+              </div>
+            </div>
+
+            <!-- Top signal -->
+            <div class="card ac ac-c tile">
+              <div class="tile-lbl">Top Signal</div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px;">
+                <div style="font-family:var(--fm);font-size:20px;font-weight:700;color:var(--t1);">NVDA</div>
+                <span class="sp sp-b">Buy</span>
+              </div>
+              <div class="tile-meta" style="margin-top:5px;">Score 87/100<br>NVIDIA Corp</div>
+              <svg viewBox="0 0 100 18" width="100%" height="18" preserveAspectRatio="none" style="margin-top:7px;">
+                <polyline points="0,16 10,13 18,15 26,10 34,13 42,7 50,10 58,5 66,8 74,3 82,6 90,1 100,0" fill="none" stroke="#22d3a0" stroke-width="1.4" stroke-linejoin="round"/>
+              </svg>
+            </div>
+
+            <!-- Allocation donut -->
+            <div class="card tile" style="padding-bottom:13px;">
+              <div class="tile-lbl">Allocation</div>
+              <div class="donut-wrap">
+                <div class="donut"><div class="donut-hole"><div class="donut-ctr">12<br>stocks</div></div></div>
+                <div class="dl">
+                  <div class="dl-r"><div class="dl-d" style="background:var(--cyan);"></div><span class="dl-n">Tech</span><span class="dl-p">58%</span></div>
+                  <div class="dl-r"><div class="dl-d" style="background:var(--warn);"></div><span class="dl-n">Finance</span><span class="dl-p">22%</span></div>
+                  <div class="dl-r"><div class="dl-d" style="background:#a78bfa;"></div><span class="dl-n">Consumer</span><span class="dl-p">20%</span></div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ── Watchlist ── -->
+        <div>
+          <div class="sec">
+            <div style="display:flex;align-items:center;gap:7px;">
+              <span class="sec-l">Watchlist</span>
+              <span style="font-size:10px;font-family:var(--fm);color:var(--t3);">12 stocks</span>
+            </div>
+            <div style="display:flex;gap:5px;">
+              <button class="btn btn-o"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>Filter</button>
+              <button class="btn btn-c"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>Refresh All</button>
+            </div>
+          </div>
+          <div class="wl-grid">
+
+            <div class="wl-card">
+              <div class="wl-top"><div><div class="wl-t">AAPL</div><div class="wl-n">Apple Inc.</div></div><div><div class="wl-p">$213.49</div><div style="text-align:right;margin-top:2px;"><span class="b bg">+1.24%</span></div></div></div>
+              <svg viewBox="0 0 140 30" width="100%" height="30" preserveAspectRatio="none"><defs><linearGradient id="wg1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#22d3a0" stop-opacity="0.2"/><stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/></linearGradient></defs><polyline points="0,24 8,22 14,25 20,20 26,23 32,17 38,20 44,15 52,18 58,13 64,16 72,11 78,14 84,9 90,12 96,8 104,11 110,6 118,9 124,5 130,8 136,4 140,3" fill="none" stroke="#22d3a0" stroke-width="1.5" stroke-linejoin="round"/><polygon points="0,24 8,22 14,25 20,20 26,23 32,17 38,20 44,15 52,18 58,13 64,16 72,11 78,14 84,9 90,12 96,8 104,11 110,6 118,9 124,5 130,8 136,4 140,3 140,30 0,30" fill="url(#wg1)"/></svg>
+              <div class="wl-bot"><span class="sp sp-b">Buy</span><div class="sc-w"><div class="sc-tr"><div class="sc-fi" style="width:78%;background:var(--cyan);"></div></div><span class="sc-v">78</span></div></div>
+            </div>
+
+            <div class="wl-card">
+              <div class="wl-top"><div><div class="wl-t">MSFT</div><div class="wl-n">Microsoft</div></div><div><div class="wl-p">$415.22</div><div style="text-align:right;margin-top:2px;"><span class="b bg">+0.88%</span></div></div></div>
+              <svg viewBox="0 0 140 30" width="100%" height="30" preserveAspectRatio="none"><defs><linearGradient id="wg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#22d3a0" stop-opacity="0.15"/><stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/></linearGradient></defs><polyline points="0,26 6,24 12,27 18,22 24,25 30,19 36,22 44,16 50,19 56,14 62,17 70,12 76,15 82,10 90,13 96,9 104,12 110,7 118,10 124,6 132,8 140,6" fill="none" stroke="#22d3a0" stroke-width="1.5" stroke-linejoin="round"/><polygon points="0,26 6,24 12,27 18,22 24,25 30,19 36,22 44,16 50,19 56,14 62,17 70,12 76,15 82,10 90,13 96,9 104,12 110,7 118,10 124,6 132,8 140,6 140,30 0,30" fill="url(#wg2)"/></svg>
+              <div class="wl-bot"><span class="sp sp-h">Hold</span><div class="sc-w"><div class="sc-tr"><div class="sc-fi" style="width:62%;background:var(--warn);"></div></div><span class="sc-v">62</span></div></div>
+            </div>
+
+            <div class="wl-card">
+              <div class="wl-top"><div><div class="wl-t">NVDA</div><div class="wl-n">NVIDIA Corp.</div></div><div><div class="wl-p">$875.60</div><div style="text-align:right;margin-top:2px;"><span class="b bg">+3.41%</span></div></div></div>
+              <svg viewBox="0 0 140 30" width="100%" height="30" preserveAspectRatio="none"><defs><linearGradient id="wg3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#22d3a0" stop-opacity="0.2"/><stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/></linearGradient></defs><polyline points="0,28 6,25 10,27 16,22 22,25 28,18 34,21 42,14 48,17 54,12 60,15 68,9 74,12 80,7 88,10 94,5 102,8 108,4 116,7 122,3 130,5 140,1" fill="none" stroke="#22d3a0" stroke-width="1.5" stroke-linejoin="round"/><polygon points="0,28 6,25 10,27 16,22 22,25 28,18 34,21 42,14 48,17 54,12 60,15 68,9 74,12 80,7 88,10 94,5 102,8 108,4 116,7 122,3 130,5 140,1 140,30 0,30" fill="url(#wg3)"/></svg>
+              <div class="wl-bot"><span class="sp sp-b">Buy</span><div class="sc-w"><div class="sc-tr"><div class="sc-fi" style="width:87%;background:var(--cyan);"></div></div><span class="sc-v">87</span></div></div>
+            </div>
+
+            <div class="wl-card">
+              <div class="wl-top"><div><div class="wl-t">TSLA</div><div class="wl-n">Tesla Inc.</div></div><div><div class="wl-p">$186.71</div><div style="text-align:right;margin-top:2px;"><span class="b bl">−2.14%</span></div></div></div>
+              <svg viewBox="0 0 140 30" width="100%" height="30" preserveAspectRatio="none"><defs><linearGradient id="wg4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f87171" stop-opacity="0.16"/><stop offset="100%" stop-color="#f87171" stop-opacity="0"/></linearGradient></defs><polyline points="0,4 6,6 12,3 18,7 24,5 30,9 36,7 44,11 50,9 56,13 62,10 70,14 76,12 82,16 90,13 96,17 104,15 110,19 118,16 124,20 132,18 140,22" fill="none" stroke="#f87171" stroke-width="1.5" stroke-linejoin="round"/><polygon points="0,4 6,6 12,3 18,7 24,5 30,9 36,7 44,11 50,9 56,13 62,10 70,14 76,12 82,16 90,13 96,17 104,15 110,19 118,16 124,20 132,18 140,22 140,30 0,30" fill="url(#wg4)"/></svg>
+              <div class="wl-bot"><span class="sp sp-s">Sell</span><div class="sc-w"><div class="sc-tr"><div class="sc-fi" style="width:28%;background:var(--loss);"></div></div><span class="sc-v">28</span></div></div>
+            </div>
+
+            <div class="wl-card">
+              <div class="wl-top"><div><div class="wl-t">AMZN</div><div class="wl-n">Amazon.com</div></div><div><div class="wl-p">$198.12</div><div style="text-align:right;margin-top:2px;"><span class="b bg">+0.55%</span></div></div></div>
+              <svg viewBox="0 0 140 30" width="100%" height="30" preserveAspectRatio="none"><defs><linearGradient id="wg5" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#22d3a0" stop-opacity="0.14"/><stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/></linearGradient></defs><polyline points="0,22 8,20 14,23 20,18 28,21 34,16 40,19 48,14 54,17 60,12 66,15 74,10 80,13 86,9 94,12 100,8 108,11 114,7 120,10 128,6 134,8 140,6" fill="none" stroke="#22d3a0" stroke-width="1.5" stroke-linejoin="round"/><polygon points="0,22 8,20 14,23 20,18 28,21 34,16 40,19 48,14 54,17 60,12 66,15 74,10 80,13 86,9 94,12 100,8 108,11 114,7 120,10 128,6 134,8 140,6 140,30 0,30" fill="url(#wg5)"/></svg>
+              <div class="wl-bot"><span class="sp sp-h">Hold</span><div class="sc-w"><div class="sc-tr"><div class="sc-fi" style="width:55%;background:var(--warn);"></div></div><span class="sc-v">55</span></div></div>
+            </div>
+
+            <div class="wl-card">
+              <div class="wl-top"><div><div class="wl-t">META</div><div class="wl-n">Meta Platforms</div></div><div><div class="wl-p">$521.30</div><div style="text-align:right;margin-top:2px;"><span class="b bg">+1.87%</span></div></div></div>
+              <svg viewBox="0 0 140 30" width="100%" height="30" preserveAspectRatio="none"><defs><linearGradient id="wg6" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#22d3a0" stop-opacity="0.18"/><stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/></linearGradient></defs><polyline points="0,25 6,23 12,26 18,21 24,24 30,18 36,21 44,15 50,18 58,13 64,16 72,10 78,13 84,8 92,11 98,6 106,9 112,5 120,8 126,4 132,6 140,3" fill="none" stroke="#22d3a0" stroke-width="1.5" stroke-linejoin="round"/><polygon points="0,25 6,23 12,26 18,21 24,24 30,18 36,21 44,15 50,18 58,13 64,16 72,10 78,13 84,8 92,11 98,6 106,9 112,5 120,8 126,4 132,6 140,3 140,30 0,30" fill="url(#wg6)"/></svg>
+              <div class="wl-bot"><span class="sp sp-b">Buy</span><div class="sc-w"><div class="sc-tr"><div class="sc-fi" style="width:72%;background:var(--cyan);"></div></div><span class="sc-v">72</span></div></div>
+            </div>
+
+            <div class="wl-card">
+              <div class="wl-top"><div><div class="wl-t">GOOGL</div><div class="wl-n">Alphabet Inc.</div></div><div><div class="wl-p">$178.45</div><div style="text-align:right;margin-top:2px;"><span class="b bl">−0.33%</span></div></div></div>
+              <svg viewBox="0 0 140 30" width="100%" height="30" preserveAspectRatio="none"><defs><linearGradient id="wg7" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#f87171" stop-opacity="0.13"/><stop offset="100%" stop-color="#f87171" stop-opacity="0"/></linearGradient></defs><polyline points="0,13 8,11 14,14 20,12 28,15 34,13 40,16 48,14 54,17 60,15 68,18 74,16 82,19 88,17 96,20 102,18 110,21 118,19 124,22 132,20 140,23" fill="none" stroke="#f87171" stroke-width="1.5" stroke-linejoin="round"/><polygon points="0,13 8,11 14,14 20,12 28,15 34,13 40,16 48,14 54,17 60,15 68,18 74,16 82,19 88,17 96,20 102,18 110,21 118,19 124,22 132,20 140,23 140,30 0,30" fill="url(#wg7)"/></svg>
+              <div class="wl-bot"><span class="sp sp-h">Hold</span><div class="sc-w"><div class="sc-tr"><div class="sc-fi" style="width:51%;background:var(--warn);"></div></div><span class="sc-v">51</span></div></div>
+            </div>
+
+            <div class="wl-card">
+              <div class="wl-top"><div><div class="wl-t">JPM</div><div class="wl-n">JPMorgan Chase</div></div><div><div class="wl-p">$233.80</div><div style="text-align:right;margin-top:2px;"><span class="b bg">+0.42%</span></div></div></div>
+              <svg viewBox="0 0 140 30" width="100%" height="30" preserveAspectRatio="none"><defs><linearGradient id="wg8" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#22d3a0" stop-opacity="0.15"/><stop offset="100%" stop-color="#22d3a0" stop-opacity="0"/></linearGradient></defs><polyline points="0,20 8,18 14,21 20,16 28,19 34,14 42,17 48,12 56,15 62,10 70,13 76,9 84,12 90,8 98,11 104,7 112,10 118,6 126,9 132,5 140,7" fill="none" stroke="#22d3a0" stroke-width="1.5" stroke-linejoin="round"/><polygon points="0,20 8,18 14,21 20,16 28,19 34,14 42,17 48,12 56,15 62,10 70,13 76,9 84,12 90,8 98,11 104,7 112,10 118,6 126,9 132,5 140,7 140,30 0,30" fill="url(#wg8)"/></svg>
+              <div class="wl-bot"><span class="sp sp-b">Buy</span><div class="sc-w"><div class="sc-tr"><div class="sc-fi" style="width:69%;background:var(--cyan);"></div></div><span class="sc-v">69</span></div></div>
+            </div>
+
+          </div>
+        </div>
+
+      </div><!-- /content -->
+    </div><!-- /main -->
+  </div><!-- /center -->
+
+  <!-- ── AI Chat Panel ── -->
+  <div class="chat-panel" id="chatPanel">
+    <div class="cp-resize" id="cpResize"></div>
+    <div class="cp-head">
+      <div>
+        <div class="cp-title">
+          <span class="cp-dot"></span>
+          AI Analyst
+        </div>
+        <div class="cp-sub">Powered by Claude · Always on</div>
+      </div>
+      <button class="cp-close" onclick="toggleChat()">✕</button>
+    </div>
+
+    <div class="cp-msgs" id="cpMsgs">
+      <!-- Bot greeting -->
+      <div class="cp-msg bot">
+        <div class="cp-bubble">Good morning! Your portfolio is up <strong style="color:var(--gain)">+$2,140</strong> today. NVDA is your strongest signal at score 87 — want me to break it down?</div>
+        <span class="cp-time">9:31 AM</span>
+      </div>
+      <!-- User -->
+      <div class="cp-msg user">
+        <div class="cp-bubble">Why is TSLA showing sell?</div>
+        <span class="cp-time">9:34 AM</span>
+      </div>
+      <!-- Bot -->
+      <div class="cp-msg bot">
+        <div class="cp-bubble">TSLA has a composite score of 28/100. Key issues: RSI at 71 (overbought), MACD bearish crossover, and Piotroski F-Score of 3/9. The risk/reward at current price doesn't look favorable.</div>
+        <span class="cp-time">9:34 AM</span>
+      </div>
+    </div>
+
+    <!-- Suggested prompts -->
+    <div class="cp-suggest">
+      <span class="cp-pill">Analyze NVDA</span>
+      <span class="cp-pill">Portfolio risk?</span>
+      <span class="cp-pill">Top buys today</span>
+      <span class="cp-pill">Rebalance advice</span>
+    </div>
+
+    <div class="cp-input-wrap">
+      <textarea class="cp-input" placeholder="Ask about any stock…" rows="1"></textarea>
+      <button class="cp-send">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+</div><!-- /app -->
+
+<!-- ── Portfolio drawer (slides up from bottom) ── -->
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
+<div class="drawer" id="portfolioDrawer">
+  <div class="drawer-inner">
+    <div class="drawer-handle" onclick="closeDrawer()"></div>
+    <button class="drawer-close" onclick="closeDrawer()">✕</button>
+
+    <div class="drawer-head">
+      <div>
+        <div style="font-size:10px;font-weight:500;text-transform:uppercase;letter-spacing:.09em;color:var(--t3);margin-bottom:4px;">Portfolio Value</div>
+        <div class="drawer-val">$124,830.50</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+          <span class="b bg" style="font-size:11px;padding:3px 9px;">+$2,140.20 today</span>
+          <span style="font-size:11px;font-family:var(--fm);color:var(--t3);">+18.4% all time</span>
+        </div>
+      </div>
+      <div class="tfs" style="margin-top:24px;">
+        <span class="tf on">1M</span><span class="tf">3M</span><span class="tf">6M</span><span class="tf">1Y</span><span class="tf">All</span>
+      </div>
+    </div>
+
+    <!-- Full-width chart -->
+    <svg viewBox="0 0 800 110" width="100%" height="110" preserveAspectRatio="none" style="display:block;">
+      <defs>
+        <linearGradient id="dpg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.2"/>
+          <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+        </linearGradient>
+        <filter id="dgl"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <!-- grid -->
+      <line x1="0" y1="25" x2="800" y2="25" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+      <line x1="0" y1="50" x2="800" y2="50" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+      <line x1="0" y1="75" x2="800" y2="75" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+      <!-- volume bars -->
+      <rect x="0" y="92" width="8" height="7" fill="rgba(56,189,248,.12)" rx="1"/><rect x="14" y="90" width="8" height="9" fill="rgba(56,189,248,.18)" rx="1"/><rect x="28" y="93" width="8" height="6" fill="rgba(56,189,248,.1)" rx="1"/><rect x="42" y="88" width="8" height="11" fill="rgba(56,189,248,.22)" rx="1"/><rect x="56" y="92" width="8" height="7" fill="rgba(56,189,248,.15)" rx="1"/><rect x="70" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="84" y="93" width="8" height="6" fill="rgba(56,189,248,.12)" rx="1"/><rect x="98" y="87" width="8" height="12" fill="rgba(56,189,248,.28)" rx="1"/><rect x="112" y="91" width="8" height="8" fill="rgba(56,189,248,.18)" rx="1"/><rect x="126" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="140" y="92" width="8" height="7" fill="rgba(56,189,248,.14)" rx="1"/><rect x="154" y="86" width="8" height="13" fill="rgba(56,189,248,.3)" rx="1"/><rect x="168" y="93" width="8" height="6" fill="rgba(56,189,248,.1)" rx="1"/><rect x="182" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="196" y="92" width="8" height="7" fill="rgba(56,189,248,.15)" rx="1"/><rect x="210" y="87" width="8" height="12" fill="rgba(56,189,248,.28)" rx="1"/><rect x="224" y="91" width="8" height="8" fill="rgba(56,189,248,.18)" rx="1"/><rect x="238" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="252" y="92" width="8" height="7" fill="rgba(56,189,248,.13)" rx="1"/><rect x="266" y="86" width="8" height="13" fill="rgba(56,189,248,.32)" rx="1"/><rect x="280" y="93" width="8" height="6" fill="rgba(56,189,248,.1)" rx="1"/><rect x="294" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="308" y="92" width="8" height="7" fill="rgba(56,189,248,.15)" rx="1"/><rect x="322" y="87" width="8" height="12" fill="rgba(56,189,248,.28)" rx="1"/><rect x="336" y="91" width="8" height="8" fill="rgba(56,189,248,.18)" rx="1"/><rect x="350" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="364" y="92" width="8" height="7" fill="rgba(56,189,248,.14)" rx="1"/><rect x="378" y="86" width="8" height="13" fill="rgba(56,189,248,.3)" rx="1"/><rect x="392" y="93" width="8" height="6" fill="rgba(56,189,248,.1)" rx="1"/><rect x="406" y="90" width="8" height="9" fill="rgba(56,189,248,.22)" rx="1"/><rect x="420" y="92" width="8" height="7" fill="rgba(56,189,248,.15)" rx="1"/><rect x="434" y="87" width="8" height="12" fill="rgba(56,189,248,.28)" rx="1"/><rect x="448" y="91" width="8" height="8" fill="rgba(56,189,248,.18)" rx="1"/><rect x="462" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="476" y="92" width="8" height="7" fill="rgba(56,189,248,.13)" rx="1"/><rect x="490" y="86" width="8" height="13" fill="rgba(56,189,248,.32)" rx="1"/><rect x="504" y="93" width="8" height="6" fill="rgba(56,189,248,.1)" rx="1"/><rect x="518" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="532" y="92" width="8" height="7" fill="rgba(56,189,248,.15)" rx="1"/><rect x="546" y="87" width="8" height="12" fill="rgba(56,189,248,.3)" rx="1"/><rect x="560" y="91" width="8" height="8" fill="rgba(56,189,248,.18)" rx="1"/><rect x="574" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="588" y="92" width="8" height="7" fill="rgba(56,189,248,.14)" rx="1"/><rect x="602" y="86" width="8" height="13" fill="rgba(56,189,248,.28)" rx="1"/><rect x="616" y="93" width="8" height="6" fill="rgba(56,189,248,.1)" rx="1"/><rect x="630" y="90" width="8" height="9" fill="rgba(56,189,248,.22)" rx="1"/><rect x="644" y="92" width="8" height="7" fill="rgba(56,189,248,.15)" rx="1"/><rect x="658" y="87" width="8" height="12" fill="rgba(56,189,248,.3)" rx="1"/><rect x="672" y="91" width="8" height="8" fill="rgba(56,189,248,.18)" rx="1"/><rect x="686" y="90" width="8" height="9" fill="rgba(56,189,248,.2)" rx="1"/><rect x="700" y="92" width="8" height="7" fill="rgba(56,189,248,.13)" rx="1"/><rect x="714" y="86" width="8" height="13" fill="rgba(56,189,248,.32)" rx="1"/><rect x="728" y="93" width="8" height="6" fill="rgba(56,189,248,.1)" rx="1"/><rect x="742" y="90" width="8" height="9" fill="rgba(56,189,248,.22)" rx="1"/><rect x="756" y="92" width="8" height="7" fill="rgba(56,189,248,.15)" rx="1"/><rect x="770" y="87" width="8" height="12" fill="rgba(56,189,248,.28)" rx="1"/><rect x="784" y="91" width="8" height="8" fill="rgba(56,189,248,.2)" rx="1"/>
+      <!-- fill + line — jagged realistic -->
+      <polygon points="0,78 12,75 20,78 30,72 38,75 48,68 56,72 66,65 76,69 86,62 94,66 104,59 112,63 122,56 132,60 142,53 150,57 160,50 170,54 180,47 188,51 198,44 208,48 218,41 228,45 238,38 248,42 258,35 268,39 278,32 288,36 298,29 308,33 318,26 328,30 338,23 348,27 358,21 368,25 378,18 388,22 398,16 408,20 418,14 428,18 438,12 448,16 458,11 468,15 478,10 488,14 498,9 508,13 518,8 528,12 538,8 548,11 558,7 568,11 578,7 588,10 598,7 608,10 618,8 628,11 638,9 648,12 658,10 668,13 678,11 688,14 698,12 708,15 718,13 728,16 738,14 748,17 758,15 768,18 778,16 788,14 800,13 800,85 0,85" fill="url(#dpg)"/>
+      <polyline points="0,78 12,75 20,78 30,72 38,75 48,68 56,72 66,65 76,69 86,62 94,66 104,59 112,63 122,56 132,60 142,53 150,57 160,50 170,54 180,47 188,51 198,44 208,48 218,41 228,45 238,38 248,42 258,35 268,39 278,32 288,36 298,29 308,33 318,26 328,30 338,23 348,27 358,21 368,25 378,18 388,22 398,16 408,20 418,14 428,18 438,12 448,16 458,11 468,15 478,10 488,14 498,9 508,13 518,8 528,12 538,8 548,11 558,7 568,11 578,7 588,10 598,7 608,10 618,8 628,11 638,9 648,12 658,10 668,13 678,11 688,14 698,12 708,15 718,13 728,16 738,14 748,17 758,15 768,18 778,16 788,14 800,13" fill="none" stroke="rgba(56,189,248,.3)" stroke-width="3" stroke-linejoin="round"/>
+      <polyline points="0,78 12,75 20,78 30,72 38,75 48,68 56,72 66,65 76,69 86,62 94,66 104,59 112,63 122,56 132,60 142,53 150,57 160,50 170,54 180,47 188,51 198,44 208,48 218,41 228,45 238,38 248,42 258,35 268,39 278,32 288,36 298,29 308,33 318,26 328,30 338,23 348,27 358,21 368,25 378,18 388,22 398,16 408,20 418,14 428,18 438,12 448,16 458,11 468,15 478,10 488,14 498,9 508,13 518,8 528,12 538,8 548,11 558,7 568,11 578,7 588,10 598,7 608,10 618,8 628,11 638,9 648,12 658,10 668,13 678,11 688,14 698,12 708,15 718,13 728,16 738,14 748,17 758,15 768,18 778,16 788,14 800,13" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-linejoin="round" filter="url(#dgl)"/>
+      <circle cx="800" cy="13" r="4" fill="#38bdf8"/><circle cx="800" cy="13" r="8" fill="rgba(56,189,248,.2)"/>
+      <!-- X axis labels -->
+      <text x="0"   y="108" fill="#2d3e5a" font-size="10" font-family="JetBrains Mono,monospace">Oct</text>
+      <text x="160" y="108" fill="#2d3e5a" font-size="10" font-family="JetBrains Mono,monospace">Nov</text>
+      <text x="320" y="108" fill="#2d3e5a" font-size="10" font-family="JetBrains Mono,monospace">Dec</text>
+      <text x="480" y="108" fill="#2d3e5a" font-size="10" font-family="JetBrains Mono,monospace">Jan</text>
+      <text x="640" y="108" fill="#2d3e5a" font-size="10" font-family="JetBrains Mono,monospace">Feb</text>
+      <text x="758" y="108" fill="#2d3e5a" font-size="10" font-family="JetBrains Mono,monospace">Mar</text>
+    </svg>
+
+    <div class="drawer-stats">
+      <div class="dstat"><div class="dstat-l">Cost Basis</div><div class="dstat-v">$101,890.30</div></div>
+      <div class="dstat"><div class="dstat-l">Unrealized P&amp;L</div><div class="dstat-v" style="color:var(--gain);">+$22,940</div></div>
+      <div class="dstat"><div class="dstat-l">Day Change</div><div class="dstat-v" style="color:var(--gain);">+$2,140.20</div></div>
+      <div class="dstat"><div class="dstat-l">All-time Return</div><div class="dstat-v" style="color:var(--gain);">+18.4%</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+  function toggleChat() {
+    const panel = document.getElementById('chatPanel');
+    const btn = document.getElementById('chatToggle');
+    panel.classList.toggle('open');
+    btn.classList.toggle('on');
+    document.body.classList.toggle('chat-open', panel.classList.contains('open'));
+  }
+  function openDrawer() {
+    document.getElementById('portfolioDrawer').classList.add('open');
+    document.getElementById('drawerBackdrop').classList.add('open');
+  }
+  function closeDrawer() {
+    document.getElementById('portfolioDrawer').classList.remove('open');
+    document.getElementById('drawerBackdrop').classList.remove('open');
+  }
+  // Open chat panel by default on load
+  window.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('chatPanel').classList.add('open');
+    document.getElementById('chatToggle').classList.add('on');
+    document.body.classList.add('chat-open');
+
+    // ── Resizable chat panel ──────────────────────────────────────────────
+    const handle = document.getElementById('cpResize');
+    const panel  = document.getElementById('chatPanel');
+    const root   = document.documentElement;
+    const MIN = 240, MAX = 520;
+
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      handle.classList.add('dragging');
+      document.body.classList.add('resizing');
+
+      const startX   = e.clientX;
+      const startWidth = panel.offsetWidth;
+
+      function onMove(e) {
+        // dragging left = wider, dragging right = narrower
+        const delta = startX - e.clientX;
+        const newWidth = Math.min(MAX, Math.max(MIN, startWidth + delta));
+        root.style.setProperty('--cp', newWidth + 'px');
+      }
+
+      function onUp() {
+        handle.classList.remove('dragging');
+        document.body.classList.remove('resizing');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  });
+</script>
+</body>
+</html>

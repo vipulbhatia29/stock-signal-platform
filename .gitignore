@@ -64,3 +64,4 @@ redis_data/
 # Brainstorming / local tools
 .superpowers/
 .serena/
+.playwright-mcp/

@@ -222,15 +222,15 @@ export function ScreenerTable({
           ))}
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <Table>
-            <TableHeader className="sticky top-0 z-10 bg-background">
+            <TableHeader className="sticky top-0 z-10 bg-card2">
               <TableRow>
                 {columns.map((col) => (
                   <TableHead
                     key={col.key}
                     className={cn(
-                      textSize,
+                      "text-subtle uppercase text-[9.5px] tracking-[0.1em]",
                       col.sortable &&
                         "cursor-pointer select-none hover:text-foreground",
                       col.key === sortBy && "text-foreground"
@@ -260,7 +260,7 @@ export function ScreenerTable({
                     key={item.ticker}
                     className={cn(
                       rowBg,
-                      "cursor-pointer hover:bg-accent/50",
+                      "cursor-pointer hover:bg-hov",
                       i < 12 && "animate-fade-slide-up",
                     )}
                     style={
