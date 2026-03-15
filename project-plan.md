@@ -225,6 +225,21 @@ Natural language interface that orchestrates all tools.
 ### Success Criteria
 Can ask natural language questions and get tool-backed, synthesized answers.
 
+### Phase 4 Pre-flight Bug & UX Backlog (found in Session 26 QA)
+Fix these before or alongside Phase 4 AI work:
+
+**Bugs**
+- [ ] `GET /portfolio/dividends/{ticker}` returns 404/error on stock detail page for tickers not held in portfolio — called unconditionally; should only call if ticker is in portfolio, or suppress the error gracefully (no console noise)
+
+**UX Improvements**
+- [ ] **"Add any ticker" open-world search** — if search returns no results, show a fallback option (e.g. "Ingest BA anyway →") that calls `POST /stocks/{ticker}/ingest` directly, then adds to watchlist. Currently only stocks already in the DB are searchable, but the backend supports any valid global ticker.
+- [ ] **Search empty-state messaging** — distinguish between "ticker doesn't exist" vs "ticker not yet seeded" so the user knows what to do
+
+**Polish**
+- [ ] Add `--color-warning` CSS var to design system (currently AT_CAP badge uses raw `text-amber-500`)
+- [ ] Signal History x-axis: when very few snapshots exist (< 7 days of data), dates repeat — add min-data guard or improve axis labelling
+- [ ] Price history chart tooltip shows stale date on initial load before user hovers — cosmetic
+
 ---
 
 ## Phase 5: Background Jobs + Alerts (Weeks 9-10)

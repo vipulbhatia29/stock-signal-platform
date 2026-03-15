@@ -206,3 +206,50 @@ All 10 steps from `docs/superpowers/plans/divestment-rules-implementation.md` co
 - Or: add `--color-warning` CSS var to design system (minor polish)
 
 ---
+
+## Session 26 — Full QA + Phase 4 Backlog
+
+**Date:** 2026-03-15
+**Branch:** `feat/phase-4-ai-chatbot`
+
+**What was done:**
+
+### Full QA Pass (no code changes)
+- [x] Ran full test suite: **267/267 passing** (143 unit + 124 API, 41s)
+- [x] Frontend TypeScript build: **clean** (Next.js 16.1.6, zero type errors)
+- [x] ESLint: **zero errors**
+- [x] Ruff: **zero errors**
+- [x] Backend API smoke test via cookie auth — all endpoints 200 OK
+- [x] Playwright UI tour of all pages (light + dark mode):
+  - Login, Dashboard (empty + with AAPL watchlist card)
+  - Stock detail `/stocks/AAPL` — price chart, signal breakdown, signal history, risk/return, fundamentals (Piotroski), dividends
+  - Screener — Overview, Signals, Performance tabs
+  - Portfolio — empty state + after logging AAPL BUY transaction (positions, sector pie, rebalancing panel)
+  - Transaction modal
+  - Dark mode on all pages
+- [x] Verified AAPL refresh triggers `POST /stocks/AAPL/ingest` → 200 OK (full pipeline)
+- [x] Verified adding Boeing (BA) triggers `POST /stocks/BA/ingest` → 200 OK before `POST /watchlist` → 201
+- [x] Confirmed backend supports **any valid global ticker** (not just S&P 500) — `ensure_stock_exists()` creates record from yfinance on demand
+
+### Issues Found & Logged
+- [x] **Bug:** `GET /portfolio/dividends/{ticker}` called unconditionally on stock detail → 404 console error for tickers not held in portfolio (UI handles gracefully, but noisy)
+- [x] **UX gap:** Search only returns pre-seeded stocks; no way to add an unseeded ticker from the UI (backend supports it via ingest, UI doesn't expose it)
+- [x] **Polish:** `--color-warning` CSS var missing; AT_CAP badge uses raw `text-amber-500`
+- [x] **Polish:** Signal history x-axis repeats dates when < 7 days of snapshots exist
+- [x] **Polish:** Price history tooltip shows stale date on initial load
+
+### Docs Updated
+- [x] `project-plan.md` — Phase 4 Pre-flight Bug & UX Backlog section added (5 items)
+- [x] `PROGRESS.md` — this entry
+- [x] Serena memories — `project_overview` + `style_and_conventions` updated
+
+**Test count:** 267 total (unchanged — QA session only)
+**Alembic head:** `821eb511d146` (migration 007 — unchanged)
+**Current branch:** `feat/phase-4-ai-chatbot`
+
+**Next session — Phase 4 start:**
+1. Fix the 5 pre-flight items (dividends 404, open-world search, CSS var, x-axis, tooltip)
+2. Create PR for Phase 3.5 branch (`feat/phase-3.5-portfolio-advanced` → main)
+3. Start Phase 4: ChatSession/ChatMessage models, agents, streaming chat router, chat UI
+
+---
