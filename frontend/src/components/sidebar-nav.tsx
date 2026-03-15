@@ -98,15 +98,17 @@ export function SidebarNav() {
 
         {/* User avatar with logout popover */}
         <Popover>
-          <PopoverTrigger asChild>
-            <button
-              className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-[10px] font-bold text-white cursor-pointer mt-1"
-              style={{ background: "linear-gradient(135deg, #38bdf8, #6366f1)" }}
-              aria-label="User menu"
-            >
-              U
-            </button>
-          </PopoverTrigger>
+          <PopoverTrigger
+            render={
+              <button
+                className="w-[26px] h-[26px] rounded-full flex items-center justify-center text-[10px] font-bold text-white cursor-pointer mt-1"
+                style={{ background: "linear-gradient(135deg, #38bdf8, #6366f1)" }}
+                aria-label="User menu"
+              >
+                U
+              </button>
+            }
+          />
           <PopoverContent
             side="right"
             align="end"
