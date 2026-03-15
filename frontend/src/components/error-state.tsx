@@ -15,7 +15,7 @@ export function ErrorState({
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-12 text-center">
       <AlertCircleIcon className="size-8 text-destructive" aria-hidden="true" />
-      <p className="text-sm text-muted-foreground">{error}</p>
+      <p className="text-sm text-foreground">{error}</p>
       {onRetry && (
         <Button variant="outline" size="sm" onClick={onRetry}>
           Try again

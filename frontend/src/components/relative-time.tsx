@@ -40,7 +40,7 @@ export function RelativeTime({ date, prefix = "Refreshed" }: RelativeTimeProps) 
   }
 
   return (
-    <span title={d.toLocaleString()}>
+    <span className="text-subtle" title={d.toLocaleString()}>
       {prefix} {label}
     </span>
   );
