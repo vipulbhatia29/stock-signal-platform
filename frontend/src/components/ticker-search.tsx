@@ -54,7 +54,7 @@ export function TickerSearch({ onSelect }: TickerSearchProps) {
           Search stocks to add...
         </Button>
       } />
-      <PopoverContent className="w-80 p-0" align="start">
+      <PopoverContent className="w-80 p-0 bg-card2 border-border" align="start">
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search by ticker or name..."
@@ -63,7 +63,7 @@ export function TickerSearch({ onSelect }: TickerSearchProps) {
           />
           <CommandList>
             {isLoading && debouncedQuery && (
-              <div className="py-4 text-center text-sm text-muted-foreground">
+              <div className="py-4 text-center text-sm text-subtle">
                 Searching...
               </div>
             )}
@@ -77,6 +77,7 @@ export function TickerSearch({ onSelect }: TickerSearchProps) {
                     key={stock.ticker}
                     value={stock.ticker}
                     onSelect={() => handleSelect(stock.ticker)}
+                    className="hover:bg-hov text-foreground"
                   >
                     <div className="flex flex-1 items-center justify-between">
                       <div>
@@ -108,6 +109,7 @@ export function TickerSearch({ onSelect }: TickerSearchProps) {
                   <CommandItem
                     value={`add-${debouncedQuery}`}
                     onSelect={() => handleSelect(debouncedQuery.toUpperCase())}
+                    className="hover:bg-hov text-foreground"
                   >
                     <PlusCircleIcon className="mr-2 size-4 text-muted-foreground" />
                     <span>

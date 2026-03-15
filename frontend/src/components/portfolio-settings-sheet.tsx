@@ -65,7 +65,7 @@ function SettingsForm({
     <>
       <div className="grid gap-6 py-6">
         <div className="grid gap-2">
-          <Label htmlFor="stop-loss">Stop-Loss Threshold (%)</Label>
+          <Label htmlFor="stop-loss" className="text-subtle">Stop-Loss Threshold (%)</Label>
           <Input
             id="stop-loss"
             type="number"
@@ -74,6 +74,7 @@ function SettingsForm({
             step={1}
             value={stopLoss}
             onChange={(e) => setStopLoss(Number(e.target.value))}
+            className="bg-card2 border-border focus:border-[var(--bhi)]"
           />
           <p className="text-xs text-muted-foreground">
             Alert when a position drops below this percentage loss.
@@ -81,7 +82,7 @@ function SettingsForm({
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="max-position">Max Position Size (%)</Label>
+          <Label htmlFor="max-position" className="text-subtle">Max Position Size (%)</Label>
           <Input
             id="max-position"
             type="number"
@@ -90,6 +91,7 @@ function SettingsForm({
             step={1}
             value={maxPosition}
             onChange={(e) => setMaxPosition(Number(e.target.value))}
+            className="bg-card2 border-border focus:border-[var(--bhi)]"
           />
           <p className="text-xs text-muted-foreground">
             Alert when a single position exceeds this portfolio percentage.
@@ -97,7 +99,7 @@ function SettingsForm({
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="max-sector">Max Sector Concentration (%)</Label>
+          <Label htmlFor="max-sector" className="text-subtle">Max Sector Concentration (%)</Label>
           <Input
             id="max-sector"
             type="number"
@@ -106,6 +108,7 @@ function SettingsForm({
             step={1}
             value={maxSector}
             onChange={(e) => setMaxSector(Number(e.target.value))}
+            className="bg-card2 border-border focus:border-[var(--bhi)]"
           />
           <p className="text-xs text-muted-foreground">
             Alert when any sector exceeds this portfolio percentage.
@@ -113,7 +116,7 @@ function SettingsForm({
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="min-cash" className="text-muted-foreground">
+          <Label htmlFor="min-cash" className="text-subtle">
             Min Cash Reserve (%)
           </Label>
           <Input
@@ -121,7 +124,7 @@ function SettingsForm({
             type="number"
             value={minCash}
             disabled
-            className="opacity-50"
+            className="bg-card2 border-border opacity-50"
           />
           <p className="text-xs text-muted-foreground">
             Coming soon — requires cash tracking.
@@ -156,7 +159,7 @@ export function PortfolioSettingsSheet() {
       >
         <Settings className="h-4 w-4" />
       </SheetTrigger>
-      <SheetContent>
+      <SheetContent className="bg-card border-border">
         <SheetHeader>
           <SheetTitle>Portfolio Settings</SheetTitle>
           <SheetDescription>

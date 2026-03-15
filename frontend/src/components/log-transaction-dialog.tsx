@@ -58,13 +58,13 @@ export function LogTransactionDialog({
         <PlusIcon className="mr-2 size-4" />
         Log Transaction
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md bg-card border-border">
         <DialogHeader>
           <DialogTitle>Log Transaction</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="ticker">Ticker</Label>
+            <Label htmlFor="ticker" className="text-subtle">Ticker</Label>
             <Input
               id="ticker"
               placeholder="AAPL"
@@ -74,11 +74,12 @@ export function LogTransactionDialog({
               }
               required
               maxLength={10}
+              className="bg-card2 border-border focus:border-[var(--bhi)]"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="type">Type</Label>
+            <Label htmlFor="type" className="text-subtle">Type</Label>
             <Select
               value={form.transaction_type}
               onValueChange={(v) =>
@@ -100,7 +101,7 @@ export function LogTransactionDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label htmlFor="shares">Shares</Label>
+              <Label htmlFor="shares" className="text-subtle">Shares</Label>
               <Input
                 id="shares"
                 type="number"
@@ -110,10 +111,11 @@ export function LogTransactionDialog({
                 value={form.shares}
                 onChange={(e) => setForm({ ...form, shares: e.target.value })}
                 required
+                className="bg-card2 border-border focus:border-[var(--bhi)]"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="price">Price / Share</Label>
+              <Label htmlFor="price" className="text-subtle">Price / Share</Label>
               <Input
                 id="price"
                 type="number"
@@ -125,12 +127,13 @@ export function LogTransactionDialog({
                   setForm({ ...form, price_per_share: e.target.value })
                 }
                 required
+                className="bg-card2 border-border focus:border-[var(--bhi)]"
               />
             </div>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="date">Date</Label>
+            <Label htmlFor="date" className="text-subtle">Date</Label>
             <Input
               id="date"
               type="date"
@@ -142,11 +145,12 @@ export function LogTransactionDialog({
                 })
               }
               required
+              className="bg-card2 border-border focus:border-[var(--bhi)]"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="notes">Notes (optional)</Label>
+            <Label htmlFor="notes" className="text-subtle">Notes (optional)</Label>
             <Input
               id="notes"
               placeholder="e.g. Earnings dip buy"
@@ -154,6 +158,7 @@ export function LogTransactionDialog({
               onChange={(e) =>
                 setForm({ ...form, notes: e.target.value || undefined })
               }
+              className="bg-card2 border-border focus:border-[var(--bhi)]"
             />
           </div>
 
