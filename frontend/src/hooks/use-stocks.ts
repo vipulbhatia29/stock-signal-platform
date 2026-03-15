@@ -18,6 +18,9 @@ import type {
   UserPreferences,
   UserPreferencesUpdate,
   RebalancingResponse,
+  Position,
+  PortfolioSummary,
+  PortfolioSnapshot,
 } from "@/types/api";
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -254,5 +257,31 @@ export function useRebalancing() {
     queryKey: ["portfolio", "rebalancing"],
     queryFn: () => get<RebalancingResponse>("/portfolio/rebalancing"),
     staleTime: 5 * 60 * 1000, // 5 min
+  });
+}
+
+// ── Portfolio ─────────────────────────────────────────────────────────────────
+
+export function usePositions() {
+  return useQuery<Position[]>({
+    queryKey: ["portfolio", "positions"],
+    queryFn: () => get<Position[]>("/portfolio/positions"),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function usePortfolioSummary() {
+  return useQuery<PortfolioSummary>({
+    queryKey: ["portfolio", "summary"],
+    queryFn: () => get<PortfolioSummary>("/portfolio/summary"),
+    staleTime: 60 * 1000,
+  });
+}
+
+export function usePortfolioHistory(days = 365) {
+  return useQuery<PortfolioSnapshot[]>({
+    queryKey: ["portfolio", "history", days],
+    queryFn: () => get<PortfolioSnapshot[]>(`/portfolio/history?days=${days}`),
+    staleTime: 15 * 60 * 1000,
   });
 }

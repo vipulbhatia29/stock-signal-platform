@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { get, post, del } from "@/lib/api";
-import { useRebalancing } from "@/hooks/use-stocks";
+import { useRebalancing, usePositions, usePortfolioSummary, usePortfolioHistory } from "@/hooks/use-stocks";
 import { toast } from "sonner";
 import { Trash2Icon } from "lucide-react";
 import {
@@ -34,7 +34,6 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
   DivestmentAlert,
   Position,
-  PortfolioSnapshot,
   PortfolioSummary,
   Transaction,
   TransactionCreate,
@@ -42,36 +41,11 @@ import type {
 
 // ── Data hooks ────────────────────────────────────────────────────────────────
 
-function usePositions() {
-  return useQuery<Position[]>({
-    queryKey: ["portfolio", "positions"],
-    queryFn: () => get<Position[]>("/portfolio/positions"),
-    staleTime: 60 * 1000,
-  });
-}
-
-function usePortfolioSummary() {
-  return useQuery<PortfolioSummary>({
-    queryKey: ["portfolio", "summary"],
-    queryFn: () => get<PortfolioSummary>("/portfolio/summary"),
-    staleTime: 60 * 1000,
-  });
-}
-
 function useTransactions() {
   return useQuery<Transaction[]>({
     queryKey: ["portfolio", "transactions"],
     queryFn: () => get<Transaction[]>("/portfolio/transactions"),
     staleTime: 60 * 1000,
-  });
-}
-
-function usePortfolioHistory(days = 365) {
-  return useQuery<PortfolioSnapshot[]>({
-    queryKey: ["portfolio", "history", days],
-    queryFn: () =>
-      get<PortfolioSnapshot[]>(`/portfolio/history?days=${days}`),
-    staleTime: 15 * 60 * 1000,
   });
 }
 
