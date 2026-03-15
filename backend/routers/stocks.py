@@ -626,13 +626,66 @@ async def ingest_ticker(
 
     # Compute signals if we have enough data
     composite_score = None
+    signal_result = None
     if not full_df.empty:
-        result = compute_signals(ticker, full_df, piotroski_score=piotroski)
-        if result.composite_score is not None:
-            await store_signal_snapshot(result, db)
-            composite_score = result.composite_score
+        signal_result = compute_signals(ticker, full_df, piotroski_score=piotroski)
+        if signal_result.composite_score is not None:
+            await store_signal_snapshot(signal_result, db)
+            composite_score = signal_result.composite_score
 
     await update_last_fetched_at(ticker, db)
+
+    # ── Generate and store portfolio-aware recommendation ─────────────
+    if signal_result is not None and signal_result.composite_score is not None:
+        from backend.tools.recommendations import generate_recommendation, store_recommendation
+
+        # ── Optional portfolio context ────────────────────────────────
+        # If the user holds this stock, pass allocation context so the
+        # recommendation engine can return HOLD/SELL instead of BUY.
+        portfolio_state = None
+        max_position_pct = 5.0
+        try:
+            from backend.models.user import UserPreference
+            from backend.tools.portfolio import get_or_create_portfolio, get_positions_with_pnl
+
+            portfolio = await get_or_create_portfolio(current_user.id, db)
+            positions = await get_positions_with_pnl(portfolio.id, db)
+            pos_map = {p.ticker: p for p in positions}
+            if ticker in pos_map:
+                p = pos_map[ticker]
+                portfolio_state = {
+                    "is_held": True,
+                    "allocation_pct": p.allocation_pct or 0.0,
+                }
+            pref_result = await db.execute(
+                select(UserPreference).where(UserPreference.user_id == current_user.id)
+            )
+            pref = pref_result.scalar_one_or_none()
+            if pref is not None:
+                max_position_pct = pref.max_position_pct
+        except Exception:
+            logger.warning(
+                "Could not load portfolio context for %s — using basic recommendation", ticker
+            )
+            portfolio_state = None
+            max_position_pct = 5.0
+
+        # Fetch latest price for recommendation
+        latest_price_result = await db.execute(
+            select(StockPrice)
+            .where(StockPrice.ticker == ticker)
+            .order_by(StockPrice.time.desc())
+            .limit(1)
+        )
+        latest_price_row = latest_price_result.scalar_one_or_none()
+        if latest_price_row is not None:
+            rec = generate_recommendation(
+                signal_result,
+                current_price=float(latest_price_row.adj_close),
+                portfolio_state=portfolio_state,
+                max_position_pct=max_position_pct,
+            )
+            await store_recommendation(rec, str(current_user.id), db)
 
     return IngestResponse(
         ticker=ticker,
