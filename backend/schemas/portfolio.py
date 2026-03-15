@@ -165,3 +165,28 @@ class UserPreferenceUpdate(BaseModel):
     max_position_pct: float | None = Field(None, gt=0, le=100)
     max_sector_pct: float | None = Field(None, gt=0, le=100)
     min_cash_reserve_pct: float | None = Field(None, gt=0, le=100)
+
+
+# ---------------------------------------------------------------------------
+# Rebalancing
+# ---------------------------------------------------------------------------
+
+
+class RebalancingSuggestion(BaseModel):
+    """Single rebalancing suggestion for one position."""
+
+    ticker: str
+    action: str  # "BUY_MORE" | "HOLD" | "AT_CAP"
+    current_allocation_pct: float | None
+    target_allocation_pct: float
+    suggested_amount: float  # 0.0 means no action needed
+    reason: str
+
+
+class RebalancingResponse(BaseModel):
+    """Full rebalancing output for the portfolio."""
+
+    total_value: float
+    available_cash: float
+    num_positions: int
+    suggestions: list[RebalancingSuggestion]

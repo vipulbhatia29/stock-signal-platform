@@ -22,6 +22,8 @@ from backend.schemas.portfolio import (
     PortfolioSnapshotResponse,
     PortfolioSummaryResponse,
     PositionWithAlerts,
+    RebalancingResponse,
+    RebalancingSuggestion,
     TransactionCreate,
     TransactionResponse,
 )
@@ -37,6 +39,7 @@ from backend.tools.portfolio import (
     get_positions_with_pnl,
     recompute_position,
 )
+from backend.tools.recommendations import calculate_position_size
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -306,6 +309,109 @@ async def get_history(
     portfolio = await get_or_create_portfolio(current_user.id, db)
     snapshots = await get_portfolio_history(portfolio.id, db, days=days)
     return [PortfolioSnapshotResponse.model_validate(s) for s in snapshots]
+
+
+@router.get(
+    "/rebalancing",
+    response_model=RebalancingResponse,
+    summary="Get rebalancing suggestions for all open positions",
+)
+async def get_rebalancing(
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> RebalancingResponse:
+    """Compute rebalancing suggestions for all open positions.
+
+    For each held position, calculates how much the user would need to invest
+    to bring it to its equal-weight target (capped by max_position_pct and
+    max_sector_pct from UserPreference).
+
+    Available cash is computed as total_value - sum(market_values) — i.e.,
+    what is not currently invested. Phase 3.5: no explicit cash account exists,
+    so available_cash is reported as 0.0.
+    """
+    portfolio = await get_or_create_portfolio(current_user.id, db)
+    pref = await _get_or_create_preference(current_user.id, db)
+
+    positions = await get_positions_with_pnl(portfolio.id, db)
+
+    if not positions:
+        return RebalancingResponse(
+            total_value=0.0,
+            available_cash=0.0,
+            num_positions=0,
+            suggestions=[],
+        )
+
+    # Compute portfolio totals
+    total_value = sum(p.market_value or 0.0 for p in positions)
+    available_cash = 0.0  # no cash account in Phase 3.5
+
+    num_positions = len(positions)
+
+    # Build sector allocation map for sector cap checks
+    sector_totals: dict[str, float] = {}
+    for p in positions:
+        if p.sector and p.market_value:
+            sector_totals[p.sector] = sector_totals.get(p.sector, 0.0) + p.market_value
+    sector_pct_map: dict[str, float] = {
+        sector: (val / total_value * 100) if total_value > 0 else 0.0
+        for sector, val in sector_totals.items()
+    }
+
+    suggestions = []
+    for pos in positions:
+        alloc = pos.allocation_pct or 0.0
+        sector_alloc = sector_pct_map.get(pos.sector or "", 0.0)
+
+        amount = calculate_position_size(
+            ticker=pos.ticker,
+            current_allocation_pct=alloc,
+            total_value=total_value,
+            available_cash=available_cash,
+            num_target_positions=num_positions,
+            max_position_pct=pref.max_position_pct,
+            sector_allocation_pct=sector_alloc,
+            max_sector_pct=pref.max_sector_pct,
+        )
+
+        equal_weight_pct = 100.0 / max(num_positions, 1)
+        target_pct = min(pref.max_position_pct, equal_weight_pct)
+
+        if sector_alloc >= pref.max_sector_pct:
+            action = "AT_CAP"
+            reason = f"Sector {pos.sector or 'Unknown'} is at the {pref.max_sector_pct:.0f}% cap"
+        elif amount > 0:
+            action = "BUY_MORE"
+            reason = (
+                f"Under-weight ({alloc:.1f}% vs {target_pct:.1f}% target). "
+                f"Add ${amount:,.2f} to reach target."
+            )
+        else:
+            action = "HOLD"
+            reason = f"At or above target allocation ({alloc:.1f}% \u2265 {target_pct:.1f}%)"
+
+        suggestions.append(
+            RebalancingSuggestion(
+                ticker=pos.ticker,
+                action=action,
+                current_allocation_pct=alloc,
+                target_allocation_pct=round(target_pct, 2),
+                suggested_amount=amount,
+                reason=reason,
+            )
+        )
+
+    # Sort: BUY_MORE first (highest gap), then HOLD, then AT_CAP
+    action_order = {"BUY_MORE": 0, "HOLD": 1, "AT_CAP": 2}
+    suggestions.sort(key=lambda s: (action_order.get(s.action, 9), -s.suggested_amount))
+
+    return RebalancingResponse(
+        total_value=total_value,
+        available_cash=available_cash,
+        num_positions=num_positions,
+        suggestions=suggestions,
+    )
 
 
 @router.get(

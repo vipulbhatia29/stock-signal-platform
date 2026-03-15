@@ -413,3 +413,65 @@ class TestPositionAlerts:
         rules = {a["rule"] for a in alrt["alerts"]}
         # weak_fundamentals should fire (composite_score 1.5 < 3)
         assert "weak_fundamentals" in rules
+
+
+@pytest.mark.asyncio
+class TestRebalancing:
+    """Tests for GET /api/v1/portfolio/rebalancing."""
+
+    async def test_rebalancing_requires_auth(self, client: AsyncClient) -> None:
+        """Unauthenticated request returns 401."""
+        resp = await client.get("/api/v1/portfolio/rebalancing")
+        assert resp.status_code == 401
+
+    async def test_rebalancing_empty_portfolio(self, authenticated_client: AsyncClient) -> None:
+        """Empty portfolio returns zero totals and no suggestions."""
+        resp = await authenticated_client.get("/api/v1/portfolio/rebalancing")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["suggestions"] == []
+        assert data["total_value"] == 0.0
+        assert data["available_cash"] == 0.0
+        assert data["num_positions"] == 0
+
+    async def test_rebalancing_response_structure(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """With a real position, response should have correct structure."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="RBAL", name="Rebalance Corp", sector="Technology")
+            session.add(stock)
+            await session.commit()
+        await engine.dispose()
+
+        await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "RBAL",
+                "transaction_type": "BUY",
+                "shares": "10",
+                "price_per_share": "100.00",
+                "transacted_at": "2026-01-15T00:00:00Z",
+            },
+        )
+
+        resp = await authenticated_client.get("/api/v1/portfolio/rebalancing")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "suggestions" in data
+        assert "total_value" in data
+        assert "available_cash" in data
+        assert "num_positions" in data
+        assert isinstance(data["suggestions"], list)
+        assert data["num_positions"] >= 1
+        if data["suggestions"]:
+            suggestion = data["suggestions"][0]
+            assert "ticker" in suggestion
+            assert "action" in suggestion
+            assert "current_allocation_pct" in suggestion
+            assert "target_allocation_pct" in suggestion
+            assert "suggested_amount" in suggestion
+            assert "reason" in suggestion
+            assert suggestion["action"] in ("BUY_MORE", "HOLD", "AT_CAP")
