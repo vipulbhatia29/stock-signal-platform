@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Living Document (Phase 1-2.5 complete)
+**Status:** Living Document (Phase 1-3.5 in progress)
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -312,13 +312,15 @@ Users can override weights via UserPreference.composite_weights.
 - PortfolioValueChart: area chart with value line + cost basis dashed line
 - Upsert (ON CONFLICT DO UPDATE) for idempotent daily re-runs
 
-**FR-6.6: Divestment Rules Engine** (design complete, implementation pending — Session 23)
-- On-demand alerts bundled into positions endpoint response
-- 4 rule types: stop-loss, position concentration, sector concentration, weak fundamentals
+**FR-6.6: Divestment Rules Engine** (IMPLEMENTED — Session 24)
+- On-demand alerts bundled into positions endpoint response (`PositionWithAlerts`)
+- 4 rule types: stop_loss (critical), position_concentration (warning), sector_concentration (warning), weak_fundamentals (warning)
 - All thresholds configurable via UserPreference model (not hardcoded)
 - `GET /api/v1/preferences` and `PATCH /api/v1/preferences` for threshold management
-- Settings sheet on portfolio page with sensible defaults
-- Spec: `docs/superpowers/specs/2026-03-14-divestment-rules-engine-design.md`
+- Settings sheet on portfolio page (gear icon → shadcn Sheet)
+- Alert badges on positions table with severity-based coloring
+- Pure function `check_divestment_rules()` in `backend/tools/divestment.py`
+- Null safety: skips rules when dependent values are None
 
 ### FR-7: Screener (Phase 2)
 

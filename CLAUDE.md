@@ -322,7 +322,11 @@ docs/superpowers/
 | Delete a file referenced in `mkdocs.yml` | Update `mkdocs.yml` nav to remove or comment out the entry |
 
 **End-of-session checklist** — before wrapping up, verify these are current:
-1. `PROGRESS.md` — session entry added
+1. `PROGRESS.md` — session entry added (full detail for last 3 sessions; compact older ones)
+   - **Maintenance:** When starting a new session, compact the 4th-oldest session in-place.
+     When PROGRESS.md exceeds ~200 lines, append full text of compacted sessions to
+     `docs/superpowers/archive/progress-full-log.md`, then replace with phase-level summary lines.
+   - Full archive: `docs/superpowers/archive/progress-full-log.md` (never read by Claude)
 2. `CLAUDE.md` — updated if conventions/architecture changed
 3. `project-plan.md` — **ALWAYS** mark completed deliverables with ✅ and session number; add any new pending items
 4. `docs/FSD.md` — updated if functional requirements changed
