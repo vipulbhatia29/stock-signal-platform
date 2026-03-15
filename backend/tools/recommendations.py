@@ -63,6 +63,7 @@ class PortfolioState(TypedDict, total=False):
 BUY_THRESHOLD = 8.0  # Score >= 8 → BUY
 WATCH_THRESHOLD = 5.0  # Score >= 5 but < 8 → WATCH
 # Below 5 → AVOID
+MIN_TRADE_SIZE = 100.0  # minimum dollar amount worth recommending
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +286,64 @@ def generate_recommendation(
         reasoning=reasoning,
         is_actionable=is_actionable,
     )
+
+
+def calculate_position_size(
+    ticker: str,
+    current_allocation_pct: float,
+    total_value: float,
+    available_cash: float,
+    num_target_positions: int,
+    max_position_pct: float,
+    sector_allocation_pct: float,
+    max_sector_pct: float,
+) -> float:
+    """Calculate how many dollars to invest in a BUY recommendation.
+
+    Uses equal-weight targeting capped by max_position_pct and sector cap.
+    Returns 0 if the sector is full, the position is already at target,
+    or the suggested amount is below the minimum trade size ($100).
+
+    Args:
+        ticker: Stock ticker (used for logging only).
+        current_allocation_pct: Current position size as % of portfolio.
+        total_value: Total portfolio market value in dollars.
+        available_cash: Cash available (total_value - sum of position values).
+        num_target_positions: Number of positions to target for equal weighting.
+        max_position_pct: Maximum single-position size (from UserPreference).
+        sector_allocation_pct: Current sector allocation as % of portfolio.
+        max_sector_pct: Maximum sector concentration (from UserPreference).
+
+    Returns:
+        Suggested dollar amount to invest, rounded to 2 decimal places.
+        Returns 0.0 if the position should not be added to.
+    """
+    # Sector cap check — if sector is full, don't add more exposure
+    if sector_allocation_pct >= max_sector_pct:
+        logger.debug(
+            "Skipping %s: sector at cap (%.1f%% >= %.1f%%)",
+            ticker,
+            sector_allocation_pct,
+            max_sector_pct,
+        )
+        return 0.0
+
+    # Equal-weight target, capped by max_position_pct
+    equal_weight_pct = 100.0 / max(num_target_positions, 1)
+    target_pct = min(max_position_pct, equal_weight_pct)
+
+    # How much more room do we have?
+    gap_pct = target_pct - current_allocation_pct
+    if gap_pct <= 0:
+        return 0.0
+
+    # Dollar amount needed to fill the gap, limited by available cash
+    suggested = round(min(gap_pct / 100.0 * total_value, available_cash), 2)
+
+    if suggested < MIN_TRADE_SIZE:
+        return 0.0
+
+    return suggested
 
 
 def _build_reasoning(signal: SignalResult) -> dict:

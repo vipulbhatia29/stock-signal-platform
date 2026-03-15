@@ -14,6 +14,7 @@ from backend.tools.recommendations import (
     Action,
     Confidence,
     PortfolioState,
+    calculate_position_size,
     generate_recommendation,
 )
 from backend.tools.signals import SignalResult
@@ -373,3 +374,100 @@ class TestPortfolioAwareRecommendations:
             max_position_pct=5.0,
         )
         assert result.action == Action.BUY
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Position sizing tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_position_size_basic():
+    """Normal case: stock not held, plenty of cash, under sector cap."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=0.0,
+        total_value=100_000.0,
+        available_cash=20_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=10.0,
+        max_sector_pct=30.0,
+    )
+    # target = min(5%, 100/20=5%) = 5% → gap = 5% → 5% * 100k = 5000
+    assert amount == 5000.0
+
+
+def test_position_size_already_at_target():
+    """Already at target allocation → 0."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=5.0,
+        total_value=100_000.0,
+        available_cash=10_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=10.0,
+        max_sector_pct=30.0,
+    )
+    assert amount == 0.0
+
+
+def test_position_size_sector_at_cap():
+    """Sector already full → 0 regardless of gap."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=0.0,
+        total_value=100_000.0,
+        available_cash=20_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=30.0,  # at cap
+        max_sector_pct=30.0,
+    )
+    assert amount == 0.0
+
+
+def test_position_size_capped_by_cash():
+    """Suggested amount exceeds available cash → capped."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=0.0,
+        total_value=100_000.0,
+        available_cash=1_000.0,  # only $1k available
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=5.0,
+        max_sector_pct=30.0,
+    )
+    assert amount == 1000.0
+
+
+def test_position_size_below_minimum():
+    """Suggested < $100 → 0 (too small to be worth trading)."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=4.9,
+        total_value=100_000.0,
+        available_cash=5_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=5.0,
+        max_sector_pct=30.0,
+    )
+    # gap = 0.1% → 0.001 * 100k = $100 — exactly at boundary, should return 100.0
+    assert amount == 100.0
+
+
+def test_position_size_rounds_to_cents():
+    """Result is rounded to 2 decimal places."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=0.0,
+        total_value=33_333.0,
+        available_cash=50_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=5.0,
+        max_sector_pct=30.0,
+    )
+    assert amount == round(amount, 2)
