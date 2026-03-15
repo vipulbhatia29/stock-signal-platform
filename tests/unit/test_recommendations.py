@@ -321,7 +321,9 @@ class TestPortfolioAwareRecommendations:
         """Strong signal but already at max allocation should return HOLD."""
         signal = _make_signal("AAPL", composite_score=9.0)
         portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 5.5}
-        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
         assert result.action == Action.HOLD
         assert result.confidence == Confidence.HIGH
         assert "already at target allocation" in result.reasoning["summary"].lower()
@@ -330,7 +332,9 @@ class TestPortfolioAwareRecommendations:
         """Held stock with medium signals should return HOLD."""
         signal = _make_signal("AAPL", composite_score=6.0)
         portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 2.0}
-        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
         assert result.action == Action.HOLD
         assert result.confidence == Confidence.MEDIUM
 
@@ -338,7 +342,9 @@ class TestPortfolioAwareRecommendations:
         """Held stock with weak signals should return SELL."""
         signal = _make_signal("AAPL", composite_score=3.0)
         portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 2.0}
-        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
         assert result.action == Action.SELL
         assert result.confidence == Confidence.MEDIUM
 
@@ -346,7 +352,9 @@ class TestPortfolioAwareRecommendations:
         """Held stock with very weak signals (score < 2) should return SELL HIGH confidence."""
         signal = _make_signal("AAPL", composite_score=1.5)
         portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 3.0}
-        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
         assert result.action == Action.SELL
         assert result.confidence == Confidence.HIGH
 
@@ -354,7 +362,9 @@ class TestPortfolioAwareRecommendations:
         """Not held stock with strong signals should still return BUY."""
         signal = _make_signal("AAPL", composite_score=8.5)
         portfolio_state: PortfolioState = {"is_held": False, "allocation_pct": None}
-        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
         assert result.action == Action.BUY
 
     def test_no_portfolio_state_preserves_existing_logic(self) -> None:
@@ -446,6 +456,22 @@ def test_position_size_below_minimum():
     """Suggested < $100 → 0 (too small to be worth trading)."""
     amount = calculate_position_size(
         ticker="AAPL",
+        current_allocation_pct=4.901,
+        total_value=100_000.0,
+        available_cash=5_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=5.0,
+        max_sector_pct=30.0,
+    )
+    # gap = 0.099% → 0.00099 * 100k = $99.0 — below minimum $100 → should return 0.0
+    assert amount == 0.0
+
+
+def test_position_size_at_exact_minimum():
+    """Suggested exactly $100 → $100 (at-boundary trade is still valid)."""
+    amount = calculate_position_size(
+        ticker="AAPL",
         current_allocation_pct=4.9,
         total_value=100_000.0,
         available_cash=5_000.0,
@@ -459,7 +485,8 @@ def test_position_size_below_minimum():
 
 
 def test_position_size_rounds_to_cents():
-    """Result is rounded to 2 decimal places."""
+    """Result is rounded to 2 decimal places (not truncated)."""
+    # 5% of 33,333 = 1666.65 exactly
     amount = calculate_position_size(
         ticker="AAPL",
         current_allocation_pct=0.0,
@@ -470,4 +497,4 @@ def test_position_size_rounds_to_cents():
         sector_allocation_pct=5.0,
         max_sector_pct=30.0,
     )
-    assert amount == round(amount, 2)
+    assert amount == 1666.65
