@@ -219,7 +219,7 @@ export function useDividends(ticker: string) {
     queryKey: ["dividends", ticker],
     queryFn: () => get<DividendSummary>(`/portfolio/dividends/${ticker}`),
     staleTime: 30 * 60 * 1000, // Dividends change infrequently — cache 30 min
-    retry: 1,
+    retry: 0, // 404 for unheld tickers is expected — don't retry
   });
 }
 

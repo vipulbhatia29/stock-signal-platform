@@ -105,56 +105,10 @@ Full verbose history for sessions 1-22: `docs/superpowers/archive/progress-full-
 
 ---
 
-## Session 24 — Divestment Rules Engine Implementation
+## Session 24 — Divestment Rules Engine Implementation *(compact)*
 
-**Date:** 2026-03-14
-**Branch:** `feat/phase-3.5-portfolio-advanced`
-
-**What was done:**
-
-### Phase 3.5 Item 9: Divestment Rules Engine (IMPLEMENTED)
-All 10 steps from `docs/superpowers/plans/divestment-rules-implementation.md` completed:
-
-- [x] **Step 1:** `backend/tools/divestment.py` — pure `check_divestment_rules()` function
-  - 4 rules: stop_loss (critical), position_concentration (warning), sector_concentration (warning), weak_fundamentals (warning)
-  - Null safety: skips rule when dependent value is None
-  - Returns `list[dict]` with rule, severity, message, value, threshold
-- [x] **Step 2:** `backend/schemas/portfolio.py` — `DivestmentAlert`, `PositionWithAlerts`, `UserPreferenceResponse`, `UserPreferenceUpdate` (with `Field(gt=0, le=100)` validation)
-  - Added `sector: str | None` to `PositionResponse`
-  - `AlertRule` and `AlertSeverity` as `Literal` types
-- [x] **Step 3:** `backend/tools/portfolio.py` — bulk sector fetch in `get_positions_with_pnl()`, parameterized `_group_sectors(max_sector_pct)`, `get_portfolio_summary(max_sector_pct)` uses user pref
-- [x] **Step 4:** `backend/routers/preferences.py` — GET/PATCH `/api/v1/preferences` with `_get_or_create_preference()` helper
-- [x] **Step 5:** `backend/routers/portfolio.py` — positions endpoint returns `PositionWithAlerts`, 3-query pattern (positions, prefs, signals), summary uses user's `max_sector_pct`
-- [x] **Step 6:** `frontend/src/types/api.ts` — `DivestmentAlert`, `UserPreferences`, `UserPreferencesUpdate` interfaces; `sector` + `alerts` on `Position`
-  - `frontend/src/lib/api.ts` — `patch<T>()` helper
-  - `frontend/src/hooks/use-stocks.ts` — `usePreferences()` + `useUpdatePreferences()` hooks
-- [x] **Step 7:** `frontend/src/components/portfolio-settings-sheet.tsx` — inner/outer component pattern (avoids setState-in-useEffect), base-ui `render` prop pattern
-- [x] **Step 8:** Portfolio page: `AlertBadges` component, "Alerts" column, gear icon with settings sheet
-- [x] **Step 9:** Tests all passing — 129 unit + 121 API = 250 total
-  - `tests/unit/test_divestment.py` — 11 tests (all rules, boundaries, null safety, custom thresholds, stacking)
-  - `tests/api/test_preferences.py` — 6 tests (auth, defaults, existing, partial update, validation)
-  - `tests/api/test_portfolio.py` — 2 new tests (alerts field, alerts respect user prefs)
-- [x] **Step 10:** `backend/main.py` — PATCH in CORS, preferences router mounted; lint clean
-
-**Key decisions:**
-- Inner/outer component pattern in settings sheet to avoid `setState` in `useEffect` anti-pattern (ESLint rule)
-- base-ui v4 uses `render` prop instead of `asChild` on triggers
-- `_get_or_create_preference()` shared between preferences and portfolio routers
-- TimescaleDB signal subquery: `func.max(computed_at)` grouped by ticker joined back for latest composite_score
-
-**Bugs fixed:**
-- FK violation in test: `SignalSnapshotFactory` needs stock flushed before signal insert
-- `SheetTrigger asChild` → `render` prop (base-ui v4 API change)
-- ruff auto-formatted dividend migration + model (whitespace only)
-
-**Test count:** 129 unit + 121 API = 250 total (was 235 → +7 unit, +8 API)
-**Alembic head:** `821eb511d146` (migration 007 — unchanged)
-**Current branch:** `feat/phase-3.5-portfolio-advanced`
-
-**Next session — Phase 3.5 continued:**
-- Phase 3.5 item 10: Portfolio-aware recommendations upgrade
-- Phase 3.5 item 11: Rebalancing suggestions with specific dollar amounts
-- Move completed divestment spec + plan to `docs/superpowers/archive/`
+**Date:** 2026-03-14 | **Branch:** `feat/phase-3.5-portfolio-advanced` | **Tests:** 250
+Phase 3.5 item 9 complete: `check_divestment_rules()` (4 rules), `DivestmentAlert` schemas, sector on positions, `/api/v1/preferences` router, alerts wired into positions endpoint, `AlertBadges` + settings sheet on portfolio page. Key gotchas: inner/outer component pattern (setState-in-useEffect), base-ui v4 `render` prop.
 
 ---
 
@@ -251,5 +205,41 @@ All 10 steps from `docs/superpowers/plans/divestment-rules-implementation.md` co
 1. Fix the 5 pre-flight items (dividends 404, open-world search, CSS var, x-axis, tooltip)
 2. Create PR for Phase 3.5 branch (`feat/phase-3.5-portfolio-advanced` → main)
 3. Start Phase 4: ChatSession/ChatMessage models, agents, streaming chat router, chat UI
+
+---
+
+## Session 27 — Phase 4 Pre-flight Fixes
+
+**Date:** 2026-03-15
+**Branch:** `feat/phase-4-ai-chatbot`
+
+**What was done:**
+
+### All 5 Phase 4 Pre-flight Items Fixed
+
+- [x] **Bug: Dividends 404 noise** — `useDividends` hook: `retry: 1` → `retry: 0`. Expected 404 for unheld tickers no longer retried or creates console noise. `DividendCard` already renders gracefully with null data.
+- [x] **UX: Open-world search** — `TickerSearch` component: added `TICKER_RE` regex (`/^[A-Za-z0-9.]{1,6}$/`) and a "Add new ticker" `CommandGroup` that appears when query matches no DB results but looks like a valid ticker. Uses `PlusCircleIcon`. Calls `handleSelect(query.toUpperCase())` → existing `handleAddTicker` flow on dashboard (ingest + watchlist add).
+- [x] **Polish: `--color-warning` CSS var** — Added `--warning` / `--warning-foreground` OKLCH values in `:root` (light) and `.dark`. Registered `--color-warning` + `--color-warning-foreground` in `@theme inline` block. Updated AT_CAP badge in `rebalancing-panel.tsx` from raw `text-amber-500 border-amber-500` → `text-warning border-warning`.
+- [x] **Polish: Signal history x-axis repeated dates** — `SignalHistoryChart`: added `interval={Math.max(0, Math.floor(history.length / 5) - 1)}` to XAxis. Caps visible ticks to ~5 regardless of data density.
+- [x] **Polish: Price chart x-axis / tooltip** — `PriceChart` XAxis: added `interval="preserveStartEnd"` + `minTickGap={60}`. Prevents crowded/repeated dates on short periods (1M, 3M); always shows start + end date.
+
+### Memory housekeeping
+- [x] Serena `tool_usage_rules` memory written — enforces Serena-first tool usage for ALL file types (not just Python)
+- [x] `feedback_use_serena_for_code.md` updated — removed incorrect "Python-only" caveat
+- [x] `MEMORY.md` Tool Usage section updated
+
+**Key decisions:**
+- Dividends fix: `retry: 0` is the minimal-touch correct approach — don't refactor the call site, let the card's existing null handling do the work
+- Open-world search: `TICKER_RE` is permissive (1-6 alphanumeric + dot) to cover ETFs like BRK.B; the "Add" item always appears alongside any DB results that partially match, so users can still pick an existing stock
+- `--color-warning` uses OKLCH hue 65 (amber) consistent with the existing design system palette; `text-warning` is now a proper Tailwind utility class
+
+**Test count:** 267 total (unchanged — frontend-only changes)
+**Alembic head:** `821eb511d146` (migration 007 — unchanged)
+**Current branch:** `feat/phase-4-ai-chatbot`
+
+**Next session — Phase 4: AI Chatbot**
+1. Design: brainstorm ChatSession/ChatMessage models, LangGraph agent loop, streaming SSE/NDJSON
+2. Backend: DB models + migration 008, agents/ module wiring, `/api/v1/chat` streaming router
+3. Frontend: chat UI panel (floating or dedicated `/chat` page)
 
 ---

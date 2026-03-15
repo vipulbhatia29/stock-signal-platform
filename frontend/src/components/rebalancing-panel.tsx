@@ -86,7 +86,7 @@ export function RebalancingPanel({ suggestions }: Props) {
                     }
                     className={cn(
                       s.action === "AT_CAP" &&
-                        "text-amber-500 border-amber-500"
+                        "text-warning border-warning"
                     )}
                   >
                     {ACTION_LABEL[s.action]}

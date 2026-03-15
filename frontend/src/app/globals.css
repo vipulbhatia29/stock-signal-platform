@@ -51,6 +51,8 @@
   --color-loss: var(--loss);
   --color-loss-foreground: var(--loss-foreground);
   --color-neutral-signal: var(--neutral-signal);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
 }
 
 :root {
@@ -92,6 +94,8 @@
   --loss: oklch(0.55 0.20 25);
   --loss-foreground: oklch(0.25 0.10 25);
   --neutral-signal: oklch(0.65 0.15 80);
+  --warning: oklch(0.68 0.17 65);
+  --warning-foreground: oklch(0.28 0.08 65);
   /* Chart-specific semantic colors */
   --chart-price: oklch(0.55 0.22 264);
   --chart-volume: oklch(0.65 0.05 250);
@@ -140,6 +144,8 @@
   --loss: oklch(0.72 0.19 22);
   --loss-foreground: oklch(0.95 0.05 22);
   --neutral-signal: oklch(0.78 0.14 82);
+  --warning: oklch(0.80 0.17 65);
+  --warning-foreground: oklch(0.95 0.05 65);
   /* Chart-specific semantic colors (brighter for dark bg) */
   --chart-price: oklch(0.72 0.22 264);
   --chart-volume: oklch(0.60 0.06 250);

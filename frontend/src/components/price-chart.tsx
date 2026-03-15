@@ -86,6 +86,8 @@ export function PriceChart({ ticker, period, onPeriodChange }: PriceChartProps) 
             <XAxis
               dataKey="time"
               tickFormatter={formatChartDate}
+              interval="preserveStartEnd"
+              minTickGap={60}
               {...CHART_STYLE.axis}
             />
             <YAxis

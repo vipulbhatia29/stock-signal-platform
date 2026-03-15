@@ -225,20 +225,19 @@ Natural language interface that orchestrates all tools.
 ### Success Criteria
 Can ask natural language questions and get tool-backed, synthesized answers.
 
-### Phase 4 Pre-flight Bug & UX Backlog (found in Session 26 QA)
-Fix these before or alongside Phase 4 AI work:
+### Phase 4 Pre-flight Bug & UX Backlog (found in Session 26 QA) — ✅ COMPLETE (Session 27)
 
 **Bugs**
-- [ ] `GET /portfolio/dividends/{ticker}` returns 404/error on stock detail page for tickers not held in portfolio — called unconditionally; should only call if ticker is in portfolio, or suppress the error gracefully (no console noise)
+- ✅ `GET /portfolio/dividends/{ticker}` — set `retry: 0` on `useDividends`; 404 for unheld tickers no longer retried/noisy
 
 **UX Improvements**
-- [ ] **"Add any ticker" open-world search** — if search returns no results, show a fallback option (e.g. "Ingest BA anyway →") that calls `POST /stocks/{ticker}/ingest` directly, then adds to watchlist. Currently only stocks already in the DB are searchable, but the backend supports any valid global ticker.
-- [ ] **Search empty-state messaging** — distinguish between "ticker doesn't exist" vs "ticker not yet seeded" so the user knows what to do
+- ✅ **"Add any ticker" open-world search** — `TickerSearch` now shows "Add [TICKER]" fallback item with `PlusCircleIcon` when query matches no DB results and looks like a valid ticker (`TICKER_RE`)
+- ✅ **Search empty-state messaging** — "No stocks found" shown when no DB results; "Add new ticker" group shown simultaneously for valid-looking queries
 
 **Polish**
-- [ ] Add `--color-warning` CSS var to design system (currently AT_CAP badge uses raw `text-amber-500`)
-- [ ] Signal History x-axis: when very few snapshots exist (< 7 days of data), dates repeat — add min-data guard or improve axis labelling
-- [ ] Price history chart tooltip shows stale date on initial load before user hovers — cosmetic
+- ✅ Add `--color-warning` CSS var to design system — OKLCH amber in `:root` + `.dark`; `--color-warning` in `@theme`; AT_CAP badge updated to `text-warning border-warning`
+- ✅ Signal History x-axis: dynamic `interval={Math.max(0, Math.floor(history.length / 5) - 1)}` — caps at ~5 ticks regardless of data density
+- ✅ Price history chart: `interval="preserveStartEnd"` + `minTickGap={60}` — prevents crowded/stale-looking dates on short periods
 
 ---
 
