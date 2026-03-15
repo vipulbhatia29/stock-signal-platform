@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { get, post, del } from "@/lib/api";
+import { useRebalancing } from "@/hooks/use-stocks";
 import { toast } from "sonner";
 import { Trash2Icon } from "lucide-react";
 import {
@@ -28,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { LogTransactionDialog } from "@/components/log-transaction-dialog";
 import { PortfolioValueChart } from "@/components/portfolio-value-chart";
 import { PortfolioSettingsSheet } from "@/components/portfolio-settings-sheet";
+import { RebalancingPanel } from "@/components/rebalancing-panel";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
   DivestmentAlert,
@@ -375,6 +377,7 @@ export function PortfolioClient() {
   const { data: summary } = usePortfolioSummary();
   const { data: positions } = usePositions();
   const { data: history } = usePortfolioHistory();
+  const { data: rebalancing } = useRebalancing();
   const logTransaction = useLogTransaction();
   const deleteTransaction = useDeleteTransaction();
 
@@ -434,6 +437,11 @@ export function PortfolioClient() {
           </div>
         </div>
       </div>
+
+      {/* Rebalancing suggestions */}
+      {rebalancing && rebalancing.suggestions.length > 0 && (
+        <RebalancingPanel suggestions={rebalancing.suggestions} />
+      )}
     </div>
   );
 }
