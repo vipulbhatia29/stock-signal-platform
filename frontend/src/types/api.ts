@@ -249,6 +249,14 @@ export interface TransactionCreate {
   notes?: string;
 }
 
+export interface DivestmentAlert {
+  rule: "stop_loss" | "position_concentration" | "sector_concentration" | "weak_fundamentals";
+  severity: "critical" | "warning";
+  message: string;
+  value: number;
+  threshold: number;
+}
+
 export interface Position {
   ticker: string;
   shares: number;
@@ -258,6 +266,8 @@ export interface Position {
   unrealized_pnl: number | null;
   unrealized_pnl_pct: number | null;
   allocation_pct: number | null;
+  sector: string | null;
+  alerts: DivestmentAlert[];
 }
 
 export interface SectorAllocation {
@@ -324,6 +334,22 @@ export interface FundamentalsResponse {
   debt_to_equity: number | null;
   piotroski_score: number | null;
   piotroski_breakdown: PiotroskiBreakdown;
+}
+
+// ── User Preferences ─────────────────────────────────────────────────────────
+
+export interface UserPreferences {
+  default_stop_loss_pct: number;
+  max_position_pct: number;
+  max_sector_pct: number;
+  min_cash_reserve_pct: number;
+}
+
+export interface UserPreferencesUpdate {
+  default_stop_loss_pct?: number;
+  max_position_pct?: number;
+  max_sector_pct?: number;
+  min_cash_reserve_pct?: number;
 }
 
 // ── API Error ─────────────────────────────────────────────────────────────────

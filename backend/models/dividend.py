@@ -34,7 +34,4 @@ class DividendPayment(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<DividendPayment ticker={self.ticker} "
-            f"ex_date={self.ex_date} amount={self.amount}>"
-        )
+        return f"<DividendPayment ticker={self.ticker} ex_date={self.ex_date} amount={self.amount}>"

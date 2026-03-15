@@ -24,10 +24,13 @@ import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/section-heading";
 import { MetricCard } from "@/components/metric-card";
 import { ChangeIndicator } from "@/components/change-indicator";
+import { Badge } from "@/components/ui/badge";
 import { LogTransactionDialog } from "@/components/log-transaction-dialog";
 import { PortfolioValueChart } from "@/components/portfolio-value-chart";
+import { PortfolioSettingsSheet } from "@/components/portfolio-settings-sheet";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
+  DivestmentAlert,
   Position,
   PortfolioSnapshot,
   PortfolioSummary,
@@ -173,6 +176,7 @@ function PositionsTable({
             <TableHead className="text-right">Unrealized P&L</TableHead>
             <TableHead className="text-right">Return</TableHead>
             <TableHead className="text-right">Weight</TableHead>
+            <TableHead>Alerts</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -213,6 +217,9 @@ function PositionsTable({
                 {pos.allocation_pct !== null
                   ? `${pos.allocation_pct.toFixed(1)}%`
                   : "—"}
+              </TableCell>
+              <TableCell>
+                <AlertBadges alerts={pos.alerts} />
               </TableCell>
             </TableRow>
           ))}
@@ -340,6 +347,28 @@ function AllocationPie({ sectors }: { summary: PortfolioSummary; sectors: Portfo
   );
 }
 
+function AlertBadges({ alerts }: { alerts: DivestmentAlert[] }) {
+  if (!alerts || alerts.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      {alerts.map((alert) => (
+        <Badge
+          key={alert.rule}
+          variant="outline"
+          className={
+            alert.severity === "critical"
+              ? "bg-red-500/10 text-loss border-red-500/20 text-xs"
+              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-xs"
+          }
+        >
+          {alert.message}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function PortfolioClient() {
@@ -353,10 +382,13 @@ export function PortfolioClient() {
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
       <div className="flex items-center justify-between">
         <SectionHeading>Portfolio</SectionHeading>
-        <LogTransactionDialog
-          onSubmit={(data) => logTransaction.mutate(data)}
-          isLoading={logTransaction.isPending}
-        />
+        <div className="flex items-center gap-2">
+          <PortfolioSettingsSheet />
+          <LogTransactionDialog
+            onSubmit={(data) => logTransaction.mutate(data)}
+            isLoading={logTransaction.isPending}
+          />
+        </div>
       </div>
 
       {/* KPI row */}

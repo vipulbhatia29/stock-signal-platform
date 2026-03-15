@@ -30,9 +30,7 @@ def upgrade() -> None:
     )
 
     # Convert to TimescaleDB hypertable for efficient time-series queries
-    op.execute(
-        "SELECT create_hypertable('dividend_payments', 'ex_date', migrate_data => true)"
-    )
+    op.execute("SELECT create_hypertable('dividend_payments', 'ex_date', migrate_data => true)")
 
 
 def downgrade() -> None:

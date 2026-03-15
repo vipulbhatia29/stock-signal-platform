@@ -77,12 +77,14 @@ def _run_fifo(
 def _group_sectors(
     positions: list[dict],
     total_value: float,
+    max_sector_pct: float = 30.0,
 ) -> list[dict]:
     """Group positions by sector, compute %, flag concentration.
 
     Args:
         positions: List of dicts with keys: ticker, sector (str|None), market_value (float).
         total_value: Total portfolio market value (denominator for pct).
+        max_sector_pct: User's sector concentration limit (default 30%).
 
     Returns:
         List of dicts: sector, market_value, pct, over_limit.
@@ -96,7 +98,12 @@ def _group_sectors(
     for sector, value in sorted(buckets.items(), key=lambda x: -x[1]):
         pct = (value / total_value * 100) if total_value > 0 else 0.0
         result.append(
-            {"sector": sector, "market_value": value, "pct": round(pct, 2), "over_limit": pct > 30}
+            {
+                "sector": sector,
+                "market_value": value,
+                "pct": round(pct, 2),
+                "over_limit": pct > max_sector_pct,
+            }
         )
     return result
 
@@ -224,6 +231,15 @@ async def get_positions_with_pnl(
     )
     positions = result.scalars().all()
 
+    # Bulk-fetch sector for all held tickers
+    tickers = [pos.ticker for pos in positions]
+    sector_map: dict[str, str | None] = {}
+    if tickers:
+        sector_result = await db.execute(
+            select(Stock.ticker, Stock.sector).where(Stock.ticker.in_(tickers))
+        )
+        sector_map = {row.ticker: row.sector for row in sector_result}
+
     pnl_rows = []
     total_value = 0.0
     for pos in positions:
@@ -249,6 +265,7 @@ async def get_positions_with_pnl(
                 "avg_cost_basis": avg_cost,
                 "current_price": current_price,
                 "market_value": market_value,
+                "sector": sector_map.get(pos.ticker),
                 "_cost_basis_total": shares * avg_cost,
             }
         )
@@ -272,19 +289,23 @@ async def get_positions_with_pnl(
                 unrealized_pnl=unrealized_pnl,
                 unrealized_pnl_pct=unrealized_pnl_pct,
                 allocation_pct=allocation_pct,
+                sector=row["sector"],
             )
         )
     return responses
 
 
 async def get_portfolio_summary(
-    portfolio_id: uuid.UUID, db: AsyncSession
+    portfolio_id: uuid.UUID,
+    db: AsyncSession,
+    max_sector_pct: float = 30.0,
 ) -> PortfolioSummaryResponse:
     """Aggregate KPI totals and sector allocation for the portfolio.
 
     Args:
         portfolio_id: The portfolio's UUID.
         db: Async SQLAlchemy session.
+        max_sector_pct: User's sector concentration limit for over_limit flag.
 
     Returns:
         PortfolioSummaryResponse with totals and sector breakdown.
@@ -296,24 +317,16 @@ async def get_portfolio_summary(
     unrealized_pnl = total_value - total_cost
     unrealized_pnl_pct = (unrealized_pnl / total_cost * 100) if total_cost > 0 else 0.0
 
-    # Fetch sector for each ticker
-    tickers = [p.ticker for p in positions_with_pnl]
-    sector_map: dict[str, str | None] = {}
-    if tickers:
-        result = await db.execute(
-            select(Stock.ticker, Stock.sector).where(Stock.ticker.in_(tickers))
-        )
-        sector_map = {row.ticker: row.sector for row in result}
-
+    # Sector data is already on positions (populated by get_positions_with_pnl)
     pos_dicts = [
         {
             "ticker": p.ticker,
-            "sector": sector_map.get(p.ticker),
+            "sector": p.sector,
             "market_value": p.market_value or 0,
         }
         for p in positions_with_pnl
     ]
-    sector_data = _group_sectors(pos_dicts, total_value)
+    sector_data = _group_sectors(pos_dicts, total_value, max_sector_pct=max_sector_pct)
     sectors = [SectorAllocation(**s) for s in sector_data]
 
     return PortfolioSummaryResponse(

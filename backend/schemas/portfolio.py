@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -53,6 +54,7 @@ class PositionResponse(BaseModel):
     unrealized_pnl: float | None
     unrealized_pnl_pct: float | None
     allocation_pct: float | None
+    sector: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -63,7 +65,7 @@ class SectorAllocation(BaseModel):
     sector: str
     market_value: float
     pct: float
-    over_limit: bool  # True if pct > 30
+    over_limit: bool  # True if pct exceeds user's max_sector_pct
 
 
 class PortfolioSummaryResponse(BaseModel):
@@ -109,3 +111,57 @@ class DividendSummaryResponse(BaseModel):
     last_ex_date: datetime | None
     payment_count: int
     history: list[DividendResponse]
+
+
+# ---------------------------------------------------------------------------
+# Divestment rules
+# ---------------------------------------------------------------------------
+
+AlertRule = Literal[
+    "stop_loss",
+    "position_concentration",
+    "sector_concentration",
+    "weak_fundamentals",
+]
+AlertSeverity = Literal["critical", "warning"]
+
+
+class DivestmentAlert(BaseModel):
+    """A single divestment alert fired by the rules engine."""
+
+    rule: AlertRule
+    severity: AlertSeverity
+    message: str
+    value: float
+    threshold: float
+
+
+class PositionWithAlerts(PositionResponse):
+    """Position response enriched with divestment alerts."""
+
+    alerts: list[DivestmentAlert] = []
+
+
+# ---------------------------------------------------------------------------
+# User preferences
+# ---------------------------------------------------------------------------
+
+
+class UserPreferenceResponse(BaseModel):
+    """Response schema for user investment preferences."""
+
+    default_stop_loss_pct: float
+    max_position_pct: float
+    max_sector_pct: float
+    min_cash_reserve_pct: float
+
+    model_config = {"from_attributes": True}
+
+
+class UserPreferenceUpdate(BaseModel):
+    """Partial update schema for user investment preferences."""
+
+    default_stop_loss_pct: float | None = Field(None, gt=0, le=100)
+    max_position_pct: float | None = Field(None, gt=0, le=100)
+    max_sector_pct: float | None = Field(None, gt=0, le=100)
+    min_cash_reserve_pct: float | None = Field(None, gt=0, le=100)

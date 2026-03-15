@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from tests.conftest import StockFactory
+from tests.conftest import SignalSnapshotFactory, StockFactory
 
 
 @pytest.mark.asyncio
@@ -330,3 +332,84 @@ class TestPortfolioHistory:
         """Invalid days param returns 422."""
         resp = await authenticated_client.get("/api/v1/portfolio/history?days=0")
         assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+class TestPositionAlerts:
+    """Tests for divestment alerts on GET /api/v1/portfolio/positions."""
+
+    async def test_positions_include_alerts_field(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """Positions response includes an alerts field (empty when healthy)."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="HLTH", name="Healthy Inc.", sector="Technology")
+            session.add(stock)
+            await session.commit()
+        await engine.dispose()
+
+        await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "HLTH",
+                "transaction_type": "BUY",
+                "shares": "5",
+                "price_per_share": "100.00",
+                "transacted_at": "2026-01-15T00:00:00Z",
+            },
+        )
+
+        resp = await authenticated_client.get("/api/v1/portfolio/positions")
+        assert resp.status_code == 200
+        positions = resp.json()
+        assert len(positions) >= 1
+        hlth = next(p for p in positions if p["ticker"] == "HLTH")
+        assert "alerts" in hlth
+        assert "sector" in hlth
+        assert isinstance(hlth["alerts"], list)
+
+    async def test_positions_alerts_respect_user_prefs(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """Custom user prefs with very low thresholds trigger alerts."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="ALRT", name="Alert Corp", sector="Energy")
+            session.add(stock)
+            await session.flush()  # stock must exist before signal FK
+            signal = SignalSnapshotFactory.build(
+                ticker="ALRT",
+                composite_score=1.5,
+                computed_at=datetime.now(timezone.utc),
+            )
+            session.add(signal)
+            await session.commit()
+        await engine.dispose()
+
+        # Set very low max_position_pct so the alert fires
+        await authenticated_client.patch(
+            "/api/v1/preferences",
+            json={"max_position_pct": 1.0},
+        )
+
+        await authenticated_client.post(
+            "/api/v1/portfolio/transactions",
+            json={
+                "ticker": "ALRT",
+                "transaction_type": "BUY",
+                "shares": "10",
+                "price_per_share": "100.00",
+                "transacted_at": "2026-01-15T00:00:00Z",
+            },
+        )
+
+        resp = await authenticated_client.get("/api/v1/portfolio/positions")
+        assert resp.status_code == 200
+        positions = resp.json()
+        alrt = next(p for p in positions if p["ticker"] == "ALRT")
+        rules = {a["rule"] for a in alrt["alerts"]}
+        # weak_fundamentals should fire (composite_score 1.5 < 3)
+        assert "weak_fundamentals" in rules

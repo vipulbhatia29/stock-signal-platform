@@ -13,15 +13,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import get_async_session
 from backend.dependencies import get_current_user
 from backend.models.portfolio import Transaction
+from backend.models.signal import SignalSnapshot
 from backend.models.user import User
+from backend.routers.preferences import _get_or_create_preference
 from backend.schemas.portfolio import (
+    DivestmentAlert,
     DividendSummaryResponse,
     PortfolioSnapshotResponse,
     PortfolioSummaryResponse,
-    PositionResponse,
+    PositionWithAlerts,
     TransactionCreate,
     TransactionResponse,
 )
+from backend.tools.divestment import check_divestment_rules
 from backend.tools.dividends import get_dividend_summary
 from backend.tools.market_data import get_latest_price
 from backend.tools.portfolio import (
@@ -190,16 +194,80 @@ async def delete_transaction(
 
 @router.get(
     "/positions",
-    response_model=list[PositionResponse],
-    summary="Get current positions with live P&L",
+    response_model=list[PositionWithAlerts],
+    summary="Get current positions with live P&L and divestment alerts",
 )
 async def list_positions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
-) -> list[PositionResponse]:
-    """Return all open positions with current price and unrealized P&L."""
+) -> list[PositionWithAlerts]:
+    """Return all open positions with P&L and divestment alerts.
+
+    Alerts are computed on-demand using the user's preference thresholds.
+    Three queries: positions, user preferences, latest signals.
+    """
     portfolio = await get_or_create_portfolio(current_user.id, db)
-    return await get_positions_with_pnl(portfolio.id, db)
+    positions = await get_positions_with_pnl(portfolio.id, db)
+
+    if not positions:
+        return []
+
+    # Query 2: user preferences
+    prefs = await _get_or_create_preference(current_user.id, db)
+
+    # Query 3: bulk-fetch latest composite_score for held tickers
+    tickers = [p.ticker for p in positions]
+    from sqlalchemy import func
+
+    subq = (
+        select(
+            SignalSnapshot.ticker,
+            func.max(SignalSnapshot.computed_at).label("latest"),
+        )
+        .where(SignalSnapshot.ticker.in_(tickers))
+        .group_by(SignalSnapshot.ticker)
+        .subquery()
+    )
+    signal_result = await db.execute(
+        select(SignalSnapshot.ticker, SignalSnapshot.composite_score).join(
+            subq,
+            (SignalSnapshot.ticker == subq.c.ticker)
+            & (SignalSnapshot.computed_at == subq.c.latest),
+        )
+    )
+    signal_map: dict[str, float | None] = {row.ticker: row.composite_score for row in signal_result}
+
+    # Build sector allocations from positions in-memory
+    total_value = sum(p.market_value or 0 for p in positions)
+    sector_buckets: dict[str, float] = {}
+    for p in positions:
+        sector = p.sector or "Unknown"
+        sector_buckets[sector] = sector_buckets.get(sector, 0.0) + (p.market_value or 0)
+    sector_allocations = [
+        {"sector": s, "pct": round(v / total_value * 100, 2) if total_value > 0 else 0.0}
+        for s, v in sector_buckets.items()
+    ]
+
+    # Check rules for each position
+    result: list[PositionWithAlerts] = []
+    for p in positions:
+        pos_dict = {
+            "ticker": p.ticker,
+            "unrealized_pnl_pct": p.unrealized_pnl_pct,
+            "allocation_pct": p.allocation_pct,
+            "sector": p.sector,
+        }
+        signal = {"composite_score": signal_map.get(p.ticker)} if p.ticker in signal_map else None
+        alerts_raw = check_divestment_rules(pos_dict, sector_allocations, signal, prefs)
+        alerts = [DivestmentAlert(**a) for a in alerts_raw]
+        result.append(
+            PositionWithAlerts(
+                **p.model_dump(),
+                alerts=alerts,
+            )
+        )
+
+    return result
 
 
 @router.get(
@@ -211,9 +279,13 @@ async def get_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> PortfolioSummaryResponse:
-    """Return total value, cost basis, unrealized P&L, and sector breakdown."""
+    """Return total value, cost basis, unrealized P&L, and sector breakdown.
+
+    Uses the user's max_sector_pct preference for the over_limit flag.
+    """
     portfolio = await get_or_create_portfolio(current_user.id, db)
-    return await get_portfolio_summary(portfolio.id, db)
+    prefs = await _get_or_create_preference(current_user.id, db)
+    return await get_portfolio_summary(portfolio.id, db, max_sector_pct=prefs.max_sector_pct)
 
 
 @router.get(
