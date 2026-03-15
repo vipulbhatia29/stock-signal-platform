@@ -208,6 +208,70 @@ Phase 3.5 item 9 complete: `check_divestment_rules()` (4 rules), `DivestmentAler
 
 ---
 
+## Session 29 — Phase 4A UI Redesign: Full Execution (25 Tasks)
+
+**Date:** 2026-03-15
+**Branch:** `feat/phase-4-ai-chatbot`
+
+**What was done:**
+
+Executed all 25 tasks in `docs/superpowers/plans/2026-03-15-ui-redesign-implementation.md` using `superpowers:subagent-driven-development`. Each task had a fresh subagent + spec compliance review + code quality review.
+
+### Chunk 1 — Foundations (Tasks 1-6)
+- [x] `frontend/src/lib/storage-keys.ts` — central localStorage key registry (`stocksignal:cp-width`, `stocksignal:density`)
+- [x] `frontend/src/lib/market-hours.ts` — pure `isNYSEOpen()` utility (IANA `America/New_York`, DST-correct); 7 Jest tests
+- [x] `frontend/src/app/globals.css` — replaced entirely: dark-only navy palette, `@theme inline` block, layout tokens (`--sw: 54px`, `--cp: 280px`), `body.resizing` utility
+- [x] `frontend/src/lib/design-tokens.ts` — expanded with `cyan`, `cdim`, `warning`, `warningForeground`, `card`, `card2`, `hov`, `bhi`, `chart4`, `chart5`
+- [x] `frontend/src/app/layout.tsx` — Sora + JetBrains Mono via `next/font/google`; `cn(sora.variable, jetbrainsMono.variable)` on body
+- [x] `frontend/src/app/providers.tsx` + `sonner.tsx` — `forcedTheme="dark"`, `defaultTheme="dark"`, removed `enableSystem`
+
+### Chunk 2 — Shell (Tasks 7-11)
+- [x] Extracted `usePositions`, `usePortfolioSummary`, `usePortfolioHistory` from `portfolio-client.tsx` → `hooks/use-stocks.ts`
+- [x] `frontend/src/components/sidebar-nav.tsx` — 54px icon-only sidebar, CSS tooltips via `group-hover`, active left indicator, Popover logout (`render={<button/>}` not `asChild` — base-ui v4 fix)
+- [x] `frontend/src/components/topbar.tsx` — market status chip, signal count chip, AI Analyst toggle button
+- [x] `frontend/src/components/chat-panel.tsx` — drag-resize handle (DOM events), `--cp` CSS var updated directly, width persisted to `STORAGE_KEYS.CHAT_PANEL_WIDTH`, `transform: translateX` hide
+- [x] `frontend/src/app/(authenticated)/layout.tsx` — replaced as `"use client"`: `SidebarNav | flex-col(Topbar + main) | ChatPanel`; deleted `nav-bar.tsx`
+
+### Chunk 3 — Core Components (Tasks 12-15)
+- [x] `frontend/src/components/sparkline.tsx` — rewritten as raw SVG `<polyline>` (bezier → jagged); optional `volumes` bars; `readCssVar` for SSR-safe color
+- [x] `frontend/src/components/index-card.tsx` — navy tokens, cyan accent gradient, monospace stock count
+- [x] `frontend/src/components/stock-card.tsx` — inline signal badge with `var(--gain)`/`var(--loss)`/`var(--cyan)`, score progress bar; all existing staleness/refresh logic preserved
+- [x] `frontend/src/components/signal-badge.tsx` — added `RECOMMENDATION_STYLES` map for `BUY | HOLD | SELL` alongside existing RSI/MACD types
+- [x] `section-heading.tsx`, `score-badge.tsx`, `change-indicator.tsx`, `metric-card.tsx` — navy token updates
+
+### Chunk 4 — New Dashboard Components (Tasks 16-19)
+- [x] `frontend/src/components/stat-tile.tsx` — accent gradient top border, `accentColor` prop, children slot OR value+sub display
+- [x] `frontend/src/components/allocation-donut.tsx` — CSS `conic-gradient` donut (no chart lib), exported `buildGradient()`, legend top 3 sectors
+- [x] `frontend/src/components/portfolio-drawer.tsx` — bottom slide-up, `left: var(--sw)`, `right: var(--cp)` when chat open, uses `usePortfolioSummary` + `usePortfolioHistory` + `PortfolioValueChart`
+- [x] `frontend/src/app/(authenticated)/dashboard/page.tsx` — wired: `StatTile` grid (5 cols), `AllocationDonut`, `PortfolioDrawer`, `signalCounts`, `topSignal`, `allocations` useMemo; removed header (moved to layout/Topbar)
+
+### Chunk 5 — Token Updates (Tasks 20-23)
+- [x] Screener components (`screener-table.tsx`, `screener-grid.tsx`, `pagination-controls.tsx`) — headers to `text-subtle uppercase text-[9.5px] tracking-[0.1em]`, hover `bg-hov`, buttons `bg-card2`
+- [x] Stock detail components (`signal-meter.tsx`, `chart-tooltip.tsx`) — `bg-card2` tokens, monospace values
+- [x] Portfolio components (`rebalancing-panel.tsx`, `portfolio-settings-sheet.tsx`, `log-transaction-dialog.tsx`, `ticker-search.tsx`) — `bg-card2 border-border`, search popover `bg-card2`, focus ring `border-[var(--bhi)]`
+
+### Chunk 6 — Tests + Verification (Tasks 24-25)
+- [x] `frontend/src/__tests__/components/` — 5 new test files: `stat-tile.test.tsx`, `allocation-donut.test.tsx`, `chat-panel.test.tsx`, `sidebar-nav.test.tsx`, `portfolio-drawer.test.tsx` (20 tests total)
+- [x] `frontend/jest.config.ts` — upgraded to `testEnvironment: "jsdom"`, added `@testing-library/jest-dom` setup, `@testing-library/react` + `jest-environment-jsdom` installed
+- [x] Build clean: `npm run build` + `npm run lint` zero errors
+
+### Key bug fixes during execution
+- `PopoverTrigger asChild` → `render={<button/>}` (base-ui v4 compat; caught in build)
+- Market hours test UTC timestamp bug: `14:00Z` ≠ `09:00 EDT` (Mar, DST) → corrected to `13:00Z`
+- Jest jsdom environment not set up → installed `@testing-library/react` + reconfigured `jest.config.ts`
+
+**Test count:** 267 backend (unchanged) + 20 frontend component tests (new)
+**Alembic head:** `821eb511d146` (migration 007 — unchanged)
+**Current branch:** `feat/phase-4-ai-chatbot`
+
+**Next session — Phase 4B: AI Chatbot Backend:**
+1. `ChatSession` + `ChatMessage` DB models + migration 008
+2. `backend/agents/` — `BaseAgent`, `StockAgent`, `GeneralAgent`, agentic loop, NDJSON streaming
+3. `backend/routers/chat.py` — `POST /api/v1/chat/stream`
+4. Wire `ChatPanel` stub to real streaming backend
+
+---
+
 ## Session 28 — UI Redesign Brainstorm + Spec + Implementation Plan
 
 **Date:** 2026-03-15

@@ -205,15 +205,17 @@ Command-center dark UI shell + natural language AI interface that orchestrates a
 
 ### Deliverables
 
-#### Phase 4A — UI Redesign (Sessions 28–29)
+#### Phase 4A — UI Redesign (Sessions 28–29) ✅ COMPLETE
 - ✅ **Spec:** `docs/superpowers/specs/2026-03-15-ui-redesign-phase-4-shell-design.md`
 - ✅ **Plan:** `docs/superpowers/plans/2026-03-15-ui-redesign-implementation.md`
-- [ ] **Design tokens** — navy dark palette replacing OKLCH shadcn defaults, dark-only
-- [ ] **Typography** — Sora (UI) + JetBrains Mono (numbers) via `next/font/google`
-- [ ] **Shell layout** — 54px icon `SidebarNav` + `Topbar` + resizable `ChatPanel` (stub)
-- [ ] **New components** — `StatTile`, `AllocationDonut`, `PortfolioDrawer`
-- [ ] **Dashboard Overview row** — 5 stat tiles with portfolio/signals/allocation data
-- [ ] **All component restyling** — 28 existing components updated to navy tokens
+- ✅ **Design tokens** — navy dark palette replacing OKLCH shadcn defaults, dark-only (`forcedTheme="dark"`)
+- ✅ **Typography** — Sora (UI) + JetBrains Mono (numbers) via `next/font/google`; `--font-sora`, `--font-jetbrains-mono` CSS vars
+- ✅ **Shell layout** — 54px icon `SidebarNav` + `Topbar` + resizable `ChatPanel` (stub, drag-resize, persisted width)
+- ✅ **New components** — `StatTile`, `AllocationDonut`, `PortfolioDrawer`
+- ✅ **Dashboard Overview row** — 5 stat tiles with portfolio/signals/allocation data
+- ✅ **All component restyling** — screener, stock detail, portfolio, shared atoms updated to navy tokens
+- ✅ **SVG Sparkline** — raw `<polyline>` replacing Recharts (jagged financial chart feel)
+- ✅ **Frontend tests** — 20 component tests in `frontend/src/__tests__/components/`; Jest upgraded to jsdom env
 
 #### Phase 4B — AI Backend (Session 30+)
 - [ ] **Database models:** ChatSession, ChatMessage
