@@ -249,6 +249,19 @@ Dark command-center UI live. Can ask natural language questions and get tool-bac
 - ✅ Signal History x-axis: dynamic `interval={Math.max(0, Math.floor(history.length / 5) - 1)}` — caps at ~5 ticks regardless of data density
 - ✅ Price history chart: `interval="preserveStartEnd"` + `minTickGap={60}` — prevents crowded/stale-looking dates on short periods
 
+#### Phase 4.5 — CI/CD + Branching Strategy (between 4B and Phase 5)
+- [ ] **Spec:** `docs/superpowers/specs/2026-03-15-cicd-branching-design.md` ✅ READY
+- [ ] **Implementation plan:** to be written at the start of this sprint (spec is the input)
+- [ ] Two-track branching: `main` (production) + `develop` (staging); `feat/*` → develop; `hotfix/*` → main
+- [ ] **`ci-pr.yml`** — fast gate on PRs to `develop`/`main`: lint + unit + API tests with service containers
+- [ ] **`ci-merge.yml`** — full gate on push to `develop`: lint → unit+api → integration stub → build
+- [ ] **`deploy.yml`** — no-op stub (Phase 6 Terraform/Azure will fill this in)
+- [ ] **Conftest restructure** — sub-level conftests in `tests/unit/` and `tests/api/` to override `db_url` from `DATABASE_URL` env var; `TEST_ENV` guard prevents testcontainers in CI
+- [ ] **`uv.lock`** — commit lockfile, remove from `.gitignore`
+- [ ] **5 GitHub Actions Secrets** — `CI_DATABASE_URL`, `CI_REDIS_URL`, `CI_JWT_SECRET_KEY`, `CI_JWT_ALGORITHM`, `CI_POSTGRES_PASSWORD`
+- [ ] **Branch protection rules** — GitHub UI: require status checks on `main` and `develop`
+- [ ] **Doc catch-up** — FSD, TDD, CLAUDE.md updates for Phase 4A UI changes + CI/CD additions
+
 ---
 
 ## Phase 5: Background Jobs + Alerts (Weeks 9-10)
