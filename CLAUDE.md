@@ -287,6 +287,25 @@ stock-signal-platform/
 - `project-plan.md` — Phased build plan with deliverables per phase.
 - `PROGRESS.md` — Session log tracking what was built and what's next.
 
+### Sprint Document Rules
+
+All sprint artifacts live under `docs/superpowers/` with this structure:
+
+```
+docs/superpowers/
+├── specs/          # Active design specs (brainstorming output)
+├── plans/          # Active implementation plans (writing-plans output)
+└── archive/        # Completed specs + plans (moved here after shipping)
+```
+
+**Rules:**
+- **One canonical location:** ALL specs go in `docs/superpowers/specs/`, ALL plans go in `docs/superpowers/plans/`. NEVER use `.claude/plans/` or any other directory.
+- **Naming:** `YYYY-MM-DD-<topic>-design.md` for specs, `<topic>-implementation.md` for plans.
+- **Lifecycle:** Active → Implemented → Archived. After a feature ships and tests pass, move both spec and plan to `docs/superpowers/archive/`.
+- **Never delete:** `CLAUDE.md`, `PROGRESS.md`, `project-plan.md`, `MEMORY.md`, Serena memories, or incomplete sprint docs.
+- **Context budget:** Do NOT read archived files. They exist only for historical reference. If you need to understand a completed feature, read the actual code or PROGRESS.md instead.
+- **Serena for code exploration:** When exploring Python backend code, prefer Serena's `find_symbol` and `get_symbols_overview` over reading full files. This saves significant context tokens.
+
 ### Documentation Triggers
 
 | When you... | Update... |
@@ -299,11 +318,15 @@ stock-signal-platform/
 | Change architecture or conventions | This file (`CLAUDE.md`) |
 | Add a new env var | `backend/.env.example` + Environment Variables section in `CLAUDE.md` |
 | Complete a session | `PROGRESS.md` with what was done, key decisions, and what's next |
-| Ship a feature from an implementation plan | Delete or mark COMPLETED the plan/spec files (`.claude/plans/`, `docs/superpowers/`). Extract any reusable design principles to `global-claude-md-for-home-dir/design-principles.md` |
+| Ship a feature from an implementation plan | Move completed spec/plan files to `docs/superpowers/archive/`. Extract any reusable design principles to `global-claude-md-for-home-dir/design-principles.md` |
 | Delete a file referenced in `mkdocs.yml` | Update `mkdocs.yml` nav to remove or comment out the entry |
 
 **End-of-session checklist** — before wrapping up, verify these are current:
-1. `PROGRESS.md` — session entry added
+1. `PROGRESS.md` — session entry added (full detail for last 3 sessions; compact older ones)
+   - **Maintenance:** When starting a new session, compact the 4th-oldest session in-place.
+     When PROGRESS.md exceeds ~200 lines, append full text of compacted sessions to
+     `docs/superpowers/archive/progress-full-log.md`, then replace with phase-level summary lines.
+   - Full archive: `docs/superpowers/archive/progress-full-log.md` (never read by Claude)
 2. `CLAUDE.md` — updated if conventions/architecture changed
 3. `project-plan.md` — **ALWAYS** mark completed deliverables with ✅ and session number; add any new pending items
 4. `docs/FSD.md` — updated if functional requirements changed
@@ -340,3 +363,5 @@ Optional: GROQ_API_KEY, SERPAPI_API_KEY, FRED_API_KEY, OPENAI_API_KEY
 | `gh auth login` fails with `permission denied` on `~/.config/gh` | Missing config directory | `sudo mkdir -p ~/.config/gh && sudo chown $USER ~/.config/gh` |
 | CSS var colors not resolving in Recharts | Recharts needs literal color strings, not `var(--x)` | Use `useChartColors()` hook (reads via `getComputedStyle`) or local `readCssVar()` for one-off reads |
 | Sparkline/chart colors wrong on initial render | CSS vars not yet resolved on first paint | Use lazy `useState(() => resolveColor(...))` initializer — reads CSS vars synchronously on mount |
+| TimescaleDB hypertable PK uses `ON CONFLICT ... DO UPDATE` | Composite PK `(id, time)` means upsert needs named constraint | Use `constraint="tablename_pkey"` in `on_conflict_do_update()` |
+| Python heredoc/script inserts escaped backticks in JS | Template literals get backslash-escaped through shell layers | Use the Edit tool or Write tool for JS/TS files with template literals — never use Python string replacement via Bash for template literal content |

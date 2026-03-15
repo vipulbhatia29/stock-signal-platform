@@ -13,6 +13,8 @@ Test strategy:
 from backend.tools.recommendations import (
     Action,
     Confidence,
+    PortfolioState,
+    calculate_position_size,
     generate_recommendation,
 )
 from backend.tools.signals import SignalResult
@@ -305,3 +307,194 @@ class TestReasoning:
         rsi_info = result.reasoning["signals"]["rsi"]
         assert "interpretation" in rsi_info
         assert len(rsi_info["interpretation"]) > 10  # Not empty/trivial
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Portfolio-aware recommendation tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestPortfolioAwareRecommendations:
+    """Tests for portfolio-aware HOLD/SELL actions."""
+
+    def test_held_strong_signal_at_max_allocation_returns_hold(self) -> None:
+        """Strong signal but already at max allocation should return HOLD."""
+        signal = _make_signal("AAPL", composite_score=9.0)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 5.5}
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
+        assert result.action == Action.HOLD
+        assert result.confidence == Confidence.HIGH
+        assert "already at target allocation" in result.reasoning["summary"].lower()
+
+    def test_held_medium_signal_returns_hold(self) -> None:
+        """Held stock with medium signals should return HOLD."""
+        signal = _make_signal("AAPL", composite_score=6.0)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 2.0}
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
+        assert result.action == Action.HOLD
+        assert result.confidence == Confidence.MEDIUM
+
+    def test_held_weak_signal_returns_sell(self) -> None:
+        """Held stock with weak signals should return SELL."""
+        signal = _make_signal("AAPL", composite_score=3.0)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 2.0}
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
+        assert result.action == Action.SELL
+        assert result.confidence == Confidence.MEDIUM
+
+    def test_held_very_weak_signal_returns_sell_high_confidence(self) -> None:
+        """Held stock with very weak signals (score < 2) should return SELL HIGH confidence."""
+        signal = _make_signal("AAPL", composite_score=1.5)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 3.0}
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
+        assert result.action == Action.SELL
+        assert result.confidence == Confidence.HIGH
+
+    def test_not_held_strong_signal_still_returns_buy(self) -> None:
+        """Not held stock with strong signals should still return BUY."""
+        signal = _make_signal("AAPL", composite_score=8.5)
+        portfolio_state: PortfolioState = {"is_held": False, "allocation_pct": None}
+        result = generate_recommendation(
+            signal, current_price=150.0, portfolio_state=portfolio_state
+        )
+        assert result.action == Action.BUY
+
+    def test_no_portfolio_state_preserves_existing_logic(self) -> None:
+        """Passing None for portfolio_state must not change existing behavior."""
+        signal = _make_signal("AAPL", composite_score=8.5)
+        result = generate_recommendation(signal, current_price=150.0, portfolio_state=None)
+        assert result.action == Action.BUY
+
+    def test_held_strong_signal_under_max_allocation_returns_buy(self) -> None:
+        """Still held but not at cap — should still recommend BUY."""
+        signal = _make_signal("AAPL", composite_score=8.5)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 2.0}
+        result = generate_recommendation(
+            signal,
+            current_price=150.0,
+            portfolio_state=portfolio_state,
+            max_position_pct=5.0,
+        )
+        assert result.action == Action.BUY
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Position sizing tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_position_size_basic():
+    """Normal case: stock not held, plenty of cash, under sector cap."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=0.0,
+        total_value=100_000.0,
+        available_cash=20_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=10.0,
+        max_sector_pct=30.0,
+    )
+    # target = min(5%, 100/20=5%) = 5% → gap = 5% → 5% * 100k = 5000
+    assert amount == 5000.0
+
+
+def test_position_size_already_at_target():
+    """Already at target allocation → 0."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=5.0,
+        total_value=100_000.0,
+        available_cash=10_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=10.0,
+        max_sector_pct=30.0,
+    )
+    assert amount == 0.0
+
+
+def test_position_size_sector_at_cap():
+    """Sector already full → 0 regardless of gap."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=0.0,
+        total_value=100_000.0,
+        available_cash=20_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=30.0,  # at cap
+        max_sector_pct=30.0,
+    )
+    assert amount == 0.0
+
+
+def test_position_size_capped_by_cash():
+    """Suggested amount exceeds available cash → capped."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=0.0,
+        total_value=100_000.0,
+        available_cash=1_000.0,  # only $1k available
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=5.0,
+        max_sector_pct=30.0,
+    )
+    assert amount == 1000.0
+
+
+def test_position_size_below_minimum():
+    """Suggested < $100 → 0 (too small to be worth trading)."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=4.901,
+        total_value=100_000.0,
+        available_cash=5_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=5.0,
+        max_sector_pct=30.0,
+    )
+    # gap = 0.099% → 0.00099 * 100k = $99.0 — below minimum $100 → should return 0.0
+    assert amount == 0.0
+
+
+def test_position_size_at_exact_minimum():
+    """Suggested exactly $100 → $100 (at-boundary trade is still valid)."""
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=4.9,
+        total_value=100_000.0,
+        available_cash=5_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=5.0,
+        max_sector_pct=30.0,
+    )
+    # gap = 0.1% → 0.001 * 100k = $100 — exactly at boundary, should return 100.0
+    assert amount == 100.0
+
+
+def test_position_size_rounds_to_cents():
+    """Result is rounded to 2 decimal places (not truncated)."""
+    # 5% of 33,333 = 1666.65 exactly
+    amount = calculate_position_size(
+        ticker="AAPL",
+        current_allocation_pct=0.0,
+        total_value=33_333.0,
+        available_cash=50_000.0,
+        num_target_positions=20,
+        max_position_pct=5.0,
+        sector_allocation_pct=5.0,
+        max_sector_pct=30.0,
+    )
+    assert amount == 1666.65

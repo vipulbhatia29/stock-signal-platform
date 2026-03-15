@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.config import settings
 from backend.rate_limit import limiter
-from backend.routers import auth, indexes, portfolio, stocks
+from backend.routers import auth, indexes, portfolio, preferences, stocks
 from backend.routers.tasks import router as tasks_router
 
 app = FastAPI(
@@ -24,7 +24,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
@@ -42,3 +42,4 @@ app.include_router(indexes.router, prefix="/api/v1/indexes", tags=["indexes"])
 app.include_router(stocks.router, prefix="/api/v1/stocks", tags=["stocks"])
 app.include_router(portfolio.router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1")
+app.include_router(preferences.router, prefix="/api/v1")

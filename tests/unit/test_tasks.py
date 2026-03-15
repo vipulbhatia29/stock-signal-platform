@@ -75,3 +75,35 @@ def test_beat_schedule_contains_refresh_job():
     entry = celery_app.conf.beat_schedule["refresh-all-watchlist-tickers"]
     assert entry["task"] == "backend.tasks.market_data.refresh_all_watchlist_tickers_task"
     assert entry["schedule"] == 30 * 60
+
+
+@pytest.mark.filterwarnings("ignore::RuntimeWarning")
+def test_beat_schedule_contains_portfolio_snapshot_job():
+    """Celery beat_schedule includes the daily portfolio snapshot job."""
+    from backend.tasks import celery_app
+
+    assert "snapshot-all-portfolios-daily" in celery_app.conf.beat_schedule
+    entry = celery_app.conf.beat_schedule["snapshot-all-portfolios-daily"]
+    assert entry["task"] == "backend.tasks.portfolio.snapshot_all_portfolios_task"
+
+
+def test_snapshot_all_portfolios_task_calls_async():
+    """snapshot_all_portfolios_task delegates to _snapshot_all_portfolios_async."""
+    with patch("asyncio.run", return_value={"snapshotted": 2, "skipped": 0}) as mock_run:
+        from backend.tasks.portfolio import snapshot_all_portfolios_task
+
+        result = snapshot_all_portfolios_task.run()
+        mock_run.assert_called_once()
+        assert result["snapshotted"] == 2
+        assert result["skipped"] == 0
+
+
+def test_snapshot_all_portfolios_task_retries_on_exception():
+    """snapshot_all_portfolios_task re-raises on failure."""
+    with patch("asyncio.run") as mock_run:
+        mock_run.side_effect = Exception("DB connection refused")
+
+        from backend.tasks.portfolio import snapshot_all_portfolios_task
+
+        with pytest.raises(Exception, match="DB connection refused"):
+            snapshot_all_portfolios_task.run()

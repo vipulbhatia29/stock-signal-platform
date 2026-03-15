@@ -93,7 +93,7 @@ Establish a cohesive design system informed by TradingView, Robinhood, and
 Bloomberg Terminal UI patterns. Fix responsive layout issues, standardize
 color/typography tokens, and add financial-specific components.
 
-**Detailed plan:** `.claude/plans/cozy-wandering-backus.md`
+**Detailed plan:** `docs/superpowers/archive/cozy-wandering-backus.md` (COMPLETED)
 
 ### Deliverables — Phase 2 Polish (do now)
 1. **Color system overhaul** — financial semantic CSS variables (gain/loss/neutral),
@@ -154,22 +154,24 @@ Track actual positions and add fundamental analysis signals.
 6. ✅ **Updated composite score** merging technical (50%) + fundamental (50%) (Session 21)
    - `GET /api/v1/stocks/{ticker}/fundamentals` endpoint added
    - `FundamentalsCard` on stock detail page (P/E, PEG, FCF yield, D/E, Piotroski bar)
-   - **Pending:** wire Piotroski into ingest endpoint so composite score uses fundamentals at ingest time
+   - ✅ Piotroski wired into ingest endpoint for 50/50 blending at ingest time (Session 22)
 
 ### Deliverables — Phase 3.5 (deferred — next sprint after core)
 
-7. Portfolio value history chart (Celery daily PortfolioSnapshot hypertable)
-8. Dividend tracking (DividendPayment model)
-9. **Divestment rules engine:**
-   - Trailing stop-loss alerts
-   - Position concentration warnings (>5%)
-   - Sector concentration warnings (>30%)
-   - Fundamental deterioration flags
-   - Cash reserve warnings (<10%)
-10. **`backend/tools/recommendations.py`** — UPGRADE to portfolio-aware:
-    - Factor in current holdings, position sizing, sector caps
-    - Decision reasoning in JSONB
-11. Rebalancing suggestions with specific dollar amounts
+7. ✅ **Portfolio value history** — PortfolioSnapshot hypertable, Celery Beat daily task, `GET /portfolio/history`, PortfolioValueChart (Session 22)
+8. ✅ **Dividend tracking** — DividendPayment model, migration 007, summary tool, GET endpoint, unit+API tests, DividendCard UI (Session 23)
+9. ✅ **Divestment rules engine** (Session 24):
+   - Pure `check_divestment_rules()` function with 4 rules (stop-loss, position/sector concentration, weak fundamentals)
+   - GET/PATCH `/api/v1/preferences` with configurable thresholds
+   - Settings sheet UI on portfolio page (gear icon)
+   - Alert badges on positions table (critical=red, warning=amber)
+   - 19 new tests (11 unit + 6 preferences API + 2 portfolio alert API)
+10. ✅ **`backend/tools/recommendations.py`** — UPGRADE to portfolio-aware (Session 25):
+    - `PortfolioState` TypedDict; `Action.HOLD` + `Action.SELL`; portfolio context in `ingest_ticker`
+    - held + at cap → HOLD; held + weak → SELL; not held → existing BUY/WATCH/AVOID
+11. ✅ **Rebalancing suggestions with specific dollar amounts** (Session 25):
+    - `calculate_position_size()` pure function; `GET /api/v1/portfolio/rebalancing`
+    - `RebalancingPanel` component on portfolio page (BUY_MORE/HOLD/AT_CAP per position)
 12. **Schwab OAuth sync** — Phase 4 dedicated feature
 13. **Multi-account support** (Fidelity/IRA) — Phase 4
 

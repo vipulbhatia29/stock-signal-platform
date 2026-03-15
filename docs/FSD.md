@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Living Document (Phase 1-2.5 complete)
+**Status:** Living Document (Phase 1-3.5 in progress)
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -298,18 +298,29 @@ Users can override weights via UserPreference.composite_weights.
 - Adjust avg_cost: divide by ratio_to/ratio_from
 - Historical prices use adj_close (already split-adjusted by yfinance)
 
-**FR-6.4: Dividend Tracking**
-- Auto-detect dividends from yfinance dividend history
-- Record DividendPayment: amount_per_share × shares_held_at_ex_date
-- Include in total return calculations
-- Dashboard shows: total dividend income, trailing 12-month yield
+**FR-6.4: Dividend Tracking** ✅ (Session 23)
+- Fetch dividends from yfinance dividend history via `fetch_dividends()` tool
+- Store as DividendPayment rows (TimescaleDB hypertable, composite PK: ticker + ex_date)
+- `GET /api/v1/portfolio/dividends/{ticker}` — summary with total received, trailing-12-month annual dividends, dividend yield, payment history
+- Stock detail page: DividendCard component with KPI row + collapsible payment history table
+- Idempotent upserts via ON CONFLICT DO NOTHING
 
-**FR-6.5: Portfolio Snapshots**
-- Nightly task computes and stores PortfolioSnapshot
-- total_value = sum(position_qty × current_price) + cash
-- day_pnl = today_value - yesterday_value
-- total_pnl = total_value - total_invested
-- positions_json stores snapshot of all positions for historical reconstruction
+**FR-6.5: Portfolio Snapshots** ✅ (Session 22)
+- Celery Beat daily task at 21:00 UTC (4 PM ET after market close)
+- Stores PortfolioSnapshot: total_value, total_cost_basis, unrealized_pnl, position_count
+- `GET /api/v1/portfolio/history?days=N` — returns daily snapshots
+- PortfolioValueChart: area chart with value line + cost basis dashed line
+- Upsert (ON CONFLICT DO UPDATE) for idempotent daily re-runs
+
+**FR-6.6: Divestment Rules Engine** (IMPLEMENTED — Session 24)
+- On-demand alerts bundled into positions endpoint response (`PositionWithAlerts`)
+- 4 rule types: stop_loss (critical), position_concentration (warning), sector_concentration (warning), weak_fundamentals (warning)
+- All thresholds configurable via UserPreference model (not hardcoded)
+- `GET /api/v1/preferences` and `PATCH /api/v1/preferences` for threshold management
+- Settings sheet on portfolio page (gear icon → shadcn Sheet)
+- Alert badges on positions table with severity-based coloring
+- Pure function `check_divestment_rules()` in `backend/tools/divestment.py`
+- Null safety: skips rules when dependent values are None
 
 ### FR-7: Screener (Phase 2)
 
@@ -625,7 +636,7 @@ After 3+ months of data accumulation, the following metrics become available:
 | Entry animations | | ✓ (Phase 2.5) | | | | |
 | Fundamental signals | | | ✓ | | | |
 | Portfolio tracker | | | ✓ | | | |
-| Dividends + splits | | | ✓ | | | |
+| Dividends ✅ + splits | | | ✓ | | | |
 | Portfolio snapshots | | | ✓ | | | |
 | Alert rules engine | | | ✓ | | | |
 | Position sizing | | | ✓ | | | |

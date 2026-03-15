@@ -249,6 +249,14 @@ export interface TransactionCreate {
   notes?: string;
 }
 
+export interface DivestmentAlert {
+  rule: "stop_loss" | "position_concentration" | "sector_concentration" | "weak_fundamentals";
+  severity: "critical" | "warning";
+  message: string;
+  value: number;
+  threshold: number;
+}
+
 export interface Position {
   ticker: string;
   shares: number;
@@ -258,6 +266,8 @@ export interface Position {
   unrealized_pnl: number | null;
   unrealized_pnl_pct: number | null;
   allocation_pct: number | null;
+  sector: string | null;
+  alerts: DivestmentAlert[];
 }
 
 export interface SectorAllocation {
@@ -274,6 +284,32 @@ export interface PortfolioSummary {
   unrealized_pnl_pct: number;
   position_count: number;
   sectors: SectorAllocation[];
+}
+
+export interface PortfolioSnapshot {
+  snapshot_date: string;
+  total_value: number;
+  total_cost_basis: number;
+  unrealized_pnl: number;
+  position_count: number;
+}
+
+// ── Dividends ───────────────────────────────────────────────────────────────
+
+export interface DividendPayment {
+  ticker: string;
+  ex_date: string;
+  amount: number;
+}
+
+export interface DividendSummary {
+  ticker: string;
+  total_received: number;
+  annual_dividends: number;
+  dividend_yield: number | null;
+  last_ex_date: string | null;
+  payment_count: number;
+  history: DividendPayment[];
 }
 
 // ── Fundamentals ─────────────────────────────────────────────────────────────
@@ -298,6 +334,40 @@ export interface FundamentalsResponse {
   debt_to_equity: number | null;
   piotroski_score: number | null;
   piotroski_breakdown: PiotroskiBreakdown;
+}
+
+// ── User Preferences ─────────────────────────────────────────────────────────
+
+export interface UserPreferences {
+  default_stop_loss_pct: number;
+  max_position_pct: number;
+  max_sector_pct: number;
+  min_cash_reserve_pct: number;
+}
+
+export interface UserPreferencesUpdate {
+  default_stop_loss_pct?: number;
+  max_position_pct?: number;
+  max_sector_pct?: number;
+  min_cash_reserve_pct?: number;
+}
+
+// ── Rebalancing ───────────────────────────────────────────────────────────────
+
+export interface RebalancingSuggestion {
+  ticker: string;
+  action: "BUY_MORE" | "HOLD" | "AT_CAP";
+  current_allocation_pct: number | null;
+  target_allocation_pct: number;
+  suggested_amount: number;
+  reason: string;
+}
+
+export interface RebalancingResponse {
+  total_value: number;
+  available_cash: number;
+  num_positions: number;
+  suggestions: RebalancingSuggestion[];
 }
 
 // ── API Error ─────────────────────────────────────────────────────────────────

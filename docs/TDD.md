@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Living Document (Phase 1-2.5 complete)
+**Status:** Living Document (Phase 1-3.5 in progress)
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -220,18 +220,41 @@ GET /api/v1/portfolio/summary                [200 OK]
               unrealized_pnl_pct, position_count,
               sectors: [{ sector, market_value, pct, over_limit }] }
 
---- Deferred to Phase 3.5 ---
-GET /api/v1/portfolio/history?period={1m|3m|6m|1y|all}   (value history chart)
-GET /api/v1/portfolio/dividends?period={1y|all}           (dividend tracking)
+--- Phase 3.5 (implemented) ---
+GET /api/v1/portfolio/history?days={N}                    (value history chart) ✅
+GET /api/v1/portfolio/dividends/{ticker}                  (dividend summary + history) ✅
+
+--- Phase 3.5 (implemented — divestment rules) ---
+GET /api/v1/preferences                                   (user threshold preferences) ✅
+PATCH /api/v1/preferences                                 (update threshold preferences) ✅
+GET /portfolio/positions now returns alerts[] per position (divestment alerts) ✅
 ```
 
 **Tool:** `backend/tools/portfolio.py`
 - `_run_fifo(transactions)` — pure function, no DB, O(1) lot consumption via `deque`
-- `_group_sectors(positions, total_value)` — pure function, groups by sector (null → "Unknown")
+- `_group_sectors(positions, total_value, max_sector_pct)` — pure function, groups by sector (null → "Unknown"), flags `over_limit` per user pref
 - `get_or_create_portfolio(user_id, db)` — lazy portfolio creation on first use
 - `recompute_position(portfolio_id, ticker, db)` — full FIFO recompute after every write; preserves `opened_at`
-- `get_positions_with_pnl(portfolio_id, db)` — fetches latest price per position from StockPrice
-- `get_portfolio_summary(portfolio_id, db)` — aggregates KPIs + sector breakdown
+- `get_positions_with_pnl(portfolio_id, db)` — fetches latest price per position from StockPrice, includes sector
+- `get_portfolio_summary(portfolio_id, db, max_sector_pct)` — aggregates KPIs + sector breakdown with user-configurable over_limit threshold
+- `snapshot_portfolio_value(portfolio_id, db)` — daily snapshot with upsert
+- `get_portfolio_history(portfolio_id, db, days)` — fetch time series snapshots
+
+**Tool:** `backend/tools/dividends.py`
+- `fetch_dividends(ticker)` — fetch from yfinance, returns list of {ex_date, amount}
+- `store_dividends(ticker, dividends, db)` — upsert to DividendPayment table (ON CONFLICT DO NOTHING)
+- `get_dividends(ticker, db)` — query stored dividend payments
+- `get_dividend_summary(ticker, db, current_price)` — aggregate stats: total received, annual, yield, history
+
+**Tool:** `backend/tools/divestment.py`
+- `check_divestment_rules(position, sector_allocations, signal, prefs)` — pure function, returns list of alert dicts
+  - 4 rules: stop_loss (critical, pnl ≤ -threshold), position_concentration (warning, alloc > max), sector_concentration (warning, sector > max), weak_fundamentals (warning, composite < 3)
+  - Null-safe: skips rule when dependent value is None
+
+**Router:** `backend/routers/preferences.py`
+- `_get_or_create_preference(user_id, db)` — idempotent fetch/create helper (shared with portfolio router)
+- `GET /api/v1/preferences` → `UserPreferenceResponse`
+- `PATCH /api/v1/preferences` → partial update via `UserPreferenceUpdate` (Field gt=0, le=100)
 
 ### 3.6 Chat Endpoint (Phase 4)
 

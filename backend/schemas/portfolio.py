@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field, field_validator
@@ -53,6 +54,7 @@ class PositionResponse(BaseModel):
     unrealized_pnl: float | None
     unrealized_pnl_pct: float | None
     allocation_pct: float | None
+    sector: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -63,7 +65,7 @@ class SectorAllocation(BaseModel):
     sector: str
     market_value: float
     pct: float
-    over_limit: bool  # True if pct > 30
+    over_limit: bool  # True if pct exceeds user's max_sector_pct
 
 
 class PortfolioSummaryResponse(BaseModel):
@@ -75,3 +77,116 @@ class PortfolioSummaryResponse(BaseModel):
     unrealized_pnl_pct: float
     position_count: int
     sectors: list[SectorAllocation]
+
+
+class PortfolioSnapshotResponse(BaseModel):
+    """A single daily portfolio value snapshot."""
+
+    snapshot_date: datetime
+    total_value: float
+    total_cost_basis: float
+    unrealized_pnl: float
+    position_count: int
+
+    model_config = {"from_attributes": True}
+
+
+class DividendResponse(BaseModel):
+    """A single dividend payment record."""
+
+    ticker: str
+    ex_date: datetime
+    amount: float
+
+    model_config = {"from_attributes": True}
+
+
+class DividendSummaryResponse(BaseModel):
+    """Dividend summary for a ticker: history + aggregated stats."""
+
+    ticker: str
+    total_received: float
+    annual_dividends: float
+    dividend_yield: float | None
+    last_ex_date: datetime | None
+    payment_count: int
+    history: list[DividendResponse]
+
+
+# ---------------------------------------------------------------------------
+# Divestment rules
+# ---------------------------------------------------------------------------
+
+AlertRule = Literal[
+    "stop_loss",
+    "position_concentration",
+    "sector_concentration",
+    "weak_fundamentals",
+]
+AlertSeverity = Literal["critical", "warning"]
+
+
+class DivestmentAlert(BaseModel):
+    """A single divestment alert fired by the rules engine."""
+
+    rule: AlertRule
+    severity: AlertSeverity
+    message: str
+    value: float
+    threshold: float
+
+
+class PositionWithAlerts(PositionResponse):
+    """Position response enriched with divestment alerts."""
+
+    alerts: list[DivestmentAlert] = []
+
+
+# ---------------------------------------------------------------------------
+# User preferences
+# ---------------------------------------------------------------------------
+
+
+class UserPreferenceResponse(BaseModel):
+    """Response schema for user investment preferences."""
+
+    default_stop_loss_pct: float
+    max_position_pct: float
+    max_sector_pct: float
+    min_cash_reserve_pct: float
+
+    model_config = {"from_attributes": True}
+
+
+class UserPreferenceUpdate(BaseModel):
+    """Partial update schema for user investment preferences."""
+
+    default_stop_loss_pct: float | None = Field(None, gt=0, le=100)
+    max_position_pct: float | None = Field(None, gt=0, le=100)
+    max_sector_pct: float | None = Field(None, gt=0, le=100)
+    min_cash_reserve_pct: float | None = Field(None, gt=0, le=100)
+
+
+# ---------------------------------------------------------------------------
+# Rebalancing
+# ---------------------------------------------------------------------------
+
+
+class RebalancingSuggestion(BaseModel):
+    """Single rebalancing suggestion for one position."""
+
+    ticker: str
+    action: str  # "BUY_MORE" | "HOLD" | "AT_CAP"
+    current_allocation_pct: float | None
+    target_allocation_pct: float
+    suggested_amount: float  # 0.0 means no action needed
+    reason: str
+
+
+class RebalancingResponse(BaseModel):
+    """Full rebalancing output for the portfolio."""
+
+    total_value: float
+    available_cash: float
+    num_positions: int
+    suggestions: list[RebalancingSuggestion]

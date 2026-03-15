@@ -1,9 +1,10 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { get, post, del } from "@/lib/api";
+import { get, post, patch, del } from "@/lib/api";
 import { toast } from "sonner";
 import type {
+  DividendSummary,
   IndexResponse,
   WatchlistItem,
   StockSearchResponse,
@@ -14,6 +15,9 @@ import type {
   SignalResponse,
   SignalHistoryItem,
   PricePeriod,
+  UserPreferences,
+  UserPreferencesUpdate,
+  RebalancingResponse,
 } from "@/types/api";
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -205,5 +209,50 @@ export function useFundamentals(ticker: string) {
     queryFn: () => get<FundamentalsResponse>(`/stocks/${ticker}/fundamentals`),
     staleTime: 15 * 60 * 1000, // Fundamentals change slowly — cache 15 min
     retry: 1,
+  });
+}
+
+// ── Dividends ────────────────────────────────────────────────────────────────
+
+export function useDividends(ticker: string) {
+  return useQuery({
+    queryKey: ["dividends", ticker],
+    queryFn: () => get<DividendSummary>(`/portfolio/dividends/${ticker}`),
+    staleTime: 30 * 60 * 1000, // Dividends change infrequently — cache 30 min
+    retry: 1,
+  });
+}
+
+// ── Preferences ──────────────────────────────────────────────────────────────
+
+export function usePreferences() {
+  return useQuery({
+    queryKey: ["preferences"],
+    queryFn: () => get<UserPreferences>("/preferences"),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useUpdatePreferences() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: UserPreferencesUpdate) =>
+      patch<UserPreferences>("/preferences", body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["preferences"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+      toast.success("Preferences saved");
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : "Failed to save preferences");
+    },
+  });
+}
+
+export function useRebalancing() {
+  return useQuery<RebalancingResponse>({
+    queryKey: ["portfolio", "rebalancing"],
+    queryFn: () => get<RebalancingResponse>("/portfolio/rebalancing"),
+    staleTime: 5 * 60 * 1000, // 5 min
   });
 }

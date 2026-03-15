@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { get, post, del } from "@/lib/api";
+import { useRebalancing } from "@/hooks/use-stocks";
 import { toast } from "sonner";
 import { Trash2Icon } from "lucide-react";
 import {
@@ -24,10 +25,16 @@ import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/section-heading";
 import { MetricCard } from "@/components/metric-card";
 import { ChangeIndicator } from "@/components/change-indicator";
+import { Badge } from "@/components/ui/badge";
 import { LogTransactionDialog } from "@/components/log-transaction-dialog";
+import { PortfolioValueChart } from "@/components/portfolio-value-chart";
+import { PortfolioSettingsSheet } from "@/components/portfolio-settings-sheet";
+import { RebalancingPanel } from "@/components/rebalancing-panel";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type {
+  DivestmentAlert,
   Position,
+  PortfolioSnapshot,
   PortfolioSummary,
   Transaction,
   TransactionCreate,
@@ -56,6 +63,15 @@ function useTransactions() {
     queryKey: ["portfolio", "transactions"],
     queryFn: () => get<Transaction[]>("/portfolio/transactions"),
     staleTime: 60 * 1000,
+  });
+}
+
+function usePortfolioHistory(days = 365) {
+  return useQuery<PortfolioSnapshot[]>({
+    queryKey: ["portfolio", "history", days],
+    queryFn: () =>
+      get<PortfolioSnapshot[]>(`/portfolio/history?days=${days}`),
+    staleTime: 15 * 60 * 1000,
   });
 }
 
@@ -162,6 +178,7 @@ function PositionsTable({
             <TableHead className="text-right">Unrealized P&L</TableHead>
             <TableHead className="text-right">Return</TableHead>
             <TableHead className="text-right">Weight</TableHead>
+            <TableHead>Alerts</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -202,6 +219,9 @@ function PositionsTable({
                 {pos.allocation_pct !== null
                   ? `${pos.allocation_pct.toFixed(1)}%`
                   : "—"}
+              </TableCell>
+              <TableCell>
+                <AlertBadges alerts={pos.alerts} />
               </TableCell>
             </TableRow>
           ))}
@@ -329,11 +349,35 @@ function AllocationPie({ sectors }: { summary: PortfolioSummary; sectors: Portfo
   );
 }
 
+function AlertBadges({ alerts }: { alerts: DivestmentAlert[] }) {
+  if (!alerts || alerts.length === 0) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      {alerts.map((alert) => (
+        <Badge
+          key={alert.rule}
+          variant="outline"
+          className={
+            alert.severity === "critical"
+              ? "bg-red-500/10 text-loss border-red-500/20 text-xs"
+              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-xs"
+          }
+        >
+          {alert.message}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────────────────────
 
 export function PortfolioClient() {
   const { data: summary } = usePortfolioSummary();
   const { data: positions } = usePositions();
+  const { data: history } = usePortfolioHistory();
+  const { data: rebalancing } = useRebalancing();
   const logTransaction = useLogTransaction();
   const deleteTransaction = useDeleteTransaction();
 
@@ -341,14 +385,27 @@ export function PortfolioClient() {
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
       <div className="flex items-center justify-between">
         <SectionHeading>Portfolio</SectionHeading>
-        <LogTransactionDialog
-          onSubmit={(data) => logTransaction.mutate(data)}
-          isLoading={logTransaction.isPending}
-        />
+        <div className="flex items-center gap-2">
+          <PortfolioSettingsSheet />
+          <LogTransactionDialog
+            onSubmit={(data) => logTransaction.mutate(data)}
+            isLoading={logTransaction.isPending}
+          />
+        </div>
       </div>
 
       {/* KPI row */}
       {summary && <KpiRow summary={summary} />}
+
+      {/* Value history chart */}
+      <div className="space-y-3">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Value History
+        </h2>
+        <div className="rounded-lg border p-4">
+          <PortfolioValueChart snapshots={history ?? []} />
+        </div>
+      </div>
 
       {/* Positions + allocation */}
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">
@@ -380,6 +437,11 @@ export function PortfolioClient() {
           </div>
         </div>
       </div>
+
+      {/* Rebalancing suggestions */}
+      {rebalancing && rebalancing.suggestions.length > 0 && (
+        <RebalancingPanel suggestions={rebalancing.suggestions} />
+      )}
     </div>
   );
 }

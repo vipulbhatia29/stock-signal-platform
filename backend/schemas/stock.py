@@ -208,6 +208,7 @@ class RecommendationResponse(BaseModel):
     reasoning: dict | None = None  # Detailed explanation (JSONB)
     generated_at: datetime
     is_actionable: bool  # True if user should act on this
+    suggested_amount: float | None = None  # dollar amount to invest (BUY only)
 
     model_config = {"from_attributes": True}
 
