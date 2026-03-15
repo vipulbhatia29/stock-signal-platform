@@ -198,32 +198,40 @@ Implementation backlog items B1-B8 addressed before portfolio-aware features.
 
 ---
 
-## Phase 4: Chatbot + AI Agent (Weeks 7-8)
+## Phase 4: UI Redesign + Chatbot + AI Agent (Weeks 7-8)
 
 ### Goal
-Natural language interface that orchestrates all tools.
+Command-center dark UI shell + natural language AI interface that orchestrates all tools.
 
 ### Deliverables
-1. **Database models:** ChatSession, ChatMessage
-2. **`backend/agents/base.py`** — BaseAgent ABC with tool binding
-2. **`backend/agents/general_agent.py`** — general Q&A + web search
-3. **`backend/agents/stock_agent.py`** — stock analysis orchestrating all tools
-4. **`backend/agents/loop.py`** — agentic tool-calling loop (max 15 iterations)
-5. **`backend/agents/stream.py`** — NDJSON streaming to frontend
-6. **`backend/routers/chat.py`** — `POST /api/v1/chat/stream` with SSE
-7. **LLM fallback:** Groq primary for tool loops, Claude Sonnet for synthesis
-8. **Chat UI in frontend:**
-   - Message bubbles with markdown rendering
-   - Streaming response display
-   - Agent selector (General / Stock Analysis)
-   - Tool execution status indicators
-9. **Example queries that should work:**
-   - "Analyse AAPL — give me technicals, fundamentals, and recommendation"
-   - "How is my portfolio doing? Am I overexposed to any sector?"
-   - "What are my top 3 buy candidates in Technology right now?"
+
+#### Phase 4A — UI Redesign (Sessions 28–29)
+- ✅ **Spec:** `docs/superpowers/specs/2026-03-15-ui-redesign-phase-4-shell-design.md`
+- ✅ **Plan:** `docs/superpowers/plans/2026-03-15-ui-redesign-implementation.md`
+- [ ] **Design tokens** — navy dark palette replacing OKLCH shadcn defaults, dark-only
+- [ ] **Typography** — Sora (UI) + JetBrains Mono (numbers) via `next/font/google`
+- [ ] **Shell layout** — 54px icon `SidebarNav` + `Topbar` + resizable `ChatPanel` (stub)
+- [ ] **New components** — `StatTile`, `AllocationDonut`, `PortfolioDrawer`
+- [ ] **Dashboard Overview row** — 5 stat tiles with portfolio/signals/allocation data
+- [ ] **All component restyling** — 28 existing components updated to navy tokens
+
+#### Phase 4B — AI Backend (Session 30+)
+- [ ] **Database models:** ChatSession, ChatMessage
+- [ ] **`backend/agents/base.py`** — BaseAgent ABC with tool binding
+- [ ] **`backend/agents/general_agent.py`** — general Q&A + web search
+- [ ] **`backend/agents/stock_agent.py`** — stock analysis orchestrating all tools
+- [ ] **`backend/agents/loop.py`** — agentic tool-calling loop (max 15 iterations)
+- [ ] **`backend/agents/stream.py`** — NDJSON streaming to frontend
+- [ ] **`backend/routers/chat.py`** — `POST /api/v1/chat/stream` with SSE
+- [ ] **LLM:** Groq primary for tool loops, Claude Sonnet for synthesis
+- [ ] **Wire `ChatPanel`** — connect stub UI to streaming backend
+- [ ] **Example queries that should work:**
+  - "Analyse AAPL — give me technicals, fundamentals, and recommendation"
+  - "How is my portfolio doing? Am I overexposed to any sector?"
+  - "What are my top 3 buy candidates in Technology right now?"
 
 ### Success Criteria
-Can ask natural language questions and get tool-backed, synthesized answers.
+Dark command-center UI live. Can ask natural language questions and get tool-backed, synthesized answers via the docked chat panel.
 
 ### Phase 4 Pre-flight Bug & UX Backlog (found in Session 26 QA) — ✅ COMPLETE (Session 27)
 

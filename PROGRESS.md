@@ -208,6 +208,71 @@ Phase 3.5 item 9 complete: `check_divestment_rules()` (4 rules), `DivestmentAler
 
 ---
 
+## Session 28 — UI Redesign Brainstorm + Spec + Implementation Plan
+
+**Date:** 2026-03-15
+**Branch:** `feat/phase-4-ai-chatbot`
+
+**What was done:**
+
+### Prototype Refinement
+- [x] Reviewed `prototype-ui.html` v5 (dark navy command-center design) with user
+- [x] Fixed chat panel to **open by default** via `DOMContentLoaded` JS listener + `body.chat-open` class
+- [x] Fixed empty-space issue: panel hides via `transform: translateX(100%)` (doesn't collapse layout space)
+- [x] Added **drag-resize handle** on left edge of chat panel — updates `--cp` CSS var directly via JS (no React state), min 240px / max 520px
+- [x] Drawer `right` offset tracks `body.chat-open` class so drawer never overlaps open chat panel
+- [x] User approved prototype: "I like the theme and the layout. We can design accordingly"
+
+### Brainstorming Session (using superpowers:brainstorming skill)
+- [x] Established Phase A (shell) + Phase B (component restyling) as combined spec
+- [x] Confirmed dark-only app (`forcedTheme="dark"` — removes next-themes system detection)
+- [x] Confirmed no dedicated `/chat` page — chatbot lives in side panel only
+- [x] Sidebar nav items: Dashboard, Screener, Portfolio + stock detail sub-sidebar (not top-level)
+- [x] Allocation tile on dashboard: donut chart from `usePositions()` via `useMemo` (no separate hook)
+- [x] Fonts: Sora (headings/UI), JetBrains Mono (metrics/numbers)
+- [x] `usePositions` / `usePortfolioSummary` / `usePortfolioHistory` extracted from portfolio-client.tsx → `hooks/use-stocks.ts`
+- [x] SVG polyline sparklines replace Recharts LineChart (jagged financial feel)
+- [x] `lib/storage-keys.ts` for namespaced localStorage keys
+- [x] `lib/market-hours.ts` pure client-side NYSE hours calculation (no API)
+
+### Design Spec Written + Reviewed (2 rounds)
+- [x] Spec: `docs/superpowers/specs/2026-03-15-ui-redesign-phase-4-shell-design.md` (770 lines)
+- [x] Round 1 critical fixes: `forcedTheme="dark"` (not `enableSystem`), hook extraction, complete `@theme inline` block, `design-tokens.ts` step added
+- [x] Round 2 important fixes: Radix Popover logout on avatar, `lib/market-hours.ts` pure function, `--cp` keep-value-on-close via `transform`, `sentiment` prop kept for backward compat
+
+### Implementation Plan Written + Reviewed (2 rounds)
+- [x] Plan: `docs/superpowers/plans/2026-03-15-ui-redesign-implementation.md` (25 tasks, 6 chunks, ~2370 lines)
+  - Chunk 1: Foundations (storage-keys, market-hours, globals.css, design-tokens, fonts, providers)
+  - Chunk 2: Shell (extract hooks, SidebarNav, Topbar, ChatPanel, layout)
+  - Chunk 3: Core component restyling (Sparkline rewrite, IndexCard, StockCard, shared atoms)
+  - Chunk 4: New dashboard components (StatTile, AllocationDonut, PortfolioDrawer, dashboard wiring)
+  - Chunk 5: Remaining token updates (empty/error states, screener, stock detail, portfolio)
+  - Chunk 6: Tests + final verification
+- [x] Round 1 critical fixes: `PortfolioSummary` correct field names (`unrealized_pnl` not `total_gain`), correct `PortfolioValueChart` props (`snapshots`), `buildGradient` exported, Vitest→Jest
+- [x] Round 2 fixes: removed double import in layout, `chatIsOpen = false` placeholder with clear TODO, density-context explicit removal instruction, `chart4`/`chart5` tokens preserved
+
+### project-plan.md Updated
+- [x] Phase 4 restructured → Phase 4A (UI Redesign) + Phase 4B (AI Backend/Chatbot)
+- [x] Phase 4A deliverables listed with spec/plan file links
+
+**Key decisions:**
+- `--cp` CSS var stays set when chat closes; panel uses `transform: translateX(100%)` to hide (preserves width for next open)
+- Drawer `right` uses React `chatIsOpen` state (not CSS var) — React state is source of truth for JS
+- `usePortfolioAllocations` doesn't exist — derive sector allocations inline from `usePositions()` via `useMemo`
+- `chatIsOpen = false` hardcoded as a known limitation placeholder; Phase 4B will wire it to real chat state
+- All font/token changes go through `@theme inline` block in `globals.css` for Tailwind v4 utility generation
+
+**Test count:** 267 total (unchanged — no code changes this session)
+**Alembic head:** `821eb511d146` (migration 007 — unchanged)
+**Current branch:** `feat/phase-4-ai-chatbot`
+
+**Next session — Execute Phase 4A UI Redesign:**
+1. Use `superpowers:subagent-driven-development` to execute `docs/superpowers/plans/2026-03-15-ui-redesign-implementation.md`
+2. Start with Chunk 1 (foundations: storage-keys, market-hours, globals.css, design-tokens, fonts, providers)
+3. Then Chunk 2 (shell: extract hooks, SidebarNav, Topbar, ChatPanel, layout wiring)
+
+---
+
 ## Session 27 — Phase 4 Pre-flight Fixes
 
 **Date:** 2026-03-15
