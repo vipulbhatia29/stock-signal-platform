@@ -252,7 +252,7 @@ export function useUpdatePreferences() {
 export function useRebalancing() {
   return useQuery<RebalancingResponse>({
     queryKey: ["portfolio", "rebalancing"],
-    queryFn: () => get<RebalancingResponse>("/api/v1/portfolio/rebalancing"),
+    queryFn: () => get<RebalancingResponse>("/portfolio/rebalancing"),
     staleTime: 5 * 60 * 1000, // 5 min
   });
 }
