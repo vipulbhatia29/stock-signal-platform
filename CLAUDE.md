@@ -184,7 +184,10 @@ stock-signal-platform/
 
 - Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`
 - Branch per feature: `feat/signal-engine`, `feat/dashboard`, etc.
-- Never commit to main directly
+- Feature flow: `feat/* → PR → develop → PR → main`
+- Never commit to `main` or `develop` directly — everything goes through a PR
+- `main` is production-ready at all times; `develop` is the staging/integration branch
+- Hotfix flow: `hotfix/* → PR → main`, then immediately open a second PR `hotfix/* → develop` to back-merge
 
 ## Anti-Patterns — Do NOT Do These
 
@@ -345,6 +348,9 @@ All secrets live in `backend/.env` (gitignored). See `backend/.env.example` for 
 Required: ANTHROPIC_API_KEY, JWT_SECRET_KEY, DATABASE_URL, REDIS_URL
 Optional: GROQ_API_KEY, SERPAPI_API_KEY, FRED_API_KEY, OPENAI_API_KEY
 
+CI-only secrets (stored in GitHub Actions Secrets, never in `.env`):
+`CI_DATABASE_URL`, `CI_REDIS_URL`, `CI_JWT_SECRET_KEY`, `CI_JWT_ALGORITHM`, `CI_POSTGRES_PASSWORD`
+
 ## Troubleshooting
 
 | Problem | Cause | Fix |
@@ -354,7 +360,7 @@ Optional: GROQ_API_KEY, SERPAPI_API_KEY, FRED_API_KEY, OPENAI_API_KEY
 | Redis connection refused | Docker on non-default ports | Use port 6380 (not 6379); check `docker compose ps` |
 | `asyncpg` event loop errors in tests | Nested transactions / shared engine | Use per-test engine + truncate tables approach |
 | UserRole enum sends uppercase to Postgres | SQLAlchemy uses `.name` not `.value` | Add `values_callable=lambda e: [m.value for m in e]` to `Enum()` |
-| `uv.lock` conflicts | Lock file is gitignored | Run `uv sync` to regenerate |
+| `uv.lock` out of date after pull | Lock file committed — local venv may drift | Run `uv sync` after pulling to keep local venv in sync |
 | yfinance returns empty DataFrame | Ticker invalid or rate-limited | Verify ticker on Yahoo Finance; wait and retry |
 | yfinance rate limiting in scripts | Too many requests too fast | Add 0.5s delay between tickers |
 | `VIRTUAL_ENV` warning from uv | System VIRTUAL_ENV conflicts | Ignore; uv uses `.venv/` correctly via `uv run` |

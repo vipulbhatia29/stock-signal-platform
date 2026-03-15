@@ -568,18 +568,26 @@ def refresh_ticker(self, ticker: str):
 ```
 frontend/
 ├── app/
-│   ├── layout.tsx              # Root layout with providers + animate-fade-in on <main>
+│   ├── layout.tsx              # Root layout: Sora + JetBrains Mono fonts, Providers
 │   ├── page.tsx                # Redirect to /dashboard
+│   ├── providers.tsx           # ThemeProvider (forcedTheme="dark") + QueryProvider
 │   ├── (authenticated)/        # Route group with auth guard
-│   │   ├── dashboard/page.tsx  # Index cards + watchlist + search
+│   │   ├── layout.tsx          # Shell: "use client"; SidebarNav | flex-col(Topbar + main) | ChatPanel
+│   │   ├── dashboard/page.tsx  # StatTile grid + AllocationDonut + PortfolioDrawer + watchlist
 │   │   ├── screener/page.tsx   # Table/grid views + filters + density toggle
 │   │   └── stocks/[ticker]/    # Stock detail (server + client components)
 │   ├── login/page.tsx
 │   └── register/page.tsx
 ├── components/
 │   ├── ui/                     # shadcn/ui v4 primitives (@base-ui/react, not Radix)
-│   ├── stock-card.tsx          # Watchlist card with score badge
-│   ├── signal-badge.tsx        # RSI/MACD/SMA label badge
+│   ├── sidebar-nav.tsx         # 54px icon-only nav, CSS tooltips, Popover logout
+│   ├── topbar.tsx              # Market status chip, signal count chip, AI toggle
+│   ├── chat-panel.tsx          # Docked right panel, drag-resize, stub (Phase 4B wires backend)
+│   ├── stat-tile.tsx           # Dashboard KPI tile with accent gradient top border
+│   ├── allocation-donut.tsx    # CSS conic-gradient donut; exported buildGradient()
+│   ├── portfolio-drawer.tsx    # Bottom slide-up; right offset tracks chatIsOpen state
+│   ├── stock-card.tsx          # Watchlist card with score badge + inline signal badge
+│   ├── signal-badge.tsx        # RSI/MACD/SMA + BUY/HOLD/SELL label badge
 │   ├── score-badge.tsx         # Composite score 0-10 with color
 │   ├── screener-table.tsx      # TradingView-style tabs + sortable columns
 │   ├── screener-grid.tsx       # Sparkline card grid view
@@ -587,32 +595,52 @@ frontend/
 │   ├── price-chart.tsx         # Recharts line + sentiment gradient
 │   ├── signal-history-chart.tsx # Dual-axis composite + RSI over time
 │   ├── risk-return-card.tsx    # Annualized return, volatility, Sharpe
-│   ├── index-card.tsx          # S&P 500 / NASDAQ / Dow card
-│   ├── nav-bar.tsx             # Top nav with Sun/Moon theme toggle
+│   ├── index-card.tsx          # S&P 500 / NASDAQ / Dow card (navy redesign)
 │   ├── change-indicator.tsx    # Gain/loss with arrow + sign + color
 │   ├── section-heading.tsx     # Semantic section label
 │   ├── chart-tooltip.tsx       # Reusable Recharts tooltip
 │   ├── error-state.tsx         # Error display with retry
 │   ├── breadcrumbs.tsx         # Back navigation on detail pages
-│   ├── sparkline.tsx           # Tiny inline chart (no axes)
+│   ├── sparkline.tsx           # Raw SVG <polyline> (jagged financial chart; no Recharts)
 │   ├── signal-meter.tsx        # 10-segment horizontal score bar
 │   └── metric-card.tsx         # Standardized KPI block
 ├── hooks/
-│   ├── use-stocks.ts           # 12+ TanStack Query hooks (all API data)
+│   ├── use-stocks.ts           # 15+ TanStack Query hooks (all API data, portfolio hooks extracted here)
 │   └── use-container-width.ts  # ResizeObserver for responsive grids
 ├── lib/
 │   ├── api.ts                  # Centralized fetch with cookie auth + auto-refresh
 │   ├── auth.ts                 # AuthContext + useAuth hook
 │   ├── signals.ts              # Sentiment classification, CSS var color mappings
 │   ├── format.ts               # Currency, percent, volume, date formatters
-│   ├── design-tokens.ts        # CSS variable name constants
+│   ├── design-tokens.ts        # CSS variable name constants (expanded with Phase 4A tokens)
 │   ├── chart-theme.ts          # useChartColors() hook + CHART_STYLE constants
 │   ├── typography.ts           # Semantic type scale (PAGE_TITLE, METRIC_PRIMARY, etc.)
-│   └── density-context.tsx     # DensityProvider + useDensity() for screener
+│   ├── density-context.tsx     # DensityProvider + useDensity() for screener
+│   ├── storage-keys.ts         # Namespaced localStorage key registry (stocksignal: prefix)
+│   └── market-hours.ts         # Pure isNYSEOpen() — IANA America/New_York, DST-correct
 ├── types/
 │   └── api.ts                  # Shared TypeScript types
 └── middleware.ts               # Auth guard (checks access_token cookie)
 ```
+
+### 7.1.1 Shell Architecture (Phase 4A)
+
+The authenticated layout is a client component that composes three side-by-side panels:
+
+```
+┌────────────────────────────────────────────────────────────┐
+│ SidebarNav (54px)  │ Topbar + <page content>  │ ChatPanel  │
+│  --sw: 54px        │  flex-col, flex-1         │  --cp: 280px│
+└────────────────────────────────────────────────────────────┘
+```
+
+- **SidebarNav** — icon-only, CSS tooltip on hover, active left-border indicator. Logout via `PopoverTrigger render={<button/>}` (base-ui v4 — not `asChild`)
+- **Topbar** — market status (isNYSEOpen()), signal count, AI Analyst toggle that controls ChatPanel visibility
+- **ChatPanel** — hides via `transform: translateX(100%)` so `--cp` CSS var stays set; drag-resize updates `--cp` directly via DOM (no React state); width persisted to `STORAGE_KEYS.CHAT_PANEL_WIDTH`
+
+**CSS layout tokens** (set in `globals.css @theme inline`):
+- `--sw: 54px` — sidebar width
+- `--cp: 280px` — chat panel width (default; user can drag-resize)
 
 ### 7.2 State Management
 
@@ -620,7 +648,8 @@ frontend/
 - **Client state:** React useState/useReducer (minimal — most state is server-derived)
 - **Auth state:** React Context via AuthProvider
 - **Density state:** React Context via DensityProvider (comfortable/compact, persisted to localStorage)
-- **Theme state:** next-themes for dark/light mode (persisted to localStorage)
+- **Theme state:** next-themes `forcedTheme="dark"` — dark-only, no system detection, no toggle
+- **Chat panel width:** CSS var `--cp` updated directly via DOM in drag handler (not React state); persisted to localStorage via `STORAGE_KEYS.CHAT_PANEL_WIDTH`
 - **No Redux, no Zustand** — complexity not justified for this scale
 
 ### 7.3 Data Fetching Pattern
