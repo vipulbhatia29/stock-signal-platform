@@ -167,14 +167,31 @@ unit-and-api:  (same as ci-pr.yml backend-test + frontend-test)
 integration:
   services: postgres + redis (same as above)
   env:
-    TEST_ENV: integration      # enables testcontainers guard in root conftest
+    TEST_ENV: integration      # signals "integration mode" — NOT a trigger to launch
+                               # testcontainers. All DB access uses service containers
+                               # via DATABASE_URL env var throughout CI (both PR and merge
+                               # gates). testcontainers are for local runs only.
+                               # The db_url fixture in tests/integration/ must read from
+                               # DATABASE_URL env var, not launch a container.
   steps:
     - uv run alembic upgrade head
-    - uv run pytest tests/integration/ -v --tb=short --ignore-glob="*/__init__.py"
-  note: tests/integration/ currently has only __init__.py — pytest exits 0 with no tests
-        collected. This job is a stub that will produce output once real integration tests
-        are added. Use `--passWithNoTests` equivalent: `pytest ... || [ $? -eq 5 ]` to
-        handle exit code 5 (no tests found) as success.
+    - uv run pytest tests/integration/ -v --tb=short || [ $? -eq 5 ]
+  note: tests/integration/ currently has only __init__.py — pytest exits code 5 (no tests
+        collected). The `|| [ $? -eq 5 ]` idiom treats "no tests found" as success so the
+        job passes. This job is a stub; add real integration tests here in future phases.
+
+**Fixture architecture for CI (applies to ALL three jobs):**
+- `tests/unit/conftest.py` and `tests/api/conftest.py` override `db_url` to read from
+  `DATABASE_URL` env var (points at service container) — no Docker started
+- `tests/integration/conftest.py` does the same — no Docker started in CI
+- Root `tests/conftest.py` `postgres_container` fixture is guarded:
+  `if os.environ.get("TEST_ENV") == "local_docker": start container else: skip`
+- The `_setup_database` autouse fixture depends on `db_url` — the sub-level conftest
+  overrides of `db_url` take precedence over root conftest, so autouse resolves correctly
+- On local dev: `TEST_ENV` unset → sub-level conftests read `DATABASE_URL` from your
+  `.env` (points at Docker on port 5433). testcontainers only used if explicitly invoked.
+- This means `uv run pytest tests/unit/ -v` works locally without Docker running,
+  as long as `DATABASE_URL` is set in `.env`.
 build:
   steps:
     - npm ci
@@ -229,7 +246,7 @@ is not needed in CI.
 1. Go to `https://github.com/vipulbhatia29/stock-signal-platform/settings/secrets/actions`
 2. Click "New repository secret"
 3. Enter name and value exactly as above
-4. Repeat for all 6 secrets
+4. Repeat for all 5 secrets
 
 The workflow files reference them as `${{ secrets.CI_DATABASE_URL }}` etc.
 
