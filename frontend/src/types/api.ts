@@ -352,6 +352,24 @@ export interface UserPreferencesUpdate {
   min_cash_reserve_pct?: number;
 }
 
+// ── Rebalancing ───────────────────────────────────────────────────────────────
+
+export interface RebalancingSuggestion {
+  ticker: string;
+  action: "BUY_MORE" | "HOLD" | "AT_CAP";
+  current_allocation_pct: number | null;
+  target_allocation_pct: number;
+  suggested_amount: number;
+  reason: string;
+}
+
+export interface RebalancingResponse {
+  total_value: number;
+  available_cash: number;
+  num_positions: number;
+  suggestions: RebalancingSuggestion[];
+}
+
 // ── API Error ─────────────────────────────────────────────────────────────────
 
 export interface ApiError {

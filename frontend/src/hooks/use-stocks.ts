@@ -17,6 +17,7 @@ import type {
   PricePeriod,
   UserPreferences,
   UserPreferencesUpdate,
+  RebalancingResponse,
 } from "@/types/api";
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -245,5 +246,13 @@ export function useUpdatePreferences() {
     onError: (err) => {
       toast.error(err instanceof Error ? err.message : "Failed to save preferences");
     },
+  });
+}
+
+export function useRebalancing() {
+  return useQuery<RebalancingResponse>({
+    queryKey: ["portfolio", "rebalancing"],
+    queryFn: () => get<RebalancingResponse>("/api/v1/portfolio/rebalancing"),
+    staleTime: 5 * 60 * 1000, // 5 min
   });
 }
