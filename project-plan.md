@@ -160,18 +160,18 @@ Track actual positions and add fundamental analysis signals.
 
 7. ✅ **Portfolio value history** — PortfolioSnapshot hypertable, Celery Beat daily task, `GET /portfolio/history`, PortfolioValueChart (Session 22)
 8. ✅ **Dividend tracking** — DividendPayment model, migration 007, summary tool, GET endpoint, unit+API tests, DividendCard UI (Session 23)
-9. 🔧 **Divestment rules engine** (design complete, implementation plan ready — `docs/superpowers/plans/divestment-rules-implementation.md`):
-   - Trailing stop-loss alerts (configurable via UserPreference)
-   - Position concentration warnings (configurable, default >5%)
-   - Sector concentration warnings (configurable, default >30%)
-   - Fundamental deterioration: composite_score < 3 (Piotroski deferred until persisted)
-   - Cash reserve warnings deferred to Phase 4
-   - Preferences router (GET/PATCH /preferences)
-   - Settings sheet UI on portfolio page
-10. **`backend/tools/recommendations.py`** — UPGRADE to portfolio-aware:
-    - Factor in current holdings, position sizing, sector caps
-    - Decision reasoning in JSONB
-11. Rebalancing suggestions with specific dollar amounts
+9. ✅ **Divestment rules engine** (Session 24):
+   - Pure `check_divestment_rules()` function with 4 rules (stop-loss, position/sector concentration, weak fundamentals)
+   - GET/PATCH `/api/v1/preferences` with configurable thresholds
+   - Settings sheet UI on portfolio page (gear icon)
+   - Alert badges on positions table (critical=red, warning=amber)
+   - 19 new tests (11 unit + 6 preferences API + 2 portfolio alert API)
+10. ✅ **`backend/tools/recommendations.py`** — UPGRADE to portfolio-aware (Session 25):
+    - `PortfolioState` TypedDict; `Action.HOLD` + `Action.SELL`; portfolio context in `ingest_ticker`
+    - held + at cap → HOLD; held + weak → SELL; not held → existing BUY/WATCH/AVOID
+11. ✅ **Rebalancing suggestions with specific dollar amounts** (Session 25):
+    - `calculate_position_size()` pure function; `GET /api/v1/portfolio/rebalancing`
+    - `RebalancingPanel` component on portfolio page (BUY_MORE/HOLD/AT_CAP per position)
 12. **Schwab OAuth sync** — Phase 4 dedicated feature
 13. **Multi-account support** (Fidelity/IRA) — Phase 4
 
