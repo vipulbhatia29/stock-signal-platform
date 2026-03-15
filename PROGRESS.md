@@ -1064,7 +1064,7 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
   - `Field(gt=0, le=100)` validation added
   - `Literal` types for `rule`/`severity`
   - Null safety documented + edge case tests added
-- [x] Implementation plan: `.claude/plans/divestment-rules-implementation.md` (10 steps)
+- [x] Implementation plan: `docs/superpowers/plans/divestment-rules-implementation.md` (10 steps)
 
 **Key decisions:**
 - User thresholds stored in `UserPreference` model (already exists with default values: stop-loss 20%, position 5%, sector 30%)
@@ -1077,7 +1077,7 @@ The chart grid view (deferred) requires these specific changes to pick up cleanl
 **Current branch:** `feat/phase-3.5-portfolio-advanced`
 
 **Next session — Implement divestment rules engine:**
-- Follow `.claude/plans/divestment-rules-implementation.md` (10 steps)
+- Follow `docs/superpowers/plans/divestment-rules-implementation.md` (10 steps)
 - Pure rule checker → schemas → sector on positions → preferences router → wire alerts → frontend
 - Then: Phase 3.5 items 10-11 (portfolio-aware recommendations, rebalancing)
 

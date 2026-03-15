@@ -93,7 +93,7 @@ Establish a cohesive design system informed by TradingView, Robinhood, and
 Bloomberg Terminal UI patterns. Fix responsive layout issues, standardize
 color/typography tokens, and add financial-specific components.
 
-**Detailed plan:** `.claude/plans/cozy-wandering-backus.md`
+**Detailed plan:** `docs/superpowers/archive/cozy-wandering-backus.md` (COMPLETED)
 
 ### Deliverables — Phase 2 Polish (do now)
 1. **Color system overhaul** — financial semantic CSS variables (gain/loss/neutral),
@@ -160,7 +160,7 @@ Track actual positions and add fundamental analysis signals.
 
 7. ✅ **Portfolio value history** — PortfolioSnapshot hypertable, Celery Beat daily task, `GET /portfolio/history`, PortfolioValueChart (Session 22)
 8. ✅ **Dividend tracking** — DividendPayment model, migration 007, summary tool, GET endpoint, unit+API tests, DividendCard UI (Session 23)
-9. 🔧 **Divestment rules engine** (design complete, implementation plan ready — `.claude/plans/divestment-rules-implementation.md`):
+9. 🔧 **Divestment rules engine** (design complete, implementation plan ready — `docs/superpowers/plans/divestment-rules-implementation.md`):
    - Trailing stop-loss alerts (configurable via UserPreference)
    - Position concentration warnings (configurable, default >5%)
    - Sector concentration warnings (configurable, default >30%)
