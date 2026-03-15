@@ -13,6 +13,7 @@ Test strategy:
 from backend.tools.recommendations import (
     Action,
     Confidence,
+    PortfolioState,
     generate_recommendation,
 )
 from backend.tools.signals import SignalResult
@@ -305,3 +306,70 @@ class TestReasoning:
         rsi_info = result.reasoning["signals"]["rsi"]
         assert "interpretation" in rsi_info
         assert len(rsi_info["interpretation"]) > 10  # Not empty/trivial
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Portfolio-aware recommendation tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestPortfolioAwareRecommendations:
+    """Tests for portfolio-aware HOLD/SELL actions."""
+
+    def test_held_strong_signal_at_max_allocation_returns_hold(self) -> None:
+        """Strong signal but already at max allocation should return HOLD."""
+        signal = _make_signal("AAPL", composite_score=9.0)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 5.5}
+        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        assert result.action == Action.HOLD
+        assert result.confidence == Confidence.HIGH
+        assert "already at target allocation" in result.reasoning["summary"].lower()
+
+    def test_held_medium_signal_returns_hold(self) -> None:
+        """Held stock with medium signals should return HOLD."""
+        signal = _make_signal("AAPL", composite_score=6.0)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 2.0}
+        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        assert result.action == Action.HOLD
+        assert result.confidence == Confidence.MEDIUM
+
+    def test_held_weak_signal_returns_sell(self) -> None:
+        """Held stock with weak signals should return SELL."""
+        signal = _make_signal("AAPL", composite_score=3.0)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 2.0}
+        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        assert result.action == Action.SELL
+        assert result.confidence == Confidence.MEDIUM
+
+    def test_held_very_weak_signal_returns_sell_high_confidence(self) -> None:
+        """Held stock with very weak signals (score < 2) should return SELL HIGH confidence."""
+        signal = _make_signal("AAPL", composite_score=1.5)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 3.0}
+        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        assert result.action == Action.SELL
+        assert result.confidence == Confidence.HIGH
+
+    def test_not_held_strong_signal_still_returns_buy(self) -> None:
+        """Not held stock with strong signals should still return BUY."""
+        signal = _make_signal("AAPL", composite_score=8.5)
+        portfolio_state: PortfolioState = {"is_held": False, "allocation_pct": None}
+        result = generate_recommendation(signal, current_price=150.0, portfolio_state=portfolio_state)
+        assert result.action == Action.BUY
+
+    def test_no_portfolio_state_preserves_existing_logic(self) -> None:
+        """Passing None for portfolio_state must not change existing behavior."""
+        signal = _make_signal("AAPL", composite_score=8.5)
+        result = generate_recommendation(signal, current_price=150.0, portfolio_state=None)
+        assert result.action == Action.BUY
+
+    def test_held_strong_signal_under_max_allocation_returns_buy(self) -> None:
+        """Still held but not at cap — should still recommend BUY."""
+        signal = _make_signal("AAPL", composite_score=8.5)
+        portfolio_state: PortfolioState = {"is_held": True, "allocation_pct": 2.0}
+        result = generate_recommendation(
+            signal,
+            current_price=150.0,
+            portfolio_state=portfolio_state,
+            max_position_pct=5.0,
+        )
+        assert result.action == Action.BUY

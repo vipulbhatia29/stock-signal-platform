@@ -29,6 +29,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import TypedDict
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +38,23 @@ from backend.models.recommendation import RecommendationSnapshot
 from backend.tools.signals import SignalResult
 
 logger = logging.getLogger(__name__)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio context type — passed in from the caller (no DB calls here)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class PortfolioState(TypedDict, total=False):
+    """Minimal portfolio context passed to the recommendation engine.
+
+    is_held:        True if the user currently holds this ticker.
+    allocation_pct: Current portfolio allocation as a percentage (0-100).
+                    None if the stock is not held.
+    """
+
+    is_held: bool
+    allocation_pct: float | None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -56,8 +74,8 @@ class Action:
     BUY:   Strong buy signal — consider purchasing this stock.
     WATCH: Mixed signals — add to watchlist and monitor.
     AVOID: Weak signals — don't buy, or consider selling if held.
-    HOLD:  Currently unused in Phase 1 (needs portfolio context in Phase 3).
-    SELL:  Currently unused in Phase 1 (needs portfolio context in Phase 3).
+    HOLD:  You hold this stock; signals are neutral — keep the position.
+    SELL:  Weak signals and you hold this stock — consider exiting.
     """
 
     BUY = "BUY"
@@ -93,22 +111,33 @@ class RecommendationResult:
     """
 
     ticker: str
-    action: str  # BUY, WATCH, or AVOID
+    action: str  # BUY, WATCH, AVOID, HOLD, or SELL
     confidence: str  # HIGH, MEDIUM, or LOW
     composite_score: float  # The score that drove the decision
     current_price: float  # Stock price at time of recommendation
     reasoning: dict  # Human-readable explanation of why
     is_actionable: bool  # True if the user should act on this
+    suggested_amount: float | None = None  # dollar amount to invest (BUY only)
 
 
 def generate_recommendation(
     signal: SignalResult,
     current_price: float,
+    portfolio_state: PortfolioState | None = None,
+    max_position_pct: float = 5.0,
 ) -> RecommendationResult:
-    """Generate a BUY/WATCH/AVOID recommendation from a signal result.
+    """Generate a BUY/WATCH/AVOID/HOLD/SELL recommendation from a signal result.
 
-    This is the Phase 1 decision engine. It uses simple score thresholds
-    to decide what action to recommend. The logic is intentionally simple:
+    This is the Phase 3 decision engine. It uses simple score thresholds
+    to decide what action to recommend. When portfolio_state is supplied and
+    the stock is currently held, portfolio-aware overrides apply:
+
+      Held + score >= BUY_THRESHOLD + at max allocation → HOLD (HIGH)
+      Held + score >= WATCH_THRESHOLD                  → HOLD (MEDIUM)
+      Held + score < WATCH_THRESHOLD                   → SELL (MEDIUM or HIGH)
+
+    Without portfolio context (portfolio_state=None or is_held=False), the
+    original Phase 1 logic applies:
 
       Score >= 8  →  BUY with HIGH confidence
       Score >= 7  →  BUY with MEDIUM confidence (strong but not overwhelming)
@@ -125,6 +154,10 @@ def generate_recommendation(
                 technical indicator values and the composite score.
         current_price: The current stock price. Stored so we can later
                        evaluate if the recommendation was correct.
+        portfolio_state: Optional portfolio context. If the stock is held,
+                         portfolio-aware HOLD/SELL overrides may apply.
+        max_position_pct: Maximum allowed portfolio allocation as a percentage
+                          (default 5.0%). Used to gate the BUY→HOLD override.
 
     Returns:
         A RecommendationResult with the action, confidence, and reasoning.
@@ -152,6 +185,64 @@ def generate_recommendation(
     # When you look at a recommendation later, you can see exactly what the
     # indicators were saying at the time.
     reasoning = _build_reasoning(signal)
+
+    # ── Portfolio-aware overrides ────────────────────────────────────
+    # When the user already holds this stock, context changes the action.
+    # HOLD means "keep it, don't buy more"; SELL means "signals are weak, exit".
+    if portfolio_state and portfolio_state.get("is_held"):
+        alloc = portfolio_state.get("allocation_pct") or 0.0
+
+        if score >= BUY_THRESHOLD and alloc >= max_position_pct:
+            # Strong signal but position is already at the size cap → HOLD
+            reasoning["summary"] = (
+                f"Strong signals (score {score}/10) but already at target allocation "
+                f"({alloc:.1f}% \u2265 {max_position_pct:.1f}%). Hold current position."
+            )
+            return RecommendationResult(
+                ticker=signal.ticker,
+                action=Action.HOLD,
+                confidence=Confidence.HIGH,
+                composite_score=score,
+                current_price=current_price,
+                reasoning=reasoning,
+                is_actionable=True,
+            )
+
+        # score >= BUY_THRESHOLD but alloc < max_position_pct → fall through to BUY
+
+        if BUY_THRESHOLD > score >= WATCH_THRESHOLD:
+            # Moderate signal while held → HOLD (no reason to add or exit)
+            reasoning["summary"] = (
+                f"Moderate signals (score {score}/10). You hold this stock — hold your position."
+            )
+            return RecommendationResult(
+                ticker=signal.ticker,
+                action=Action.HOLD,
+                confidence=Confidence.MEDIUM,
+                composite_score=score,
+                current_price=current_price,
+                reasoning=reasoning,
+                is_actionable=False,
+            )
+
+        if score < WATCH_THRESHOLD:
+            # Weak signal while held → SELL
+            confidence = Confidence.HIGH if score < 2.0 else Confidence.MEDIUM
+            reasoning["summary"] = (
+                f"Weak signals (score {score}/10) and you hold this stock. "
+                "Consider exiting the position."
+            )
+            return RecommendationResult(
+                ticker=signal.ticker,
+                action=Action.SELL,
+                confidence=confidence,
+                composite_score=score,
+                current_price=current_price,
+                reasoning=reasoning,
+                is_actionable=True,
+            )
+
+        # score >= BUY_THRESHOLD and alloc < max_position_pct → fall through to BUY logic
 
     # ── Apply decision rules ─────────────────────────────────────────
     if score >= BUY_THRESHOLD:
