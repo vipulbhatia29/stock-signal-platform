@@ -11,17 +11,24 @@ import {
   useIndexes,
   useWatchlist,
   useRemoveFromWatchlist,
+  usePortfolioSummary,
+  usePositions,
 } from "@/hooks/use-stocks";
 import { IndexCard, IndexCardSkeleton } from "@/components/index-card";
 import { StockCard, StockCardSkeleton } from "@/components/stock-card";
 import { SectorFilter } from "@/components/sector-filter";
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeading } from "@/components/section-heading";
+import { StatTile } from "@/components/stat-tile";
+import { AllocationDonut, DONUT_COLORS } from "@/components/allocation-donut";
+import { PortfolioDrawer } from "@/components/portfolio-drawer";
+import { ChangeIndicator } from "@/components/change-indicator";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import * as api from "@/lib/api";
 import type { TaskStatus, RefreshTask } from "@/types/api";
 import { cn } from "@/lib/utils";
+import { formatCurrency } from "@/lib/format";
 
 export default function DashboardPage() {
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
@@ -98,6 +105,53 @@ export default function DashboardPage() {
     setTimeout(() => setRefreshTasks(stillPending), 0);
   }, [taskPollQuery.data, queryClient]);
 
+  // ── Portfolio overview ──────────────────────────────────────────────────────
+
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const chatIsOpen = false; // TODO: wire from layout context
+
+  const { data: summary } = usePortfolioSummary();
+  const { data: positions } = usePositions();
+
+  const allocations = useMemo(() => {
+    if (!positions) return [];
+    const sectorTotals: Record<string, number> = {};
+    let total = 0;
+    positions.forEach((p) => {
+      const sector = p.sector ?? "Other";
+      sectorTotals[sector] = (sectorTotals[sector] ?? 0) + (p.market_value ?? 0);
+      total += p.market_value ?? 0;
+    });
+    return Object.entries(sectorTotals).map(([sector, value], i) => ({
+      sector,
+      pct: total > 0 ? (value / total) * 100 : 0,
+      color: DONUT_COLORS[i % DONUT_COLORS.length],
+    }));
+  }, [positions]);
+
+  const signalCounts = useMemo(() => {
+    if (!watchlist) return { buy: 0, hold: 0, sell: 0 };
+    return watchlist.reduce(
+      (acc, w) => {
+        const score = w.composite_score ?? 0;
+        if (score >= 0.6) acc.buy++;
+        else if (score >= 0.4) acc.hold++;
+        else acc.sell++;
+        return acc;
+      },
+      { buy: 0, hold: 0, sell: 0 }
+    );
+  }, [watchlist]);
+
+  const topSignal = useMemo(() => {
+    if (!watchlist) return null;
+    return (
+      watchlist
+        .filter((w) => (w.composite_score ?? 0) >= 0.6)
+        .sort((a, b) => (b.composite_score ?? 0) - (a.composite_score ?? 0))[0] ?? null
+    );
+  }, [watchlist]);
+
   // ── Derived data ────────────────────────────────────────────────────────────
 
   const sectors = useMemo(() => {
@@ -146,6 +200,87 @@ export default function DashboardPage() {
           </div>
         )}
       </section>
+
+      {/* Overview tiles */}
+      <section>
+        <SectionHeading>Overview</SectionHeading>
+        <div className="grid grid-cols-5 gap-[9px]">
+          {/* Portfolio Value */}
+          <StatTile
+            label="Portfolio Value"
+            value={summary ? formatCurrency(summary.total_value) : "—"}
+            sub={
+              summary?.unrealized_pnl != null ? (
+                <ChangeIndicator value={summary.unrealized_pnl} format="currency" />
+              ) : undefined
+            }
+            accentColor="cyan"
+            onClick={() => setDrawerOpen(true)}
+          />
+
+          {/* Unrealized P&L */}
+          <StatTile
+            label="Unrealized P&L"
+            value={summary ? formatCurrency(summary.unrealized_pnl) : "—"}
+            sub={
+              summary?.unrealized_pnl_pct != null ? (
+                <ChangeIndicator value={summary.unrealized_pnl_pct} format="percent" />
+              ) : undefined
+            }
+            accentColor={
+              (summary?.unrealized_pnl ?? 0) >= 0 ? "gain" : "loss"
+            }
+          />
+
+          {/* Signals */}
+          <StatTile label="Signals" accentColor="warn">
+            <div className="grid grid-cols-3 gap-[5px] mt-[7px]">
+              <div className="text-center rounded-[6px] py-[7px] bg-[var(--gdim)]">
+                <div className="font-mono text-[20px] font-bold leading-none text-gain">{signalCounts.buy}</div>
+                <div className="text-[9px] font-semibold tracking-[0.07em] uppercase mt-0.5 text-gain">Buy</div>
+              </div>
+              <div className="text-center rounded-[6px] py-[7px] bg-[var(--wdim)]">
+                <div className="font-mono text-[20px] font-bold leading-none text-warning">{signalCounts.hold}</div>
+                <div className="text-[9px] font-semibold tracking-[0.07em] uppercase mt-0.5 text-warning">Hold</div>
+              </div>
+              <div className="text-center rounded-[6px] py-[7px] bg-[var(--ldim)]">
+                <div className="font-mono text-[20px] font-bold leading-none text-loss">{signalCounts.sell}</div>
+                <div className="text-[9px] font-semibold tracking-[0.07em] uppercase mt-0.5 text-loss">Sell</div>
+              </div>
+            </div>
+          </StatTile>
+
+          {/* Top Signal */}
+          <StatTile label="Top Signal" accentColor="gain">
+            {topSignal ? (
+              <div className="mt-1">
+                <div className="font-mono text-[18px] font-bold text-foreground">{topSignal.ticker}</div>
+                <div className="text-[10px] text-subtle truncate">{topSignal.name}</div>
+                <div className="font-mono text-[11px] text-gain mt-1">
+                  Score: {Math.round((topSignal.composite_score ?? 0) * 100)}
+                </div>
+              </div>
+            ) : (
+              <div className="text-[10px] text-subtle mt-2">No strong signals</div>
+            )}
+          </StatTile>
+
+          {/* Allocation */}
+          <StatTile label="Allocation" accentColor="cyan">
+            <AllocationDonut
+              allocations={allocations}
+              stockCount={positions?.length}
+            />
+          </StatTile>
+        </div>
+      </section>
+
+      {/* Portfolio Drawer */}
+      <PortfolioDrawer
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        chatIsOpen={chatIsOpen}
+      />
 
       {/* Watchlist */}
       <section>
