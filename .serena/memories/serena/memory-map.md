@@ -7,16 +7,16 @@ purpose: taxonomy anchor — ensures new modules are documented in Serena
 # Memory Taxonomy Map
 
 ## Global Memories (~/.serena/memories/global/)
+Truly cross-project patterns only — nothing stock-signal-platform specific here.
+
 | Key | Content |
 |-----|---------|
 | global/conventions/python-style | Python typing, async, logging, forbidden patterns |
 | global/conventions/typescript-style | TS strict mode, TanStack Query, shadcn, Recharts |
 | global/conventions/testing-patterns | pytest, factory-boy, testcontainers, mock rules |
-| global/conventions/git-workflow | Conventional commits, branch strategy, PR flow |
+| global/conventions/git-workflow | Conventional commits, branch strategy, PR flow (generic) |
 | global/conventions/error-handling | Logging levels, error handling by context |
 | global/debugging/mock-patching-gotchas | Patch at lookup site, AsyncMock, decorator stacking |
-| global/architecture/system-overview | Services table, entry points, filesystem layout, env vars, critical files |
-| global/onboarding/setup-guide | Bootstrap a new machine: clone, uv sync, .env, Docker, first ingest |
 
 ## Project Memories (.serena/memories/ — in repo)
 | Key | Content |
@@ -24,6 +24,8 @@ purpose: taxonomy anchor — ensures new modules are documented in Serena
 | project/state | Current phase, branch, Alembic head, test count, resume point |
 | project/stack | Entry points, critical gotchas, package manager rules |
 | project/testing | Test commands, test layout, fixtures, factory-boy, freezegun, CI |
+| project/onboarding | Bootstrap a new machine: clone, uv sync, .env, Docker, first ingest |
+| architecture/system-overview | Services table, ports, entry points, filesystem layout, env vars, critical files |
 | architecture/timescaledb-patterns | Hypertable upsert, Alembic caution, continuous aggregates |
 | architecture/frontend-design-system | Navy theme, Recharts colors, shared components, shadcn v4 |
 | architecture/auth-jwt-flow | Full JWT request flow, token storage, OWASP checklist, critical files |
@@ -37,10 +39,15 @@ purpose: taxonomy anchor — ensures new modules are documented in Serena
 | serena/memory-map | This file — taxonomy anchor |
 | conventions/auth-patterns | JWT, httpOnly cookies, frontend auth, bcrypt pinning, security rules |
 
+## Scope Rule
+**Global = truly cross-project** (language conventions, generic patterns).
+**Project = anything with a file path, port number, or domain concept** from this repo.
+When in doubt: project-scoped.
+
 ## New Module Checklist
 When adding a module in Phase 4B, 5, or 6+:
 1. Create `domain/<module-name>.md` covering: purpose, key functions, gotchas, integration points.
 2. Add row to this memory-map table.
 3. If debugging discoveries arise: append to `debugging/backend-gotchas` or `debugging/frontend-gotchas`.
-4. If a pattern is project-agnostic: flag with `GLOBAL-CANDIDATE: true` in frontmatter.
+4. If a pattern is truly project-agnostic: flag with `GLOBAL-CANDIDATE: true` in frontmatter.
 5. Promote to `global/` via `/ship` when the PR is ready.

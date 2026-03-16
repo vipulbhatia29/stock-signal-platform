@@ -27,7 +27,8 @@ Load what you need for the task at hand:
 | `global/conventions/git-workflow` | Conventional commits, branch strategy, PR flow |
 | `global/conventions/error-handling` | Logging levels, error handling by context |
 | `global/debugging/mock-patching-gotchas` | Patch lookup-site rule, AsyncMock |
-| `global/architecture/system-overview` | Full stack, ports, principles |
+| `project/onboarding` | Bootstrap: clone, uv sync, .env, Docker, first ingest |
+| `architecture/system-overview` | Services, ports, entry points, filesystem layout, env vars |
 | `architecture/timescaledb-patterns` | Hypertable upsert, Alembic gotchas |
 | `architecture/frontend-design-system` | Navy theme, Recharts colors, shadcn v4 |
 | `architecture/auth-jwt-flow` | Full JWT flow, token storage, OWASP checklist |
