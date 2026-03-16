@@ -89,6 +89,12 @@ main
 
 Three workflow files under `.github/workflows/`. **No JIRA logic in any workflow** — CI is a pure quality gate.
 
+**Note:** YAML snippets below show job logic only. All jobs require standard setup steps:
+`runs-on: ubuntu-latest`, `actions/checkout@v4`, `astral-sh/setup-uv@v4` (backend),
+`actions/setup-node@v4` (frontend), and caching (see Section 4.2). Full workflow YAML
+will be written during implementation. Add `concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }`
+to both `ci-pr.yml` and `ci-merge.yml` to cancel stale runs.
+
 ### 3.1 `ci-pr.yml` — PR Gate (fast)
 
 **Trigger:** `pull_request` with `branches: [develop, main]`
@@ -125,14 +131,14 @@ backend-test:
 frontend-test:
   steps:
     - npm ci
-    - npx jest --passWithNoTests
+    - npm test -- --passWithNoTests
 ```
 
 ### 3.2 `ci-merge.yml` — Merge Gate (full)
 
-**Trigger:** `push` to `develop`
+**Trigger:** `push` to `develop` or `main`
 **Target runtime:** 5-10 minutes
-**Purpose:** Full confidence check before develop → main promotion.
+**Purpose:** Full confidence check. Runs after merge to develop (before main promotion) and after hotfix merge to main.
 
 **Jobs (sequential — each depends on previous):**
 
@@ -149,7 +155,6 @@ integration:
     JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
     JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
     CI: true
-    TEST_ENV: integration
   steps:
     - uv run alembic upgrade head
     - uv run pytest tests/integration/ -v --tb=short || [ $? -eq 5 ]
@@ -212,13 +217,13 @@ These are throwaway CI-only values — not real credentials.
     restore-keys: uv-
 ```
 
-npm caching:
+npm caching (use `actions/setup-node` built-in cache):
 ```yaml
-- name: Cache npm
-  uses: actions/cache@v4
+- uses: actions/setup-node@v4
   with:
-    path: frontend/node_modules
-    key: npm-${{ hashFiles('frontend/package-lock.json') }}
+    node-version: 22
+    cache: npm
+    cache-dependency-path: frontend/package-lock.json
 ```
 
 ---
@@ -238,9 +243,27 @@ The current `tests/conftest.py` starts Docker containers via testcontainers at s
 @pytest.fixture(scope="session")
 def postgres_container():
     if os.environ.get("CI"):
-        pytest.skip("Testcontainers disabled in CI — using service containers")
+        pytest.fail(
+            "Testcontainers disabled in CI — using service containers. "
+            "Ensure this test directory has a conftest.py that overrides db_url."
+        )
+    # ... existing testcontainers startup code ...
+
+@pytest.fixture(scope="session")
+def redis_container():
+    if os.environ.get("CI"):
+        pytest.fail(
+            "Testcontainers disabled in CI — using service containers. "
+            "Ensure REDIS_URL env var is set."
+        )
     # ... existing testcontainers startup code ...
 ```
+
+**IMPORTANT:** Every test subdirectory (`tests/unit/`, `tests/api/`, `tests/integration/`,
+and any future directories like `tests/e2e/`) MUST have its own `conftest.py` that overrides
+`db_url`. Without it, pytest will resolve `db_url` from the root conftest, which depends on
+`postgres_container`, which will `pytest.fail()` in CI — a loud, clear failure rather than
+a silent skip.
 
 **Sub-level conftests — override db_url:**
 
@@ -328,8 +351,12 @@ Handles the human-triggered event (PR merge) that the agent can't observe in rea
 ```
 Trigger:     When a pull request is merged (GitHub)
 Condition:   PR title contains "KAN-"
-Action:      Transition linked issues to "Done"
+Action:      Transition the issue referenced in the PR title (by KAN-XX pattern) to "Done"
 ```
+
+**Scope:** This rule transitions the Story or Task referenced in the PR title only.
+Subtask transitions are handled by the agent before opening the PR — all subtasks should
+already be in "Ready for Verification" or "Done" by the time the PR merges.
 
 Requires: **GitHub for Jira** app installed on Atlassian site.
 
@@ -400,7 +427,7 @@ uv.lock                 ← NEWLY COMMITTED
 - [ ] `package.json` has `"test": "jest"` script
 - [ ] Testcontainers fixture guarded — CI uses service containers
 - [ ] `tests/unit/conftest.py`, `tests/api/conftest.py`, `tests/integration/conftest.py` override `db_url`
-- [ ] All 267 backend + 20 frontend tests pass in CI
+- [ ] All existing backend and frontend tests pass in CI (pytest exits 0, jest exits 0)
 - [ ] JIRA board has 5 columns (To Do, In Progress, Blocked, Ready for Verification, Done)
 - [ ] GitHub for Jira app installed and connected to repository
 - [ ] JIRA Automation rule: PR merged → transition to Done
@@ -416,6 +443,6 @@ uv.lock                 ← NEWLY COMMITTED
 - E2E / Playwright tests in CI (Phase 6+)
 - Slack/email notifications on CI failure (Phase 6)
 - Dependabot / automated dependency updates (Phase 6)
-- FSD/TDD/CLAUDE.md doc catch-up (KAN-29, next session)
+- FSD/TDD/CLAUDE.md doc catch-up (KAN-29, next session) — was Section 7 in the original CI/CD spec (`2026-03-15`), extracted as a separate deliverable
 - Multiple JIRA automation rules — keep it to one
 - JIRA API token for headless CI auth (future, when OAuth isn't sufficient)
