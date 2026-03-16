@@ -389,7 +389,76 @@ Original 5 files deleted after migration is verified.
 
 ---
 
-## 12. Out of Scope (Deferred to memory-platform phase)
+## 12. Self-Perpetuating Memory for New Modules (Phases 4B–6+)
+
+New modules built in Phase 4B, 5, and 6 must follow the same atomic memory structure automatically — not by convention that gets forgotten, but by a self-documenting taxonomy that agents consult.
+
+### `serena/memory-map.md` — the taxonomy anchor
+
+Create this memory during Phase 0 implementation. It describes:
+- Which categories exist and what belongs in each
+- The rule: every new project module gets a `domain/<module-name>.md` entry
+- The classification checklist the `/ship` command uses
+
+**Content:**
+```markdown
+# Memory Taxonomy
+
+## Project scope categories
+- project/       → state (CI-written) and stack (ports, entry points). Never domain content.
+- domain/        → ONE FILE PER MODULE. New module = new domain/<module>.md.
+                   Current: signals-and-screener, portfolio-tracker, agent-tools
+                   Add: forecasting-engine, rag-pipeline, observability, etc. as built
+- architecture/  → cross-cutting technical patterns (TimescaleDB, design system, auth)
+- conventions/   → project-specific overrides only (most conventions live in global/)
+- debugging/     → backend-gotchas.md and frontend-gotchas.md. Append; do not create new files.
+- serena/        → tool-usage.md and this memory-map.md. Structural only.
+- session/       → ephemeral scratch. Never commit. Promoted by /ship at PR time.
+
+## Global scope categories (written with global/ prefix)
+- global/conventions/  → language/tooling standards (python-style, typescript-style, etc.)
+- global/architecture/ → cross-project design decisions
+- global/debugging/    → cross-project gotchas (mock-patching-gotchas, etc.)
+- global/onboarding/   → new developer setup
+
+## Classification rules for /ship
+1. Contains stock/portfolio/ticker/signal domain concept? → project/domain/<module>
+2. Generic Python/TS/testing pattern, no domain dependency? → global/ candidate
+3. Project-specific gotcha (bcrypt pin, asyncpg, base-ui quirk)? → debugging/backend or frontend
+4. Cross-cutting architecture decision? → architecture/<topic>
+5. Ambiguous? → default project/domain/<nearest-module>, flag frontmatter: global-candidate: true
+
+## New module checklist
+When a new backend module is built:
+  □ Create domain/<module-name>.md with: purpose, key functions, gotchas, patterns
+  □ Add memory-map.md entry under domain/ current list
+  □ Run /check-stale-memories at phase end to verify
+```
+
+### How this enforces consistency across phases
+
+The Implementation Agent reads `serena/memory-map.md` at the start of any task involving a new module. It knows the taxonomy without being told. When `/ship` runs at PR time, it consults the map to classify session discoveries into the correct atomic file. New Phase 5 module (e.g., `forecasting-engine`) → agent creates `domain/forecasting-engine.md` and updates the current list in `memory-map.md` in the same PR.
+
+---
+
+## 13. CLAUDE.md Backup
+
+Before replacing `CLAUDE.md` with the slim routing manifest, preserve the current version:
+
+**Backup location:** `docs/superpowers/archive/CLAUDE-backup-2026-03-16.md`
+
+This follows the existing archive pattern — the archive directory is never read by Claude Code (CLAUDE.md session start checklist rule: "do not read archived files"), so the backup won't pollute context. It is findable by a human if the migration goes wrong and a rollback is needed.
+
+**Implementation step order:**
+1. Copy current `CLAUDE.md` → `docs/superpowers/archive/CLAUDE-backup-2026-03-16.md`
+2. Commit the backup first (standalone commit: `chore: backup CLAUDE.md before memory architecture migration`)
+3. Then replace `CLAUDE.md` with the slim version in a separate commit
+4. Verify Claude Code session start works correctly with the new slim CLAUDE.md
+5. Only delete the backup after 2 full sessions confirm no regressions
+
+---
+
+## 14. Out of Scope (Deferred to memory-platform phase)
 
 - `memory-platform` repo creation
 - `sync-global-memories.sh` script
