@@ -20,6 +20,7 @@ Load what you need for the task at hand:
 |---|---|
 | `project/state` | Current phase, branch, test count, resume point |
 | `project/stack` | Entry points, critical gotchas, package manager |
+| `project/testing` | Test commands, test layout, fixtures, factory-boy, freezegun, CI |
 | `global/conventions/python-style` | Python typing, async, logging, forbidden patterns |
 | `global/conventions/typescript-style` | TS strict mode, TanStack, shadcn, Recharts |
 | `global/conventions/testing-patterns` | pytest, factory-boy, testcontainers, mock rules |
@@ -30,6 +31,7 @@ Load what you need for the task at hand:
 | `architecture/timescaledb-patterns` | Hypertable upsert, Alembic gotchas |
 | `architecture/frontend-design-system` | Navy theme, Recharts colors, shadcn v4 |
 | `architecture/auth-jwt-flow` | Full JWT flow, token storage, OWASP checklist |
+| `architecture/celery-patterns` | Celery entry points, asyncio.run() bridge, beat schedule |
 | `domain/signals-and-screener` | Signal computation, screener |
 | `domain/portfolio-tracker` | Portfolio tools, API prefix gotcha |
 | `domain/agent-tools` | Agents, LLM routing, NDJSON streaming |

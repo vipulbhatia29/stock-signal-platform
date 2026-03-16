@@ -16,16 +16,18 @@ purpose: taxonomy anchor — ensures new modules are documented in Serena
 | global/conventions/error-handling | Logging levels, error handling by context |
 | global/debugging/mock-patching-gotchas | Patch at lookup site, AsyncMock, decorator stacking |
 | global/architecture/system-overview | Services table, entry points, filesystem layout, env vars, critical files |
-| global/onboarding/setup-guide | Bootstrap a new machine |
+| global/onboarding/setup-guide | Bootstrap a new machine: clone, uv sync, .env, Docker, first ingest |
 
 ## Project Memories (.serena/memories/ — in repo)
 | Key | Content |
 |-----|---------|
 | project/state | Current phase, branch, Alembic head, test count, resume point |
 | project/stack | Entry points, critical gotchas, package manager rules |
+| project/testing | Test commands, test layout, fixtures, factory-boy, freezegun, CI |
 | architecture/timescaledb-patterns | Hypertable upsert, Alembic caution, continuous aggregates |
 | architecture/frontend-design-system | Navy theme, Recharts colors, shared components, shadcn v4 |
 | architecture/auth-jwt-flow | Full JWT request flow, token storage, OWASP checklist, critical files |
+| architecture/celery-patterns | Celery entry points, asyncio.run() bridge, beat schedule, task naming |
 | domain/signals-and-screener | Signal computation, screener, market hours UTC gotcha |
 | domain/portfolio-tracker | Portfolio tools, API double-prefix, patch() helper |
 | domain/agent-tools | Agent architecture, LLM routing, NDJSON streaming, DB models |
