@@ -38,6 +38,8 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | serena/tool-usage | MCP prefix, tool priority, symbolic reading, editing |
 | serena/memory-map | This file — taxonomy anchor |
 | conventions/auth-patterns | JWT, httpOnly cookies, frontend auth, bcrypt pinning, security rules |
+| conventions/jira-sdlc-workflow | **MANDATORY** — full JIRA SDLC process, board, refinement lifecycle, branching, CI/CD integration |
+| project/jira-integration-brainstorm | JIRA board state, ticket map (KAN-1 through KAN-15), Atlassian connection details |
 
 ## Scope Rule
 **Global = truly cross-project** (language conventions, generic patterns).

@@ -7,9 +7,12 @@ Personal stock analysis platform — US equities, signal detection, portfolio tr
 Before writing any code:
 1. Read `PROJECT_INDEX.md` — full repo map
 2. Read `PROGRESS.md` — where we left off
-3. Run `git status && git log --oneline -5`
-4. Run `uv run pytest tests/unit/ -v` — confirm baseline green
-5. If unclear what to work on, ask
+3. Read Serena memory `conventions/jira-sdlc-workflow` — **mandatory SDLC process**
+4. Run `git status && git log --oneline -5`
+5. Query JIRA board: `project = KAN AND status != Done ORDER BY rank ASC`
+6. Identify current phase of active Epics (Refinement? Implementation?)
+7. Pick next unblocked Subtask and present to PM for approval
+8. Run `uv run pytest tests/unit/ -v` — confirm baseline green
 
 ## Memory Map
 
@@ -39,10 +42,11 @@ Load what you need for the task at hand:
 | `debugging/backend-gotchas` | asyncpg, UserRole enum, circular imports |
 | `debugging/frontend-gotchas` | ESLint hooks, Recharts, template literals |
 | `conventions/auth-patterns` | JWT, httpOnly cookies, bcrypt pinning |
+| `conventions/jira-sdlc-workflow` | **MANDATORY** — full JIRA SDLC process, branching, CI/CD integration |
 | `serena/tool-usage` | Serena MCP prefix, tool priority rules |
 | `serena/memory-map` | Full taxonomy — use when adding new modules |
 
-## 8 Hard Rules
+## 9 Hard Rules
 
 1. **uv only** — `uv run`, `uv add`. Never `pip install` or bare `python`.
 2. **Test everything** — unit test every public function; endpoint tests: auth + happy + error.
@@ -52,6 +56,7 @@ Load what you need for the task at hand:
 6. **Edit, don't create** — prefer editing existing files over creating new ones.
 7. **No mutable module state** — constants and `settings` only at module level.
 8. **Serena first** — use symbolic tools for all code reads/edits. Built-ins only when Serena can't.
+9. **JIRA workflow** — follow `conventions/jira-sdlc-workflow` exactly. Never skip refinement. Never create implementation subtasks before plan is approved.
 
 ## Services (local dev)
 
