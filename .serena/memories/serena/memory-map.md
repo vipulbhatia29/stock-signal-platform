@@ -15,7 +15,7 @@ purpose: taxonomy anchor — ensures new modules are documented in Serena
 | global/conventions/git-workflow | Conventional commits, branch strategy, PR flow |
 | global/conventions/error-handling | Logging levels, error handling by context |
 | global/debugging/mock-patching-gotchas | Patch at lookup site, AsyncMock, decorator stacking |
-| global/architecture/system-overview | Full stack, principles, local dev ports |
+| global/architecture/system-overview | Services table, entry points, filesystem layout, env vars, critical files |
 | global/onboarding/setup-guide | Bootstrap a new machine |
 
 ## Project Memories (.serena/memories/ — in repo)
@@ -25,6 +25,7 @@ purpose: taxonomy anchor — ensures new modules are documented in Serena
 | project/stack | Entry points, critical gotchas, package manager rules |
 | architecture/timescaledb-patterns | Hypertable upsert, Alembic caution, continuous aggregates |
 | architecture/frontend-design-system | Navy theme, Recharts colors, shared components, shadcn v4 |
+| architecture/auth-jwt-flow | Full JWT request flow, token storage, OWASP checklist, critical files |
 | domain/signals-and-screener | Signal computation, screener, market hours UTC gotcha |
 | domain/portfolio-tracker | Portfolio tools, API double-prefix, patch() helper |
 | domain/agent-tools | Agent architecture, LLM routing, NDJSON streaming, DB models |
@@ -32,7 +33,7 @@ purpose: taxonomy anchor — ensures new modules are documented in Serena
 | debugging/frontend-gotchas | ESLint hooks, Recharts colors, API prefix, next/image |
 | serena/tool-usage | MCP prefix, tool priority, symbolic reading, editing |
 | serena/memory-map | This file — taxonomy anchor |
-| conventions/auth-patterns | JWT, httpOnly cookies, bcrypt pinning, rate limiting |
+| conventions/auth-patterns | JWT, httpOnly cookies, frontend auth, bcrypt pinning, security rules |
 
 ## New Module Checklist
 When adding a module in Phase 4B, 5, or 6+:

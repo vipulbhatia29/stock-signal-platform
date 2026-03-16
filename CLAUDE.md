@@ -29,6 +29,7 @@ Load what you need for the task at hand:
 | `global/architecture/system-overview` | Full stack, ports, principles |
 | `architecture/timescaledb-patterns` | Hypertable upsert, Alembic gotchas |
 | `architecture/frontend-design-system` | Navy theme, Recharts colors, shadcn v4 |
+| `architecture/auth-jwt-flow` | Full JWT flow, token storage, OWASP checklist |
 | `domain/signals-and-screener` | Signal computation, screener |
 | `domain/portfolio-tracker` | Portfolio tools, API prefix gotcha |
 | `domain/agent-tools` | Agents, LLM routing, NDJSON streaming |
