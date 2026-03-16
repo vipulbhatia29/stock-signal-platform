@@ -23,10 +23,11 @@ tracking, and surface actionable buy/hold/sell recommendations.
 
 Before writing any code, orient yourself:
 
-1. Read `PROGRESS.md` — understand where we left off and what's next
-2. Run `git status` and `git log --oneline -5` — verify branch state
-3. Run `uv run pytest tests/unit/ -v` — confirm baseline is green
-4. If unclear what to work on, ask
+1. Read `PROJECT_INDEX.md` — full repo map: all modules, components, hooks, test counts, phase roadmap
+2. Read `PROGRESS.md` — understand where we left off and what's next
+3. Run `git status` and `git log --oneline -5` — verify branch state
+4. Run `uv run pytest tests/unit/ -v` — confirm baseline is green
+5. If unclear what to work on, ask
 
 ## Virtual Environment
 
