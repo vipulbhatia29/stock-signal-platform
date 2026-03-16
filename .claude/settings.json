@@ -29,7 +29,8 @@
       "Bash(npx *)",
       "Bash(node *)",
       "Bash(ruff *)",
-      "Bash(mkdocs *)"
+      "Bash(mkdocs *)",
+      "Bash(gh *)"
     ],
     "deny": [
       "Bash(rm -rf /)",

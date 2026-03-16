@@ -63,5 +63,9 @@ redis_data/
 
 # Brainstorming / local tools
 .superpowers/
-.serena/
+# Serena — commit project memories, ignore cache and ephemeral session
+.serena/cache/
+.serena/memories/session/*
+!.serena/memories/session/.gitkeep
+.serena/project.local.yml
 .playwright-mcp/
