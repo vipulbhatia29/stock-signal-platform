@@ -390,6 +390,15 @@ Users can override weights via UserPreference.composite_weights.
 - Signal history chart (dual-axis: composite score + RSI over time)
 - Risk & return section: annualized return, volatility, Sharpe ratio
 
+**FR-7.12: Shell Layout + Design System (Phase 4A)** ✅ IMPLEMENTED
+- Dark-only application (`forcedTheme="dark"`) — light mode removed; `enableSystem` disabled
+- Shell layout: 54px icon-only `SidebarNav` + `Topbar` + docked right `ChatPanel`
+- `ChatPanel`: drag-resizable via DOM events, width persisted to localStorage (`stocksignal:cp-width`), hides via `transform: translateX(100%)` (preserves width when closed)
+- New dashboard components: `StatTile` (5-tile KPI row with accent gradient top border), `AllocationDonut` (CSS conic-gradient, no chart library), `PortfolioDrawer` (bottom slide-up with portfolio value chart)
+- `Sparkline` replaced with raw SVG `<polyline>` for jagged financial chart aesthetics
+- Typography: Sora (UI labels) + JetBrains Mono (numbers/metrics) loaded via `next/font/google`
+- All components restyed to navy design tokens (card2, hov, bhi, warning, cyan)
+
 ### FR-8: AI Chatbot (Phase 4)
 
 **FR-8.1: Agent Selection**
@@ -563,6 +572,13 @@ After 3+ months of data accumulation, the following metrics become available:
 - Background job monitoring: TaskLog table + dashboard widget
 - LLM usage tracking: tokens_used and model_used on every ChatMessage
 - Error alerting: log ERROR level → future integration with monitoring
+
+### NFR-7: Developer Experience (Phase 4.5)
+
+- All PRs to `develop` must pass CI gate before merge (lint + unit + API tests + Jest)
+- All merges to `main` must pass full CI gate (lint → unit+api → integration stub → build)
+- `main` branch is always deployable — no broken builds permitted
+- Branch protection enforced via GitHub branch rules (no direct push to `main` or `develop`)
 
 ---
 

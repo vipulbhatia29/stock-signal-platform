@@ -272,6 +272,57 @@ Executed all 25 tasks in `docs/superpowers/plans/2026-03-15-ui-redesign-implemen
 
 ---
 
+## Session 31 — Memory Architecture Migration *(compact)*
+
+**Date:** 2026-03-16 | **Branch:** `feat/phase-4b-ai-chatbot` | **Tests:** 267 backend + 20 frontend (unchanged)
+
+Designed and executed full Serena memory architecture migration. Brainstormed 3-scope topology (session/project/global), staged approach (B), atomic file design, and lifecycle tooling. Spec written + reviewed (2 rounds), 22-task implementation plan written, all 3 chunks executed.
+
+**What was done:**
+- Spec: `docs/superpowers/specs/2026-03-16-memory-architecture-design.md`
+- Plan: `docs/superpowers/plans/2026-03-16-memory-architecture-implementation.md`
+- CLAUDE.md backup: `docs/superpowers/archive/CLAUDE-backup-2026-03-16.md`
+- `.gitignore` surgical fix: `.serena/` → `.serena/cache/` + `session/*` + `!.gitkeep` + `project.local.yml`
+- `.serena/memories/session/.gitkeep` — session staging directory created
+- `.claude/settings.json` — `Bash(gh *)` added to allowed tools
+- 20 atomic Serena memories written (8 global/ + 12 project-scoped)
+- 5 old monolithic memories deleted (`project_overview`, `style_and_conventions`, `suggested_commands`, `task_completion_checklist`, `tool_usage_rules`)
+- CLAUDE.md slimmed: 374 → 85 lines (routing manifest pointing to Serena memories)
+- `~/.claude/CLAUDE.md` created: machine-level workspace rules (42 lines)
+- `/ship` command: `.claude/commands/ship.md` — session memory promotion + commit + push + PR
+- `/check-stale-memories` command: `.claude/commands/check-stale-memories.md` — staleness audit
+
+Key design decisions: Serena native `global/` prefix resolves to `~/.serena/memories/global/` machine-wide (no symlinks); `memory-platform` repo deferred until second stockanalysis project starts; `serena/memory-map.md` is taxonomy anchor for new modules in Phases 4B-6+.
+
+**Commits:** 34037d4 (backup+plan), a5d5457 (foundation), 8a834d7 (20 memories), 4878c41 (tooling)
+
+**Next session — Phase 4B AI Chatbot Backend:**
+1. `ChatSession` + `ChatMessage` DB models + migration 008
+2. `backend/agents/` — `BaseAgent`, `StockAgent`, `GeneralAgent`, agentic loop, NDJSON streaming
+3. `backend/routers/chat.py` — `POST /api/v1/chat/stream`
+4. Wire `ChatPanel` stub to real streaming backend
+
+---
+
+## Session 30 — CI/CD + Branching Strategy Brainstorm + Spec *(compact)*
+
+**Date:** 2026-03-15 | **Branch:** `feat/phase-4b-ai-chatbot` | **Tests:** 267 backend + 20 frontend (unchanged)
+
+Brainstormed CI/CD and branching strategy for the project. Designed two-track branching model (`main` production + `develop` staging), 3 GitHub Actions workflow files, and fixture architecture for CI. Spec written, reviewed twice (2 rounds, 12 issues total resolved), committed. Implementation plan **deferred to post-Phase-4B sprint** — spec is ready, plan to be written at that time.
+
+Key decisions: `ci-pr.yml` fast gate on PRs to develop/main; `ci-merge.yml` full sequential gate on push to develop; `deploy.yml` no-op stub for Phase 6; 5 GitHub Actions Secrets (CI-only throwaway values); sub-level `conftest.py` overrides in `tests/unit/` + `tests/api/` with `TEST_ENV` guard to prevent testcontainers in CI; `uv.lock` must be committed. Doc catch-up for Phase 4A UI (FSD/TDD/CLAUDE.md) bundled into this sprint.
+
+Spec: `docs/superpowers/specs/2026-03-15-cicd-branching-design.md` | Plan: to be written at sprint start (post-4B)
+CI/CD placeholder added to `project-plan.md` as Phase 4.5.
+
+**Next session — Phase 4B AI Chatbot Backend:**
+1. `ChatSession` + `ChatMessage` DB models + migration 008
+2. `backend/agents/` — `BaseAgent`, `StockAgent`, `GeneralAgent`, agentic loop, NDJSON streaming
+3. `backend/routers/chat.py` — `POST /api/v1/chat/stream`
+4. Wire `ChatPanel` stub to real streaming backend
+
+---
+
 ## Session 28 — UI Redesign Brainstorm + Spec + Implementation Plan
 
 **Date:** 2026-03-15
