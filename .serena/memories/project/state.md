@@ -1,23 +1,29 @@
 ---
 scope: project
 category: project
-updated_by: session-33
+updated_by: session-34
 ---
 
 # Project State
 
-- **Current Phase:** Phase 4B — AI Chatbot backend (paused for JIRA integration setup)
-- **Current Branch:** feat/phase-4b-ai-chatbot
+- **Current Phase:** Phase 4B — AI Chatbot (refinement not started yet)
+- **Current Branch:** develop (clean, CI green)
 - **Alembic Head:** 821eb511d146 (migration 007)
 - **Test Count:** 267 (143 unit + 124 API backend) + 20 frontend component tests
-- **JIRA board created:** Epic KAN-1, 4 Stories (KAN-2–5), 10 Subtasks (KAN-6–15). Read `project/jira-integration-brainstorm` for full ticket map. — read `project/jira-integration-brainstorm` memory
-- **What's next:** Resolve remaining design questions (git branching, agent autonomy) → pick up KAN-6 (DB models) as first subtask
+- **CI/CD:** Fully operational — 3 workflows (ci-pr, ci-merge, deploy stub), branch protection on main + develop
+- **JIRA:** 5-column board, 2 automation rules, agent-driven workflow. Read `conventions/jira-sdlc-workflow` for process.
+- **What's next:** Phase 4B refinement (KAN-16/KAN-17: brainstorm AI chatbot architecture) → doc catch-up (KAN-29)
 
-## Session 33 Fixes
-- Disabled duplicate Serena plugin (`serena@claude-plugins-official` in `~/.claude/settings.json`) — was a dead endpoint from SuperClaude; real Serena is `mcp__plugin_serena_serena__*` via VSCode plugin
-- Wrote `global/conventions/session-start-protocol` memory — activate Serena FIRST, every session, no exceptions
-- Wrote Claude memory `feedback_serena_activation_first.md` + added to MEMORY.md index
-- Atlassian OAuth still not triggered — needs session restart
+## Git Branch Structure
+```
+main        ← production-ready, protected (requires ci-merge/build)
+develop     ← integration branch, protected (requires ci-pr/backend-test + frontend-test)
+feat/KAN-*  ← Story branches, PR to develop
+```
+
+## Active JIRA Epics
+- **KAN-1** Phase 4B — AI Chatbot Backend (To Do, refinement pending)
+- **KAN-22** CI/CD Pipeline + Branching Strategy (implementation COMPLETE, KAN-29 doc catch-up remains)
 
 ## Phase Completion
 - Phase 1 (Sessions 1-3): COMPLETE
@@ -27,5 +33,4 @@ updated_by: session-33
 - Phase 3.5 (Sessions 21-25): COMPLETE
 - Phase 4A UI Redesign (Session 29): COMPLETE
 - Memory Architecture Migration (Session 31): COMPLETE
-- Session 32-33: JIRA integration brainstorm (in progress)
-- Session 34: JIRA board created — Epic + 4 Stories + 10 Subtasks for Phase 4B
+- Sessions 32-34: JIRA SDLC + CI/CD pipeline COMPLETE
