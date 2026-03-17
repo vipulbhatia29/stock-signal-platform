@@ -39,6 +39,8 @@ Load what you need for the task at hand:
 | `domain/signals-and-screener` | Signal computation, screener |
 | `domain/portfolio-tracker` | Portfolio tools, API prefix gotcha |
 | `domain/agent-tools` | Agents, LLM routing, NDJSON streaming |
+| `architecture/cicd-pipeline` | CI/CD workflows, branch protection, fixture split, test expectations |
+| `project/jira-integration-brainstorm` | JIRA instance details, ticket map, transition IDs, automation rules |
 | `debugging/backend-gotchas` | asyncpg, UserRole enum, circular imports |
 | `debugging/frontend-gotchas` | ESLint hooks, Recharts, template literals |
 | `conventions/auth-patterns` | JWT, httpOnly cookies, bcrypt pinning |
@@ -68,6 +70,21 @@ Load what you need for the task at hand:
 | Redis | `docker compose up -d redis` | **6380** |
 | Celery worker | `uv run celery -A backend.tasks worker --loglevel=info` | — |
 | Docs | `uv run mkdocs serve` | 8000 |
+
+## Git Branching
+
+```
+main        ← production-ready, protected (ci-merge/build required)
+develop     ← integration branch, protected (ci-pr/backend-test + frontend-test)
+feat/KAN-*  ← Story branches → PR to develop
+hotfix/KAN-* ← emergency fixes → PR to main + back-merge to develop
+```
+
+- Branch per Story: `feat/KAN-[story#]-[kebab-name]`
+- PR title: `[KAN-X] Summary`
+- Never commit directly to main or develop
+- Never skip hooks (`--no-verify`) — fix the underlying issue
+- `uv.lock` is committed — run `uv sync` after pulling
 
 ## Sprint Documents
 
