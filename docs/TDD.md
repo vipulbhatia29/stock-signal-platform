@@ -642,6 +642,43 @@ The authenticated layout is a client component that composes three side-by-side 
 - `--sw: 54px` — sidebar width
 - `--cp: 280px` — chat panel width (default; user can drag-resize)
 
+**Font Loading** (`app/layout.tsx`):
+- Sora + JetBrains Mono via `next/font/google`
+- Set as CSS vars: `--font-sora`, `--font-jetbrains-mono`
+- Applied via: `cn(sora.variable, jetbrainsMono.variable)` on `<body>`
+
+**Component Inventory (Phase 4A):**
+
+| Component | Purpose |
+|-----------|---------|
+| `SidebarNav` | Icon-only sidebar with tooltip labels |
+| `Topbar` | Market status chip, signal count, AI toggle |
+| `ChatPanel` | Drag-resize stub; Phase 4B wires to streaming backend |
+| `StatTile` | Dashboard KPI tile with accent gradient top border |
+| `AllocationDonut` | CSS conic-gradient pie; no chart library |
+| `PortfolioDrawer` | Bottom slide-up with PortfolioValueChart |
+
+**Hook Locations:**
+
+| Hook | File | Source |
+|------|------|--------|
+| `usePositions()` | `hooks/use-stocks.ts` | Extracted from portfolio-client |
+| `usePortfolioSummary()` | `hooks/use-stocks.ts` | Extracted from portfolio-client |
+| `usePortfolioHistory()` | `hooks/use-stocks.ts` | Extracted from portfolio-client |
+| `useWatchlist()` | `hooks/use-stocks.ts` | Existing |
+
+**localStorage Keys** (all in `lib/storage-keys.ts` with `stocksignal:` namespace prefix):
+
+| Key | Constant | Purpose |
+|-----|----------|---------|
+| `stocksignal:cp-width` | `CHAT_PANEL_WIDTH` | Chat panel drag width |
+| `stocksignal:density` | `SCREENER_DENSITY` | Screener compact/comfortable |
+
+**Market Hours:**
+- `lib/market-hours.ts` — pure `isNYSEOpen()` function
+- Uses IANA `America/New_York` timezone (DST-correct)
+- No API call — client-side only
+
 ### 7.2 State Management
 
 - **Server state:** TanStack Query (React Query) for all API data
