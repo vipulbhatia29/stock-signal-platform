@@ -69,7 +69,7 @@ Phase 4B builds a **three-layer financial intelligence platform** that serves as
 
 | MCP Server | What it provides | Tier |
 |------------|-----------------|------|
-| **EdgarTools MCP** | SEC filings: 10-K, 10-Q, 8-K, 13F, Form 4. XBRL native. | 1 |
+| **EdgarTools MCP** | SEC filings: 10-K, 10-Q, 8-K, 13F, Form 4. XBRL native. Used via MCPAdapter for agent access AND as Python library in Celery warm pipeline tasks. | 1 |
 | **Alpha Vantage MCP** | News + sentiment scores, quotes, technical indicators | 1 |
 | **FRED MCP** (`mcp-fredapi`) | 840K macroeconomic series (GDP, CPI, Fed rate, employment) | 1 |
 | **Finnhub MCP** | Analyst ratings, ESG, social sentiment, supply chain, ETF holdings | 1 |
@@ -124,12 +124,18 @@ class ToolRegistry:
 ### 3.2 BaseTool
 
 ```python
+class CachePolicy:
+    ttl: timedelta                     # e.g., timedelta(hours=24)
+    key_fields: list[str]             # e.g., ["ticker"] — params used in cache key
+    backend: Literal["redis"] = "redis"
+
 class BaseTool(ABC):
     name: str                          # "analyze_stock"
     description: str                   # for LLM context
     category: str                      # "analysis"|"data"|"portfolio"|"macro"|"news"|"sec"
     parameters: dict                   # JSON Schema
     cache_policy: CachePolicy | None   # {ttl: "24h", key_fields: ["ticker"]}
+    timeout_seconds: float = 10.0      # default for internal tools; 30.0 for proxied MCP tools
 
     async def execute(params: dict) -> ToolResult
 ```
@@ -173,6 +179,7 @@ AGENT_TOOL_FILTERS = {
 | `get_recommendations` | portfolio | Recommendations with multi-source context | DB + analyst + macro |
 | `compute_signals` | data | Signal computation for a ticker | DB |
 | `get_geopolitical_events` | macro | GDELT wrapper — geopolitical events + sector mapping | GDELT API |
+| `web_search` | data | General web search for current information | SerpAPI (SERPAPI_API_KEY already in config) |
 
 **Proxied tools (via MCPAdapters):**
 
@@ -216,8 +223,12 @@ Start with Groq for development. Provider-agnostic interface allows switching wi
 ### 4.3 Fallback Chain
 
 ```
-Groq → Anthropic → OpenAI → Local → AllProvidersFailedError
+Groq → Anthropic → Local → AllProvidersFailedError
 ```
+
+Aligned with PRD §NFR-3 and FSD §5: Groq (fast/cheap) → Claude (quality) → LM Studio (offline).
+OpenAI is available as a provider implementation but NOT in the default fallback chain.
+It can be added by configuration if needed — the `LLMClient` accepts an ordered provider list.
 
 Each provider is tried in order. On `APIError` or `Timeout`, log warning and try next. The LLMClient tracks which provider succeeded for logging.
 
@@ -233,6 +244,12 @@ Every LLM call records:
 ## 5. Agentic Loop
 
 ### 5.1 Core Loop
+
+**Two-phase approach per iteration:**
+1. **Tool-calling phase:** call LLM in non-streaming mode (or buffer stream). Detect tool calls from the complete response. Execute tools.
+2. **Synthesis phase:** when LLM responds without tool calls, this is the final answer — stream it token-by-token to the client.
+
+This matches how LLM SDKs work in practice: tool_use blocks arrive as part of the response and must be fully received before execution.
 
 ```python
 async def agentic_loop(
@@ -268,10 +285,11 @@ async def agentic_loop(
 
 ```python
 async def execute_tool_safely(registry, tool_call) -> ToolResult:
+    tool = registry.get(tool_call.name)
     try:
         result = await asyncio.wait_for(
             registry.execute(tool_call.name, tool_call.params),
-            timeout=10.0
+            timeout=tool.timeout_seconds  # 10s internal, 30s proxied MCP
         )
         return ToolResult(status="ok", data=result)
     except ToolNotAvailableError:
@@ -364,11 +382,12 @@ CREATE TABLE chat_session (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES "user"(id),
     agent_type VARCHAR(20) NOT NULL,  -- 'stock' | 'general'
-    title VARCHAR(255),               -- auto-generated from first message
+    title VARCHAR(255),               -- auto-generated: first 100 chars of user's first message, trimmed to word boundary
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     last_active_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX idx_chat_session_user ON chat_session(user_id, last_active_at DESC);
 ```
 
 ### 7.2 ChatMessage
@@ -387,25 +406,27 @@ CREATE TABLE chat_message (
     latency_ms INTEGER,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE INDEX idx_chat_message_session ON chat_message(session_id, created_at);
 ```
 
 ### 7.3 LLMCallLog (operational)
 
 ```sql
 CREATE TABLE llm_call_log (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
     session_id UUID REFERENCES chat_session(id),
     message_id UUID REFERENCES chat_message(id),
     provider VARCHAR(50) NOT NULL,    -- 'groq' | 'anthropic' | 'openai' | 'local'
     model VARCHAR(100) NOT NULL,
     prompt_tokens INTEGER,
     completion_tokens INTEGER,
+    cost_usd NUMERIC(10,6),           -- estimated cost per call
     latency_ms INTEGER,
     tool_calls_requested JSONB,
     error TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (id, created_at)      -- composite PK required for TimescaleDB hypertable
 );
--- TimescaleDB hypertable for time-series queries
 SELECT create_hypertable('llm_call_log', 'created_at');
 ```
 
@@ -413,7 +434,7 @@ SELECT create_hypertable('llm_call_log', 'created_at');
 
 ```sql
 CREATE TABLE tool_execution_log (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
     session_id UUID REFERENCES chat_session(id),
     message_id UUID REFERENCES chat_message(id),
     tool_name VARCHAR(100) NOT NULL,
@@ -423,10 +444,13 @@ CREATE TABLE tool_execution_log (
     cache_hit BOOLEAN DEFAULT FALSE,
     status VARCHAR(20) NOT NULL,      -- 'ok' | 'degraded' | 'timeout' | 'error'
     error TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (id, created_at)      -- composite PK required for TimescaleDB hypertable
 );
 SELECT create_hypertable('tool_execution_log', 'created_at');
 ```
+
+**Note:** Composite PK `(id, created_at)` is required because TimescaleDB hypertables need the partitioning column in the primary key. This matches the existing pattern used by `StockPrice` and other hypertables in the codebase.
 
 ---
 
@@ -436,14 +460,15 @@ SELECT create_hypertable('tool_execution_log', 'created_at');
 
 - **New session:** create `ChatSession` with `user_id` + `agent_type`
 - **Resume:** load session + last 20 messages as LLM context (sliding window)
-- **History summary:** when context exceeds token budget, oldest messages summarized by a cheap/fast LLM call: "Previous context: user analyzed AAPL, discussed Iran exposure..."
+- **Context budget:** 16K tokens for the sliding window. Summarization triggers at 12K tokens. Budget is provider-aware — uses the minimum across configured providers (Groq/Claude: 128K+, but we cap at 16K for cost/speed). Token counting via `tiktoken` (OpenAI-compatible) or provider-specific tokenizer.
+- **History summary:** when context exceeds 12K tokens, oldest messages summarized by a cheap/fast LLM call: "Previous context: user analyzed AAPL, discussed Iran exposure..."
 - **Expiry:** 24h inactivity → `is_active = FALSE`. Messages preserved, session context cleared.
 
 ### 8.2 During Streaming
 
 | Event | Behavior |
 |-------|----------|
-| User sends another message while streaming | Queue in-memory (asyncio.Queue per session) — process after current response |
+| User sends another message while streaming | Queue in-memory (asyncio.Queue per session) — process after current response. **Note:** per-process queue; does not work across multiple workers. Acceptable for single-process dev; needs Redis-backed queue if multi-worker (Phase 6). |
 | User disconnects (closes browser/tab) | Server detects SSE disconnect → cancel remaining tool calls → save partial response |
 | User reconnects | Load session → show last complete messages + "response was interrupted" |
 
@@ -496,6 +521,12 @@ JSON-formatted logs, shippable to any aggregator (ELK, CloudWatch) without code 
 ---
 
 ## 10. MCP Server (Layer 3)
+
+**Phase note:** MCP server exposure was originally planned for Phase 6 (FSD Feature Matrix, TDD §12). It is pulled forward to Phase 4B because:
+1. The Tool Registry (core of Phase 4B) is the exact same abstraction the MCP server exposes — building both simultaneously is cheaper than retrofitting.
+2. Mounting MCP on FastAPI is ~50 lines of code on top of the registry — minimal incremental effort.
+3. It makes the platform immediately usable from Claude Code and Cursor, enabling the developer to be their own first customer during Phase 4B development.
+4. FSD and TDD will be updated to reflect this phase change (KAN-29 catch-up or dedicated PR).
 
 ### 10.1 Transport
 
@@ -591,7 +622,7 @@ Request:
 {
   "message": "Analyze AAPL given the Iran situation",
   "session_id": "uuid" | null,       // null = new session
-  "agent_type": "stock" | "general"  // required for new session
+  "agent_type": "stock" | "general"  // required for new session; ignored when resuming (agent bound at creation)
 }
 
 Response: text/event-stream (NDJSON)
@@ -644,7 +675,7 @@ ANTHROPIC_API_KEY=...      # already in Settings
 OPENAI_API_KEY=...         # already in Settings
 ALPHA_VANTAGE_API_KEY=...  # NEW
 FINNHUB_API_KEY=...        # NEW
-# FRED: free, no key needed
+FRED_API_KEY=...           # already in Settings (free, requires registration)
 # EdgarTools: free, no key needed (uses SEC EDGAR public API)
 # GDELT: free, no key needed
 ```
