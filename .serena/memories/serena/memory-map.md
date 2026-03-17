@@ -33,7 +33,7 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | architecture/celery-patterns | Celery entry points, asyncio.run() bridge, beat schedule, task naming |
 | domain/signals-and-screener | Signal computation, screener, market hours UTC gotcha |
 | domain/portfolio-tracker | Portfolio tools, API double-prefix, patch() helper |
-| domain/agent-tools | Agent architecture, LLM routing, NDJSON streaming, DB models |
+| domain/agent-tools | Three-layer MCP architecture, Tool Registry, MCPAdapters, LLM client, DB models |
 | debugging/backend-gotchas | asyncpg, UserRole enum, circular imports, Alembic, yfinance |
 | debugging/frontend-gotchas | ESLint hooks, Recharts colors, API prefix, next/image |
 | serena/tool-usage | MCP prefix, tool priority, symbolic reading, editing |
