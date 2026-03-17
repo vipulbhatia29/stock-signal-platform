@@ -209,8 +209,8 @@ main                    ← production-ready, always deployable
 |-------|-------------|-------|---------------------|
 | PR opened | Subtasks → Ready for Verification | Agent does manually | GitHub Action updates JIRA |
 | CI fails on PR | Subtasks stay In Progress | Agent checks CI | GitHub Action comments on JIRA |
-| PR merged to develop | Story → Done | Agent does manually | GitHub Action transitions JIRA |
-| develop → main merged | Epic → Done | PM does manually | GitHub Action transitions JIRA |
+| PR merged to develop | Story → Done | Agent does manually | JIRA Automation rule transitions to Done |
+| develop → main merged | Epic → Done | PM does manually | JIRA Automation rule or agent reconciliation |
 
 ## 6. Session Start Protocol (for Agent)
 

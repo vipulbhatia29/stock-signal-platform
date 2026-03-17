@@ -1,0 +1,105 @@
+name: ci-pr
+
+on:
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Ruff check
+        run: uv run ruff check backend/ tests/ scripts/ --no-fix
+      - name: Ruff format check
+        run: uv run ruff format backend/ tests/ scripts/ --check
+
+  frontend-lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: ESLint
+        run: npm run lint
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+  backend-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+        run: uv run alembic upgrade head
+      - name: Run backend tests
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.CI_REDIS_URL }}
+          JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
+          JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+          CI: "true"
+        run: uv run pytest tests/unit/ tests/api/ -v --tb=short
+
+  frontend-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Run frontend tests
+        run: npm test -- --passWithNoTests
