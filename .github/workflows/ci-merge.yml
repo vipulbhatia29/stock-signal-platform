@@ -1,0 +1,148 @@
+name: ci-merge
+
+on:
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-merge-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
+      - run: uv run ruff check backend/ tests/ scripts/ --no-fix
+      - run: uv run ruff format backend/ tests/ scripts/ --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: cd frontend && npm ci
+      - run: cd frontend && npm run lint
+      - run: cd frontend && npx tsc --noEmit
+
+  unit-and-api:
+    needs: lint
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+        run: uv run alembic upgrade head
+      - name: Run backend tests
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.CI_REDIS_URL }}
+          JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
+          JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+          CI: "true"
+        run: uv run pytest tests/unit/ tests/api/ -v --tb=short
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: cd frontend && npm ci
+      - name: Run frontend tests
+        run: cd frontend && npm test -- --passWithNoTests
+
+  integration:
+    needs: unit-and-api
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+        run: uv run alembic upgrade head
+      - name: Run integration tests
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.CI_REDIS_URL }}
+          JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
+          JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+          CI: "true"
+        # Exit code 5 = no tests collected (tests/integration/ is empty stub)
+        run: uv run pytest tests/integration/ -v --tb=short || [ $? -eq 5 ]
+
+  build:
+    needs: integration
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Next.js production build
+        run: npm run build
