@@ -304,6 +304,55 @@ Key design decisions: Serena native `global/` prefix resolves to `~/.serena/memo
 
 ---
 
+## Session 34 — JIRA SDLC + CI/CD Implementation + Phase 4B Spec
+
+**Date:** 2026-03-17 | **Branch:** `feat/KAN-16-phase4b-refinement` (PR #10) | **Tests:** 267 backend + 20 frontend (unchanged)
+
+Massive session: JIRA integration, CI/CD pipeline, and Phase 4B architecture design.
+
+### JIRA SDLC Workflow (COMPLETE)
+- [x] JIRA MCP connection verified (OAuth 2.1 via Atlassian plugin)
+- [x] `conventions/jira-sdlc-workflow` Serena memory written — mandatory process for all future work
+- [x] CLAUDE.md updated: Rule 9 (JIRA workflow), session start protocol, git branching section
+- [x] 5-column board configured: To Do → In Progress → Blocked → Ready for Verification → Done
+- [x] 2 JIRA Automation rules: "PR merged → Done" + "All subtasks done → parent Done"
+- [x] GitHub for Jira app installed + connected
+- [x] All 5 transition IDs discovered: 7=Blocked, 8=Ready for Verification, 11=To Do, 21=In Progress, 31=Done
+- [x] Reusable template: `global/templates/agentic-sdlc-setup`
+
+### CI/CD Pipeline — KAN-22 Epic (COMPLETE)
+- [x] Brainstorm → spec → review → plan → implementation (full SDLC cycle)
+- [x] Spec: `docs/superpowers/specs/2026-03-16-cicd-jira-integration-design.md`
+- [x] Plan: `docs/superpowers/plans/2026-03-16-cicd-jira-integration.md`
+- [x] 3 GitHub Actions workflows: ci-pr.yml (4 parallel jobs), ci-merge.yml (4 sequential), deploy.yml (stub)
+- [x] Testcontainers fixture split — sub-level conftests override db_url for CI
+- [x] uv.lock committed, frontend test script added, tsconfig types fix
+- [x] 5 GitHub Secrets configured, branch protection on main + develop
+- [x] PRs: #7 (CI/CD code), #8 (docs), #9 (doc catch-up KAN-29) — all merged
+- [x] ci-merge.yml validated: 4m41s, all jobs pass
+
+### Phase 4B Spec (COMPLETE)
+- [x] Brainstormed three-layer MCP architecture: consume external MCPs → enrich → expose as MCP server
+- [x] 5 data layers: fundamentals, SEC filings, news/sentiment, macro/geopolitical, analyst/alternative
+- [x] 4 Tier 1 MCPs selected: EdgarTools, Alpha Vantage, FRED, Finnhub + GDELT wrapper
+- [x] Tool Registry + MCPAdapter pattern with auto-discovery
+- [x] LLM client: Groq → Anthropic → Local fallback with exponential backoff + provider health tracking
+- [x] Spec: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md` (780+ lines)
+- [x] Spec reviewed (15+1 issues fixed), retry strategy added (§4.4)
+- [x] PRD, FSD, TDD updated for new architecture
+- [x] PR #10 open with spec + memories + doc updates
+
+### JIRA Board Created
+- KAN-1 Epic: Phase 4B AI Chatbot — 5 Stories (KAN-2–5, KAN-16) + 15 Subtasks
+- KAN-22 Epic: CI/CD Pipeline — DONE
+- KAN-16 Refinement: brainstorm ✅, spec ✅, review ✅ — plan next (KAN-20)
+
+**Key decisions:** Phase 4B = backend only (4C = frontend). MCP server pulled from Phase 6. Agent-driven JIRA (not CI-driven). Branch per Story. Few-shot prompting. No new infrastructure (TimescaleDB + Redis + Celery).
+
+**Next session:** Merge PR #10 → KAN-20 (write implementation plan) → KAN-21 (review plan) → revise JIRA Stories → implement
+
+---
+
 ## Session 30 — CI/CD + Branching Strategy Brainstorm + Spec *(compact)*
 
 **Date:** 2026-03-15 | **Branch:** `feat/phase-4b-ai-chatbot` | **Tests:** 267 backend + 20 frontend (unchanged)
