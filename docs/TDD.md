@@ -406,79 +406,50 @@ async def get_signal_service(
 
 ## 5. Agent Architecture
 
-> **Implementation status:** The agent architecture described below is planned for Phase 4. The `AgentRegistry`, `ToolRegistry`, agentic loop, and LLM client with fallback are NOT yet implemented. The `backend/agents/` directory exists as a placeholder.
+> **Implementation status:** Phase 4B spec complete (Session 34). Full design: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md`. Implementation plan pending. The `backend/agents/` directory exists as a placeholder.
 
-### 5.1 Agent Registry
+### 5.1 Three-Layer Architecture
 
-```python
-class AgentRegistry:
-    agents: dict[str, BaseAgent] = {
-        "general": GeneralAgent,
-        "stock": StockAgent,
-    }
-
-    def get(self, agent_type: str) -> BaseAgent:
-        return self.agents[agent_type](tool_registry=self.tool_registry)
-```
+Layer 1: Consume external MCPs (EdgarTools, Alpha Vantage, FRED, Finnhub, GDELT)
+Layer 2: Enrich in backend (Tool Registry + caching + cross-source analysis)
+Layer 3: Expose as MCP server at `/mcp` (Streamable HTTP, JWT auth)
 
 ### 5.2 Tool Registry
 
 ```python
 class ToolRegistry:
-    """Central registry of all tools available to agents."""
-    tools: dict[str, Callable] = {
-        "fetch_stock_data": market_data.fetch_prices,
-        "compute_signals": signals.compute_all,
-        "get_recommendations": recommendations.get_current,
-        "get_fundamentals": fundamentals.get_fundamentals,
-        "get_portfolio": portfolio.get_positions,
-        "screen_stocks": screener.screen,
-        "run_forecast": forecasting.forecast,
-        "web_search": search.web_search,
-    }
+    """Central registry — all tools (internal + MCP-proxied) discoverable here."""
+    def register(tool: BaseTool) -> None
+    def register_mcp(adapter: MCPAdapter) -> None
+    def discover() -> list[ToolInfo]
+    def get(name: str) -> BaseTool
+    def execute(name: str, params: dict) -> ToolResult
+    def schemas(filter: ToolFilter) -> list[dict]  # JSON schemas for LLM
+    def by_category(*categories) -> list[BaseTool]
+    def health() -> dict[str, bool]
 ```
 
-### 5.3 Agentic Loop
+Internal tools: `analyze_stock`, `get_portfolio_exposure`, `screen_stocks`, `get_recommendations`, `compute_signals`, `get_geopolitical_events`, `web_search`
 
-```python
-async def agentic_loop(agent: BaseAgent, message: str, max_iterations: int = 15):
-    messages = [{"role": "user", "content": message}]
+MCPAdapter proxied tools: `get_10k_section`, `get_13f_holdings`, `get_insider_trades`, `get_news_sentiment`, `get_economic_series`, `get_analyst_ratings`, `get_social_sentiment`, `get_etf_holdings`
 
-    for i in range(max_iterations):
-        # Call LLM (Groq for tool-calling, Claude for synthesis)
-        response = await llm_client.chat(messages, tools=agent.tools)
+Agent types = registry filters:
+- Stock agent: all categories (analysis, data, portfolio, macro, news, sec)
+- General agent: data + news only
 
-        if response.has_tool_calls:
-            for tool_call in response.tool_calls:
-                yield {"type": "tool_start", "tool": tool_call.name}
-                result = await tool_registry.execute(tool_call)
-                yield {"type": "tool_result", "tool": tool_call.name, "output": result}
-                messages.append(tool_call_message(tool_call, result))
-        else:
-            # No more tool calls — this is the final synthesis
-            yield {"type": "token", "content": response.content}
-            break
-```
+### 5.3 Agentic Loop (two-phase per iteration)
 
-### 5.4 LLM Client with Fallback
+1. Tool-calling phase: LLM called in non-streaming mode. Tool calls detected, executed with per-tool timeout (10s internal, 30s proxied). Safe execution wrapper handles timeouts/errors gracefully.
+2. Synthesis phase: when LLM responds without tool calls, stream tokens to client.
 
-```python
-class LLMClient:
-    providers = [
-        GroqProvider(model="llama-3.3-70b-versatile"),  # Fast, cheap, tool-calling
-        AnthropicProvider(model="claude-sonnet-4-20250514"),   # Synthesis quality
-        LMStudioProvider(base_url="http://localhost:1234/v1"), # Offline fallback
-    ]
+Max 15 iterations. Few-shot prompted (prompt templates in `backend/agents/prompts/`).
 
-    async def chat(self, messages, tools=None):
-        for provider in self.providers:
-            try:
-                return await provider.chat(messages, tools)
-            except (APIError, Timeout) as e:
-                logger.warning(f"{provider.name} failed: {e}, trying next")
-                continue
-        raise AllProvidersFailedError()
-```
+### 5.4 LLM Client
+
+Provider-agnostic abstraction. Fallback: Groq → Anthropic → Local.
+Retry policy: exponential backoff (1s, 2s, 4s) for transient errors. Immediate switch for quota exhaustion, timeouts, connection failures. Provider health tracking skips exhausted providers.
+
+See spec §4 for full retry/fallback strategy.
 
 ---
 
@@ -934,36 +905,37 @@ def stock_factory(db_session):
 
 ---
 
-## 12. MCP Server Design (Phase 6)
+## 12. MCP Server Design (Phase 4B — pulled forward from Phase 6)
 
-### 12.1 MCP Server Mapping
+> **Phase change:** Originally Phase 6. Pulled forward to Phase 4B because the Tool Registry is the same abstraction the MCP server exposes — minimal incremental effort. Full design: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md` §10.
 
-Each tool group becomes an MCP server:
+### 12.1 Single MCP Server
 
-| MCP Server | Tools Exposed |
-|-----------|---------------|
-| market-data | fetch_prices, get_latest_price, search_stocks |
-| signal-engine | compute_signals, get_latest_signals, get_composite_score |
-| portfolio | get_positions, get_allocation, log_transaction, get_dividends |
-| screener | screen_stocks, get_universe |
-| recommendations | get_recommendations, acknowledge |
+One MCP server exposes ALL Tool Registry tools (not one server per tool group):
+
+```python
+# backend/mcp_server/server.py
+from fastmcp import FastMCP
+
+mcp = FastMCP("stock-signal-platform")
+
+# Tools auto-registered from ToolRegistry — not hardcoded here
+for tool in registry.discover():
+    mcp.register_tool(tool.name, tool.description, tool.parameters, tool.execute)
+```
 
 ### 12.2 Transport
 
-- stdio for local MCP clients (Claude Desktop, Claude Code)
-- SSE for remote MCP clients
-- Same business logic — MCP is just a transport wrapper
+**Streamable HTTP** — mounted on FastAPI at `/mcp`:
+- Single endpoint supports request-response AND SSE streaming
+- Authenticated via JWT (same as REST API)
+- Clients: Claude Code, Cursor, future mobile/Slack bots
 
-```python
-# mcp_servers/signal_engine.py
-from mcp.server import Server
-
-server = Server("signal-engine")
-
-@server.tool()
-async def compute_signals(ticker: str) -> dict:
-    """Compute all technical signals for a stock."""
-    return await signal_tool.compute_all(ticker)
+```
+FastAPI (port 8181)
+  ├── /api/v1/...          ← REST API
+  ├── /api/v1/chat/stream  ← chatbot (NDJSON)
+  └── /mcp                 ← MCP server (Streamable HTTP)
 ```
 
 ---

@@ -399,29 +399,60 @@ Users can override weights via UserPreference.composite_weights.
 - Typography: Sora (UI labels) + JetBrains Mono (numbers/metrics) loaded via `next/font/google`
 - All components restyed to navy design tokens (card2, hov, bhi, warning, cyan)
 
-### FR-8: AI Chatbot (Phase 4)
+### FR-8: AI Chatbot — Financial Intelligence Platform (Phase 4B backend, 4C frontend)
 
 **FR-8.1: Agent Selection**
-- General Agent: web search + Q&A (no tool access to portfolio)
-- Stock Agent: full tool access (signals, fundamentals, portfolio, screener, forecast)
+- General Agent: web search + news Q&A (limited tool access)
+- Stock Agent: full tool access across all 5 data layers
 - User selects agent type per conversation
+- Agent type bound at session creation (cannot switch mid-session)
 
 **FR-8.2: Tool Orchestration**
-- Agent uses LLM tool-calling to invoke platform tools
+- Tool Registry with pluggable internal tools and MCPAdapter for external sources
+- Agent uses LLM tool-calling to invoke registered tools
 - Maximum 15 tool calls per conversation turn
 - All data in responses must come from tool results (no hallucination)
 - If a tool fails, agent explains the failure and continues with available data
+- Few-shot prompted agents for reliable tool selection
 
-**FR-8.3: Streaming**
+**FR-8.3: External Data Integration (5 layers)**
+- SEC Filings: 10-K, 10-Q, 8-K, 13F, Form 4 (via EdgarTools MCP)
+- News + Sentiment: financial news with sentiment scores (via Alpha Vantage MCP)
+- Macroeconomic: FRED data — Fed rate, CPI, treasury yields, employment (via FRED MCP)
+- Geopolitical: event detection + sector impact mapping (via GDELT API)
+- Analyst + Alternative: consensus ratings, ESG, social sentiment, supply chain (via Finnhub MCP)
+- Web search: general web search for current information (via SerpAPI)
+
+**FR-8.4: Warm Data Pipeline**
+- Daily: analyst consensus per tracked ticker, key FRED macro indicators
+- Weekly: top institutional holders (13F) per portfolio stock
+- On-demand with cache: 10-K/10-Q section extraction (cached 24h after first query)
+
+**FR-8.5: Streaming**
 - Response streams via NDJSON over SSE
-- Frontend renders incrementally as tokens arrive
-- Tool execution status shown as progress indicators
+- Stream events: thinking, tool_start, tool_result, token, done, provider_fallback, degraded
+- Frontend renders incrementally as tokens arrive (Phase 4C)
+- Tool execution status shown as progress indicators (Phase 4C)
 
-**FR-8.4: Conversation History**
+**FR-8.6: Conversation History**
 - Stored per ChatSession (user + agent_type)
-- ChatMessage records: role, content, tool_calls, tokens_used, model_used
-- History sent as context for multi-turn conversations
+- ChatMessage records: role, content, tool_calls, tokens_used, model_used, latency_ms
+- Sliding window: last 20 messages as LLM context (16K token budget)
+- History summary when context exceeds 12K tokens
 - Sessions auto-expire after 24 hours of inactivity
+
+**FR-8.7: MCP Server (pulled forward from Phase 6)**
+- Platform intelligence exposed as MCP server at `/mcp` (Streamable HTTP)
+- Same Tool Registry powers both chat endpoint and MCP server
+- Callable by Claude Code, Cursor, or any MCP-compatible client
+- Authenticated via JWT (same as REST API)
+
+**FR-8.8: Graceful Degradation**
+- Individual tool failures don't crash the response
+- LLM provider fallback: Groq → Anthropic → Local
+- Exponential backoff for transient errors, immediate switch for quota/timeout
+- MCP server health tracking — disconnected adapters excluded from tool set
+- User informed of degraded data availability in response
 
 ### FR-9: Alerts & Notifications (Phase 5)
 
@@ -656,14 +687,18 @@ After 3+ months of data accumulation, the following metrics become available:
 | Portfolio snapshots | | | ✓ | | | |
 | Alert rules engine | | | ✓ | | | |
 | Position sizing | | | ✓ | | | |
-| AI chatbot | | | | ✓ | | |
-| Chat UI | | | | ✓ | | |
+| AI chatbot backend | | | | ✓ (4B) | | |
+| Tool Registry + MCPAdapters | | | | ✓ (4B) | | |
+| External MCP integrations | | | | ✓ (4B) | | |
+| Warm data pipeline | | | | ✓ (4B) | | |
+| MCP server (`/mcp`) | | | | ✓ (4B) | | |
+| Chat UI (frontend wiring) | | | | ✓ (4C) | | |
+| CI/CD pipeline | | | | ✓ (done) | | |
 | Background jobs (Celery) | | | | | ✓ | |
 | Forecasting (Prophet) | | | | | ✓ | |
 | Model versioning | | | | | ✓ | |
-| Macro overlay | | | | | ✓ | |
+| Options flow (Unusual Whales) | | | | | ✓ | |
 | Telegram notifications | | | | | ✓ | |
 | Recommendation evaluation | | | | | ✓ | |
-| MCP servers | | | | | | ✓ |
+| LLMOps / Gateway | | | | | | ✓ |
 | Cloud deployment | | | | | | ✓ |
-| CI/CD | | | | | | ✓ |

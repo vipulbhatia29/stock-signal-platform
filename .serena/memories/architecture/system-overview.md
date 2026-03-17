@@ -24,8 +24,9 @@ category: architecture
 - `backend/config.py` — Pydantic Settings, reads from `backend/.env`, single source of truth for all config
 - `backend/database.py` — async engine + `async_session_factory` (correct import name)
 - `backend/dependencies.py` — `get_current_user` FastAPI dependency (JWT validation + DB lookup)
-- `backend/tools/registry.py` — `ToolRegistry` (all agent tools discoverable here)
-- `backend/agents/registry.py` — `AgentRegistry` (routes chat messages to correct agent)
+- `backend/tools/registry.py` — `ToolRegistry` (all agent tools + MCPAdapters discoverable here)
+- `backend/agents/base.py` — `BaseAgent` ABC (StockAgent, GeneralAgent)
+- `backend/mcp_server/server.py` — FastMCP server at `/mcp` (Streamable HTTP)
 - `frontend/app/(authenticated)/layout.tsx` — authenticated shell: SidebarNav | Topbar + main | ChatPanel
 
 ## Core Architecture Patterns
@@ -34,7 +35,7 @@ category: architecture
 - **Async by default** — all FastAPI endpoints and DB operations use `async`/`await`. Celery tasks are the exception (sync, bridge via `asyncio.run()`).
 - **Tool boundary for external APIs** — yfinance, FRED, web search calls go through `backend/tools/`, never directly from routers. Routers call services or tools only.
 - **Pre-computed signals** — Celery Beat runs nightly signal computation; dashboard reads pre-computed data. Agents call tools on-demand.
-- **Monolith-first, MCP-ready** — `backend/tools/` groups have clean interfaces designed for future extraction as MCP servers.
+- **Three-layer MCP architecture** — Layer 1: consume external MCPs (EdgarTools, Alpha Vantage, FRED, Finnhub). Layer 2: enrich in backend (Tool Registry + caching). Layer 3: expose as MCP server at `/mcp` (Streamable HTTP). See `domain/agent-tools` memory for full details.
 
 ## LLM Routing
 
@@ -51,8 +52,9 @@ stock-signal-platform/
 │   ├── config.py              # Pydantic Settings (.env)
 │   ├── database.py            # async engine + async_session_factory
 │   ├── dependencies.py        # get_current_user, JWT auth
-│   ├── agents/                # LangGraph agent definitions
-│   ├── tools/                 # Agent tools (future MCP servers)
+│   ├── agents/                # BaseAgent, StockAgent, GeneralAgent, loop, stream, llm_client
+│   ├── tools/                 # ToolRegistry, BaseTool, MCPAdapters, internal tools
+│   ├── mcp_server/            # FastMCP server (Streamable HTTP at /mcp)
 │   ├── routers/               # FastAPI endpoint handlers
 │   ├── models/                # SQLAlchemy 2.0 ORM models
 │   ├── schemas/               # Pydantic v2 request/response schemas
@@ -90,7 +92,9 @@ All secrets in `backend/.env` (gitignored). Template: `backend/.env.example`.
 | `GROQ_API_KEY` | No | Groq (agentic loops — fast/cheap) |
 | `FRED_API_KEY` | No | FRED macro data |
 | `SERPAPI_API_KEY` | No | Web/news search |
-| `OPENAI_API_KEY` | No | Optional fallback |
+| `OPENAI_API_KEY` | No | Optional LLM fallback |
+| `ALPHA_VANTAGE_API_KEY` | No | News + sentiment (Phase 4B) |
+| `FINNHUB_API_KEY` | No | Analyst ratings, ESG, social sentiment (Phase 4B) |
 
 CI-only (GitHub Actions Secrets, never in `.env`): `CI_DATABASE_URL`, `CI_REDIS_URL`, `CI_JWT_SECRET_KEY`, `CI_JWT_ALGORITHM`, `CI_POSTGRES_PASSWORD`
 
