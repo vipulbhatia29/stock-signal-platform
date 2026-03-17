@@ -85,6 +85,7 @@ hotfix/KAN-* ← emergency fixes → PR to main + back-merge to develop
 - Never commit directly to main or develop
 - Never skip hooks (`--no-verify`) — fix the underlying issue
 - `uv.lock` is committed — run `uv sync` after pulling
+- CI secrets (GitHub Actions Secrets, never in .env): `CI_DATABASE_URL`, `CI_REDIS_URL`, `CI_JWT_SECRET_KEY`, `CI_JWT_ALGORITHM`, `CI_POSTGRES_PASSWORD`
 
 ## Sprint Documents
 
