@@ -230,7 +230,72 @@ Aligned with PRD §NFR-3 and FSD §5: Groq (fast/cheap) → Claude (quality) →
 OpenAI is available as a provider implementation but NOT in the default fallback chain.
 It can be added by configuration if needed — the `LLMClient` accepts an ordered provider list.
 
-Each provider is tried in order. On `APIError` or `Timeout`, log warning and try next. The LLMClient tracks which provider succeeded for logging.
+### 4.4 Retry + Fallback Strategy
+
+Each provider implements a retry policy before falling through to the next:
+
+```python
+class RetryPolicy:
+    max_retries: int = 3
+    base_delay: float = 1.0          # seconds
+    max_delay: float = 10.0          # cap for exponential backoff
+    backoff_factor: float = 2.0      # delay = base * (factor ^ attempt)
+```
+
+**Failure classification — determines retry vs. switch:**
+
+| Failure | Action | Rationale |
+|---------|--------|-----------|
+| HTTP 500/503 (server error) | Retry with exponential backoff (1s, 2s, 4s), then switch | Transient — likely recovers |
+| HTTP 429 + `Retry-After` ≤ 5s | Wait the specified time, retry | Short wait is acceptable |
+| HTTP 429 + `Retry-After` > 5s | **Switch immediately** | User is waiting — can't afford long waits |
+| HTTP 429 + "quota exceeded" | **Switch immediately + mark provider as exhausted** | Retrying is pointless until quota resets |
+| Timeout (30s no response) | **Switch immediately** | Provider is unresponsive |
+| HTTP 400 context_length_exceeded | **Do NOT switch** — truncate history, retry same provider | Input problem, not provider problem |
+| Malformed response / parse error | Retry once, then switch | Could be transient |
+| Connection refused / DNS failure | **Switch immediately** | Provider is down |
+
+**Provider health tracking:**
+
+```python
+class ProviderHealth:
+    provider: str
+    is_exhausted: bool = False        # quota exceeded — skip until reset
+    exhausted_until: datetime | None  # when to try again (from Retry-After or midnight)
+    consecutive_failures: int = 0
+    last_failure: datetime | None
+```
+
+The `LLMClient` checks provider health before attempting a call. Exhausted providers are skipped entirely (no retry, no backoff) until their reset time. This avoids wasting time on providers that will definitely reject the request.
+
+**Backoff implementation:**
+
+```python
+async def call_with_retry(provider, messages, tools) -> LLMResponse:
+    for attempt in range(policy.max_retries):
+        try:
+            return await asyncio.wait_for(
+                provider.chat(messages, tools),
+                timeout=30.0
+            )
+        except RateLimitError as e:
+            if e.is_quota_exhausted:
+                provider.health.mark_exhausted(e.retry_after)
+                raise  # fall through to next provider
+            if e.retry_after and e.retry_after <= 5:
+                await asyncio.sleep(e.retry_after)
+                continue
+            raise  # fall through to next provider
+        except (ServerError, ConnectionError):
+            delay = min(policy.base_delay * (policy.backoff_factor ** attempt), policy.max_delay)
+            logger.warning("llm_retry", extra={"provider": provider.name, "attempt": attempt, "delay": delay})
+            await asyncio.sleep(delay)
+        except asyncio.TimeoutError:
+            raise  # fall through immediately
+    raise MaxRetriesExceeded(provider.name)
+```
+
+The LLMClient tracks which provider succeeded for logging and streams a `provider_fallback` event to the client when switching.
 
 ### 4.4 Token Tracking
 
