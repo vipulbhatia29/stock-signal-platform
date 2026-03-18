@@ -79,3 +79,36 @@ async def test_geopolitical_tool_metadata():
     assert tool.name == "get_geopolitical_events"
     assert tool.category == "macro"
     assert "query" in tool.parameters["properties"]
+
+
+@pytest.mark.asyncio
+async def test_compute_signals_tool_metadata():
+    """ComputeSignalsTool has correct name and category."""
+    from backend.tools.compute_signals_tool import ComputeSignalsTool
+
+    tool = ComputeSignalsTool()
+    assert tool.name == "compute_signals"
+    assert tool.category == "data"
+    assert "ticker" in tool.parameters["properties"]
+
+
+@pytest.mark.asyncio
+async def test_recommendations_tool_metadata():
+    """RecommendationsTool has correct name and category."""
+    from backend.tools.recommendations_tool import RecommendationsTool
+
+    tool = RecommendationsTool()
+    assert tool.name == "get_recommendations"
+    assert tool.category == "portfolio"
+
+
+@pytest.mark.asyncio
+async def test_recommendations_tool_error_handling():
+    """RecommendationsTool returns error when DB unavailable."""
+    from backend.tools.recommendations_tool import RecommendationsTool
+
+    tool = RecommendationsTool()
+    # No DB in unit tests — should return error, not raise
+    result = await tool.execute({"ticker": "AAPL"})
+    assert result.status == "error"
+    assert result.error is not None
