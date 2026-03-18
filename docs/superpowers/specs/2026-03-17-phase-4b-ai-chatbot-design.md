@@ -306,67 +306,197 @@ Every LLM call records:
 
 ---
 
-## 5. Agentic Loop
+## 5. Agentic Loop (LangGraph)
 
-### 5.1 Core Loop
+### 5.1 Why LangGraph
 
-**Two-phase approach per iteration:**
-1. **Tool-calling phase:** call LLM in non-streaming mode (or buffer stream). Detect tool calls from the complete response. Execute tools.
-2. **Synthesis phase:** when LLM responds without tool calls, this is the final answer — stream it token-by-token to the client.
+The agentic loop is built on **LangGraph** (`langgraph` v1.0+) rather than a custom Python loop. This decision is driven by Phase 5-6 requirements that would otherwise require a rewrite:
 
-This matches how LLM SDKs work in practice: tool_use blocks arrive as part of the response and must be fully received before execution.
+| Capability | Phase 4B (now) | Phase 5-6 (future) |
+|------------|---------------|---------------------|
+| **Checkpointing** | Disconnect recovery (§8.2) | Long-running multi-step analyses |
+| **Conditional branching** | Tool-call vs. synthesis decision | Retrain triggers, macro regime routing |
+| **Parallel tool execution** | Fan-out for independent tools | Multi-source data gathering |
+| **Human-in-the-loop** | Not needed yet | Stop-loss confirmation, trade approval |
+| **Multi-agent** | Single agent per session | StockAgent + MacroAgent collaboration |
 
-```python
-async def agentic_loop(
-    agent: BaseAgent,
-    message: str,
-    history: list[Message],
-    registry: ToolRegistry,
-    llm: LLMClient,
-    max_iterations: int = 15,
-) -> AsyncIterator[StreamEvent]:
+LangGraph's `StateGraph` is a thin abstraction over our existing pattern — the Phase 4B graph has just 2 nodes (`call_model` → `execute_tools` → loop). But it gives us the above capabilities without refactoring the orchestration layer later.
 
-    messages = history + [user_message(message)]
-    tools = registry.schemas(agent.tool_filter)
+### 5.2 Graph Architecture
 
-    for i in range(max_iterations):
-        response = await llm.chat(messages, tools, stream=True)
-
-        if response.has_tool_calls:
-            for tool_call in response.tool_calls:
-                yield StreamEvent(type="tool_start", tool=tool_call.name)
-                result = await execute_tool_safely(registry, tool_call)
-                yield StreamEvent(type="tool_result", tool=tool_call.name, data=result)
-                messages.append(tool_message(tool_call, result))
-        else:
-            async for chunk in response.stream:
-                yield StreamEvent(type="token", content=chunk)
-            break
-
-    yield StreamEvent(type="done", usage=total_usage)
+```
+                    ┌──────────────┐
+                    │    START     │
+                    └──────┬───────┘
+                           │
+                    ┌──────▼───────┐
+              ┌────►│  call_model  │◄────┐
+              │     └──────┬───────┘     │
+              │            │             │
+              │     ┌──────▼───────┐     │
+              │     │  has_tools?  │     │
+              │     └──┬───────┬───┘     │
+              │   yes  │       │  no     │
+              │ ┌──────▼─────┐ │         │
+              │ │exec_tools  │ │         │
+              │ └──────┬─────┘ │         │
+              │        │       │         │
+              └────────┘ ┌─────▼───────┐ │
+                         │  synthesize │ │
+                         └─────┬───────┘ │
+                               │         │
+                        ┌──────▼───────┐ │
+                        │     END      │ │
+                        └──────────────┘ │
+              (max_iterations reached)───┘
 ```
 
-### 5.2 Safe Tool Execution
+### 5.3 State Definition
 
 ```python
-async def execute_tool_safely(registry, tool_call) -> ToolResult:
-    tool = registry.get(tool_call.name)
-    try:
-        result = await asyncio.wait_for(
-            registry.execute(tool_call.name, tool_call.params),
-            timeout=tool.timeout_seconds  # 10s internal, 30s proxied MCP
+from typing import Annotated, TypedDict
+from langgraph.graph.message import AnyMessage, add_messages
+
+
+class AgentState(TypedDict):
+    """State managed by the LangGraph agent graph."""
+    messages: Annotated[list[AnyMessage], add_messages]
+    agent_type: str                    # "stock" | "general"
+    iteration: int                     # current iteration count
+    tool_results: list[dict]           # accumulated tool results for streaming
+    usage: dict                        # token usage tracking
+```
+
+### 5.4 Core Graph
+
+```python
+from langgraph.graph import END, START, StateGraph
+from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.memory import MemorySaver
+
+
+def build_agent_graph(
+    agent: BaseAgent,
+    registry: ToolRegistry,
+    llm_client: LLMClient,
+    max_iterations: int = 15,
+) -> StateGraph:
+    """Build the LangGraph StateGraph for an agent."""
+
+    # Bind tools to the LLM via LangChain-compatible wrapper
+    tools = registry.get_langchain_tools(agent.tool_filter)
+
+    async def call_model(state: AgentState) -> dict:
+        """Call the LLM with current messages + tool schemas."""
+        response = await llm_client.chat(
+            messages=state["messages"],
+            tools=registry.schemas(agent.tool_filter),
         )
-        return ToolResult(status="ok", data=result)
-    except ToolNotAvailableError:
-        return ToolResult(status="degraded", error="Tool temporarily unavailable")
+        return {
+            "messages": [response.to_langchain_message()],
+            "iteration": state["iteration"] + 1,
+            "usage": response.usage_dict(),
+        }
+
+    async def execute_tools(state: AgentState) -> dict:
+        """Execute all tool calls from the last LLM response."""
+        last_message = state["messages"][-1]
+        results = []
+        for tool_call in last_message.tool_calls:
+            result = await execute_tool_safely(
+                registry, tool_call["name"], tool_call["args"]
+            )
+            results.append({
+                "tool": tool_call["name"],
+                "status": result.status,
+                "data": result.data,
+                "error": result.error,
+            })
+        # ToolNode handles message formatting; we track results for streaming
+        return {"tool_results": results}
+
+    def should_continue(state: AgentState) -> str:
+        """Route: if LLM returned tool calls and under max iterations, execute them."""
+        last_message = state["messages"][-1]
+        if state["iteration"] >= max_iterations:
+            return "end"
+        if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            return "execute_tools"
+        return "end"
+
+    # Build the graph
+    tool_node = ToolNode(tools)
+    graph = StateGraph(AgentState)
+    graph.add_node("call_model", call_model)
+    graph.add_node("execute_tools", tool_node)
+
+    graph.add_edge(START, "call_model")
+    graph.add_conditional_edges("call_model", should_continue, {
+        "execute_tools": "execute_tools",
+        "end": END,
+    })
+    graph.add_edge("execute_tools", "call_model")
+
+    # Compile with checkpointer for session persistence
+    checkpointer = MemorySaver()  # Phase 6: swap for PostgresSaver or RedisSaver
+    return graph.compile(checkpointer=checkpointer)
+```
+
+### 5.5 Safe Tool Execution
+
+```python
+async def execute_tool_safely(registry, tool_name: str, params: dict) -> ToolResult:
+    try:
+        return await asyncio.wait_for(
+            registry.execute(tool_name, params),
+            timeout=registry.get(tool_name).timeout_seconds
+        )
+    except KeyError:
+        return ToolResult(status="error", error=f"Tool '{tool_name}' not found")
     except asyncio.TimeoutError:
         return ToolResult(status="timeout", error="Tool took too long")
     except Exception as e:
-        logger.error("tool_failed", extra={"tool": tool_call.name, "error": str(e)})
-        return ToolResult(status="error", error="Unexpected error")
+        logger.error("tool_failed", extra={"tool": tool_name, "error": str(e)})
+        return ToolResult(status="error", error=str(e))
 ```
 
 The LLM sees error statuses and adapts its synthesis: "I wasn't able to fetch the latest 10-K filing, but based on the available data..."
+
+### 5.6 LangGraph ↔ StreamEvent Bridge
+
+The LangGraph graph runs internally with LangChain message types. The chat router converts graph events to our `StreamEvent` NDJSON format for the frontend:
+
+```python
+async def stream_graph_events(graph, input_state, config) -> AsyncIterator[StreamEvent]:
+    """Bridge LangGraph astream_events to our NDJSON StreamEvent format."""
+    yield StreamEvent(type="thinking", content="Analyzing your question...")
+
+    async for event in graph.astream_events(input_state, config, version="v2"):
+        if event["event"] == "on_chat_model_start":
+            pass  # model invocation started
+        elif event["event"] == "on_chat_model_stream":
+            chunk = event["data"]["chunk"]
+            if chunk.content:
+                yield StreamEvent(type="token", content=chunk.content)
+        elif event["event"] == "on_tool_start":
+            yield StreamEvent(type="tool_start", tool=event["name"], params=event["data"].get("input"))
+        elif event["event"] == "on_tool_end":
+            yield StreamEvent(type="tool_result", tool=event["name"], status="ok", data=event["data"].get("output"))
+
+    yield StreamEvent(type="done", usage={})
+```
+
+### 5.7 Future Phase Extensions
+
+The LangGraph architecture enables these Phase 5-6 features with minimal changes:
+
+| Feature | How LangGraph Enables It |
+|---------|-------------------------|
+| **Parallel tool execution** | Replace sequential `execute_tools` with `Send()` API for fan-out |
+| **Human-in-the-loop** | Add `interrupt()` before trade execution nodes |
+| **Multi-agent** | Add `supervisor` node that routes to sub-graphs (StockAgent, MacroAgent) |
+| **Persistent checkpointing** | Swap `MemorySaver` for `PostgresSaver` (already have TimescaleDB) |
+| **Conditional workflows** | Add new conditional edges (e.g., if macro risk > threshold → deep analysis) |
 
 ### 5.3 Stream Event Types
 
@@ -523,19 +653,20 @@ SELECT create_hypertable('tool_execution_log', 'created_at');
 
 ### 8.1 Create / Resume / Expire
 
-- **New session:** create `ChatSession` with `user_id` + `agent_type`
-- **Resume:** load session + last 20 messages as LLM context (sliding window)
+- **New session:** create `ChatSession` with `user_id` + `agent_type`. LangGraph `thread_id` = `ChatSession.id` (UUID).
+- **Resume:** LangGraph's `MemorySaver` checkpointer stores graph state per `thread_id`. Resuming a session = invoking the compiled graph with the same `{"configurable": {"thread_id": session_id}}`. No manual message loading needed — the checkpointer restores full conversation state including tool call history.
 - **Context budget:** 16K tokens for the sliding window. Summarization triggers at 12K tokens. Budget is provider-aware — uses the minimum across configured providers (Groq/Claude: 128K+, but we cap at 16K for cost/speed). Token counting via `tiktoken` (OpenAI-compatible) or provider-specific tokenizer.
 - **History summary:** when context exceeds 12K tokens, oldest messages summarized by a cheap/fast LLM call: "Previous context: user analyzed AAPL, discussed Iran exposure..."
-- **Expiry:** 24h inactivity → `is_active = FALSE`. Messages preserved, session context cleared.
+- **Expiry:** 24h inactivity → `is_active = FALSE`. Messages preserved in DB. LangGraph checkpoint can be cleared.
+- **Checkpointer upgrade path:** Phase 4B uses `MemorySaver` (in-memory, sufficient for single-process dev). Phase 6 swaps to `PostgresSaver` or `RedisSaver` for multi-worker persistence with zero code changes to the graph.
 
 ### 8.2 During Streaming
 
 | Event | Behavior |
 |-------|----------|
 | User sends another message while streaming | Queue in-memory (asyncio.Queue per session) — process after current response. **Note:** per-process queue; does not work across multiple workers. Acceptable for single-process dev; needs Redis-backed queue if multi-worker (Phase 6). |
-| User disconnects (closes browser/tab) | Server detects SSE disconnect → cancel remaining tool calls → save partial response |
-| User reconnects | Load session → show last complete messages + "response was interrupted" |
+| User disconnects (closes browser/tab) | LangGraph checkpointer saves graph state at each node boundary. Server detects SSE disconnect → cancel remaining tool calls. On reconnect, graph can resume from last checkpoint rather than replaying from scratch. |
+| User reconnects | Load session → LangGraph restores from checkpoint → show last complete messages + "response was interrupted" |
 
 ### 8.3 Graceful Degradation
 
@@ -637,8 +768,8 @@ backend/
     base.py                  # BaseAgent ABC
     stock_agent.py           # StockAgent
     general_agent.py         # GeneralAgent
-    loop.py                  # agentic tool-calling loop
-    stream.py                # NDJSON/SSE streaming + event types
+    graph.py                 # LangGraph StateGraph builder + AgentState
+    stream.py                # StreamEvent types + LangGraph→NDJSON bridge
     llm_client.py            # LLMClient + provider implementations
     prompts/
       stock_agent.md         # few-shot system prompt
@@ -717,10 +848,14 @@ DELETE /api/v1/chat/sessions/{id}
 ## 14. Dependencies (New Packages)
 
 ```
-# LLM providers
-groq                    # Groq SDK (OpenAI-compatible)
-anthropic               # Anthropic SDK
-openai                  # OpenAI SDK (also used for LM Studio)
+# Agent orchestration
+langgraph               # LangGraph — StateGraph, checkpointing, streaming
+langchain-core          # LangChain core — message types, tool abstractions
+
+# LLM providers (LangChain-compatible wrappers)
+langchain-groq          # Groq provider for LangChain
+langchain-anthropic     # Anthropic provider for LangChain
+langchain-openai        # OpenAI provider for LangChain (also LM Studio)
 
 # MCP
 fastmcp                 # MCP server framework for FastAPI
