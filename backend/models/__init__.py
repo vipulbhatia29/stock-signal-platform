@@ -3,8 +3,8 @@
 from backend.models.base import Base
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.dividend import DividendPayment
-from backend.models.logs import LLMCallLog, ToolExecutionLog
 from backend.models.index import StockIndex, StockIndexMembership
+from backend.models.logs import LLMCallLog, ToolExecutionLog
 from backend.models.portfolio import (  # noqa: F401
     Portfolio,
     PortfolioSnapshot,

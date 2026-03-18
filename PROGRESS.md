@@ -304,14 +304,58 @@ Key design decisions: Serena native `global/` prefix resolves to `~/.serena/memo
 
 ---
 
-## Session 34 — JIRA SDLC + CI/CD Implementation + Phase 4B Spec
+## Session 35 — Phase 4B Plan + LangGraph Adoption + Implementation Start
+
+**Date:** 2026-03-18 | **Branches:** `feat/KAN-5-conversation-history`, `feat/KAN-3-tool-orchestration` | **Tests:** 329 (267→329: +62 new)
+
+### Refinement Completed
+- [x] PR #10 (spec) already merged. PR #11 (plan) created, CI green, merged.
+- [x] KAN-20: 19-task implementation plan written across 5 chunks, reviewed (4C + 8I issues fixed)
+- [x] KAN-21: PM approved plan
+- [x] LangGraph adopted for agent orchestration (spec §5, §8, §12, §14 rewritten)
+- [x] 8 implementation subtasks revised under KAN-3/4/5 with plan task references + DoD checklists
+
+### Implementation — KAN-6 (Conversation History foundation)
+- [x] Task 1: `backend/config.py` — added ALPHA_VANTAGE_API_KEY, FINNHUB_API_KEY. Installed langgraph, langchain-*, fastmcp, mcp, edgartools, gdeltdoc, tiktoken
+- [x] Task 2: `backend/models/chat.py` (ChatSession, ChatMessage) + `backend/models/logs.py` (LLMCallLog, ToolExecutionLog)
+- [x] Task 3: Alembic migration 008 — 4 tables, 2 hypertables, cleaned false TimescaleDB index drops
+- [x] Task 4: `backend/schemas/chat.py` (ChatRequest, ChatSessionResponse, ChatMessageResponse)
+
+### Implementation — KAN-8 (Tool system)
+- [x] Task 5: `backend/tools/base.py` — BaseTool ABC, ProxiedTool, CachePolicy, ToolResult, ToolFilter, ToolInfo
+- [x] Task 6: `backend/tools/registry.py` — ToolRegistry with register_mcp, get_langchain_tools
+- [x] Task 7: 5 internal tools (analyze_stock, portfolio_exposure, screen_stocks, web_search, geopolitical)
+- [x] Task 8: 2 wrapper tools (compute_signals_tool, recommendations_tool)
+
+### Implementation — KAN-14, KAN-7, KAN-11 (LLM + Agents + Graph)
+- [x] Task 10: `backend/agents/llm_client.py` — LLMClient, RetryPolicy, ProviderHealth, fallback chain
+- [x] Task 10: 3 providers (GroqProvider, AnthropicProvider, OpenAIProvider) wrapping LangChain chat models
+- [x] Task 11: `backend/agents/base.py` + StockAgent + GeneralAgent + few-shot prompt templates
+- [x] Task 9: `backend/agents/stream.py` — StreamEvent (7 types) + stream_graph_events bridge
+- [x] Task 12: `backend/agents/graph.py` — AgentState, build_agent_graph (LangGraph StateGraph), execute_tool_safely
+
+**Test count:** 329 (267 existing + 62 new across 8 test files)
+**Alembic head:** `664e54e974c5` (migration 008)
+**JIRA:** KAN-6, KAN-8, KAN-14, KAN-7, KAN-11 → Ready for Verification
+
+**Next session — KAN-4 Streaming (Tasks 13-19):**
+1. KAN-12: MCP adapters (Edgar, AlphaVantage, FRED, Finnhub) + FastMCP server + warm data Celery tasks
+2. KAN-13: Chat router (POST /stream, GET /sessions) + session management
+3. KAN-15: Wire main.py lifespan startup + E2E smoke test
+
+---
+
+## Session 34 — JIRA SDLC + CI/CD Implementation + Phase 4B Spec *(compact)*
 
 **Date:** 2026-03-17 | **Branch:** `feat/KAN-16-phase4b-refinement` (PR #10) | **Tests:** 267 backend + 20 frontend (unchanged)
 
-Massive session: JIRA integration, CI/CD pipeline, and Phase 4B architecture design.
+JIRA SDLC workflow + CI/CD pipeline + Phase 4B spec. JIRA: 5-column board, 2 automation rules, all transition IDs. CI/CD: 3 GitHub Actions workflows, fixture split, branch protection. Phase 4B: Three-layer MCP architecture spec (780+ lines), reviewed (15+1 issues fixed). PRs #7-9 merged, PR #10 open.
 
-### JIRA SDLC Workflow (COMPLETE)
-- [x] JIRA MCP connection verified (OAuth 2.1 via Atlassian plugin)
+**Key decisions:** Phase 4B = backend only (4C = frontend). Agent-driven JIRA. Branch per Story. Few-shot prompting.
+
+---
+
+## Session 30 — CI/CD + Branching Strategy Brainstorm + Spec *(compact)*
 - [x] `conventions/jira-sdlc-workflow` Serena memory written — mandatory process for all future work
 - [x] CLAUDE.md updated: Rule 9 (JIRA workflow), session start protocol, git branching section
 - [x] 5-column board configured: To Do → In Progress → Blocked → Ready for Verification → Done

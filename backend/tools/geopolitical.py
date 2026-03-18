@@ -24,8 +24,16 @@ class GeopoliticalEventsTool(BaseTool):
         "type": "object",
         "properties": {
             "query": {"type": "string", "description": "Search query (e.g., 'Iran oil sanctions')"},
-            "days": {"type": "integer", "description": "Look back N days (default 7)", "default": 7},
-            "max_results": {"type": "integer", "description": "Max articles (default 10)", "default": 10},
+            "days": {
+                "type": "integer",
+                "description": "Look back N days (default 7)",
+                "default": 7,
+            },
+            "max_results": {
+                "type": "integer",
+                "description": "Max articles (default 10)",
+                "default": 10,
+            },
         },
         "required": ["query"],
     }
@@ -36,7 +44,7 @@ class GeopoliticalEventsTool(BaseTool):
         try:
             from datetime import datetime, timedelta
 
-            from gdeltdoc import GdeltDoc, Filters
+            from gdeltdoc import Filters, GdeltDoc
 
             days = params.get("days", 7)
             max_results = params.get("max_results", 10)
@@ -65,5 +73,8 @@ class GeopoliticalEventsTool(BaseTool):
                 })
             return ToolResult(status="ok", data=results)
         except Exception as e:
-            logger.error("geopolitical_failed", extra={"query": params.get("query"), "error": str(e)})
+            logger.error(
+                "geopolitical_failed",
+                extra={"query": params.get("query"), "error": str(e)},
+            )
             return ToolResult(status="error", error=str(e))

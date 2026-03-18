@@ -20,7 +20,11 @@ class WebSearchTool(BaseTool):
         "type": "object",
         "properties": {
             "query": {"type": "string", "description": "Search query"},
-            "num_results": {"type": "integer", "description": "Number of results (default 5)", "default": 5},
+            "num_results": {
+                "type": "integer",
+                "description": "Number of results (default 5)",
+                "default": 5,
+            },
         },
         "required": ["query"],
     }

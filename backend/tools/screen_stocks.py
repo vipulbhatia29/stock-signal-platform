@@ -25,7 +25,10 @@ class ScreenStocksTool(BaseTool):
         "properties": {
             "min_score": {"type": "number", "description": "Minimum composite score (0-10)"},
             "sector": {"type": "string", "description": "Filter by sector (e.g., Technology)"},
-            "rsi_state": {"type": "string", "description": "RSI state: oversold, neutral, overbought"},
+            "rsi_state": {
+                "type": "string",
+                "description": "RSI state: oversold, neutral, overbought",
+            },
             "limit": {"type": "integer", "description": "Max results (default 20)", "default": 20},
         },
     }
@@ -34,7 +37,8 @@ class ScreenStocksTool(BaseTool):
     async def execute(self, params: dict[str, Any]) -> ToolResult:
         """Run stock screener query."""
         try:
-            from sqlalchemy import select, desc
+            from sqlalchemy import desc, select
+
             from backend.database import async_session_factory
             from backend.models.signal import SignalSnapshot
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
@@ -23,7 +23,12 @@ class MaxRetriesExceeded(Exception):
 class RateLimitError(Exception):
     """Provider returned a rate limit error."""
 
-    def __init__(self, message: str, retry_after: float | None = None, is_quota_exhausted: bool = False):
+    def __init__(
+        self,
+        message: str,
+        retry_after: float | None = None,
+        is_quota_exhausted: bool = False,
+    ):
         super().__init__(message)
         self.retry_after = retry_after
         self.is_quota_exhausted = is_quota_exhausted
