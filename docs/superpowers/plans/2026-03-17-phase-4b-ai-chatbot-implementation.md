@@ -4,9 +4,9 @@
 
 **Goal:** Build a three-layer financial intelligence platform (consume external MCPs → enrich → expose as MCP server) with streaming chat API.
 
-**Architecture:** Tool Registry pattern with pluggable internal tools and external MCP adapters. Provider-agnostic LLM client with fallback chain (Groq → Anthropic → Local). Two-phase agentic loop (tool-calling non-streaming + synthesis streaming). NDJSON streaming chat endpoint. All existing infrastructure reused (TimescaleDB, Redis, Celery).
+**Architecture:** Tool Registry pattern with pluggable internal tools and external MCP adapters. LangGraph StateGraph for agent orchestration with MemorySaver checkpointing. Provider-agnostic LLM client with fallback chain (Groq → Anthropic → Local) using LangChain chat models. NDJSON streaming chat endpoint. All existing infrastructure reused (TimescaleDB, Redis, Celery).
 
-**Tech Stack:** FastAPI, SQLAlchemy async, Groq/Anthropic/OpenAI SDKs, FastMCP, edgartools, gdeltdoc, mcp SDK, Redis caching, Celery Beat.
+**Tech Stack:** FastAPI, SQLAlchemy async, LangGraph, LangChain (langchain-groq, langchain-anthropic, langchain-openai), FastMCP, edgartools, gdeltdoc, mcp SDK, Redis caching, Celery Beat.
 
 **Spec:** `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md`
 
@@ -25,8 +25,8 @@ backend/
     base.py                        # BaseAgent ABC + ToolFilter dataclass
     stock_agent.py                 # StockAgent (full toolkit)
     general_agent.py               # GeneralAgent (data + news only)
-    loop.py                        # agentic_loop() + execute_tool_safely()
-    stream.py                      # StreamEvent dataclass + NDJSON serialization
+    graph.py                       # LangGraph StateGraph builder + AgentState TypedDict
+    stream.py                      # StreamEvent dataclass + LangGraph→NDJSON bridge
     llm_client.py                  # LLMClient + LLMProvider ABC + RetryPolicy + ProviderHealth
     providers/
       __init__.py                  # Package init
@@ -124,13 +124,13 @@ FINNHUB_API_KEY: str = ""
 - [ ] **Step 2: Add new dependencies**
 
 ```bash
-uv add groq anthropic openai fastmcp mcp edgartools gdeltdoc tiktoken
+uv add langgraph langchain-core langchain-groq langchain-anthropic langchain-openai fastmcp mcp edgartools gdeltdoc tiktoken
 ```
 
 - [ ] **Step 3: Verify import works**
 
 ```bash
-uv run python -c "import groq; import anthropic; import openai; import fastmcp; import mcp; import edgartools; import tiktoken; print('OK')"
+uv run python -c "import langgraph; import langchain_core; import langchain_groq; import langchain_anthropic; import langchain_openai; import fastmcp; import mcp; import edgartools; import tiktoken; print('OK')"
 ```
 
 - [ ] **Step 4: Commit**
@@ -1625,8 +1625,10 @@ class GroqProvider(LLMProvider):
         )
 ```
 
-- `anthropic.py`: Uses `anthropic.AsyncAnthropic`. Translates Anthropic's tool_use format to the normalized `LLMResponse` format. Key difference: Anthropic uses `content[].type == "tool_use"` blocks instead of `tool_calls` array.
-- `openai.py`: Uses `openai.AsyncOpenAI`. Same format as Groq (OpenAI-compatible). Also serves as LM Studio local provider (just change base_url).
+- `anthropic.py`: Uses `langchain_anthropic.ChatAnthropic`. Wraps the LangChain chat model. LangChain handles Anthropic's tool_use format translation automatically.
+- `openai.py`: Uses `langchain_openai.ChatOpenAI`. Also serves as LM Studio local provider (just change base_url).
+
+**LangChain integration note:** With LangGraph adopted, providers should wrap LangChain chat models (`ChatGroq`, `ChatAnthropic`, `ChatOpenAI`) rather than raw SDKs. This gives us native `.bind_tools()` support that LangGraph's `ToolNode` expects. The `LLMClient` still manages the fallback chain and health tracking — it selects the active LangChain model and passes it to `build_agent_graph()`. Each provider's `get_chat_model()` method returns the LangChain model instance.
 
 - [ ] **Step 5: Run tests**
 
@@ -1794,27 +1796,29 @@ git commit -m "feat(4b): add StockAgent, GeneralAgent with few-shot prompt templ
 
 ---
 
-### Task 12: Agentic Loop
+### Task 12: LangGraph Agent Graph + Stream Bridge
 
 **Files:**
-- Create: `backend/agents/loop.py`
+- Create: `backend/agents/graph.py`
+- Modify: `backend/agents/stream.py` (add `stream_graph_events` bridge)
 
-This is the core orchestration — the two-phase tool-calling + synthesis loop from spec §5.
+This is the core orchestration — a LangGraph `StateGraph` with two nodes (`call_model` → `execute_tools`) per spec §5.
+
+**Why LangGraph:** Phase 5-6 require checkpointing, parallel tool execution, human-in-the-loop, and multi-agent collaboration. Building on LangGraph now avoids a rewrite later. For Phase 4B, the graph is simple (2 nodes), but gives us free checkpointing for disconnect recovery and a clean upgrade path.
 
 - [ ] **Step 1: Write tests**
 
-Create `tests/unit/test_agentic_loop.py`:
+Create `tests/unit/test_agent_graph.py`:
 
 ```python
-"""Tests for the agentic tool-calling loop."""
+"""Tests for the LangGraph agent graph."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from backend.agents.loop import agentic_loop, execute_tool_safely
-from backend.agents.llm_client import LLMResponse
-from backend.agents.stream import StreamEvent
+from backend.agents.graph import AgentState, build_agent_graph, execute_tool_safely
 from backend.tools.base import ToolResult
 from backend.tools.registry import ToolRegistry
 
@@ -1825,110 +1829,35 @@ def mock_registry():
     return reg
 
 
-@pytest.fixture
-def mock_llm():
-    return AsyncMock()
-
-
-@pytest.fixture
-def mock_agent():
-    agent = MagicMock()
-    agent.system_prompt.return_value = "You are a test agent."
-    agent.tool_filter = MagicMock()
-    return agent
-
-
-@pytest.mark.asyncio
-async def test_loop_no_tool_calls(mock_agent, mock_registry, mock_llm):
-    """Loop yields token events when LLM responds without tool calls."""
-    mock_llm.chat.return_value = LLMResponse(
-        content="AAPL looks strong.",
-        tool_calls=[],
-        model="test-model",
-        prompt_tokens=100,
-        completion_tokens=50,
+def test_agent_state_has_required_fields():
+    """AgentState TypedDict has all required fields."""
+    state = AgentState(
+        messages=[],
+        agent_type="stock",
+        iteration=0,
+        tool_results=[],
+        usage={},
     )
-    events = []
-    async for event in agentic_loop(
-        agent=mock_agent,
-        message="Analyze AAPL",
-        history=[],
-        registry=mock_registry,
+    assert state["agent_type"] == "stock"
+    assert state["iteration"] == 0
+
+
+def test_build_agent_graph_compiles():
+    """build_agent_graph returns a compiled graph."""
+    from backend.agents.stock_agent import StockAgent
+    from backend.tools.registry import ToolRegistry
+
+    registry = ToolRegistry()
+    # Mock LLM — we just need the graph to compile
+    mock_llm = MagicMock()
+    graph = build_agent_graph(
+        agent=StockAgent(),
+        registry=registry,
         llm=mock_llm,
-    ):
-        events.append(event)
-
-    types = [e.type for e in events]
-    assert "token" in types or "done" in types
-
-
-@pytest.mark.asyncio
-async def test_loop_with_tool_calls(mock_agent, mock_registry, mock_llm):
-    """Loop executes tools then gets final synthesis."""
-    # First call: LLM requests a tool
-    tool_response = LLMResponse(
-        content="",
-        tool_calls=[{"id": "1", "name": "fake_tool", "arguments": "{}"}],
-        model="test-model",
-        prompt_tokens=100,
-        completion_tokens=50,
     )
-    # Second call: LLM synthesizes
-    final_response = LLMResponse(
-        content="Based on the analysis...",
-        tool_calls=[],
-        model="test-model",
-        prompt_tokens=200,
-        completion_tokens=100,
-    )
-    mock_llm.chat.side_effect = [tool_response, final_response]
-
-    # Register a fake tool
-    from tests.unit.test_tool_registry import FakeTool
-    mock_registry.register(FakeTool("fake_tool", "test"))
-
-    events = []
-    async for event in agentic_loop(
-        agent=mock_agent,
-        message="Analyze AAPL",
-        history=[],
-        registry=mock_registry,
-        llm=mock_llm,
-    ):
-        events.append(event)
-
-    types = [e.type for e in events]
-    assert "tool_start" in types
-    assert "tool_result" in types
-
-
-@pytest.mark.asyncio
-async def test_loop_max_iterations(mock_agent, mock_registry, mock_llm):
-    """Loop stops at max_iterations."""
-    # Always return tool calls — should stop at max
-    mock_llm.chat.return_value = LLMResponse(
-        content="",
-        tool_calls=[{"id": "1", "name": "fake_tool", "arguments": "{}"}],
-        model="test-model",
-        prompt_tokens=100,
-        completion_tokens=50,
-    )
-    from tests.unit.test_tool_registry import FakeTool
-    mock_registry.register(FakeTool("fake_tool", "test"))
-
-    events = []
-    async for event in agentic_loop(
-        agent=mock_agent,
-        message="Loop forever",
-        history=[],
-        registry=mock_registry,
-        llm=mock_llm,
-        max_iterations=3,
-    ):
-        events.append(event)
-
-    tool_starts = [e for e in events if e.type == "tool_start"]
-    assert len(tool_starts) <= 3
+    assert graph is not None
+    # Graph should have call_model and execute_tools nodes
+    assert hasattr(graph, "invoke") or hasattr(graph, "ainvoke")
 
 
 @pytest.mark.asyncio
@@ -1937,8 +1866,6 @@ async def test_execute_tool_safely_success(mock_registry):
     from tests.unit.test_tool_registry import FakeTool
     mock_registry.register(FakeTool("fake_tool", "test"))
 
-    tool_call = MagicMock()
-    tool_call.name = "fake_tool" if hasattr(tool_call, 'name') else None
     result = await execute_tool_safely(mock_registry, "fake_tool", {})
     assert result.status == "ok"
 
@@ -1954,7 +1881,7 @@ async def test_execute_tool_safely_timeout(mock_registry):
         description = "Slow"
         category = "test"
         parameters = {}
-        timeout_seconds = 0.01  # Very short timeout
+        timeout_seconds = 0.01
 
         async def execute(self, params):
             await asyncio.sleep(10)
@@ -1963,29 +1890,61 @@ async def test_execute_tool_safely_timeout(mock_registry):
     mock_registry.register(SlowTool())
     result = await execute_tool_safely(mock_registry, "slow_tool", {})
     assert result.status == "timeout"
+
+
+@pytest.mark.asyncio
+async def test_execute_tool_safely_not_found(mock_registry):
+    """execute_tool_safely returns error for unknown tool."""
+    result = await execute_tool_safely(mock_registry, "nonexistent", {})
+    assert result.status == "error"
+    assert "not found" in result.error
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-- [ ] **Step 3: Implement `backend/agents/loop.py`**
+```bash
+uv run pytest tests/unit/test_agent_graph.py -v
+```
+
+- [ ] **Step 3: Implement `backend/agents/graph.py`**
 
 ```python
-"""Agentic tool-calling loop — two-phase: tool execution + synthesis streaming."""
+"""LangGraph StateGraph for agent orchestration.
+
+Two nodes: call_model → execute_tools → loop back.
+Compiles with MemorySaver checkpointer for session persistence.
+Phase 5-6: swap MemorySaver for PostgresSaver, add parallel execution, human-in-the-loop.
+"""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from typing import Any, AsyncIterator
+from typing import Annotated, Any, TypedDict
+
+from langchain_core.messages import AIMessage, BaseMessage
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import AnyMessage, add_messages
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.prebuilt import ToolNode
 
 from backend.agents.base import BaseAgent
-from backend.agents.llm_client import LLMClient, LLMResponse
-from backend.agents.stream import StreamEvent
 from backend.tools.base import ToolResult
 from backend.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+MAX_ITERATIONS = 15
+
+
+class AgentState(TypedDict):
+    """State managed by the LangGraph agent graph."""
+
+    messages: Annotated[list[AnyMessage], add_messages]
+    agent_type: str
+    iteration: int
+    tool_results: list[dict]
+    usage: dict
 
 
 async def execute_tool_safely(
@@ -2010,85 +1969,143 @@ async def execute_tool_safely(
         return ToolResult(status="error", error=str(e))
 
 
-async def agentic_loop(
+def build_agent_graph(
     agent: BaseAgent,
-    message: str,
-    history: list[dict[str, Any]],
     registry: ToolRegistry,
-    llm: LLMClient,
-    max_iterations: int = 15,
-) -> AsyncIterator[StreamEvent]:
-    """Run the agentic loop: tool calls → synthesis → stream."""
-    system_prompt = agent.system_prompt()
-    tools = registry.schemas(agent.tool_filter)
-    messages = [
-        {"role": "system", "content": system_prompt},
-        *history,
-        {"role": "user", "content": message},
-    ]
+    llm: Any,  # LangChain-compatible chat model (ChatGroq, ChatAnthropic, etc.)
+    max_iterations: int = MAX_ITERATIONS,
+) -> Any:
+    """Build and compile the LangGraph StateGraph for an agent.
 
-    yield StreamEvent(type="thinking", content=f"Analyzing your question...")
+    Args:
+        agent: The agent (StockAgent or GeneralAgent) — determines tool filter.
+        registry: The ToolRegistry with all registered tools.
+        llm: A LangChain-compatible chat model with .bind_tools() support.
+        max_iterations: Max tool-calling iterations before forcing synthesis.
 
-    for iteration in range(max_iterations):
-        response = await llm.chat(messages=messages, tools=tools, stream=False)
+    Returns:
+        Compiled LangGraph graph with MemorySaver checkpointer.
+    """
+    # Get LangChain-compatible tool objects from registry
+    lc_tools = registry.get_langchain_tools(agent.tool_filter)
+    model_with_tools = llm.bind_tools(lc_tools)
 
-        if not response.has_tool_calls:
-            # Synthesis phase — emit tokens
-            yield StreamEvent(type="token", content=response.content)
-            break
+    async def call_model(state: AgentState) -> dict:
+        """Invoke the LLM with current messages and tool schemas."""
+        response = await model_with_tools.ainvoke(state["messages"])
+        return {
+            "messages": [response],
+            "iteration": state["iteration"] + 1,
+        }
 
-        # Tool-calling phase
-        for tool_call in response.tool_calls:
-            tc_name = tool_call["name"]
-            tc_args = json.loads(tool_call["arguments"]) if isinstance(tool_call["arguments"], str) else tool_call["arguments"]
+    def should_continue(state: AgentState) -> str:
+        """Route: execute tools or end."""
+        last_message = state["messages"][-1]
+        if state["iteration"] >= max_iterations:
+            return "end"
+        if isinstance(last_message, AIMessage) and last_message.tool_calls:
+            return "execute_tools"
+        return "end"
 
-            yield StreamEvent(type="tool_start", tool=tc_name, params=tc_args)
-            result = await execute_tool_safely(registry, tc_name, tc_args)
-            yield StreamEvent(
-                type="tool_result",
-                tool=tc_name,
-                status=result.status,
-                data=result.data,
-                error=result.error,
-            )
+    # Build graph
+    tool_node = ToolNode(lc_tools)
+    graph = StateGraph(AgentState)
+    graph.add_node("call_model", call_model)
+    graph.add_node("execute_tools", tool_node)
 
-            # Append tool call + result to messages for next iteration
-            messages.append({"role": "assistant", "content": None, "tool_calls": [tool_call]})
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.get("id", tc_name),
-                "content": json.dumps(result.data if result.data else {"error": result.error}),
-            })
-    else:
-        # Hit max iterations
-        yield StreamEvent(type="token", content="I've gathered the available data. Let me summarize what I found.")
+    graph.add_edge(START, "call_model")
+    graph.add_conditional_edges("call_model", should_continue, {
+        "execute_tools": "execute_tools",
+        "end": END,
+    })
+    graph.add_edge("execute_tools", "call_model")
 
-    yield StreamEvent(
-        type="done",
-        usage={
-            "model": response.model,
-            "prompt_tokens": response.prompt_tokens,
-            "completion_tokens": response.completion_tokens,
-        },
-    )
+    # Compile with checkpointer
+    # Phase 4B: MemorySaver (in-memory, single process)
+    # Phase 6: swap for PostgresSaver or RedisSaver (multi-worker)
+    checkpointer = MemorySaver()
+    return graph.compile(checkpointer=checkpointer)
 ```
 
-**DB Logging (spec §9):** The agentic loop must also persist to `LLMCallLog` and `ToolExecutionLog` tables. Add a `db: AsyncSession` parameter to `agentic_loop()`. After each `llm.chat()` call, insert an `LLMCallLog` row (provider, model, tokens, latency). After each `execute_tool_safely()` call, insert a `ToolExecutionLog` row (tool_name, params, status, latency, cache_hit). Use `db.add()` + `await db.flush()` (commit happens at the router level). This ensures all LLM calls and tool executions are tracked for observability.
+**Key design notes:**
+- `registry.get_langchain_tools(filter)` — add this method to `ToolRegistry` (Task 6). It wraps each `BaseTool` as a LangChain `@tool`-decorated function that LangGraph's `ToolNode` can execute.
+- `llm.bind_tools(lc_tools)` — LangChain's chat models natively support this. We use `ChatGroq`, `ChatAnthropic`, or `ChatOpenAI` directly instead of our custom `LLMClient` providers. This simplifies provider management since LangChain handles the format translation.
+- `MemorySaver` is the simplest checkpointer. Thread ID = `ChatSession.id`.
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 4: Add `stream_graph_events` bridge to `backend/agents/stream.py`**
+
+Append to the existing `stream.py`:
+
+```python
+async def stream_graph_events(
+    graph: Any,
+    input_state: AgentState,
+    config: dict,
+) -> AsyncIterator[StreamEvent]:
+    """Bridge LangGraph astream_events to our NDJSON StreamEvent format."""
+    yield StreamEvent(type="thinking", content="Analyzing your question...")
+
+    async for event in graph.astream_events(input_state, config, version="v2"):
+        kind = event["event"]
+        if kind == "on_chat_model_stream":
+            chunk = event["data"]["chunk"]
+            if hasattr(chunk, "content") and chunk.content:
+                yield StreamEvent(type="token", content=chunk.content)
+        elif kind == "on_tool_start":
+            yield StreamEvent(
+                type="tool_start",
+                tool=event["name"],
+                params=event["data"].get("input"),
+            )
+        elif kind == "on_tool_end":
+            yield StreamEvent(
+                type="tool_result",
+                tool=event["name"],
+                status="ok",
+                data=event["data"].get("output"),
+            )
+
+    yield StreamEvent(type="done", usage={})
+```
+
+- [ ] **Step 5: Add `get_langchain_tools` to ToolRegistry (Task 6 addition)**
+
+Add this method to `backend/tools/registry.py`:
+
+```python
+def get_langchain_tools(self, tool_filter: ToolFilter) -> list:
+    """Return LangChain-compatible tool objects for LangGraph ToolNode."""
+    from langchain_core.tools import StructuredTool
+
+    lc_tools = []
+    for tool in self._tools.values():
+        if tool_filter.matches(tool.info()):
+            lc_tool = StructuredTool.from_function(
+                coroutine=tool.execute,
+                name=tool.name,
+                description=tool.description,
+                args_schema=None,  # Uses tool.parameters JSON schema
+            )
+            lc_tools.append(lc_tool)
+    return lc_tools
+```
+
+- [ ] **Step 6: Run tests**
 
 ```bash
-uv run pytest tests/unit/test_agentic_loop.py -v
+uv run pytest tests/unit/test_agent_graph.py -v
 ```
 
 Expected: 5 PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add backend/agents/loop.py tests/unit/test_agentic_loop.py
-git commit -m "feat(4b): add agentic loop — two-phase tool-calling + synthesis with max iterations"
+git add backend/agents/graph.py backend/agents/stream.py backend/tools/registry.py tests/unit/test_agent_graph.py
+git commit -m "feat(4b): add LangGraph StateGraph — call_model + execute_tools nodes, MemorySaver checkpointer"
 ```
+
+**DB Logging (spec §9):** The graph nodes should persist to `LLMCallLog` and `ToolExecutionLog` tables. Add logging callbacks: after each `call_model` node, insert an `LLMCallLog` row (provider, model, tokens, latency). After each `execute_tools` node, insert a `ToolExecutionLog` row per tool (tool_name, params, status, latency, cache_hit). Use LangGraph's callback system or post-node hooks. This ensures all LLM calls and tool executions are tracked for observability.
 
 ---
 
@@ -2563,19 +2580,25 @@ async def chat_stream(
     # Select agent
     agent = StockAgent() if agent_type == "stock" else GeneralAgent()
 
-    # Access registry and LLM client from app.state (set during lifespan startup)
+    # Access pre-built LangGraph agents from app.state (set during lifespan startup)
     # Note: `request` must be added as a parameter to the endpoint
-    registry = request.app.state.registry
-    llm = request.app.state.llm_client
+    graph = request.app.state.stock_graph if agent_type == "stock" else request.app.state.general_graph
 
     async def event_generator():
-        async for event in agentic_loop(
-            agent=agent,
-            message=body.message,
-            history=session_messages,
-            registry=registry,
-            llm=llm,
-        ):
+        from backend.agents.stream import stream_graph_events
+        from backend.agents.graph import AgentState
+
+        input_state = AgentState(
+            messages=[{"role": "user", "content": body.message}],
+            agent_type=agent_type,
+            iteration=0,
+            tool_results=[],
+            usage={},
+        )
+        # thread_id = session ID for LangGraph checkpointer
+        config = {"configurable": {"thread_id": str(session.id)}}
+
+        async for event in stream_graph_events(graph, input_state, config):
             yield event.to_ndjson() + "\n"
 
     return StreamingResponse(
@@ -2670,6 +2693,9 @@ from backend.tools.adapters.finnhub import FinnhubAdapter
 from backend.agents.llm_client import LLMClient, RetryPolicy
 from backend.agents.providers.groq import GroqProvider
 from backend.agents.providers.anthropic import AnthropicProvider
+from backend.agents.graph import build_agent_graph
+from backend.agents.stock_agent import StockAgent
+from backend.agents.general_agent import GeneralAgent
 from backend.config import settings
 
 
@@ -2698,6 +2724,11 @@ async def lifespan(app):
     if settings.ANTHROPIC_API_KEY:
         providers.append(AnthropicProvider(api_key=settings.ANTHROPIC_API_KEY))
     llm_client = LLMClient(providers=providers)
+
+    # Build LangGraph agent graphs (one per agent type)
+    active_llm = llm_client.get_active_chat_model()  # Returns LangChain ChatModel
+    app.state.stock_graph = build_agent_graph(StockAgent(), registry, active_llm)
+    app.state.general_graph = build_agent_graph(GeneralAgent(), registry, active_llm)
 
     # Store on app.state (not module globals — rule #7)
     app.state.registry = registry
