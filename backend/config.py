@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     SERPAPI_API_KEY: str = ""
     FRED_API_KEY: str = ""
+    ALPHA_VANTAGE_API_KEY: str = ""
+    FINNHUB_API_KEY: str = ""
 
     # --- Logging ---
     LOG_LEVEL: str = "INFO"
