@@ -1,5 +1,5 @@
 import React from "react";
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { ChatPanel } from "@/components/chat-panel";
 
 // Mock lucide-react to avoid SVG rendering issues in jsdom
@@ -8,14 +8,47 @@ jest.mock("lucide-react", () => ({
   XIcon: () => <svg data-testid="x-icon" />,
 }));
 
-test("has translateX(100%) transform when closed", () => {
-  const { container } = render(<ChatPanel isOpen={false} onClose={jest.fn()} />);
+// Mock the hooks
+jest.mock("@/hooks/use-stream-chat", () => ({
+  useStreamChat: () => ({
+    messages: [],
+    isStreaming: false,
+    error: null,
+    activeSessionId: null,
+    agentType: "stock",
+    sendMessage: jest.fn(),
+    stopGeneration: jest.fn(),
+    retry: jest.fn(),
+    switchSession: jest.fn(),
+    startNewSession: jest.fn(),
+    clearError: jest.fn(),
+    dispatch: jest.fn(),
+  }),
+}));
+
+jest.mock("@/hooks/use-chat", () => ({
+  useChatSessions: () => ({ data: [] }),
+  useChatMessages: () => ({ data: [] }),
+  useDeleteSession: () => ({ mutate: jest.fn() }),
+}));
+
+test("has translateX(100%) when closed", () => {
+  const { container } = render(
+    <ChatPanel isOpen={false} onClose={jest.fn()} onArtifact={jest.fn()} />
+  );
   const aside = container.querySelector("aside");
   expect(aside?.style.transform).toBe("translateX(100%)");
 });
 
-test("has translateX(0) transform when open", () => {
-  const { container } = render(<ChatPanel isOpen={true} onClose={jest.fn()} />);
+test("has translateX(0) when open", () => {
+  const { container } = render(
+    <ChatPanel isOpen={true} onClose={jest.fn()} onArtifact={jest.fn()} />
+  );
   const aside = container.querySelector("aside");
   expect(aside?.style.transform).toBe("translateX(0)");
+});
+
+test("shows agent selector when no active session", () => {
+  render(<ChatPanel isOpen={true} onClose={jest.fn()} onArtifact={jest.fn()} />);
+  expect(screen.getByText(/Stock Analyst/)).toBeInTheDocument();
 });
