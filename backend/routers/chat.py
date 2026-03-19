@@ -34,6 +34,7 @@ async def chat_stream(
         auto_title,
         create_session,
         load_session_messages,
+        save_message,
     )
 
     # Resolve or create session
@@ -58,13 +59,16 @@ async def chat_stream(
         session_messages = []
         agent_type = body.agent_type
 
+    # Persist user message BEFORE streaming
+    await save_message(db, chat_session.id, role="user", content=body.message)
+
     # Select the pre-built LangGraph from app.state
     graph = (
         request.app.state.stock_graph if agent_type == "stock" else request.app.state.general_graph
     )
 
     async def event_generator():
-        """Yield NDJSON stream events from the LangGraph agent."""
+        """Yield NDJSON stream events and persist assistant message after."""
         from backend.agents.graph import AgentState
         from backend.agents.stream import stream_graph_events
         from backend.tools.chat_session import build_context_window
@@ -82,8 +86,38 @@ async def chat_stream(
         )
         config = {"configurable": {"thread_id": str(chat_session.id)}}
 
+        collected_tokens: list[str] = []
+        collected_tool_calls: list[dict] = []
+
         async for event in stream_graph_events(graph, input_state, config):
+            # Collect for persistence
+            if event.type == "token" and event.content:
+                collected_tokens.append(event.content)
+            elif event.type == "tool_start":
+                collected_tool_calls.append({"tool": event.tool, "params": event.params})
+            elif event.type == "tool_result":
+                # Update the last tool call with result
+                if collected_tool_calls:
+                    collected_tool_calls[-1]["status"] = event.status
+                    collected_tool_calls[-1]["data"] = event.data
+
             yield event.to_ndjson() + "\n"
+
+        # Persist assistant message AFTER stream completes
+        final_content = "".join(collected_tokens) if collected_tokens else None
+        tool_calls_json = collected_tool_calls if collected_tool_calls else None
+
+        # Use a new session for the post-stream write (original may be closed)
+        from backend.database import async_session_factory
+
+        async with async_session_factory() as persist_db:
+            await save_message(
+                persist_db,
+                chat_session.id,
+                role="assistant",
+                content=final_content,
+                tool_calls=tool_calls_json,
+            )
 
     return StreamingResponse(
         event_generator(),
