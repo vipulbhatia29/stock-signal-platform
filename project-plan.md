@@ -247,6 +247,16 @@ Three-layer MCP architecture: consume external MCPs → enrich in backend → ex
 - [ ] Conversation history UI
 - [ ] New conversation button
 
+#### Phase 4E — Quick Security Fixes (after 4C/4D, before Phase 5)
+
+Two HIGH-severity findings from security audit. Trivial fixes (~15 min total).
+
+- [ ] **MCP auth bypass** (`backend/main.py:94`) — Apply `MCPAuthMiddleware` to `/mcp` mount. Currently all 22+ tools callable without auth. Fix: 3 lines. Test: verify 401 without JWT.
+- [ ] **Chat session IDOR** (`backend/routers/chat.py`) — Add `user_id` ownership check when resuming sessions (`chat_stream`) and loading messages (`get_session_messages`). Fix: ~10 lines. Test: User B cannot access User A's sessions.
+- [ ] **Exception info leak** (`backend/agents/stream.py`) — Replace `str(exc)` in error StreamEvent with generic message. Raw exceptions from LangGraph/SQLAlchemy/LLM providers can leak internal hostnames, DB connection strings, file paths. Fix: 1 line. The full exception is already logged server-side via `logger.exception`.
+
+**Dependencies:** None — can be done anytime. Placed here to not interrupt 4C/4D feature flow.
+
 ### Success Criteria
 Can ask natural language questions via API (curl/MCP client) and get tool-backed, synthesized answers with data from SEC filings, news, macro, and fundamentals. MCP server callable from Claude Code.
 
@@ -327,6 +337,26 @@ Pre-compute signals and send notifications.
 ### Success Criteria
 Signals pre-computed nightly, Telegram alerts firing for configured triggers,
 recommendation outcomes evaluated at 30/90/180d horizons with SPY benchmark.
+
+---
+
+## Phase 5.5: Security Hardening (Pre-Launch Gate)
+
+### Goal
+Fix remaining MEDIUM-severity security findings before deployment. (HIGH items already fixed in Phase 4E.)
+
+### Deliverables
+
+1. **Refresh token never invalidated** (`backend/routers/auth.py`)
+   Old refresh tokens valid for 7 days after refresh/logout. No server-side revocation.
+   Fix: Redis blocklist for revoked token JTI claims. (Was backlog item B1, deferred from Phase 3.)
+
+2. **Task status lacks ownership** (`backend/routers/tasks.py`)
+   Any authenticated user can poll any task ID.
+   Fix: Store task_id to user_id in Redis, check on GET.
+
+### Success Criteria
+Both fixed, tests added, security re-audit clean. Dependencies: Phase 4E complete.
 
 ---
 
