@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Living Document (Phase 1-4B complete, 4C/5/6 planned)
+**Status:** Living Document (Phase 1-4C complete, 4D/5/6 planned)
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -553,7 +553,18 @@ frontend/
 │   ├── ui/                     # shadcn/ui v4 primitives (@base-ui/react, not Radix)
 │   ├── sidebar-nav.tsx         # 54px icon-only nav, CSS tooltips, Popover logout
 │   ├── topbar.tsx              # Market status chip, signal count chip, AI toggle
-│   ├── chat-panel.tsx          # Docked right panel, drag-resize, stub (Phase 4B wires backend)
+│   ├── chat-panel.tsx          # Docked right panel, drag-resize, live streaming chat (Phase 4C)
+│   ├── chat/                   # Chat sub-components (Phase 4C)
+│   │   ├── thinking-indicator.tsx  # Pulsing dots animation
+│   │   ├── error-bubble.tsx        # Error card with retry button
+│   │   ├── message-actions.tsx     # Copy + CSV export hover bar
+│   │   ├── markdown-content.tsx    # react-markdown wrapper with navy styling
+│   │   ├── tool-card.tsx           # Running/completed/error/expanded tool states
+│   │   ├── message-bubble.tsx      # User + assistant message rendering
+│   │   ├── agent-selector.tsx      # Stock/general agent toggle
+│   │   ├── session-list.tsx        # Session list with active/expired/delete
+│   │   ├── chat-input.tsx          # Auto-growing textarea, Enter to send, stop button
+│   │   └── artifact-bar.tsx        # Pinned tool results with shouldPin rules + CSV export
 │   ├── stat-tile.tsx           # Dashboard KPI tile with accent gradient top border
 │   ├── allocation-donut.tsx    # CSS conic-gradient donut; exported buildGradient()
 │   ├── portfolio-drawer.tsx    # Bottom slide-up; right offset tracks chatIsOpen state
@@ -577,10 +588,16 @@ frontend/
 │   └── metric-card.tsx         # Standardized KPI block
 ├── hooks/
 │   ├── use-stocks.ts           # 15+ TanStack Query hooks (all API data, portfolio hooks extracted here)
+│   ├── use-chat.ts             # TanStack Query hooks: useChatSessions, useChatMessages, useDeleteSession (Phase 4C)
+│   ├── use-stream-chat.ts      # Streaming fetch + NDJSON parsing + RAF token batching + abort (Phase 4C)
+│   ├── chat-reducer.ts         # Pure state machine: 11 action types, ChatState/ChatMessageUI/ToolCall types (Phase 4C)
 │   └── use-container-width.ts  # ResizeObserver for responsive grids
 ├── lib/
 │   ├── api.ts                  # Centralized fetch with cookie auth + auto-refresh
 │   ├── auth.ts                 # AuthContext + useAuth hook
+│   ├── ndjson-parser.ts        # parseNDJSONLines() with buffer carry-over for streaming (Phase 4C)
+│   ├── csv-export.ts           # buildCSV() + downloadCSV() for tabular tool results (Phase 4C)
+│   ├── storage-keys.ts         # Namespaced localStorage keys (CHAT_PANEL_WIDTH, DENSITY, ACTIVE_SESSION)
 │   ├── signals.ts              # Sentiment classification, CSS var color mappings
 │   ├── format.ts               # Currency, percent, volume, date formatters
 │   ├── design-tokens.ts        # CSS variable name constants (expanded with Phase 4A tokens)
@@ -624,7 +641,7 @@ The authenticated layout is a client component that composes three side-by-side 
 |-----------|---------|
 | `SidebarNav` | Icon-only sidebar with tooltip labels |
 | `Topbar` | Market status chip, signal count, AI toggle |
-| `ChatPanel` | Drag-resize stub; Phase 4B wires to streaming backend |
+| `ChatPanel` | Live streaming chat — useStreamChat, NDJSON, tool cards, sessions, artifacts (Phase 4C) |
 | `StatTile` | Dashboard KPI tile with accent gradient top border |
 | `AllocationDonut` | CSS conic-gradient pie; no chart library |
 | `PortfolioDrawer` | Bottom slide-up with PortfolioValueChart |

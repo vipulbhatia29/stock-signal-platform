@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Living Document (Phase 1-4B complete, 4C/5/6 planned)
+**Status:** Living Document (Phase 1-4C complete, 4D/5/6 planned)
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -399,7 +399,7 @@ Users can override weights via UserPreference.composite_weights.
 - Typography: Sora (UI labels) + JetBrains Mono (numbers/metrics) loaded via `next/font/google`
 - All components restyed to navy design tokens (card2, hov, bhi, warning, cyan)
 
-### FR-8: AI Chatbot — Financial Intelligence Platform (Phase 4B backend ✅ IMPLEMENTED, 4C frontend planned)
+### FR-8: AI Chatbot — Financial Intelligence Platform (Phase 4B backend ✅ + 4C frontend ✅ IMPLEMENTED)
 
 **FR-8.1: Agent Selection**
 - General Agent: web search + news Q&A (limited tool access)
@@ -431,8 +431,8 @@ Users can override weights via UserPreference.composite_weights.
 **FR-8.5: Streaming**
 - Response streams via NDJSON over SSE
 - Stream events: thinking, tool_start, tool_result, token, done, provider_fallback, degraded
-- Frontend renders incrementally as tokens arrive (Phase 4C)
-- Tool execution status shown as progress indicators (Phase 4C)
+- Frontend renders incrementally as tokens arrive ✅ (Phase 4C, Session 37)
+- Tool execution status shown as progress indicators ✅ (Phase 4C — ToolCard component)
 
 **FR-8.6: Conversation History**
 - Stored per ChatSession (user + agent_type)
@@ -692,7 +692,7 @@ After 3+ months of data accumulation, the following metrics become available:
 | External MCP integrations | | | | ✓ (4B) | | |
 | Warm data pipeline | | | | ✓ (4B) | | |
 | MCP server (`/mcp`) | | | | ✓ (4B) | | |
-| Chat UI (frontend wiring) | | | | ✓ (4C) | | |
+| Chat UI (frontend wiring) | | | | ✓ (4C done) | | |
 | CI/CD pipeline | | | | ✓ (done) | | |
 | Background jobs (Celery) | | | | | ✓ | |
 | Forecasting (Prophet) | | | | | ✓ | |

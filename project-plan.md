@@ -252,6 +252,47 @@ Three-layer MCP architecture: consume external MCPs → enrich in backend → ex
 - [x] ArtifactBar with shouldPin rules + ChatPanel major rewrite + layout wiring (Session 37)
 - [x] 40 new tests (3 backend + 37 frontend) — 297 total (Session 37)
 
+#### Phase 4D — Query Routing + Tiered Intelligence (after 4C)
+
+**Problem:** All queries currently hit the same model with all tools bound. A simple "What's the S&P at?" burns the same tokens as "Analyze my portfolio's sector concentration vs macro headwinds." This is unsustainable at scale and blocks monetization.
+
+**Core Architecture: Query Router + Model Tiers**
+
+- [ ] **Query Classifier** — lightweight classification (heuristic first, cheap LLM fallback) that determines:
+  - Complexity tier: simple (lookup/news) vs analytical (multi-tool reasoning) vs deep (cross-source synthesis)
+  - Required tool categories: which data sources the query actually needs
+  - Estimated token budget: how much context this query needs
+- [ ] **Model Tier System** — map complexity to model:
+  - Tier 1 (Simple): Groq Llama / cheap fast model — lookups, news, simple Q&A
+  - Tier 2 (Analytical): Claude Haiku or Sonnet — tool-calling, signal analysis
+  - Tier 3 (Deep): Claude Sonnet/Opus — multi-step reasoning, portfolio synthesis, SEC filing analysis
+- [ ] **Pre-compiled Graph Pool** — N graphs (tier x agent type) compiled at startup, router picks per request
+- [ ] **Cost Tracking + Budgets** — per-user token/cost tracking via LLMCallLog, daily/monthly budget caps
+- [ ] **Escalation Logic** — if cheap model fails or returns low-confidence, auto-escalate to next tier
+- [ ] **Fallback Guarantees** — every tier has a fallback; no query goes unanswered
+
+**Monetization Foundation (product decisions needed in brainstorm):**
+
+- [ ] **User Tier Model** — Free / Pro / Premium with different:
+  - Model access (free = Tier 1 only, Pro = Tier 1+2, Premium = all tiers)
+  - Daily query limits (free = 20/day, Pro = 100/day, Premium = unlimited)
+  - Tool access (free = basic tools, Pro = all internal, Premium = all + MCP adapters)
+  - Context window budget (free = 4K, Pro = 16K, Premium = 32K)
+- [ ] **Usage Metering** — track tokens, tool calls, model tier per user per day
+- [ ] **Paywall UI** — upgrade prompts when hitting limits, tier comparison page
+- [ ] **API key management** — users bring their own keys (BYOK) as an alternative to paid tiers
+
+**Why this is separate from 4C:** Routing is a backend optimization + product decision. 4C needs to ship a working chat UI first. Once real conversations generate LLMCallLog data, we'll have actual cost data to set routing thresholds — not guesses.
+
+**Report Generation + Export (brainstorm with routing):**
+- [ ] **"Generate Report" agent tool** — agent calls multiple tools, synthesizes into structured document
+- [ ] **PDF generation** — `react-pdf` (client) or server-side (Puppeteer/wkhtmltopdf)
+- [ ] **Excel export** — SheetJS (`xlsx`) for formatted spreadsheets
+- [ ] **Report templates** — "Portfolio Summary", "Stock Analysis", "Screener Results"
+- [ ] **Monetization tie-in** — Free: CSV only. Pro: PDF. Premium: branded reports + Excel
+
+**Dependencies:** Phase 4C complete (chat working end-to-end), LLMCallLog data accumulating.
+
 #### Phase 4E — Quick Security Fixes (after 4C/4D, before Phase 5)
 
 Two HIGH-severity findings from security audit. Trivial fixes (~15 min total).
