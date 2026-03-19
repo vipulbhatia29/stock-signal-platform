@@ -58,3 +58,12 @@ def test_null_fields_excluded():
     assert "tool" not in parsed
     assert "params" not in parsed
     assert "error" not in parsed
+
+
+def test_error_event():
+    """Error event includes error message."""
+    event = StreamEvent(type="error", error="All providers failed")
+    data = json.loads(event.to_ndjson())
+    assert data["type"] == "error"
+    assert data["error"] == "All providers failed"
+    assert "content" not in data

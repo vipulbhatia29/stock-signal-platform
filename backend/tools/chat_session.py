@@ -226,3 +226,41 @@ def auto_title(first_message: str) -> str:
     if last_space > 50:
         truncated = truncated[:last_space]
     return truncated + "..."
+
+
+async def save_message(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    role: str,
+    content: str | None,
+    tool_calls: dict | None = None,
+    model_used: str | None = None,
+    tokens_used: int | None = None,
+) -> ChatMessage:
+    """Persist a single chat message to the database.
+
+    Args:
+        db: Async database session.
+        session_id: The chat session this message belongs to.
+        role: Message role ('user' or 'assistant').
+        content: Message text content.
+        tool_calls: Optional JSONB tool call data.
+        model_used: Optional LLM model identifier.
+        tokens_used: Optional total token count.
+
+    Returns:
+        The persisted ChatMessage.
+    """
+    message = ChatMessage(
+        session_id=session_id,
+        role=role,
+        content=content,
+        tool_calls=tool_calls,
+        model_used=model_used,
+        tokens_used=tokens_used,
+    )
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+    logger.info("Saved %s message for session %s", role, session_id)
+    return message

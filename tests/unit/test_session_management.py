@@ -185,3 +185,44 @@ async def test_expire_inactive_sessions():
     count = await expire_inactive_sessions(mock_db, max_age_hours=24)
     assert count == 3
     mock_db.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_save_message():
+    """save_message inserts a ChatMessage and returns it."""
+    from backend.tools.chat_session import save_message
+
+    mock_db = AsyncMock()
+    session_id = uuid.uuid4()
+
+    msg = await save_message(
+        mock_db,
+        session_id=session_id,
+        role="user",
+        content="Analyze AAPL",
+    )
+
+    assert msg.session_id == session_id
+    assert msg.role == "user"
+    assert msg.content == "Analyze AAPL"
+    mock_db.add.assert_called_once()
+    mock_db.commit.assert_awaited_once()
+    mock_db.refresh.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_save_message_called_with_correct_role():
+    """save_message stores role and content correctly for both user and assistant."""
+    from backend.tools.chat_session import save_message
+
+    mock_db = AsyncMock()
+    session_id = uuid.uuid4()
+
+    user_msg = await save_message(mock_db, session_id, "user", "Hello")
+    assert user_msg.role == "user"
+
+    assistant_msg = await save_message(
+        mock_db, session_id, "assistant", "Hi there", tool_calls={"calls": []}
+    )
+    assert assistant_msg.role == "assistant"
+    assert assistant_msg.tool_calls == {"calls": []}

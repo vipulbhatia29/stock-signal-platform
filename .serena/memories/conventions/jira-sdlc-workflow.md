@@ -186,6 +186,11 @@ main                    ← production-ready, always deployable
 ### Rules
 - **One branch per Story** (not per Subtask, not per Epic)
 - All Subtasks of a Story commit to the same Story branch
+- **ALWAYS branch from `develop`** — never from `main`. Command:
+  ```bash
+  git checkout develop && git pull origin develop && git checkout -b feat/KAN-[story#]-[short-name]
+  ```
+  Branching from `main` causes merge conflicts because `develop` diverges from `main` between Epic promotions.
 - Story branch PRs go to `develop`
 - `develop` → `main` PR when Epic is complete
 - Branch naming: `feat/KAN-[story-number]-[short-kebab-name]`
