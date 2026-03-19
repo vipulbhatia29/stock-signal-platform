@@ -45,7 +45,6 @@ export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
     retry,
     switchSession,
     startNewSession,
-    clearError,
     dispatch,
   } = useStreamChat();
 

@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { Topbar } from "@/components/topbar";
 import { ChatPanel } from "@/components/chat-panel";
+import { ArtifactBar } from "@/components/chat/artifact-bar";
 import { useAddToWatchlist, useIngestTicker, useWatchlist } from "@/hooks/use-stocks";
 import { toast } from "sonner";
 
@@ -13,6 +14,11 @@ export default function AuthenticatedLayout({
   children: React.ReactNode;
 }) {
   const [chatIsOpen, setChatIsOpen] = useState(true); // open by default
+  const [artifact, setArtifact] = useState<{
+    tool: string;
+    params: Record<string, unknown>;
+    data: unknown;
+  } | null>(null);
   const { data: watchlist } = useWatchlist();
   const addToWatchlist = useAddToWatchlist();
   const ingestTicker = useIngestTicker();
@@ -46,6 +52,9 @@ export default function AuthenticatedLayout({
           onToggleChat={() => setChatIsOpen((v) => !v)}
           onAddTicker={handleAddTicker}
         />
+        {artifact && (
+          <ArtifactBar artifact={artifact} onDismiss={() => setArtifact(null)} />
+        )}
         <main className="flex-1 overflow-y-auto">
           <div className="px-4 py-6 animate-fade-in">{children}</div>
         </main>
@@ -54,6 +63,7 @@ export default function AuthenticatedLayout({
       <ChatPanel
         isOpen={chatIsOpen}
         onClose={() => setChatIsOpen(false)}
+        onArtifact={setArtifact}
       />
     </div>
   );
