@@ -7,7 +7,7 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.config import settings
 from backend.rate_limit import limiter
-from backend.routers import auth, indexes, portfolio, preferences, stocks
+from backend.routers import auth, chat, indexes, portfolio, preferences, stocks
 from backend.routers.tasks import router as tasks_router
 
 app = FastAPI(
@@ -43,3 +43,4 @@ app.include_router(stocks.router, prefix="/api/v1/stocks", tags=["stocks"])
 app.include_router(portfolio.router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1")
 app.include_router(preferences.router, prefix="/api/v1")
+app.include_router(chat.router, prefix="/api/v1")
