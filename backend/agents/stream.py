@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Literal
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -17,6 +20,7 @@ class StreamEvent:
         "tool_result",
         "token",
         "done",
+        "error",
         "provider_fallback",
         "context_truncated",
     ]
@@ -46,24 +50,28 @@ async def stream_graph_events(
     """Bridge LangGraph astream_events to our NDJSON StreamEvent format."""
     yield StreamEvent(type="thinking", content="Analyzing your question...")
 
-    async for event in graph.astream_events(input_state, config, version="v2"):
-        kind = event["event"]
-        if kind == "on_chat_model_stream":
-            chunk = event["data"]["chunk"]
-            if hasattr(chunk, "content") and chunk.content:
-                yield StreamEvent(type="token", content=chunk.content)
-        elif kind == "on_tool_start":
-            yield StreamEvent(
-                type="tool_start",
-                tool=event["name"],
-                params=event["data"].get("input"),
-            )
-        elif kind == "on_tool_end":
-            yield StreamEvent(
-                type="tool_result",
-                tool=event["name"],
-                status="ok",
-                data=event["data"].get("output"),
-            )
+    try:
+        async for event in graph.astream_events(input_state, config, version="v2"):
+            kind = event["event"]
+            if kind == "on_chat_model_stream":
+                chunk = event["data"]["chunk"]
+                if hasattr(chunk, "content") and chunk.content:
+                    yield StreamEvent(type="token", content=chunk.content)
+            elif kind == "on_tool_start":
+                yield StreamEvent(
+                    type="tool_start",
+                    tool=event["name"],
+                    params=event["data"].get("input"),
+                )
+            elif kind == "on_tool_end":
+                yield StreamEvent(
+                    type="tool_result",
+                    tool=event["name"],
+                    status="ok",
+                    data=event["data"].get("output"),
+                )
+    except Exception as exc:
+        logger.exception("stream_graph_events error")
+        yield StreamEvent(type="error", error=str(exc))
 
     yield StreamEvent(type="done", usage={})
