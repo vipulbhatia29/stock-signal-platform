@@ -24,6 +24,30 @@ category: debugging
 - After pulling: `uv sync` to keep local venv in sync with `uv.lock`.
 
 ## yfinance
+
+## LangChain StructuredTool + LangGraph ToolNode
+- `StructuredTool.from_function(coroutine=fn)` with `**kwargs` signature creates a schema with a single `kwargs` parameter. LangChain inconsistently wraps/unwraps params.
+- Fix: define explicit Pydantic `args_schema` per tool (KAN-60).
+- Tool `execute(params: dict)` must be wrapped to accept `**kwargs` since StructuredTool passes keyword args, not a dict.
+- Tool return value must be a JSON string (not ToolResult dataclass) — LangChain ToolMessage expects string content.
+- `on_tool_end` event's `output` is a `ToolMessage` object, not a plain dict. Access `.content` (string) and `json.loads()` it.
+
+## API Tests Destroy Dev Database (KAN-58)
+- `tests/api/conftest.py` overrides `db_url` to read `DATABASE_URL` from `.env` (dev DB).
+- Root `conftest.py` runs `Base.metadata.drop_all` on teardown.
+- Running `pytest tests/api/` DROPS ALL DEV TABLES.
+- **Never run API tests against the dev DB.** Unit tests use testcontainers (safe).
+- Fix: separate `stocksignal_test` DB or use testcontainers for API tests too.
+
+## SignalResult Attribute Names
+- `SignalResult` uses flat attributes: `rsi_value`, `rsi_signal`, `macd_value`, `macd_signal_label`, `sma_signal`, `bb_position`
+- NOT nested: `signals.rsi.value` or `signals.macd.signal` — those don't exist
+- Always check the actual dataclass definition before accessing attributes
+
+## ContextVar for Request-Scoped Tool Data
+- Tools called via LangGraph ToolNode don't receive the FastAPI request or user object.
+- Use `contextvars.ContextVar` — set in the router before streaming, read in tool `execute()`.
+- Module: `backend/request_context.py` — `current_user_id: ContextVar[UUID | None]`
 - Returns empty DataFrame for invalid/delisted tickers.
 - Rate limiting: 0.5s delay between batch fetches.
 - Mock at tool boundary (`fetch_prices`) not at `yf.download`.
