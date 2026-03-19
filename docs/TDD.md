@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Living Document (Phase 1-3.5 in progress)
+**Status:** Living Document (Phase 1-4B complete, 4C/5/6 planned)
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -406,7 +406,7 @@ async def get_signal_service(
 
 ## 5. Agent Architecture
 
-> **Implementation status:** Phase 4B spec complete (Session 34). Full design: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md`. Implementation plan pending. The `backend/agents/` directory exists as a placeholder.
+> **Implementation status:** Phase 4B backend ✅ COMPLETE (Sessions 35-36). Full design: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md`. Plan: `docs/superpowers/plans/2026-03-17-phase-4b-ai-chatbot-implementation.md`. All 19 tasks implemented. PRs #12, #13 merged to main. 369 tests passing.
 
 ### 5.1 Three-Layer Architecture
 
