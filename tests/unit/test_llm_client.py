@@ -105,12 +105,18 @@ def test_retry_policy_defaults():
 def test_llm_response_has_tool_calls():
     """LLMResponse.has_tool_calls detects tool calls."""
     with_tools = LLMResponse(
-        content="", tool_calls=[{"id": "1", "name": "test"}],
-        model="m", prompt_tokens=0, completion_tokens=0,
+        content="",
+        tool_calls=[{"id": "1", "name": "test"}],
+        model="m",
+        prompt_tokens=0,
+        completion_tokens=0,
     )
     without_tools = LLMResponse(
-        content="Hi", tool_calls=[],
-        model="m", prompt_tokens=0, completion_tokens=0,
+        content="Hi",
+        tool_calls=[],
+        model="m",
+        prompt_tokens=0,
+        completion_tokens=0,
     )
     assert with_tools.has_tool_calls is True
     assert without_tools.has_tool_calls is False

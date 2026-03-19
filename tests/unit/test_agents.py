@@ -2,7 +2,6 @@
 
 from pathlib import Path
 
-from backend.agents.base import BaseAgent
 from backend.agents.general_agent import GeneralAgent
 from backend.agents.stock_agent import StockAgent
 from backend.tools.base import ToolFilter

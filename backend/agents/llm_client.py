@@ -58,9 +58,7 @@ class ProviderHealth:
         """Mark this provider as exhausted (quota exceeded)."""
         self.is_exhausted = True
         if retry_after:
-            self.exhausted_until = datetime.now(timezone.utc).replace(
-                second=0, microsecond=0
-            )
+            self.exhausted_until = datetime.now(timezone.utc).replace(second=0, microsecond=0)
         logger.warning(
             "provider_exhausted",
             extra={"provider": self.provider, "retry_after": retry_after},
@@ -213,7 +211,7 @@ class LLMClient:
                 raise
             except (ConnectionError, OSError):
                 delay = min(
-                    policy.base_delay * (policy.backoff_factor ** attempt),
+                    policy.base_delay * (policy.backoff_factor**attempt),
                     policy.max_delay,
                 )
                 logger.warning(

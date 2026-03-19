@@ -64,13 +64,15 @@ class GeopoliticalEventsTool(BaseTool):
 
             results = []
             for _, row in articles.head(max_results).iterrows():
-                results.append({
-                    "title": row.get("title", ""),
-                    "url": row.get("url", ""),
-                    "domain": row.get("domain", ""),
-                    "language": row.get("language", ""),
-                    "seendate": str(row.get("seendate", "")),
-                })
+                results.append(
+                    {
+                        "title": row.get("title", ""),
+                        "url": row.get("url", ""),
+                        "domain": row.get("domain", ""),
+                        "language": row.get("language", ""),
+                        "seendate": str(row.get("seendate", "")),
+                    }
+                )
             return ToolResult(status="ok", data=results)
         except Exception as e:
             logger.error(

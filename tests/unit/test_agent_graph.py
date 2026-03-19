@@ -1,7 +1,7 @@
 """Tests for the LangGraph agent graph."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 

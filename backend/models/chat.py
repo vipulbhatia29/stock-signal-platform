@@ -17,9 +17,7 @@ class ChatSession(TimestampMixin, Base):
 
     __tablename__ = "chat_session"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )
@@ -37,9 +35,7 @@ class ChatSession(TimestampMixin, Base):
         back_populates="session", cascade="all, delete-orphan"
     )
 
-    __table_args__ = (
-        Index("idx_chat_session_user", "user_id", "last_active_at"),
-    )
+    __table_args__ = (Index("idx_chat_session_user", "user_id", "last_active_at"),)
 
     def __repr__(self) -> str:
         return f"<ChatSession {self.id} agent={self.agent_type} active={self.is_active}>"
@@ -50,9 +46,7 @@ class ChatMessage(TimestampMixin, Base):
 
     __tablename__ = "chat_message"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     session_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("chat_session.id"), nullable=False
     )
@@ -67,9 +61,7 @@ class ChatMessage(TimestampMixin, Base):
 
     session: Mapped[ChatSession] = relationship(back_populates="messages")
 
-    __table_args__ = (
-        Index("idx_chat_message_session", "session_id", "created_at"),
-    )
+    __table_args__ = (Index("idx_chat_message_session", "session_id", "created_at"),)
 
     def __repr__(self) -> str:
         return f"<ChatMessage {self.id} role={self.role}>"

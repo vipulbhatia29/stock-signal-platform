@@ -52,13 +52,15 @@ class AnthropicProvider(LLMProvider):
 
         # Convert tools to Anthropic format
         anthropic_tools = []
-        for t in (tools or []):
+        for t in tools or []:
             func = t.get("function", {})
-            anthropic_tools.append({
-                "name": func.get("name", ""),
-                "description": func.get("description", ""),
-                "input_schema": func.get("parameters", {}),
-            })
+            anthropic_tools.append(
+                {
+                    "name": func.get("name", ""),
+                    "description": func.get("description", ""),
+                    "input_schema": func.get("parameters", {}),
+                }
+            )
 
         kwargs: dict[str, Any] = {
             "model": self._model,
@@ -79,11 +81,13 @@ class AnthropicProvider(LLMProvider):
             if block.type == "text":
                 content += block.text
             elif block.type == "tool_use":
-                tool_calls.append({
-                    "id": block.id,
-                    "name": block.name,
-                    "arguments": block.input,
-                })
+                tool_calls.append(
+                    {
+                        "id": block.id,
+                        "name": block.name,
+                        "arguments": block.input,
+                    }
+                )
 
         return LLMResponse(
             content=content,
