@@ -291,7 +291,28 @@ Gaps from spec audit + code analysis (Session 37). Grouped by priority.
 
 **Dependencies:** None — can be done independently. Functional + code quality + performance fixes should precede Phase 4D.
 
-#### Phase 4D — Query Routing + Tiered Intelligence (after 4C)
+#### Phase 4F — UI Migration: Lovable → Production (~26h, 5-6 sessions)
+
+**Gap Analysis:** `docs/lovable/migration-gap-analysis.md`
+**Workflow Plan:** `docs/superpowers/plans/2026-03-19-ui-migration-workflow.md`
+**Reference Prototype:** https://stocksignal29.lovable.app
+**Reference Code:** `docs/lovable/code/stocksignal-source/`
+
+Full UI/UX redesign based on Lovable prototype. 9 phases (UI-1 through UI-9):
+
+- [ ] **UI-1: Shell + Design Tokens** (~3h) — Sidebar (logo glow, Sectors nav, active indicator, logout), Topbar (centered search, `/` hint, Refresh All, bell stub, pulsing market dot), framer-motion install, `card2`/`hov`/`pulse-subtle` tokens, ChatContext grid adaptation
+- [ ] **UI-2: Shared Components** (~2h) — New: ScoreBar, RefreshIndicator, IndexCard. Updated: ScoreBadge, SignalBadge, ChangeIndicator, AllocationDonut, StatTile. Backend: expose `last_fetched_at`
+- [ ] **UI-3: Dashboard Redesign** (~3h) — Market Indexes section, Action Required (recommendations with reasoning), Sector Allocation link to /sectors, watchlist cards (Held badge, ScoreBar, RefreshIndicator). Backend: recommendation reasoning, index values endpoint
+- [ ] **UI-4: Screener + Stock Detail** (~3h) — ScoreBar inline, Fresh column, Held badge, Performance tab. Candlestick chart toggle, benchmark comparison chart, signal descriptions, watchlist toggle. Backend: OHLC format, benchmark prices
+- [ ] **UI-5: Portfolio Redesign** (~2h) — Cost basis overlay on chart, alert icons (AlertOctagon/Triangle), framer-motion settings sheet + transaction modal
+- [ ] **UI-6: Sectors Page (NEW)** (~4h) — New page + 3 backend endpoints (sectors, stocks-by-sector, correlation). AllocationDonut, sector accordions, comparison table, correlation heatmap + table
+- [ ] **UI-7: Auth Redesign** (~2h) — Split-panel login/register, brand showcase, Google OAuth stub, input glow effects, animated decorations
+- [ ] **UI-8: Chat Panel Polish** (~1.5h) — Styled agent selector, suggestion chips fill-not-send, tool card Copy/CSV, markdown tables, pulsing dots thinking indicator
+- [ ] **UI-9: Animations + Final Polish** (~1.5h) — framer-motion staggered fade-up on all grids, glow effects on CTAs + inputs, scrollbar styling, chat-open grid adaptation on all pages, Playwright E2E verification
+
+**Dependencies:** Phase 4C.1 (quality fixes) must be done first. UI-1 → UI-2 sequential. UI-3/4/5/7 parallelizable. UI-6 needs backend endpoints.
+
+#### Phase 4D — Query Routing + Tiered Intelligence (after 4F)
 
 **Problem:** All queries currently hit the same model with all tools bound. A simple "What's the S&P at?" burns the same tokens as "Analyze my portfolio's sector concentration vs macro headwinds." This is unsustainable at scale and blocks monetization.
 

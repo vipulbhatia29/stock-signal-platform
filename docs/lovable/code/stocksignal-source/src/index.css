@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-sora: 'Sora', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+
+    /* Brief palette mapped to HSL */
+    --background: 228 43% 7%;        /* #0a0e1a */
+    --foreground: 215 25% 90%;       /* #e2e8f0 */
+
+    --card: 220 26% 11%;             /* #111827 */
+    --card-foreground: 215 25% 90%;
+
+    --card2: 226 30% 16%;            /* #1a2035 */
+    --card2-foreground: 215 25% 90%;
+
+    --popover: 220 26% 11%;
+    --popover-foreground: 215 25% 90%;
+
+    --primary: 187 82% 54%;          /* #22d3ee  cyan accent */
+    --primary-foreground: 228 43% 7%;
+
+    --secondary: 226 30% 16%;
+    --secondary-foreground: 215 25% 90%;
+
+    --muted: 220 17% 20%;
+    --muted-foreground: 215 16% 47%; /* #64748b */
+
+    --subtle: 215 14% 34%;           /* #475569 */
+
+    --accent: 187 82% 54%;
+    --accent-foreground: 228 43% 7%;
+
+    --destructive: 0 84% 60%;        /* #ef4444 */
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 217 25% 17%;           /* #1e293b */
+    --input: 217 25% 17%;
+    --ring: 187 82% 54%;
+
+    --radius: 0.5rem;
+
+    /* Financial semantic */
+    --gain: 142 71% 45%;             /* #22c55e */
+    --gain-foreground: 142 71% 95%;
+    --loss: 0 84% 60%;               /* #ef4444 */
+    --loss-foreground: 0 84% 95%;
+    --warning: 38 92% 50%;           /* #f59e0b */
+    --warning-foreground: 38 92% 95%;
+    --cyan: 187 82% 54%;
+    --cyan-muted: 187 50% 28%;
+
+    --hov: 226 28% 18%;
+
+    /* Sidebar */
+    --sidebar-background: 228 43% 5%;
+    --sidebar-foreground: 215 16% 47%;
+    --sidebar-primary: 187 82% 54%;
+    --sidebar-primary-foreground: 228 43% 7%;
+    --sidebar-accent: 226 30% 14%;
+    --sidebar-accent-foreground: 215 25% 90%;
+    --sidebar-border: 228 30% 12%;
+    --sidebar-ring: 187 82% 54%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sora);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+@layer utilities {
+  .font-mono {
+    font-family: var(--font-mono);
+  }
+
+  .font-sora {
+    font-family: var(--font-sora);
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--muted)) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 3px;
+  }
+}

@@ -17,7 +17,8 @@ updated_by: session-37
   - KAN-55 (Highest): 4 tool wrapper bugs — user_id injection + wrong function signatures
   - KAN-56 (High): Index seeding broken — Wikipedia 403
   - KAN-57 (Medium): New user onboarding — empty state
-- **What's next:** KAN-55 (~1hr) → KAN-56 (~5min) → Phase 4E security (~15min) → Phase 4C.1 polish → UI/UX redesign (Lovable, parallel)
+- **What's next:** KAN-55 (~1hr) → KAN-56 (~5min) → Phase 4E security (~15min) → Phase 4C.1 polish → Phase 4F UI Migration (9 stories, ~26h, 5-6 sessions)
+- **UI Migration plan:** `docs/superpowers/plans/2026-03-19-ui-migration-workflow.md` — 11 steps, Lovable prototype at https://stocksignal29.lovable.app, reference code at `docs/lovable/code/stocksignal-source/`
 
 ## Session 37 Summary
 Phase 4C: all 19 plan tasks in one session. Post-implementation: security review (3 findings → 4E), code analysis (25 findings → 4C.1), spec audit (13 gaps → 4C.1), E2E Playwright testing (4 critical tool bugs found → KAN-55). CI bumped v4→v6/v7. Branching rule enforced. Lovable design brief written for full UI/UX redesign.
@@ -30,3 +31,4 @@ Phase 4C: all 19 plan tasks in one session. Post-implementation: security review
 - Phase 4C Frontend Chat UI: COMPLETE (PRs #15+#16)
 - Phase 4C.1 Polish: NOT STARTED (25 items in project-plan.md)
 - Phase 4E Security Fixes: NOT STARTED (4 items in project-plan.md)
+- Phase 4F UI Migration: NOT STARTED (9 stories, workflow plan written, Lovable gap analysis complete)
