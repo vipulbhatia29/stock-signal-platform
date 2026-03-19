@@ -1,0 +1,15 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production
+        run: |
+          echo "TODO Phase 6: wire deployment here"
+          echo "Will use: container deployment to cloud provider"

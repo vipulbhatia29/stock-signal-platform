@@ -272,34 +272,45 @@ Bloomberg-inspired dark mode, semantic color tokens (OKLCH), financial-specific 
 - Alerts fire correctly based on configured thresholds
 - Can handle portfolios of up to 50 positions
 
-### 5.6 AI Chatbot (P1 — Should Have)
+### 5.6 AI Chatbot — Financial Intelligence Platform (P1 — Should Have)
 
-**Description:** Conversational interface for querying portfolio and market data.
+**Description:** Three-layer financial intelligence platform: consume external data via MCP servers, enrich in backend with caching and cross-source analysis, expose as reusable MCP server. The chatbot is the first consumer, not the last.
 
 **Requirements:**
-- Natural language input with streaming response
-- Agent can call all platform tools (signals, fundamentals, portfolio, screener,
-  forecasting, web search)
-- Multi-step reasoning: a single question can trigger 3-5 tool calls
+- Natural language input with streaming response (NDJSON/SSE)
+- Agent can call platform tools AND external data sources across 5 layers:
+  - Layer 1: Fundamentals (existing DB — signals, Piotroski, portfolio)
+  - Layer 2: SEC Filings (10-K, 10-Q, 13F, insider trades via EdgarTools MCP)
+  - Layer 3: News + Sentiment (Alpha Vantage MCP, social sentiment via Finnhub)
+  - Layer 4: Macro + Geopolitical (FRED MCP for macro data, GDELT for geopolitical events)
+  - Layer 5: Analyst + Alternative (analyst ratings, ESG, supply chain via Finnhub)
+- Multi-step reasoning: a single question can trigger 3-5+ tool calls across layers
 - Markdown-formatted responses with embedded data tables
 - Agent selector: General (web search, Q&A) and Stock Analysis (full toolkit)
-- Chat history preserved per session
+- Chat history preserved per session (24h expiry)
+- Tool Registry with pluggable tools and MCPAdapter for external sources
+- Warm data pipeline: pre-processed analyst consensus, FRED indicators, institutional holdings
+- Graceful degradation: individual tool failures don't crash the response
+- Few-shot prompted agents for reliable tool selection
+- Exposed as MCP server at `/mcp` (Streamable HTTP) for Claude Code, Cursor, future apps
 
 **Example Interactions:**
 
 | User Says | Agent Does |
 |-----------|-----------|
-| "Analyse AAPL" | Fetches data → computes signals → runs forecast → searches news → synthesizes report |
-| "How is my portfolio doing?" | Reads positions → computes P&L → checks allocation → summarizes |
-| "What should I buy in Tech?" | Screens Technology sector → ranks by composite score → checks portfolio for overlap → recommends top 3 |
-| "Why is SOFI bearish?" | Fetches signals → explains each indicator → provides context |
-| "Set a 15% stop loss on MSFT" | Updates portfolio rules → confirms |
+| "Analyse AAPL" | Fetches signals → gets 10-K risk factors → fetches news sentiment → gets analyst ratings → synthesizes report |
+| "How is my portfolio doing?" | Reads positions → computes P&L → checks sector exposure → gets macro context → summarizes |
+| "What should I buy in Tech?" | Screens Technology sector → checks analyst consensus → reviews macro environment → checks portfolio overlap → recommends top 3 |
+| "How exposed am I to the Iran situation?" | Fetches geopolitical events → maps to affected sectors → calculates portfolio exposure → gets oil/treasury data → synthesizes risk assessment |
+| "Show me MSFT's insider trading" | Fetches Form 4 data → summarizes recent insider buys/sells → contextualizes with price action |
 
 **Acceptance Criteria:**
 - Response starts streaming within 2 seconds
 - Multi-tool queries complete within 15 seconds
 - Agent correctly identifies which tools to call based on user intent
 - No hallucinated data — all numbers come from tool calls
+- MCP server at `/mcp` callable by external MCP clients
+- Graceful degradation when external data sources are unavailable
 
 ### 5.7 Price Forecasting (P1 — Should Have)
 
@@ -353,15 +364,16 @@ Bloomberg-inspired dark mode, semantic color tokens (OKLCH), financial-specific 
 - Macro overlay adjusts recommendation confidence (bullish signals in Risk-Off
   regime should be flagged as lower confidence)
 
-### 5.10 MCP Tool Servers (P2 — Nice to Have)
+### 5.10 MCP Tool Server (P1 — Pulled forward to Phase 4B)
 
-**Description:** Expose platform tools as MCP servers for external AI access.
+**Description:** Expose platform intelligence as a single MCP server for external AI access. Originally Phase 6; pulled forward because the Tool Registry (Phase 4B core) is the same abstraction the MCP server exposes.
 
 **Requirements:**
-- Each tool group (market-data, signals, portfolio, screener) wrapped as an
-  MCP server
-- Tools callable by Claude desktop, Claude Code, or any MCP-compatible client
-- Same business logic as in-process tools — MCP is just a transport layer
+- Single MCP server at `/mcp` using Streamable HTTP transport
+- Exposes all Tool Registry tools (internal + proxied external) via MCP protocol
+- Tools callable by Claude Code, Cursor, or any MCP-compatible client
+- Authenticated via JWT (same auth as REST API)
+- Same business logic as chatbot tools — MCP is just a transport layer
 
 ---
 

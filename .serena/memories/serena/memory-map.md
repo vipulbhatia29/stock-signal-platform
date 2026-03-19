@@ -17,6 +17,7 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | global/conventions/git-workflow | Conventional commits, branch strategy, PR flow (generic) |
 | global/conventions/error-handling | Logging levels, error handling by context |
 | global/debugging/mock-patching-gotchas | Patch at lookup site, AsyncMock, decorator stacking |
+| global/templates/agentic-sdlc-setup | Reusable template: JIRA + CI/CD + agent workflow setup for new projects |
 
 ## Project Memories (.serena/memories/ — in repo)
 | Key | Content |
@@ -32,14 +33,15 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | architecture/celery-patterns | Celery entry points, asyncio.run() bridge, beat schedule, task naming |
 | domain/signals-and-screener | Signal computation, screener, market hours UTC gotcha |
 | domain/portfolio-tracker | Portfolio tools, API double-prefix, patch() helper |
-| domain/agent-tools | Agent architecture, LLM routing, NDJSON streaming, DB models |
+| domain/agent-tools | Three-layer MCP architecture, Tool Registry, MCPAdapters, LLM client, DB models |
 | debugging/backend-gotchas | asyncpg, UserRole enum, circular imports, Alembic, yfinance |
 | debugging/frontend-gotchas | ESLint hooks, Recharts colors, API prefix, next/image |
 | serena/tool-usage | MCP prefix, tool priority, symbolic reading, editing |
 | serena/memory-map | This file — taxonomy anchor |
 | conventions/auth-patterns | JWT, httpOnly cookies, frontend auth, bcrypt pinning, security rules |
-| conventions/jira-sdlc-workflow | **MANDATORY** — full JIRA SDLC process, board, refinement lifecycle, branching, CI/CD integration |
-| project/jira-integration-brainstorm | JIRA board state, ticket map (KAN-1 through KAN-15), Atlassian connection details |
+| conventions/jira-sdlc-workflow | **MANDATORY** — full JIRA SDLC process, board, refinement lifecycle, branching, CI/CD, automation rules, transition IDs |
+| architecture/cicd-pipeline | CI/CD workflows, branch protection, fixture split, test expectations, GitHub secrets |
+| project/jira-integration-brainstorm | JIRA instance details, full ticket map (KAN-1 through KAN-29), transition IDs, automation rules |
 
 ## Scope Rule
 **Global = truly cross-project** (language conventions, generic patterns).

@@ -191,7 +191,27 @@ main                    ← production-ready, always deployable
 - Branch naming: `feat/KAN-[story-number]-[short-kebab-name]`
 - Hotfixes: `hotfix/KAN-[bug#]-[short-name]` → PR to `main` + back-merge to `develop`
 
-## 5. CI/CD Integration
+## 5. JIRA Automation Rules (configured in project)
+
+Two automation rules are active:
+1. **PR merged → Done:** When a PR is merged (GitHub trigger), transition the referenced issue to Done.
+2. **All subtasks done → parent Done:** When a subtask transitions to Done AND all sibling subtasks are also Done, transition the parent Story/Task to Done. Uses Branch/For:Parent to transition the parent, not the trigger.
+
+These handle human-triggered events. Agent still explicitly transitions tickets during its workflow.
+
+## 6. JIRA Transition IDs (for MCP API calls)
+
+| ID | Status |
+|----|--------|
+| `7` | Blocked |
+| `8` | Ready for Verification |
+| `11` | To Do |
+| `21` | In Progress |
+| `31` | Done |
+
+Use `mcp__plugin_atlassian_atlassian__transitionJiraIssue` with `cloudId: "https://vipulbhatia29.atlassian.net"`.
+
+## 7. CI/CD Integration
 
 ### PR Gate (ci-pr.yml) — triggers on PR to develop or main
 - backend-lint: `ruff check` + `ruff format --check`
@@ -209,10 +229,10 @@ main                    ← production-ready, always deployable
 |-------|-------------|-------|---------------------|
 | PR opened | Subtasks → Ready for Verification | Agent does manually | GitHub Action updates JIRA |
 | CI fails on PR | Subtasks stay In Progress | Agent checks CI | GitHub Action comments on JIRA |
-| PR merged to develop | Story → Done | Agent does manually | GitHub Action transitions JIRA |
-| develop → main merged | Epic → Done | PM does manually | GitHub Action transitions JIRA |
+| PR merged to develop | Story → Done | Agent does manually | JIRA Automation rule transitions to Done |
+| develop → main merged | Epic → Done | PM does manually | JIRA Automation rule or agent reconciliation |
 
-## 6. Session Start Protocol (for Agent)
+## 8. Session Start Protocol (for Agent)
 
 At the start of every coding session:
 1. Read this memory (`conventions/jira-sdlc-workflow`)
@@ -221,7 +241,7 @@ At the start of every coding session:
 4. Pick the next unblocked Subtask
 5. Present to PM: "Next up is KAN-XX: [summary]. Proceed?"
 
-## 7. Anti-Patterns (NEVER do these)
+## 9. Anti-Patterns (NEVER do these)
 
 1. **NEVER create implementation subtasks before Refinement Story is Done**
    - The plan determines the subtask breakdown, not the TDD pseudocode
@@ -238,7 +258,16 @@ At the start of every coding session:
 7. **NEVER start a new Epic's implementation while another Epic has open Stories**
    - Finish what you started (Refinement can overlap)
 
-## 8. JIRA Comment Templates
+## 10. Git Hooks and CI Checks
+
+The project may have pre-commit and post-commit hooks configured. Before committing:
+- Do NOT skip hooks with `--no-verify`
+- If a hook fails, read the error and fix the issue — don't bypass
+- Hooks may include: ruff lint/format, type checks, secret scanning
+- Check `.pre-commit-config.yaml` or `.husky/` if hooks exist
+- CI workflows (ci-pr.yml, ci-merge.yml) run the same checks — hooks are local enforcement of the same rules
+
+## 11. JIRA Comment Templates
 
 ### Brainstorm Complete
 ```

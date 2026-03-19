@@ -1,5 +1,6 @@
 """Shared test fixtures: database, Redis, FastAPI client, factories, auth."""
 
+import os
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
@@ -36,6 +37,11 @@ from backend.models.user import User, UserPreference, UserRole
 @pytest.fixture(scope="session")
 def postgres_container():
     """Start a real Postgres+TimescaleDB container via testcontainers."""
+    if os.environ.get("CI"):
+        pytest.fail(
+            "Testcontainers disabled in CI — using service containers. "
+            "Ensure this test directory has a conftest.py that overrides db_url."
+        )
     with PostgresContainer(
         image="timescale/timescaledb:latest-pg16",
         username="test",
@@ -58,6 +64,11 @@ def db_url(postgres_container) -> str:
 @pytest.fixture(scope="session")
 def redis_container():
     """Start a real Redis container via testcontainers."""
+    if os.environ.get("CI"):
+        pytest.fail(
+            "Testcontainers disabled in CI — using service containers. "
+            "Ensure REDIS_URL env var is set."
+        )
     with RedisContainer(image="redis:7-alpine") as redis:
         yield redis
 

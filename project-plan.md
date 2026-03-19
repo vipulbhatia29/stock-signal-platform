@@ -217,23 +217,37 @@ Command-center dark UI shell + natural language AI interface that orchestrates a
 - ✅ **SVG Sparkline** — raw `<polyline>` replacing Recharts (jagged financial chart feel)
 - ✅ **Frontend tests** — 20 component tests in `frontend/src/__tests__/components/`; Jest upgraded to jsdom env
 
-#### Phase 4B — AI Backend (Session 30+)
-- [ ] **Database models:** ChatSession, ChatMessage
-- [ ] **`backend/agents/base.py`** — BaseAgent ABC with tool binding
-- [ ] **`backend/agents/general_agent.py`** — general Q&A + web search
-- [ ] **`backend/agents/stock_agent.py`** — stock analysis orchestrating all tools
-- [ ] **`backend/agents/loop.py`** — agentic tool-calling loop (max 15 iterations)
-- [ ] **`backend/agents/stream.py`** — NDJSON streaming to frontend
-- [ ] **`backend/routers/chat.py`** — `POST /api/v1/chat/stream` with SSE
-- [ ] **LLM:** Groq primary for tool loops, Claude Sonnet for synthesis
+#### Phase 4B — Financial Intelligence Platform Backend (Session 34+)
+
+**Spec:** `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md` ✅ COMPLETE
+**Plan:** To be written (KAN-20)
+**JIRA Epic:** KAN-1
+
+Three-layer MCP architecture: consume external MCPs → enrich in backend → expose as MCP server.
+
+- [ ] **Tool Registry** — `backend/tools/registry.py` with BaseTool, ProxiedTool, MCPAdapter, CachePolicy
+- [ ] **4 MCPAdapters** — EdgarTools (SEC filings), Alpha Vantage (news/sentiment), FRED (macro), Finnhub (analyst/ESG/social)
+- [ ] **7 Internal tools** — analyze_stock, portfolio_exposure, screen_stocks, recommendations, compute_signals, geopolitical (GDELT), web_search (SerpAPI)
+- [ ] **LLM Client** — provider-agnostic abstraction, fallback chain (Groq → Anthropic → Local), retry with exponential backoff, provider health tracking
+- [ ] **Agentic loop** — two-phase (tool-calling non-streaming + synthesis streaming), max 15 iterations, few-shot prompted
+- [ ] **Agents** — BaseAgent ABC, StockAgent (full toolkit), GeneralAgent (data + news only)
+- [ ] **MCP Server** — FastMCP at `/mcp` (Streamable HTTP), JWT auth, mirrors Tool Registry
+- [ ] **Database models** — ChatSession, ChatMessage, LLMCallLog (hypertable), ToolExecutionLog (hypertable)
+- [ ] **Chat endpoint** — `POST /api/v1/chat/stream` with NDJSON/SSE
+- [ ] **Warm data pipeline** — Celery tasks: daily analyst/FRED, weekly 13F, on-demand 10-K caching
+- [ ] **Graceful degradation** — per-tool failure isolation, provider fallback, MCP health checks
+- [ ] **Session management** — create/resume/expire (24h), sliding window (16K budget), history summary
+
+#### Phase 4C — Frontend Chat UI (after 4B)
 - [ ] **Wire `ChatPanel`** — connect stub UI to streaming backend
-- [ ] **Example queries that should work:**
-  - "Analyse AAPL — give me technicals, fundamentals, and recommendation"
-  - "How is my portfolio doing? Am I overexposed to any sector?"
-  - "What are my top 3 buy candidates in Technology right now?"
+- [ ] NDJSON event parsing + incremental rendering
+- [ ] Tool progress indicators
+- [ ] Agent selector UI
+- [ ] Conversation history UI
+- [ ] New conversation button
 
 ### Success Criteria
-Dark command-center UI live. Can ask natural language questions and get tool-backed, synthesized answers via the docked chat panel.
+Can ask natural language questions via API (curl/MCP client) and get tool-backed, synthesized answers with data from SEC filings, news, macro, and fundamentals. MCP server callable from Claude Code.
 
 ### Phase 4 Pre-flight Bug & UX Backlog (found in Session 26 QA) — ✅ COMPLETE (Session 27)
 
@@ -249,18 +263,19 @@ Dark command-center UI live. Can ask natural language questions and get tool-bac
 - ✅ Signal History x-axis: dynamic `interval={Math.max(0, Math.floor(history.length / 5) - 1)}` — caps at ~5 ticks regardless of data density
 - ✅ Price history chart: `interval="preserveStartEnd"` + `minTickGap={60}` — prevents crowded/stale-looking dates on short periods
 
-#### Phase 4.5 — CI/CD + Branching Strategy (between 4B and Phase 5)
-- [ ] **Spec:** `docs/superpowers/specs/2026-03-15-cicd-branching-design.md` ✅ READY
-- [ ] **Implementation plan:** to be written at the start of this sprint (spec is the input)
-- [ ] Two-track branching: `main` (production) + `develop` (staging); `feat/*` → develop; `hotfix/*` → main
-- [ ] **`ci-pr.yml`** — fast gate on PRs to `develop`/`main`: lint + unit + API tests with service containers
-- [ ] **`ci-merge.yml`** — full gate on push to `develop`: lint → unit+api → integration stub → build
-- [ ] **`deploy.yml`** — no-op stub (Phase 6 Terraform/Azure will fill this in)
-- [ ] **Conftest restructure** — sub-level conftests in `tests/unit/` and `tests/api/` to override `db_url` from `DATABASE_URL` env var; `TEST_ENV` guard prevents testcontainers in CI
-- [ ] **`uv.lock`** — commit lockfile, remove from `.gitignore`
-- [ ] **5 GitHub Actions Secrets** — `CI_DATABASE_URL`, `CI_REDIS_URL`, `CI_JWT_SECRET_KEY`, `CI_JWT_ALGORITHM`, `CI_POSTGRES_PASSWORD`
-- [ ] **Branch protection rules** — GitHub UI: require status checks on `main` and `develop`
-- [ ] **Doc catch-up** — FSD, TDD, CLAUDE.md updates for Phase 4A UI changes + CI/CD additions
+#### Phase 4.5 — CI/CD + Branching Strategy ✅ COMPLETE (Session 34)
+- ✅ **Spec:** `docs/superpowers/specs/2026-03-16-cicd-jira-integration-design.md`
+- ✅ **Plan:** `docs/superpowers/plans/2026-03-16-cicd-jira-integration.md`
+- ✅ **JIRA Epic:** KAN-22 (DONE) | **PRs:** #7, #8, #9 merged
+- ✅ `ci-pr.yml` — 4 parallel jobs (backend-lint, frontend-lint, backend-test, frontend-test)
+- ✅ `ci-merge.yml` — 4 sequential jobs (lint → unit+api → integration → build)
+- ✅ `deploy.yml` — no-op stub
+- ✅ Testcontainers fixture split — sub-level conftests with `db_url` override
+- ✅ `uv.lock` committed, `package.json` test script added
+- ✅ 5 GitHub Actions Secrets configured
+- ✅ Branch protection on `main` + `develop`
+- ✅ JIRA: 5-column board, 2 automation rules, GitHub for Jira app
+- ✅ Doc catch-up (KAN-29): FSD, TDD, CLAUDE.md updated
 
 ---
 
@@ -314,28 +329,34 @@ recommendation outcomes evaluated at 30/90/180d horizons with SPY benchmark.
 
 ---
 
-## Phase 6: MCP + Deployment (Weeks 11-12)
+## Phase 6: Deployment + LLMOps (Weeks 11-12)
 
 ### Goal
-Extract tools as MCP servers and deploy to cloud.
+Deploy to cloud and add LLM observability/gateway.
 
 ### Deliverables
-1. **MCP server wrappers** for: market-data, signal-engine, portfolio, screener
-2. **Update agents** to call tools via MCP protocol
-3. **Docker Compose** updated with all services containerized
-4. **Terraform** for Azure deployment:
-   - Azure Container Apps (API, workers, frontend)
-   - Azure Database for PostgreSQL Flexible Server + TimescaleDB
-   - Azure Cache for Redis
-   - Azure Container Registry
-5. **GitHub Actions CI/CD:**
-   - Lint + test on PR
-   - Build + push images on merge to main
-   - Deploy to staging on merge, production on tag
-6. **Observability:**
+1. **Docker Compose** updated with all services containerized
+2. **Terraform** for cloud deployment:
+   - Container Apps (API, workers, frontend)
+   - Managed PostgreSQL + TimescaleDB
+   - Managed Redis
+   - Container Registry
+3. **`deploy.yml`** — wire actual deployment (currently a stub)
+4. **LLMOps / Gateway:**
+   - LiteLLM or custom gateway for centralized LLM routing
+   - Observability dashboard (token usage, cost, latency per provider)
+   - Prompt versioning
+   - A/B testing between providers
+   - Auto-routing based on query complexity
+5. **Observability:**
    - structlog JSON logging throughout
    - OpenTelemetry instrumentation on FastAPI + Celery
-   - Azure Monitor / Application Insights
+   - Cloud monitoring integration
+6. **Tier 2 MCP integrations:**
+   - Unusual Whales MCP (options flow, dark pool, congressional trading)
+   - Polygon.io MCP (broader market data)
 
 ### Success Criteria
-App running in Azure, MCP servers callable independently, CI/CD green.
+App running in cloud, LLM gateway with cost tracking, Tier 2 data integrations live.
+
+**Note:** MCP server (`/mcp`) and CI/CD pipeline already implemented in Phase 4B/4.5.
