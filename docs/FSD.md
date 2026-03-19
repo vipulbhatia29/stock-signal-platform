@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Living Document (Phase 1-3.5 in progress)
+**Status:** Living Document (Phase 1-4B complete, 4C/5/6 planned)
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -399,7 +399,7 @@ Users can override weights via UserPreference.composite_weights.
 - Typography: Sora (UI labels) + JetBrains Mono (numbers/metrics) loaded via `next/font/google`
 - All components restyed to navy design tokens (card2, hov, bhi, warning, cyan)
 
-### FR-8: AI Chatbot — Financial Intelligence Platform (Phase 4B backend, 4C frontend)
+### FR-8: AI Chatbot — Financial Intelligence Platform (Phase 4B backend ✅ IMPLEMENTED, 4C frontend planned)
 
 **FR-8.1: Agent Selection**
 - General Agent: web search + news Q&A (limited tool access)
