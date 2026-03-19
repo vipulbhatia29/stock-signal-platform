@@ -62,6 +62,11 @@ async def chat_stream(
     # Persist user message BEFORE streaming
     await save_message(db, chat_session.id, role="user", content=body.message)
 
+    # Set request-scoped user context for tools (portfolio_exposure etc.)
+    from backend.request_context import current_user_id
+
+    current_user_id.set(user.id)
+
     # Select the pre-built LangGraph from app.state
     graph = (
         request.app.state.stock_graph if agent_type == "stock" else request.app.state.general_graph

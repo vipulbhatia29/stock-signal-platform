@@ -32,12 +32,17 @@ class PortfolioExposureTool(BaseTool):
         """Fetch portfolio summary with sector breakdown."""
         try:
             from backend.database import async_session_factory
-            from backend.tools.portfolio import get_portfolio_summary
+            from backend.request_context import current_user_id
+            from backend.tools.portfolio import get_or_create_portfolio, get_portfolio_summary
 
-            user_id = params["user_id"]
+            user_id = current_user_id.get()
+            if user_id is None:
+                return ToolResult(status="error", error="No user context available")
+
             async with async_session_factory() as session:
-                summary = await get_portfolio_summary(session, user_id)
-                return ToolResult(status="ok", data=summary)
+                portfolio = await get_or_create_portfolio(user_id, session)
+                summary = await get_portfolio_summary(portfolio.id, session)
+                return ToolResult(status="ok", data=summary.model_dump())
         except Exception as e:
             logger.error("portfolio_exposure_failed", extra={"error": str(e)})
             return ToolResult(status="error", error=str(e))

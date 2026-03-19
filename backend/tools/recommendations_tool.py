@@ -30,17 +30,27 @@ class RecommendationsTool(BaseTool):
 
     async def execute(self, params: dict[str, Any]) -> ToolResult:
         """Compute signals then generate recommendation."""
-        ticker = params["ticker"].upper()
+        ticker = params.get("ticker", "").upper()
+        if not ticker:
+            return ToolResult(status="error", error="Missing required param: ticker")
         try:
             from backend.database import async_session_factory
+            from backend.tools.market_data import get_latest_price, load_prices_df
             from backend.tools.recommendations import generate_recommendation
             from backend.tools.signals import compute_signals
 
             async with async_session_factory() as session:
-                signals = await compute_signals(session, ticker)
+                df = await load_prices_df(ticker, session)
+                if df.empty:
+                    return ToolResult(
+                        status="error",
+                        error=f"No price data for {ticker}. Ingest it first.",
+                    )
+                signals = compute_signals(ticker, df)
+                current_price = await get_latest_price(ticker, session) or 0.0
                 rec = generate_recommendation(
                     signal=signals,
-                    current_price=0.0,  # Price context not available here
+                    current_price=current_price,
                 )
                 return ToolResult(
                     status="ok",

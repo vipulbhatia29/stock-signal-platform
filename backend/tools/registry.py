@@ -58,14 +58,34 @@ class ToolRegistry:
         )
 
     def get_langchain_tools(self, tool_filter: ToolFilter) -> list:
-        """Return LangChain-compatible tool objects for LangGraph ToolNode."""
+        """Return LangChain-compatible tool objects for LangGraph ToolNode.
+
+        Each tool's execute(params: dict) -> ToolResult is wrapped to:
+        1. Accept **kwargs (LangChain passes LLM args as keyword args)
+        2. Unwrap nested 'kwargs' key if present (StructuredTool quirk)
+        3. Return a JSON string (LangChain ToolMessage expects string content)
+        """
+        import json
+
         from langchain_core.tools import StructuredTool
 
         lc_tools = []
         for tool in self._tools.values():
             if tool_filter.matches(tool.info()):
+                original_execute = tool.execute
+
+                async def _wrapper(_exec=original_execute, **kwargs: Any) -> str:
+                    # Unwrap nested kwargs if StructuredTool double-wrapped
+                    params = kwargs.get("kwargs", kwargs) if "kwargs" in kwargs else kwargs
+                    result = await _exec(params)
+                    if hasattr(result, "data") and result.data is not None:
+                        return json.dumps(result.data, default=str)
+                    if hasattr(result, "error") and result.error:
+                        return json.dumps({"error": result.error})
+                    return json.dumps({"status": getattr(result, "status", "ok")})
+
                 lc_tool = StructuredTool.from_function(
-                    coroutine=tool.execute,
+                    coroutine=_wrapper,
                     name=tool.name,
                     description=tool.description,
                 )
