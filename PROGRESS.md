@@ -345,13 +345,51 @@ Key design decisions: Serena native `global/` prefix resolves to `~/.serena/memo
 
 ---
 
-## Session 34 — JIRA SDLC + CI/CD Implementation + Phase 4B Spec *(compact)*
+## Session 36 — Phase 4B Implementation Complete + Epic Shipped
 
-**Date:** 2026-03-17 | **Branch:** `feat/KAN-16-phase4b-refinement` (PR #10) | **Tests:** 267 backend + 20 frontend (unchanged)
+**Date:** 2026-03-19 | **Branch:** `feat/KAN-4-streaming` → merged via PR #12 → PR #13 to main | **Tests:** 369 (237 unit + 132 API) + 20 frontend
 
-JIRA SDLC workflow + CI/CD pipeline + Phase 4B spec. JIRA: 5-column board, 2 automation rules, all transition IDs. CI/CD: 3 GitHub Actions workflows, fixture split, branch protection. Phase 4B: Three-layer MCP architecture spec (780+ lines), reviewed (15+1 issues fixed). PRs #7-9 merged, PR #10 open.
+### KAN-12: MCP Adapters + MCP Server + Warm Pipeline (Tasks 13-15)
+- [x] `backend/tools/adapters/base.py` — MCPAdapter ABC (name, get_tools, execute, health_check)
+- [x] `backend/tools/adapters/edgar.py` — EdgarAdapter (4 tools: 10-K sections, 13-F, insider trades, 8-K events) via edgartools
+- [x] `backend/tools/adapters/alpha_vantage.py` — AlphaVantageAdapter (news sentiment, quotes) via httpx
+- [x] `backend/tools/adapters/fred.py` — FredAdapter (economic series: DFF, CPI, 10Y, unemployment, oil) via httpx
+- [x] `backend/tools/adapters/finnhub.py` — FinnhubAdapter (analyst ratings, social sentiment, ETF holdings, ESG, supply chain) via httpx
+- [x] `backend/mcp_server/server.py` — `create_mcp_app()` dynamically registers all ToolRegistry tools with FastMCP
+- [x] `backend/mcp_server/auth.py` — MCPAuthMiddleware (JWT validation via `decode_token`)
+- [x] `backend/tasks/warm_data.py` — 3 Celery Beat tasks: `sync_analyst_consensus` (daily 6am ET), `sync_fred_indicators` (daily 7am ET), `sync_institutional_holders` (weekly Sun 2am ET)
+- [x] `backend/tasks/__init__.py` — added warm_data to Celery include + 3 Beat schedule entries
 
-**Key decisions:** Phase 4B = backend only (4C = frontend). Agent-driven JIRA. Branch per Story. Few-shot prompting.
+### KAN-13: Chat Router + Session Management (Tasks 16-17)
+- [x] `backend/tools/chat_session.py` — 7 functions: create_session, load_session_messages, list_user_sessions, deactivate_session, expire_inactive_sessions, build_context_window (tiktoken cl100k_base), auto_title
+- [x] `backend/routers/chat.py` — POST /stream (NDJSON via LangGraph), GET /sessions, GET /sessions/{id}/messages, DELETE /sessions/{id}
+- [x] `backend/main.py` — chat router mounted at /api/v1/chat
+
+### KAN-15: Wire main.py + E2E (Tasks 18-19)
+- [x] `backend/main.py` — FastAPI lifespan startup: ToolRegistry (7 internal + 4 MCP adapter sets), LLMClient (Groq/Anthropic), LangGraph graphs (stock + general) on app.state, FastMCP at /mcp
+- [x] Graceful degradation: if no LLM providers → graphs=None, chat disabled
+- [x] Full lint cleanup: ruff check + ruff format across 11 files
+
+### Epic KAN-1 Shipped
+- [x] PR #12: `feat/KAN-4-streaming` → `develop` (CI green, merged)
+- [x] PR #13: `develop` → `main` (8 CI checks pass, merged)
+- [x] KAN-1 Epic → Done in JIRA
+
+**New tests this session:** 40 (8 adapter + 4 MCP server + 6 warm data + 14 session mgmt + 8 chat API)
+**Total test count:** 369 backend (237 unit + 132 API) + 20 frontend = 389
+**Alembic head:** `664e54e974c5` (migration 008 — unchanged)
+**8 commits:** adapters, MCP server, warm data, session mgmt, chat router, lifespan wiring, lint fixes
+
+**Next session — Phase 4C (Frontend Chat UI) or Phase 5 (Background Jobs + Alerts):**
+- Wire ChatPanel stub to streaming backend (NDJSON parsing, tool progress indicators)
+- Or: start Phase 5 background jobs (nightly signals, forecasts, Telegram alerts)
+
+---
+
+## Session 34 — JIRA SDLC + CI/CD + Phase 4B Spec *(compact)*
+
+**Date:** 2026-03-17 | **Branch:** `feat/KAN-16-phase4b-refinement` | **Tests:** 267+20 (unchanged)
+JIRA SDLC + CI/CD (3 workflows, branch protection) + Phase 4B spec (three-layer MCP, 780+ lines). PRs #7-9 merged, PR #10 open.
 
 ---
 

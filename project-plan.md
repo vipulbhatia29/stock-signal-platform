@@ -220,23 +220,24 @@ Command-center dark UI shell + natural language AI interface that orchestrates a
 #### Phase 4B — Financial Intelligence Platform Backend (Session 34+)
 
 **Spec:** `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md` ✅ COMPLETE
-**Plan:** To be written (KAN-20)
-**JIRA Epic:** KAN-1
+**Plan:** `docs/superpowers/plans/2026-03-17-phase-4b-ai-chatbot-implementation.md` ✅ COMPLETE
+**JIRA Epic:** KAN-1 ✅ DONE | **PRs:** #12 (→ develop), #13 (→ main) merged
 
 Three-layer MCP architecture: consume external MCPs → enrich in backend → expose as MCP server.
 
-- [ ] **Tool Registry** — `backend/tools/registry.py` with BaseTool, ProxiedTool, MCPAdapter, CachePolicy
-- [ ] **4 MCPAdapters** — EdgarTools (SEC filings), Alpha Vantage (news/sentiment), FRED (macro), Finnhub (analyst/ESG/social)
-- [ ] **7 Internal tools** — analyze_stock, portfolio_exposure, screen_stocks, recommendations, compute_signals, geopolitical (GDELT), web_search (SerpAPI)
-- [ ] **LLM Client** — provider-agnostic abstraction, fallback chain (Groq → Anthropic → Local), retry with exponential backoff, provider health tracking
-- [ ] **Agentic loop** — two-phase (tool-calling non-streaming + synthesis streaming), max 15 iterations, few-shot prompted
-- [ ] **Agents** — BaseAgent ABC, StockAgent (full toolkit), GeneralAgent (data + news only)
-- [ ] **MCP Server** — FastMCP at `/mcp` (Streamable HTTP), JWT auth, mirrors Tool Registry
-- [ ] **Database models** — ChatSession, ChatMessage, LLMCallLog (hypertable), ToolExecutionLog (hypertable)
-- [ ] **Chat endpoint** — `POST /api/v1/chat/stream` with NDJSON/SSE
-- [ ] **Warm data pipeline** — Celery tasks: daily analyst/FRED, weekly 13F, on-demand 10-K caching
-- [ ] **Graceful degradation** — per-tool failure isolation, provider fallback, MCP health checks
-- [ ] **Session management** — create/resume/expire (24h), sliding window (16K budget), history summary
+- [x] **Tool Registry** — `backend/tools/registry.py` with BaseTool, ProxiedTool, MCPAdapter, CachePolicy (Session 35)
+- [x] **4 MCPAdapters** — EdgarTools (SEC filings), Alpha Vantage (news/sentiment), FRED (macro), Finnhub (analyst/ESG/social) (Session 36)
+- [x] **7 Internal tools** — analyze_stock, portfolio_exposure, screen_stocks, recommendations, compute_signals, geopolitical (GDELT), web_search (SerpAPI) (Session 35)
+- [x] **LLM Client** — provider-agnostic abstraction, fallback chain (Groq → Anthropic → Local), retry with exponential backoff, provider health tracking (Session 35)
+- [x] **LangGraph orchestration** — StateGraph with call_model + execute_tools nodes, MemorySaver checkpointer, max 15 iterations (Session 35)
+- [x] **Agents** — BaseAgent ABC, StockAgent (full toolkit), GeneralAgent (data + news only), few-shot prompt templates (Session 35)
+- [x] **MCP Server** — FastMCP at `/mcp` (Streamable HTTP), JWT auth middleware, mirrors Tool Registry (Session 36)
+- [x] **Database models** — ChatSession, ChatMessage, LLMCallLog (hypertable), ToolExecutionLog (hypertable), migration 008 (Session 35)
+- [x] **Chat endpoint** — `POST /api/v1/chat/stream` with NDJSON streaming, `GET/DELETE /sessions` (Session 36)
+- [x] **Warm data pipeline** — Celery Beat: daily analyst/FRED, weekly 13F, Redis caching (Session 36)
+- [x] **Graceful degradation** — per-tool failure isolation, provider fallback, MCP health checks (Session 35-36)
+- [x] **Session management** — create/resume/expire (24h), tiktoken sliding window (16K budget), auto_title (Session 36)
+- [x] **Lifespan wiring** — main.py startup: ToolRegistry + adapters + LLMClient + LangGraph graphs + MCP mount (Session 36)
 
 #### Phase 4C — Frontend Chat UI (after 4B)
 - [ ] **Wire `ChatPanel`** — connect stub UI to streaming backend
