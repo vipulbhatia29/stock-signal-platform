@@ -262,16 +262,6 @@ Two HIGH-severity findings from security audit. Trivial fixes (~15 min total).
 
 **Dependencies:** None — can be done anytime. Placed here to not interrupt 4C/4D feature flow.
 
-#### Phase 4E — Quick Security Fixes (after 4C/4D, before Phase 5)
-
-Two HIGH-severity findings from security audit. Trivial fixes (~15 min total).
-
-- [ ] **MCP auth bypass** (`backend/main.py:94`) — Apply `MCPAuthMiddleware` to `/mcp` mount. Currently all 22+ tools callable without auth. Fix: 3 lines. Test: verify 401 without JWT.
-- [ ] **Chat session IDOR** (`backend/routers/chat.py`) — Add `user_id` ownership check when resuming sessions (`chat_stream`) and loading messages (`get_session_messages`). Fix: ~10 lines. Test: User B cannot access User A's sessions.
-- [ ] **Exception info leak** (`backend/agents/stream.py`) — Replace `str(exc)` in error StreamEvent with generic message. Raw exceptions from LangGraph/SQLAlchemy/LLM providers can leak internal hostnames, DB connection strings, file paths. Fix: 1 line. The full exception is already logged server-side via `logger.exception`.
-
-**Dependencies:** None — can be done anytime. Placed here to not interrupt 4C/4D feature flow.
-
 ### Success Criteria
 Can ask natural language questions via API (curl/MCP client) and get tool-backed, synthesized answers with data from SEC filings, news, macro, and fundamentals. MCP server callable from Claude Code.
 
