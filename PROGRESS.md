@@ -380,77 +380,69 @@ Key design decisions: Serena native `global/` prefix resolves to `~/.serena/memo
 **Alembic head:** `664e54e974c5` (migration 008 — unchanged)
 **8 commits:** adapters, MCP server, warm data, session mgmt, chat router, lifespan wiring, lint fixes
 
-**Next session — Phase 4C (Frontend Chat UI) or Phase 5 (Background Jobs + Alerts):**
-- Wire ChatPanel stub to streaming backend (NDJSON parsing, tool progress indicators)
-- Or: start Phase 5 background jobs (nightly signals, forecasts, Telegram alerts)
+---
+
+## Session 37 — Phase 4C Frontend Chat UI: Full Implementation
+
+**Date:** 2026-03-19 | **Branch:** `feat/KAN-32-chat-ui` (16 commits, pushed) | **Tests:** 240 unit + 132 API + 57 frontend = 429
+
+### All 19 Plan Tasks Executed (KAN-32 + KAN-33 + KAN-34 + KAN-35)
+
+**KAN-32: Backend Prerequisites (Tasks 1-3)**
+- [x] `"error"` StreamEvent type + try/except in stream_graph_events
+- [x] `save_message()` async helper for chat message persistence
+- [x] User + assistant message persistence wired into chat_stream router
+
+**KAN-33: Frontend Foundation (Tasks 4-8b)**
+- [x] Installed react-markdown, rehype-highlight, remark-gfm
+- [x] ChatSession, ChatMessage, StreamEvent types in api.ts + CHAT_ACTIVE_SESSION storage key
+- [x] NDJSON parser with buffer carry-over (5 tests)
+- [x] CSV export utility — buildCSV + downloadCSV (3 tests)
+- [x] TanStack Query hooks: useChatSessions, useChatMessages, useDeleteSession
+- [x] chatReducer pure state machine — 11 action types (8 tests)
+- [x] useStreamChat hook — streaming fetch, RAF token batching, abort, 401 auth retry
+
+**KAN-34: Chat UI Components (Tasks 9-14)**
+- [x] ThinkingIndicator (pulsing dots), ErrorBubble (retry button), MessageActions (copy + CSV)
+- [x] MarkdownContent (react-markdown wrapper with navy styling + streaming cursor)
+- [x] ToolCard — running/completed/error/expanded states with per-tool summaries (4 tests)
+- [x] MessageBubble — user (right-aligned) + assistant (markdown + tools + actions) (3 tests)
+- [x] AgentSelector (stock/general toggle) + SessionList (active/expired/delete) (4 tests)
+- [x] ChatInput — auto-growing textarea, Enter to send, Shift+Enter newline, stop button (3 tests)
+- [x] Jest mocks for ESM-only react-markdown/rehype-highlight/remark-gfm
+
+**KAN-35: Integration (Tasks 15-19)**
+- [x] ArtifactBar — shouldPin rules (7 pinnable tools), dismiss, CSV export (6 tests)
+- [x] ChatPanel major rewrite — replaced stub with live streaming chat (3 updated tests)
+- [x] Layout wiring — artifact state, ArtifactBar between Topbar and main, onArtifact prop
+- [x] Full verification: 240 backend + 57 frontend tests green, lint clean, pushed
+
+### Security Review
+- [x] 3 findings documented in Phase 4E of project-plan.md:
+  - HIGH: Chat session IDOR (missing ownership check on resume + message load)
+  - HIGH: MCP auth bypass (from prior audit, already tracked)
+  - MEDIUM: Exception info leak in stream bridge (str(exc) sent to client)
+
+### JIRA
+- KAN-30 Epic: In Progress (all 4 Stories → Ready for Verification)
+- 19 subtasks created (KAN-36 through KAN-54), all → Ready for Verification
+- KAN-32/33/34/35 Stories: all → Ready for Verification
+
+**New files:** 23 frontend (10 components, 3 hooks, 3 libs, 7 test files) + 3 Jest mocks
+**Modified files:** 3 backend + 5 frontend + 1 jest.config
+**New tests this session:** +3 backend, +37 frontend = +40 total
+
+**Next session:**
+1. Open PR: `feat/KAN-32-chat-ui` → `develop`
+2. Phase 4E security fixes (trivial, ~15 min): session IDOR ownership checks + exception sanitization
+3. Then Phase 4D (query routing, model tiers, monetization) or Phase 5
 
 ---
 
-## Session 34 — JIRA SDLC + CI/CD + Phase 4B Spec *(compact)*
+## Sessions 30+34 — JIRA SDLC + CI/CD + Phase 4B Spec *(compact)*
 
-**Date:** 2026-03-17 | **Branch:** `feat/KAN-16-phase4b-refinement` | **Tests:** 267+20 (unchanged)
-JIRA SDLC + CI/CD (3 workflows, branch protection) + Phase 4B spec (three-layer MCP, 780+ lines). PRs #7-9 merged, PR #10 open.
-
----
-
-## Session 30 — CI/CD + Branching Strategy Brainstorm + Spec *(compact)*
-- [x] `conventions/jira-sdlc-workflow` Serena memory written — mandatory process for all future work
-- [x] CLAUDE.md updated: Rule 9 (JIRA workflow), session start protocol, git branching section
-- [x] 5-column board configured: To Do → In Progress → Blocked → Ready for Verification → Done
-- [x] 2 JIRA Automation rules: "PR merged → Done" + "All subtasks done → parent Done"
-- [x] GitHub for Jira app installed + connected
-- [x] All 5 transition IDs discovered: 7=Blocked, 8=Ready for Verification, 11=To Do, 21=In Progress, 31=Done
-- [x] Reusable template: `global/templates/agentic-sdlc-setup`
-
-### CI/CD Pipeline — KAN-22 Epic (COMPLETE)
-- [x] Brainstorm → spec → review → plan → implementation (full SDLC cycle)
-- [x] Spec: `docs/superpowers/specs/2026-03-16-cicd-jira-integration-design.md`
-- [x] Plan: `docs/superpowers/plans/2026-03-16-cicd-jira-integration.md`
-- [x] 3 GitHub Actions workflows: ci-pr.yml (4 parallel jobs), ci-merge.yml (4 sequential), deploy.yml (stub)
-- [x] Testcontainers fixture split — sub-level conftests override db_url for CI
-- [x] uv.lock committed, frontend test script added, tsconfig types fix
-- [x] 5 GitHub Secrets configured, branch protection on main + develop
-- [x] PRs: #7 (CI/CD code), #8 (docs), #9 (doc catch-up KAN-29) — all merged
-- [x] ci-merge.yml validated: 4m41s, all jobs pass
-
-### Phase 4B Spec (COMPLETE)
-- [x] Brainstormed three-layer MCP architecture: consume external MCPs → enrich → expose as MCP server
-- [x] 5 data layers: fundamentals, SEC filings, news/sentiment, macro/geopolitical, analyst/alternative
-- [x] 4 Tier 1 MCPs selected: EdgarTools, Alpha Vantage, FRED, Finnhub + GDELT wrapper
-- [x] Tool Registry + MCPAdapter pattern with auto-discovery
-- [x] LLM client: Groq → Anthropic → Local fallback with exponential backoff + provider health tracking
-- [x] Spec: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md` (780+ lines)
-- [x] Spec reviewed (15+1 issues fixed), retry strategy added (§4.4)
-- [x] PRD, FSD, TDD updated for new architecture
-- [x] PR #10 open with spec + memories + doc updates
-
-### JIRA Board Created
-- KAN-1 Epic: Phase 4B AI Chatbot — 5 Stories (KAN-2–5, KAN-16) + 15 Subtasks
-- KAN-22 Epic: CI/CD Pipeline — DONE
-- KAN-16 Refinement: brainstorm ✅, spec ✅, review ✅ — plan next (KAN-20)
-
-**Key decisions:** Phase 4B = backend only (4C = frontend). MCP server pulled from Phase 6. Agent-driven JIRA (not CI-driven). Branch per Story. Few-shot prompting. No new infrastructure (TimescaleDB + Redis + Celery).
-
-**Next session:** Merge PR #10 → KAN-20 (write implementation plan) → KAN-21 (review plan) → revise JIRA Stories → implement
-
----
-
-## Session 30 — CI/CD + Branching Strategy Brainstorm + Spec *(compact)*
-
-**Date:** 2026-03-15 | **Branch:** `feat/phase-4b-ai-chatbot` | **Tests:** 267 backend + 20 frontend (unchanged)
-
-Brainstormed CI/CD and branching strategy for the project. Designed two-track branching model (`main` production + `develop` staging), 3 GitHub Actions workflow files, and fixture architecture for CI. Spec written, reviewed twice (2 rounds, 12 issues total resolved), committed. Implementation plan **deferred to post-Phase-4B sprint** — spec is ready, plan to be written at that time.
-
-Key decisions: `ci-pr.yml` fast gate on PRs to develop/main; `ci-merge.yml` full sequential gate on push to develop; `deploy.yml` no-op stub for Phase 6; 5 GitHub Actions Secrets (CI-only throwaway values); sub-level `conftest.py` overrides in `tests/unit/` + `tests/api/` with `TEST_ENV` guard to prevent testcontainers in CI; `uv.lock` must be committed. Doc catch-up for Phase 4A UI (FSD/TDD/CLAUDE.md) bundled into this sprint.
-
-Spec: `docs/superpowers/specs/2026-03-15-cicd-branching-design.md` | Plan: to be written at sprint start (post-4B)
-CI/CD placeholder added to `project-plan.md` as Phase 4.5.
-
-**Next session — Phase 4B AI Chatbot Backend:**
-1. `ChatSession` + `ChatMessage` DB models + migration 008
-2. `backend/agents/` — `BaseAgent`, `StockAgent`, `GeneralAgent`, agentic loop, NDJSON streaming
-3. `backend/routers/chat.py` — `POST /api/v1/chat/stream`
-4. Wire `ChatPanel` stub to real streaming backend
+**Dates:** 2026-03-15 to 2026-03-17 | **Tests:** unchanged
+JIRA: 5-column board, 2 automation rules, transition IDs, `conventions/jira-sdlc-workflow` memory. CI/CD: 3 workflows (ci-pr, ci-merge, deploy stub), branch protection, fixture split. PRs #7-9 merged. Phase 4B spec: three-layer MCP, 780+ lines, PR #10 open. KAN-1 Epic created with 5 Stories + 15 Subtasks.
 
 ---
 

@@ -239,13 +239,18 @@ Three-layer MCP architecture: consume external MCPs → enrich in backend → ex
 - [x] **Session management** — create/resume/expire (24h), tiktoken sliding window (16K budget), auto_title (Session 36)
 - [x] **Lifespan wiring** — main.py startup: ToolRegistry + adapters + LLMClient + LangGraph graphs + MCP mount (Session 36)
 
-#### Phase 4C — Frontend Chat UI (after 4B)
-- [ ] **Wire `ChatPanel`** — connect stub UI to streaming backend
-- [ ] NDJSON event parsing + incremental rendering
-- [ ] Tool progress indicators
-- [ ] Agent selector UI
-- [ ] Conversation history UI
-- [ ] New conversation button
+#### Phase 4C — Frontend Chat UI (Session 37) ✅ COMPLETE
+
+**Spec:** `docs/superpowers/specs/2026-03-19-phase-4c-frontend-chat-ui.md` ✅
+**Plan:** `docs/superpowers/plans/2026-03-19-phase-4c-frontend-chat-ui.md` ✅
+**JIRA Epic:** KAN-30 | **Branch:** `feat/KAN-32-chat-ui` (16 commits)
+
+- [x] Backend: error StreamEvent + save_message + chat router persistence (Session 37)
+- [x] Frontend: NDJSON parser, CSV export, chat types, TanStack Query hooks (Session 37)
+- [x] chatReducer pure state machine + useStreamChat hook with RAF token batching (Session 37)
+- [x] 9 chat components: ThinkingIndicator, ErrorBubble, MessageActions, MarkdownContent, ToolCard, MessageBubble, AgentSelector, SessionList, ChatInput (Session 37)
+- [x] ArtifactBar with shouldPin rules + ChatPanel major rewrite + layout wiring (Session 37)
+- [x] 40 new tests (3 backend + 37 frontend) — 297 total (Session 37)
 
 #### Phase 4E — Quick Security Fixes (after 4C/4D, before Phase 5)
 
