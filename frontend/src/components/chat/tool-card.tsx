@@ -73,7 +73,7 @@ export function ToolCard({ tool, params, status, result }: ToolCardProps) {
         </div>
       </div>
 
-      {status === "completed" && result && (
+      {status === "completed" && result != null && (
         <div className="mt-1.5 text-muted-foreground">
           <span>{getToolSummary(tool, result)}</span>
           <button
@@ -85,7 +85,7 @@ export function ToolCard({ tool, params, status, result }: ToolCardProps) {
         </div>
       )}
 
-      {status === "error" && result && (
+      {status === "error" && result != null && (
         <div className="mt-1.5 text-destructive">
           {typeof result === "object" && result !== null && "error" in result
             ? String((result as Record<string, unknown>).error)
@@ -93,7 +93,7 @@ export function ToolCard({ tool, params, status, result }: ToolCardProps) {
         </div>
       )}
 
-      {expanded && result && (
+      {expanded && result != null && (
         <pre className="mt-2 max-h-60 overflow-auto rounded bg-background p-2 text-[10px] text-muted-foreground">
           {JSON.stringify(result, null, 2)}
         </pre>
