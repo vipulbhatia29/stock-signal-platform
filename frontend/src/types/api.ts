@@ -375,3 +375,45 @@ export interface RebalancingResponse {
 export interface ApiError {
   detail: string;
 }
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
+export interface ChatSession {
+  id: string;
+  agent_type: "stock" | "general";
+  title: string | null;
+  is_active: boolean;
+  created_at: string;
+  last_active_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string | null;
+  tool_calls: Record<string, unknown> | null;
+  model_used: string | null;
+  tokens_used: number | null;
+  created_at: string;
+}
+
+export type StreamEventType =
+  | "thinking"
+  | "tool_start"
+  | "tool_result"
+  | "token"
+  | "done"
+  | "error"
+  | "provider_fallback"
+  | "context_truncated";
+
+export interface StreamEvent {
+  type: StreamEventType;
+  content?: string;
+  tool?: string;
+  params?: Record<string, unknown>;
+  status?: string;
+  data?: unknown;
+  usage?: Record<string, unknown>;
+  error?: string;
+}
