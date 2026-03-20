@@ -1,8 +1,8 @@
 ---
 scope: project
 category: domain
-updated_by: session-38
-phase: 4D (spec + plan approved, implementation pending)
+updated_by: session-39
+phase: 4D (KAN-62 complete — enriched data layer shipped)
 ---
 
 # Agent Tools Domain
@@ -23,9 +23,21 @@ JIRA: Epic KAN-61, Stories KAN-62-68
 - Agent tools READ FROM DB, never yfinance at runtime
 - Chat detects stale → "Let me refresh..." → ingest → all pages update
 
-### Internal Tools (13 total after 4D)
+### Internal Tools (13 total — Session 39)
 Existing (9): analyze_stock, compute_signals, get_recommendations, get_portfolio_exposure, screen_stocks, search_stocks, ingest_stock, web_search, get_geopolitical_events
-New (4): get_fundamentals_extended, get_analyst_targets, get_earnings_history, get_company_profile — all read from DB
+Added Session 39 (4): get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile — all read from DB (materialized during ingestion)
+
+### Ingest Pipeline Enrichment (Session 39)
+Both `ingest_ticker` endpoint and `IngestStockTool` now call:
+1. `fetch_fundamentals()` → growth, margins, ROE, market cap → Stock model
+2. `fetch_analyst_data()` → target prices, buy/hold/sell → Stock model
+3. `fetch_earnings_history()` → quarterly EPS → EarningsSnapshot table
+4. `persist_enriched_fundamentals()` + `persist_earnings_snapshots()` write to DB
+
+### New DB Objects (Session 39)
+- Stock model: +15 columns (business_summary, employees, website, market_cap, revenue_growth, gross_margins, operating_margins, profit_margins, return_on_equity, analyst_target_mean/high/low, analyst_buy/hold/sell)
+- EarningsSnapshot table: ticker+quarter PK, eps_estimate, eps_actual, surprise_pct
+- Alembic migration 009
 
 ### MCP Adapters (4)
 - EdgarTools → SEC filings (10-K, 10-Q, 8-K, 13F, Form 4)

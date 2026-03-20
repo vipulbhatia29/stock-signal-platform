@@ -336,7 +336,7 @@ Three-phase Plan→Execute→Synthesize agent replacing current ReAct loop:
 - [x] No paid APIs — yfinance covers financials, targets, earnings, profile, growth
 
 **7 implementation chunks:**
-- [ ] **KAN-62:** Enriched data layer — DB models (extend Stock, EarningsSnapshot), migration, ingest pipeline extension, 4 new tools reading from DB
+- [x] **KAN-62:** Enriched data layer — DB models (extend Stock, EarningsSnapshot), migration, ingest pipeline extension, 4 new tools reading from DB ✅ Session 39
 - [ ] **KAN-63:** DB migration — feedback on ChatMessage, tier+query_id on logs
 - [ ] **KAN-64:** Agent V2 core — feature flag, user context builder, result validator, simple formatter, planner (scope + plan), mechanical executor
 - [ ] **KAN-65:** Synthesizer + Graph V2 — synthesizer node, LLMClient tier routing, 3-phase StateGraph
@@ -357,14 +357,14 @@ Three-phase Plan→Execute→Synthesize agent replacing current ReAct loop:
 
 #### Phase 4D.2 — Stock Detail Page Enrichment (after 4D)
 
-Once Phase 4D materializes enriched data into the DB, the stock detail page should display it:
+KAN-62 (Session 39) materialized all enriched data to DB and extended the `GET /stocks/{ticker}/fundamentals` API + `FundamentalsResponse` schema. Frontend TypeScript types updated. The stock detail page can now display enriched data — remaining work is UI components:
 - [ ] **Revenue, net income, margins, growth rates** — new FundamentalsCard section or expanded existing card
 - [ ] **Analyst price targets** — current vs target range (bar or gauge visualization)
 - [ ] **Earnings history** — EPS estimate vs actual chart, beat/miss streak
 - [ ] **Company profile** — business summary, employees, website, market cap
 - [ ] **Analyst consensus** — buy/hold/sell bar chart
 
-**Dependencies:** Phase 4D Chunk 1 (KAN-62) must be complete — data needs to be in the DB first.
+**Dependencies:** ~~Phase 4D Chunk 1 (KAN-62) must be complete~~ ✅ API + data layer done. Only frontend visualization remains.
 
 #### Phase 4E — Quick Security Fixes (after 4C/4D, before Phase 5)
 

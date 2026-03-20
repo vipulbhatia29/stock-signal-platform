@@ -335,6 +335,22 @@ export interface FundamentalsResponse {
   debt_to_equity: number | null;
   piotroski_score: number | null;
   piotroski_breakdown: PiotroskiBreakdown;
+
+  // Enriched fields (materialized during ingestion)
+  revenue_growth: number | null;
+  gross_margins: number | null;
+  operating_margins: number | null;
+  profit_margins: number | null;
+  return_on_equity: number | null;
+  market_cap: number | null;
+
+  // Analyst targets
+  analyst_target_mean: number | null;
+  analyst_target_high: number | null;
+  analyst_target_low: number | null;
+  analyst_buy: number | null;
+  analyst_hold: number | null;
+  analyst_sell: number | null;
 }
 
 // ── User Preferences ─────────────────────────────────────────────────────────

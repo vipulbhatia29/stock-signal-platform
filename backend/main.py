@@ -37,8 +37,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from backend.tools.adapters.edgar import EdgarAdapter
     from backend.tools.adapters.finnhub import FinnhubAdapter
     from backend.tools.adapters.fred import FredAdapter
+    from backend.tools.analyst_targets_tool import AnalystTargetsTool
     from backend.tools.analyze_stock import AnalyzeStockTool
+    from backend.tools.company_profile_tool import CompanyProfileTool
     from backend.tools.compute_signals_tool import ComputeSignalsTool
+    from backend.tools.earnings_history_tool import EarningsHistoryTool
+    from backend.tools.fundamentals_tool import FundamentalsTool
     from backend.tools.geopolitical import GeopoliticalEventsTool
     from backend.tools.ingest_stock_tool import IngestStockTool
     from backend.tools.portfolio_exposure import PortfolioExposureTool
@@ -48,7 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from backend.tools.search_stocks_tool import SearchStocksTool
     from backend.tools.web_search import WebSearchTool
 
-    # 1. Tool Registry — register 9 internal tools
+    # 1. Tool Registry — register internal tools
     registry = ToolRegistry()
     for tool_cls in [
         AnalyzeStockTool,
@@ -60,6 +64,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         GeopoliticalEventsTool,
         SearchStocksTool,
         IngestStockTool,
+        FundamentalsTool,
+        AnalystTargetsTool,
+        EarningsHistoryTool,
+        CompanyProfileTool,
     ]:
         registry.register(tool_cls())
 

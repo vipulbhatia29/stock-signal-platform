@@ -21,6 +21,8 @@ category: debugging
 ## Alembic
 - `uv run alembic upgrade head` (not bare `alembic`).
 - Autogenerate falsely drops TimescaleDB indexes — always review output before running.
+- Autogenerate also falsely detects ALL tables as new (rewrites entire schema) — MUST manually write incremental migrations for add_column/create_table only.
+- If DB has stale alembic_version (points to migration N but tables are missing), clear it: `DELETE FROM alembic_version;` then `uv run alembic upgrade head`.
 - After pulling: `uv sync` to keep local venv in sync with `uv.lock`.
 
 ## yfinance
@@ -61,3 +63,10 @@ category: debugging
 
 ## fetch_fundamentals()
 - Synchronous function. In async context: `await loop.run_in_executor(None, fetch_fundamentals, ticker)`.
+- `fetch_analyst_data()` and `fetch_earnings_history()` also synchronous — same executor pattern.
+- FundamentalResult dataclass: fields with `= None` defaults MUST come after required fields or Python raises `TypeError: non-default argument follows default`.
+
+## AsyncMock for DB tool tests
+- Testing tools that use `async with async_session_factory() as session:` requires a properly structured mock.
+- Pattern: `mock_cm = AsyncMock(); mock_cm.__aenter__.return_value = mock_session; mock_cm.__aexit__.return_value = None; patch("backend.database.async_session_factory", return_value=mock_cm)`
+- Do NOT use `AsyncMock()` directly as the session factory return value — its `__aenter__` returns another coroutine, causing "object has no attribute" errors.
