@@ -64,11 +64,25 @@ async def stream_graph_events(
                     params=event["data"].get("input"),
                 )
             elif kind == "on_tool_end":
+                output = event["data"].get("output")
+                # Normalize to JSON-serializable: ToolMessage has .content (str)
+                if hasattr(output, "content"):
+                    # LangChain ToolMessage — content is already a string
+                    try:
+                        serializable = json.loads(output.content)
+                    except (json.JSONDecodeError, TypeError):
+                        serializable = output.content
+                elif hasattr(output, "model_dump"):
+                    serializable = output.model_dump()
+                elif isinstance(output, (str, dict, list, int, float, bool, type(None))):
+                    serializable = output
+                else:
+                    serializable = str(output)
                 yield StreamEvent(
                     type="tool_result",
                     tool=event["name"],
                     status="ok",
-                    data=event["data"].get("output"),
+                    data=serializable,
                 )
     except Exception as exc:
         logger.exception("stream_graph_events error")
