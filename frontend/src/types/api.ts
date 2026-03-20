@@ -43,6 +43,7 @@ export interface StockSearchResponse {
   name: string;
   exchange: string | null;
   sector: string | null;
+  in_db: boolean;
 }
 
 // ── Price ─────────────────────────────────────────────────────────────────────
