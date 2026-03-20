@@ -275,12 +275,27 @@ Extend the ingestion pipeline to pull richer data from yfinance and **materializ
 
 ### Data materialization principle
 
-All enriched data is **fetched during ingestion** (via `ingest_ticker` endpoint or Celery nightly refresh) and stored in Postgres. Agent tools **read from the DB**, not from yfinance at runtime. This means:
-- Stock detail page can display the same data (revenue, targets, earnings, profile)
-- Agent gets instant responses from DB (no yfinance latency during chat)
+All enriched data is **fetched during ingestion** and stored in Postgres. Agent tools **read from the DB**, not from yfinance at runtime.
+
+**The single refresh flow — `ingest_stock` is the universal data pipeline:**
+1. Chat agent detects stock not in DB or data stale (last ingested before latest market close)
+2. Agent streams to user: "Data is stale — let me refresh and analyze..."
+3. Agent calls `ingest_stock` tool → yfinance fetch → materialize ALL data to DB:
+   - Prices (OHLCV) → `stock_prices` hypertable
+   - Signals (RSI, MACD, SMA, BB, composite) → `signal_snapshots` hypertable
+   - Fundamentals (P/E, Piotroski, margins, growth) → `Stock` model columns
+   - Analyst targets + consensus → `Stock` model columns
+   - Earnings history → `earnings_snapshots` hypertable
+   - Company profile → `Stock` model columns
+4. Agent tools now read fresh data from DB for analysis
+5. **All pages update automatically** — stock detail, screener, dashboard, portfolio all read from the same DB. A chat-triggered refresh updates the entire platform.
+
+This means:
+- `ingest_stock` is the **single point of data refresh** — triggered by chat, search bar, watchlist, or Celery nightly
+- No yfinance calls during chat analysis — only during ingestion
 - No rate-limit risk during chat sessions
-- Dashboard and chat always show consistent data
-- Celery nightly refresh keeps everything current
+- Dashboard and chat always show consistent, fresh data
+- Celery nightly refresh keeps watchlist stocks current
 
 ### New data to materialize (all from yfinance, free)
 
@@ -400,7 +415,8 @@ Key sections:
 - Available tools list (auto-populated from registry)
 - User context (auto-populated from DB)
 - Planning rules:
-  - Always check if stock is in DB before calling analyze_stock
+  - Always check if stock is in DB and data is fresh (ingested after latest market close) before calling analyze_stock
+  - If stock not in DB or data is stale → plan starts with `ingest_stock` and tell user "Data is stale — let me refresh and analyze..."
   - Always include portfolio context tools for personalized queries
   - Cap plan at 10 tool calls
   - If query requires multi-year historical comparisons or price predictions, decline gracefully
