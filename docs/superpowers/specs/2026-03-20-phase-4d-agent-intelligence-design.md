@@ -45,7 +45,7 @@ The planner receives the user's query plus their portfolio context (injected at 
 }
 ```
 
-**Simple query optimization:** If the query is trivial ("What's AAPL's price?"), the planner generates a single-tool plan and skips Phase 3 synthesis. The executor returns the answer directly.
+**Simple query optimization:** If the query is trivial ("What's AAPL's price?"), the planner generates a single-tool plan and marks `skip_synthesis: true`. The executor calls the tool, and a lightweight Python formatter (not an LLM) converts the result into a human-readable string: e.g., `{"adj_close": 152.30}` → "AAPL is currently trading at $152.30." This is a template-based formatter, not an LLM call. Total LLM calls for simple queries: 1 (planner only).
 
 ### Phase 2: Execute (Mechanical — No LLM)
 
@@ -68,8 +68,18 @@ The executor is **not an LLM call**. It mechanically follows the plan, calling e
 - Validate every tool result before passing downstream (not null, not stale, schema correct)
 - Stream `tool_start` and `tool_result` events for each step
 - If a tool fails → retry once, then annotate as `{status: "unavailable", reason: "..."}` and continue
-- If a critical tool fails (e.g., the primary stock lookup) → flag for re-plan (max 1 re-plan)
+- If a critical tool fails → flag for re-plan (max 1 re-plan)
 - Track tool call count against budget limit (max 10)
+
+**Re-plan trigger rules (hard-coded, not LLM-decided):**
+- `search_stocks` returns empty → re-plan with "ticker not found, suggest alternatives"
+- `ingest_stock` fails with "ticker not found" → re-plan without ingest step
+- Tool returns data for a different ticker than expected → re-plan
+- All other failures → mark unavailable, continue (don't re-plan)
+
+**Re-plan context:** The planner receives the original query + the executor's partial results + the failure reason. Token budget carries over (does not reset). This means a re-planned query has less budget for the second attempt, naturally limiting complexity.
+
+**Concurrent query protection:** The chat router rejects a second query on the same session while one is streaming. Return HTTP 429 with "Analysis in progress — please wait for the current response to complete." Scoped by `session_id`, not `user_id` — the user can have multiple sessions open.
 
 **Tool result validation rules:**
 - Null/empty response → mark unavailable, don't pass to synthesizer
@@ -310,7 +320,24 @@ user_context = {
 }
 ```
 
-**Implementation:** Single DB query at session start (portfolio + preferences + watchlist). Serialized into system prompt. No new tables, no new infrastructure.
+**Implementation:** In `backend/routers/chat.py`, before building the input state, query the DB for the user's context:
+
+```python
+# New utility function in backend/tools/portfolio.py (or a new user_context.py)
+async def build_user_context(user_id: UUID, db: AsyncSession) -> dict:
+    """Build the user context dict for agent session start."""
+    portfolio = await get_or_create_portfolio(user_id, db)
+    positions = await get_positions_with_pnl(portfolio.id, db)
+    # ... build the dict shown above
+    return user_context
+```
+
+The context is injected as a **system message** prepended to the planner's input messages:
+```python
+system_msg = f"USER PORTFOLIO CONTEXT:\n{json.dumps(user_context, indent=2)}"
+```
+
+This way the planner sees the portfolio before generating its plan, and the synthesizer sees it when personalizing the output. The executor doesn't need it (it just calls tools).
 
 **No Level 2+ memory:** We don't store past analysis summaries or user facts across sessions. If the user asks "What did you say about PLTR last time?" the agent responds honestly: "I don't have access to our previous conversations. Would you like me to run a fresh analysis?"
 
@@ -447,6 +474,27 @@ Log everything now. When monetization comes, the data is there to set tier limit
 - Premium: unlimited, priority models
 
 ---
+
+## §10 Response Strategy (B+C Hybrid)
+
+**For watchlist/portfolio stocks (strategy C — pre-computed):**
+- Celery Beat nightly task pre-computes signals, fundamentals, and a cached analysis summary for every stock in the user's watchlist
+- Stored in `SignalSnapshot` + `RecommendationSnapshot` (already exist)
+- When the user asks about a watchlist stock, the planner checks DB freshness first. If data is <24h old, skip the fetch tools and go straight to synthesis using cached data
+- Response time: ~3-5 seconds (1 planner LLM call + synthesis from cached data)
+- Displayed with "Last updated: 6 hours ago" timestamp
+
+**For unknown stocks (strategy B — quick then deep):**
+- Planner generates the full tool plan (search → ingest → signals → fundamentals → etc.)
+- Executor runs all steps, streaming progress to the user
+- Response time: ~15-30 seconds for a comprehensive analysis
+- User sees tool cards appearing as each step completes
+
+**Freshness rules:**
+- Prices: current if from last market close (accounts for weekends — Friday close is "current" until Monday open)
+- Signals: current if computed today
+- Fundamentals: current if from the latest quarterly filing
+- News: always fetched live (not cached)
 
 ## §10 Error UX
 
