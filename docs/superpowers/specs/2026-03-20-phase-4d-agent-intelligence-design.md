@@ -32,10 +32,13 @@ The planner's first job is to determine if the query is in scope. The scope is *
 - ✅ In scope: stocks, ETFs, portfolios, signals, fundamentals, macro, sectors, interest rates, company business models, earnings, dividends, risk, market news, geopolitical events affecting markets
 - ✅ In scope (peripherals): "How does the war in Ukraine affect oil stocks?" (geopolitical → financial impact), "What does Apple do?" (company overview → investment context), "Explain P/E ratio" (financial education)
 - ❌ Out of scope: general knowledge, personal advice unrelated to investing, coding, math, creative writing, weather, politics without financial context
+- ❌ Out of scope: **speculative or opinion-based questions that cannot be grounded in data.** "Will AAPL hit $300?" → decline (price prediction, not grounded). "Is now a good time to invest in general?" → decline (no specific data to ground it). "What's the best stock to buy?" → decline (subjective, no analysis context)
+
+**The rule: if the answer cannot be backed by tool results, don't answer it.**
 
 When the query is ambiguous, **default to financial interpretation.** "Tell me about Apple" → company analysis, not fruit.
 
-When out of scope, the planner returns `intent: "out_of_scope"` with a polite redirect:
+When out of scope or ungroundable, the planner returns `intent: "out_of_scope"` with a polite redirect:
 > "I'm your financial analysis assistant — I can help with stock analysis, portfolio management, and market insights. What would you like to know about your investments?"
 
 **No tools fire, no synthesizer runs.** Total cost: 1 planner call.
@@ -396,6 +399,10 @@ Key sections:
   7. "How does the Ukraine war affect energy stocks?" → in scope (geopolitical peripheral → financial)
   8. "Tell me about Apple" → in scope, default to financial interpretation (company analysis)
   9. "Write me a poem about stocks" → out_of_scope
+  10. "Will AAPL hit $300?" → out_of_scope (price prediction, not groundable in data)
+  11. "What's the best stock to buy?" → out_of_scope (subjective, no analysis context)
+  12. "Is now a good time to invest?" → out_of_scope (too broad, not groundable)
+  13. "Is AAPL overvalued right now?" → in scope (can be grounded: P/E vs sector avg, DCF, analyst targets)
 
 ### Executor prompt (`executor.md`)
 
