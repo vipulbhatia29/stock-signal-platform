@@ -304,44 +304,10 @@ Key design decisions: Serena native `global/` prefix resolves to `~/.serena/memo
 
 ---
 
-## Session 35 — Phase 4B Plan + LangGraph Adoption + Implementation Start
+## Session 35 — Phase 4B Plan + LangGraph + Implementation *(compact)*
 
-**Date:** 2026-03-18 | **Branches:** `feat/KAN-5-conversation-history`, `feat/KAN-3-tool-orchestration` | **Tests:** 329 (267→329: +62 new)
-
-### Refinement Completed
-- [x] PR #10 (spec) already merged. PR #11 (plan) created, CI green, merged.
-- [x] KAN-20: 19-task implementation plan written across 5 chunks, reviewed (4C + 8I issues fixed)
-- [x] KAN-21: PM approved plan
-- [x] LangGraph adopted for agent orchestration (spec §5, §8, §12, §14 rewritten)
-- [x] 8 implementation subtasks revised under KAN-3/4/5 with plan task references + DoD checklists
-
-### Implementation — KAN-6 (Conversation History foundation)
-- [x] Task 1: `backend/config.py` — added ALPHA_VANTAGE_API_KEY, FINNHUB_API_KEY. Installed langgraph, langchain-*, fastmcp, mcp, edgartools, gdeltdoc, tiktoken
-- [x] Task 2: `backend/models/chat.py` (ChatSession, ChatMessage) + `backend/models/logs.py` (LLMCallLog, ToolExecutionLog)
-- [x] Task 3: Alembic migration 008 — 4 tables, 2 hypertables, cleaned false TimescaleDB index drops
-- [x] Task 4: `backend/schemas/chat.py` (ChatRequest, ChatSessionResponse, ChatMessageResponse)
-
-### Implementation — KAN-8 (Tool system)
-- [x] Task 5: `backend/tools/base.py` — BaseTool ABC, ProxiedTool, CachePolicy, ToolResult, ToolFilter, ToolInfo
-- [x] Task 6: `backend/tools/registry.py` — ToolRegistry with register_mcp, get_langchain_tools
-- [x] Task 7: 5 internal tools (analyze_stock, portfolio_exposure, screen_stocks, web_search, geopolitical)
-- [x] Task 8: 2 wrapper tools (compute_signals_tool, recommendations_tool)
-
-### Implementation — KAN-14, KAN-7, KAN-11 (LLM + Agents + Graph)
-- [x] Task 10: `backend/agents/llm_client.py` — LLMClient, RetryPolicy, ProviderHealth, fallback chain
-- [x] Task 10: 3 providers (GroqProvider, AnthropicProvider, OpenAIProvider) wrapping LangChain chat models
-- [x] Task 11: `backend/agents/base.py` + StockAgent + GeneralAgent + few-shot prompt templates
-- [x] Task 9: `backend/agents/stream.py` — StreamEvent (7 types) + stream_graph_events bridge
-- [x] Task 12: `backend/agents/graph.py` — AgentState, build_agent_graph (LangGraph StateGraph), execute_tool_safely
-
-**Test count:** 329 (267 existing + 62 new across 8 test files)
-**Alembic head:** `664e54e974c5` (migration 008)
-**JIRA:** KAN-6, KAN-8, KAN-14, KAN-7, KAN-11 → Ready for Verification
-
-**Next session — KAN-4 Streaming (Tasks 13-19):**
-1. KAN-12: MCP adapters (Edgar, AlphaVantage, FRED, Finnhub) + FastMCP server + warm data Celery tasks
-2. KAN-13: Chat router (POST /stream, GET /sessions) + session management
-3. KAN-15: Wire main.py lifespan startup + E2E smoke test
+**Date:** 2026-03-18 | **Tests:** 267→329 (+62 new)
+Refinement: 19-task plan written+approved (KAN-20/21), LangGraph adopted (spec rewrite). Implementation: KAN-6 (ChatSession/Message models, migration 008, schemas), KAN-8 (BaseTool/ProxiedTool/ToolRegistry, 7 internal tools, MCPAdapter), KAN-14/7/11 (LLMClient with fallback chain, 3 providers, StockAgent/GeneralAgent, LangGraph StateGraph, StreamEvent bridge).
 
 ---
 
@@ -457,6 +423,62 @@ Key design decisions: Serena native `global/` prefix resolves to `~/.serena/memo
 3. Phase 4E security fixes (~15 min)
 4. Phase 4C.1 functional + quality + performance fixes
 5. UI/UX redesign via Lovable (parallel, user-driven)
+
+---
+
+## Session 38 — Bug Sprint + Search Autocomplete + Agent Tools
+
+**Date:** 2026-03-20 | **Branch:** multiple fix/feat branches → `develop` | **Tests:** 255 unit + 132 API + 57 frontend = 444
+
+### 4 Tickets Shipped
+
+**KAN-60 (Bug, Highest): Pydantic args_schema — PR #18 merged**
+- Added `args_schema: ClassVar[type[BaseModel] | None]` to BaseTool
+- 7 Pydantic input models co-located on each tool class
+- Registry passes `args_schema` to `StructuredTool.from_function()` — eliminated kwargs double-wrapping hack
+- `_build_schema_from_params()` fallback for ProxiedTools via `create_model()`
+- Fixed PortfolioExposureTool: removed `user_id` from LLM-facing schema (comes from ContextVar)
+- 9 new unit tests
+
+**KAN-58 (Bug, High): Test DB isolation — PR #19 merged**
+- `tests/api/conftest.py` and `tests/unit/conftest.py` were loading `.env` → pointing at dev DB
+- Root conftest's `drop_all` teardown destroyed all dev tables
+- Fix: removed `load_dotenv()`, only override `db_url` when `CI=true` (reads `DATABASE_URL` env var set by GitHub Actions workflow)
+- Locally: testcontainers (ephemeral DB). CI: service container. Dev DB: never touched.
+
+**KAN-56 (Bug, High): Wikipedia 403 — PR #20 merged**
+- `httpx` blocked by Wikipedia's TLS fingerprinting — switched to `requests`
+- Added proper `User-Agent` header
+- Wrapped `pd.read_html()` in `StringIO` (pandas FutureWarning fix)
+- Verified: S&P 500 (503), NASDAQ-100 (101), Dow 30 (30)
+
+**KAN-59 (Story, High): Search autocomplete + agent tools — PR #21 merged**
+- Backend: `_yahoo_search()` helper merges DB + Yahoo Finance results (US equities + ETFs)
+- `StockSearchResponse` gains `in_db: bool` field
+- New `SearchStocksTool` — agent resolves company name → ticker via DB + Yahoo
+- New `IngestStockTool` — agent fetches prices/signals/fundamentals for any ticker
+- 9 internal tools registered (was 7)
+- Frontend: TickerSearch shows "In watchlist universe" vs "Add from market" groups
+- 6 new Yahoo search unit tests
+
+### Agent Architecture Analysis
+Documented current LangGraph architecture (ReAct loop) and identified 4 gaps:
+1. Agent routing is manual (frontend sends `agent_type`) — needs ReAct-based auto-router
+2. IngestStockTool lacks recommendation generation (no user context)
+3. System prompts don't demonstrate search→ingest→analyze chain
+4. MemorySaver is in-memory only — checkpoints lost on restart
+5. No cross-session memory
+
+Gaps filed into Phase 4D (agent routing + Goal-Plan-Action) in `project-plan.md`. User wants to refine with ReAct loop principle + goal-plan-action pattern.
+
+### JIRA
+- KAN-60: Done, KAN-58: Done, KAN-56: Done, KAN-59: Done
+- JIRA cloud ID changed: `vipulbhatia29.atlassian.net` (was `sigmoid.atlassian.net`)
+
+**Key gotchas:**
+- `httpx` fails on Wikipedia (TLS fingerprint), `requests` works
+- CI sets `DATABASE_URL` env var (mapped from `CI_DATABASE_URL` secret) — conftest must read `DATABASE_URL`, not `CI_DATABASE_URL`
+- All PRs target `develop`, never `main` — user confirmed no direct work on main
 
 ---
 

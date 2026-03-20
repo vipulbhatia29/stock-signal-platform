@@ -227,7 +227,7 @@ Three-layer MCP architecture: consume external MCPs → enrich in backend → ex
 
 - [x] **Tool Registry** — `backend/tools/registry.py` with BaseTool, ProxiedTool, MCPAdapter, CachePolicy (Session 35)
 - [x] **4 MCPAdapters** — EdgarTools (SEC filings), Alpha Vantage (news/sentiment), FRED (macro), Finnhub (analyst/ESG/social) (Session 36)
-- [x] **7 Internal tools** — analyze_stock, portfolio_exposure, screen_stocks, recommendations, compute_signals, geopolitical (GDELT), web_search (SerpAPI) (Session 35)
+- [x] **9 Internal tools** — analyze_stock, portfolio_exposure, screen_stocks, recommendations, compute_signals, geopolitical (GDELT), web_search (SerpAPI), search_stocks (DB+Yahoo), ingest_stock (Session 35+38)
 - [x] **LLM Client** — provider-agnostic abstraction, fallback chain (Groq → Anthropic → Local), retry with exponential backoff, provider health tracking (Session 35)
 - [x] **LangGraph orchestration** — StateGraph with call_model + execute_tools nodes, MemorySaver checkpointer, max 15 iterations (Session 35)
 - [x] **Agents** — BaseAgent ABC, StockAgent (full toolkit), GeneralAgent (data + news only), few-shot prompt templates (Session 35)
@@ -312,14 +312,28 @@ Full UI/UX redesign based on Lovable prototype. 9 phases (UI-1 through UI-9):
 
 **Dependencies:** Phase 4C.1 (quality fixes) must be done first. UI-1 → UI-2 sequential. UI-3/4/5/7 parallelizable. UI-6 needs backend endpoints.
 
-#### Phase 4D — Query Routing + Tiered Intelligence (after 4F)
+#### Phase 4D — Agent Routing + ReAct Orchestration (after 4F) — NEEDS REFINEMENT
 
-**Problem:** All queries currently hit the same model with all tools bound. A simple "What's the S&P at?" burns the same tokens as "Analyze my portfolio's sector concentration vs macro headwinds." This is unsustainable at scale and blocks monetization.
+**Problem:** All queries currently hit the same model with all tools bound. No intelligent routing, no goal decomposition, no plan-then-act. The agent just calls tools reactively.
 
-**Core Architecture: Query Router + Model Tiers**
+**Core Architecture: ReAct Loop + Goal-Plan-Action**
 
-- [ ] **Query Classifier** — lightweight classification (heuristic first, cheap LLM fallback) that determines:
-  - Complexity tier: simple (lookup/news) vs analytical (multi-tool reasoning) vs deep (cross-source synthesis)
+The current LangGraph StateGraph uses a basic ReAct loop (call_model → should_continue → execute_tools → loop). Phase 4D upgrades this to a **Goal-Plan-Action** pattern:
+
+- [ ] **Goal Decomposition** — LLM decomposes user query into sub-goals before acting:
+  - "Analyze Palantir" → [resolve ticker, ingest if needed, compute signals, get fundamentals, synthesize]
+  - "How exposed am I to China?" → [get portfolio, identify China-exposed holdings, get geopolitical events, assess risk]
+- [ ] **Plan Node** — new LangGraph node between user input and tool execution:
+  - Emits a "plan" StreamEvent so the frontend can show the agent's reasoning
+  - Plan is a list of tool calls with dependencies (DAG, not flat list)
+  - User can approve/modify plan before execution (optional, gated by tier)
+- [ ] **Agent Router (ReAct-based)** — replaces manual `agent_type` selection:
+  - Lightweight classifier determines: stock analysis, portfolio review, macro research, general Q&A
+  - Routes to specialized agent (StockAgent, PortfolioAgent, MacroAgent, GeneralAgent)
+  - Each agent has different tool access, system prompt, and model tier
+  - Router itself uses ReAct: if initial classification is uncertain, ask a clarifying question
+- [ ] **Query Classifier** — determines complexity tier + required tools:
+  - Complexity: simple (lookup/news) vs analytical (multi-tool reasoning) vs deep (cross-source synthesis)
   - Required tool categories: which data sources the query actually needs
   - Estimated token budget: how much context this query needs
 - [ ] **Model Tier System** — map complexity to model:
@@ -330,6 +344,13 @@ Full UI/UX redesign based on Lovable prototype. 9 phases (UI-1 through UI-9):
 - [ ] **Cost Tracking + Budgets** — per-user token/cost tracking via LLMCallLog, daily/monthly budget caps
 - [ ] **Escalation Logic** — if cheap model fails or returns low-confidence, auto-escalate to next tier
 - [ ] **Fallback Guarantees** — every tier has a fallback; no query goes unanswered
+
+**Agent Orchestration Gaps (identified Session 38):**
+
+- [ ] **IngestStockTool lacks recommendation generation** — the router's `ingest_ticker` generates portfolio-aware recommendations after ingestion, but the agent tool doesn't. Need to wire `ContextVar` user_id into recommendation generation within IngestStockTool.
+- [ ] **System prompts don't show search→ingest→analyze chain** — the `{tools}` placeholder auto-populates tool descriptions, but the few-shot examples in `stock_agent.md` don't demonstrate the discovery flow. Add an example showing the multi-step chain for unknown stocks.
+- [ ] **MemorySaver is in-memory only** — LangGraph checkpoints lost on server restart. DB-backed checkpointer needed for production (conversation state survives restarts). Chat messages persist in DB, but LangGraph's internal state (tool call history, iteration count) does not.
+- [ ] **No cross-session memory** — agent has no memory of prior conversations. A user who asked "Analyze AAPL" yesterday gets no context today. Need a user-scoped memory store (not just session messages).
 
 **Monetization Foundation (product decisions needed in brainstorm):**
 
@@ -363,6 +384,13 @@ HIGH-severity findings from security + code analysis audits. Trivial fixes (~20 
 - [ ] **UUID leak in delete 403** (`backend/routers/chat.py:164`) — `str(exc)` in HTTPException detail exposes user UUID + session UUID. Fix: generic "Not authorized to delete this session" message.
 
 **Dependencies:** None — can be done anytime. Placed here to not interrupt 4C/4D feature flow.
+
+#### Phase 4 Bug Sprint (Session 38) ✅ COMPLETE
+
+- [x] **KAN-60** (Highest): Pydantic `args_schema` on all tools — eliminates kwargs double-wrapping (PR #18)
+- [x] **KAN-58** (High): Test DB isolation — `tests/api/` no longer destroys dev database (PR #19)
+- [x] **KAN-56** (High): Wikipedia 403 fix — switched to `requests` library for index seeding (PR #20)
+- [x] **KAN-59** (High): Search autocomplete — Yahoo Finance external search + `SearchStocksTool` + `IngestStockTool` for agent self-service (PR #21)
 
 ### Success Criteria
 Can ask natural language questions via API (curl/MCP client) and get tool-backed, synthesized answers with data from SEC filings, news, macro, and fundamentals. MCP server callable from Claude Code.
