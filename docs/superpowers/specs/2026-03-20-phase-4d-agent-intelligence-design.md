@@ -118,14 +118,26 @@ The synthesizer receives all validated tool results with their source annotation
 | **Synthesizer** | Claude Sonnet | Final analysis generation | ~$0.02-0.04/query |
 | **Fallback planner/synthesizer** | OpenAI GPT-4o-mini | If Anthropic is down | ~$0.005/query |
 
-**Implementation:** Extend existing `LLMClient` with a `tier` parameter:
+**Implementation:** Extend existing `LLMClient` constructor to accept a tier-based config:
+
 ```python
-llm_client.invoke(messages, tier="planner")     # → Sonnet
-llm_client.invoke(messages, tier="synthesizer")  # → Sonnet
+# Current: LLMClient(providers=[groq, anthropic, openai])  # ordered fallback
+# New: LLMClient(tier_config={...})
+
+tier_config = {
+    "planner": [anthropic_sonnet, openai_gpt4o_mini],      # Sonnet preferred, GPT-4o-mini fallback
+    "synthesizer": [anthropic_sonnet, openai_gpt4o_mini],   # Same as planner
+}
+
+llm_client = LLMClient(tier_config=tier_config)
+llm_client.invoke(messages, tier="planner")     # → tries Sonnet, falls back to GPT-4o-mini
+llm_client.invoke(messages, tier="synthesizer")  # → same chain
 # Executor does NOT use an LLM — it calls tools directly via registry.execute()
 ```
 
-The `tier` maps to a provider + model config. Provider fallback chain applies within each tier.
+The `tier` key selects the provider fallback chain. Each tier has its own ordered list — if the first provider fails or is rate-limited, it falls to the next. The existing `ProviderHealth` tracking applies per-provider across all tiers (if Anthropic is down for the planner, it's also skipped for the synthesizer).
+
+**Backward compatibility:** The old `LLMClient(providers=[...])` constructor can remain as a shortcut that creates a single "default" tier. This avoids breaking existing tests.
 
 **Sonnet is called exactly twice per query** (plan + synthesize). The executor is mechanical — no LLM needed. This means ~80% cost reduction vs the current approach of sending everything through Sonnet.
 
