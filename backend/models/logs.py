@@ -38,6 +38,10 @@ class LLMCallLog(Base):
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tool_calls_requested: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tier: Mapped[str | None] = mapped_column(String(20), nullable=True)  # planner|synthesizer
+    query_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
 
     def __repr__(self) -> str:
         return f"<LLMCallLog {self.provider}/{self.model} {self.created_at}>"
@@ -67,6 +71,9 @@ class ToolExecutionLog(Base):
     cache_hit: Mapped[bool] = mapped_column(Boolean, default=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    query_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
 
     def __repr__(self) -> str:
         return f"<ToolExecutionLog {self.tool_name} {self.status} {self.created_at}>"
