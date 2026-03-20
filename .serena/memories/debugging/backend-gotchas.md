@@ -32,12 +32,10 @@ category: debugging
 - Tool return value must be a JSON string (not ToolResult dataclass) — LangChain ToolMessage expects string content.
 - `on_tool_end` event's `output` is a `ToolMessage` object, not a plain dict. Access `.content` (string) and `json.loads()` it.
 
-## API Tests Destroy Dev Database (KAN-58)
-- `tests/api/conftest.py` overrides `db_url` to read `DATABASE_URL` from `.env` (dev DB).
-- Root `conftest.py` runs `Base.metadata.drop_all` on teardown.
-- Running `pytest tests/api/` DROPS ALL DEV TABLES.
-- **Never run API tests against the dev DB.** Unit tests use testcontainers (safe).
-- Fix: separate `stocksignal_test` DB or use testcontainers for API tests too.
+## API Tests — DB Isolation (KAN-58 FIXED)
+- Both `tests/api/conftest.py` and `tests/unit/conftest.py` only override `db_url` when `CI=true`.
+- Locally, all tests fall through to root conftest's testcontainers (ephemeral DB).
+- Dev DB is never touched by tests. Safe to run `pytest tests/api/` locally.
 
 ## SignalResult Attribute Names
 - `SignalResult` uses flat attributes: `rsi_value`, `rsi_signal`, `macd_value`, `macd_signal_label`, `sma_signal`, `bb_position`
