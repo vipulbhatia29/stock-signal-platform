@@ -29,7 +29,8 @@
 | `backend/agents/result_validator.py` | Tool result validation layer (null check, staleness, schema) |
 | `backend/agents/simple_formatter.py` | Template-based formatter for simple queries (no LLM) |
 | `backend/agents/prompts/planner.md` | Planner few-shot prompt with scope enforcement |
-| `backend/agents/prompts/synthesizer.md` | Synthesizer few-shot prompt with evidence rules |
+| `backend/agents/prompts/synthesizer.md` | Synthesizer few-shot prompt with evidence rules (no executor.md — executor is mechanical, no LLM) |
+| `backend/schemas/chat.py` | `FeedbackRequest` Pydantic schema (M3) |
 | `backend/migrations/versions/XXX_009_agent_v2.py` | Migration: feedback on ChatMessage, tier+query_id on LLMCallLog, query_id on ToolExecutionLog |
 | `tests/unit/test_planner.py` | Planner unit tests (scope, intent, plan generation) |
 | `tests/unit/test_executor.py` | Executor unit tests (tool calling, $PREV_RESULT, retries, circuit breaker) |
@@ -61,7 +62,7 @@
 | `backend/tools/fundamentals.py` | Extend `fetch_fundamentals()` to return financials, growth, margins |
 | `frontend/src/types/api.ts` | Add new StreamEvent types, FeedbackRequest |
 | `frontend/src/components/chat/message-bubble.tsx` | Add feedback buttons, evidence section |
-| `frontend/src/components/chat/chat-panel.tsx` | Handle new event types (plan, evidence, decline) |
+| `frontend/src/components/chat-panel.tsx` | Handle new event types (plan, evidence, decline) |
 | `frontend/src/hooks/use-stream-chat.ts` | Handle new NDJSON event types |
 
 ---
@@ -303,6 +304,10 @@ Async function that queries portfolio, positions, preferences, and watchlist. Re
 
 Should return empty positions, default preferences, empty watchlist.
 
+- [ ] **Step 4: Test user with watchlist items**
+
+Should include watchlist tickers in the context dict.
+
 - [ ] **Step 4: Run tests, commit**
 
 ### Task 8: Tool Result Validator
@@ -455,6 +460,14 @@ async def test_executor_respects_tool_limit():
 @pytest.mark.asyncio
 async def test_executor_flags_replan():
     """Empty search_stocks result flags for re-plan."""
+
+@pytest.mark.asyncio
+async def test_executor_enforces_wall_clock_timeout():
+    """Executor stops after 45 seconds and returns partial results."""
+
+@pytest.mark.asyncio
+async def test_executor_enforces_token_budget():
+    """Executor stops when token budget is exhausted."""
 ```
 
 - [ ] **Step 2: Implement execute_plan() function**
@@ -465,7 +478,9 @@ Async function that:
 3. Calls `registry.execute(tool_name, params)` for each step
 4. Validates each result via `validate_tool_result()`
 5. Tracks consecutive failures for circuit breaker
-6. Returns list of validated, annotated tool results + replan flag
+6. Checks `time.time() - start_time > 45` before each tool call — exits to synthesis on breach
+7. Tracks token budget — if remaining budget < estimated phase cost, exits to synthesis
+8. Returns list of validated, annotated tool results + replan flag
 
 - [ ] **Step 3: Run tests, commit**
 
@@ -540,9 +555,18 @@ def test_llm_client_backward_compat():
 
 - [ ] **Step 2: Implement tier_config constructor**
 
-Add optional `tier_config: dict[str, list[LLMProvider]] | None` parameter. If provided, `chat(messages, tier="planner")` selects the provider chain for that tier. If not provided, falls back to existing `providers` list behavior.
+Add optional `tier_config: dict[str, list[LLMProvider]] | None` parameter to `LLMClient.__init__()`. Store alongside existing `_providers`. In `chat()`, add `tier: str | None = None` param:
+- If `tier` is provided and `tier_config` exists: select providers from `tier_config[tier]`
+- If `tier` not found in config: fall back to `self._providers`
+- If no `tier_config`: use `self._providers` (backward compat)
 
-- [ ] **Step 3: Run all LLM client tests, commit**
+Update `_call_with_retry()` to accept the selected provider list.
+
+- [ ] **Step 3: Enable Anthropic prompt caching**
+
+When constructing planner/synthesizer calls, add `cache_control` to the system message metadata so tool schemas + system prompt are cached across calls. Check if LangChain's `ChatAnthropic` supports `extra_headers={"anthropic-beta": "prompt-caching-2024-07-31"}`. If not, document that we'll use the Anthropic SDK directly for cached calls.
+
+- [ ] **Step 4: Run all LLM client tests, commit**
 
 ### Task 14: Graph V2 — Three-Phase StateGraph
 
@@ -563,6 +587,7 @@ class AgentStateV2(TypedDict):
     failed_tools: list[str]
     replan_count: int
     start_time: float
+    token_budget_remaining: int  # Decremented per phase, enforced before each LLM call
     user_context: dict
     query_id: str
     skip_synthesis: bool
@@ -582,7 +607,11 @@ Conditional edges:
 - `synthesize` → `done`
 - `format_simple` → `done`
 
-- [ ] **Step 3: Write integration test with mocked LLM + tools**
+- [ ] **Step 3: Create integration test conftest**
+
+Create `tests/integration/conftest.py` with CI-aware `db_url` override (same pattern as `tests/unit/conftest.py` and `tests/api/conftest.py`).
+
+- [ ] **Step 4: Write integration test with mocked LLM + tools**
 
 ```python
 @pytest.mark.asyncio
@@ -669,7 +698,16 @@ Generate `query_id = uuid4()` per request. Pass to graph state. Log in LLMCallLo
 async def set_feedback(session_id, message_id, feedback: Literal["up", "down"], ...):
 ```
 
-- [ ] **Step 6: Write API tests for new behavior, commit**
+- [ ] **Step 6: Write API tests for new behavior**
+
+Include explicit test cases:
+- Test concurrent query on same session returns HTTP 429 with "Analysis in progress"
+- Test user context is injected (mock portfolio, verify it appears in graph input)
+- Test feature flag selects graph_v2 when `AGENT_V2=true`
+- Test feedback PATCH endpoint saves to DB
+- Test feedback with invalid message_id returns 404
+
+- [ ] **Step 7: Commit**
 
 ### Task 17: Main.py — Graph V2 Startup
 
@@ -865,3 +903,16 @@ Verify: feedback saved to DB, icon state updates
 | 6: Frontend | 18-21 | ~2 hours | 1 |
 | 7: Regression + polish | 22-24 | ~1 hour | same |
 | **Total** | **24 tasks** | **~14 hours** | **~4-5 sessions** |
+
+---
+
+## Explicitly Deferred Items
+
+These spec items are acknowledged but intentionally deferred:
+
+| Item | Spec Section | Reason |
+|---|---|---|
+| **Celery nightly pre-computation** (B+C caching strategy) | §10 | Requires Celery Beat changes + cached analysis schema. Defer to Phase 4D.1 — the agent works without caching, just slower for watchlist stocks. |
+| **Post-synthesis claim verification** | §8, item 4 | Stretch goal per spec. Implement after core agent is stable. Phase 4D.1. |
+| **Per-query cost estimation logging** | §9 | Migration adds the fields, but the cost calculation logic (sum tokens × model price) is deferred to Phase 4D.1 when we have real usage data. |
+| **`get_latest_price` wrapper tool** | §7, example 3 | Planner can use `analyze_stock` for simple price queries. Thin wrapper deferred. |
