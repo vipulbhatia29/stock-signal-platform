@@ -16,8 +16,10 @@ import argparse
 import asyncio
 import logging
 from datetime import datetime, timezone
+from io import StringIO
 
 import pandas as pd
+import requests
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -45,7 +47,13 @@ def fetch_sp500_tickers() -> pd.DataFrame:
     Returns:
         DataFrame with columns: ticker, name, sector, industry, exchange.
     """
-    tables = pd.read_html(SP500_URL)
+    resp = requests.get(
+        SP500_URL,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; StockSignalPlatform/1.0)"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    tables = pd.read_html(StringIO(resp.text))
     # The first table on the page is the current constituents
     df = tables[0]
 
