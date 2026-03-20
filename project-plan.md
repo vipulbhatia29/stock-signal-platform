@@ -312,67 +312,59 @@ Full UI/UX redesign based on Lovable prototype. 9 phases (UI-1 through UI-9):
 
 **Dependencies:** Phase 4C.1 (quality fixes) must be done first. UI-1 → UI-2 sequential. UI-3/4/5/7 parallelizable. UI-6 needs backend endpoints.
 
-#### Phase 4D — Agent Routing + ReAct Orchestration (after 4F) — NEEDS REFINEMENT
+#### Phase 4D — Agent Intelligence Architecture — SPEC + PLAN APPROVED (Session 38)
 
-**Problem:** All queries currently hit the same model with all tools bound. No intelligent routing, no goal decomposition, no plan-then-act. The agent just calls tools reactively.
+**JIRA Epic:** KAN-61 | **Stories:** KAN-62 through KAN-68 (7 chunks, 24 tasks, ~14h)
+**Spec:** `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
+**Plan:** `docs/superpowers/plans/2026-03-20-phase-4d-agent-intelligence.md`
 
-**Core Architecture: ReAct Loop + Goal-Plan-Action**
+Three-phase Plan→Execute→Synthesize agent replacing current ReAct loop:
+- **Planner (Sonnet):** Classifies intent, enforces scope (financial only, data-grounded only), generates ordered tool plan, detects stale data → triggers refresh
+- **Executor (mechanical, no LLM):** Calls tools in plan order, validates results, retries, circuit breaker. `ingest_stock` is the universal data pipeline — materializes ALL yfinance data to DB
+- **Synthesizer (Sonnet):** Confidence scoring (≥65% actionable), bull/base/bear scenarios, collapsible evidence tree, personalized to portfolio, no claims without tool citations
 
-The current LangGraph StateGraph uses a basic ReAct loop (call_model → should_continue → execute_tools → loop). Phase 4D upgrades this to a **Goal-Plan-Action** pattern:
+**Key architectural decisions:**
+- [x] All yfinance data materialized to DB during ingestion — tools read from DB, not yfinance at runtime
+- [x] `ingest_stock` is the single refresh point — chat, search bar, watchlist, Celery nightly all use it
+- [x] Chat detects stale data → "Let me refresh and analyze..." → ingest → analysis. Updates all pages.
+- [x] Feature-flagged behind `AGENT_V2=true` with rollback plan
+- [x] Model tiering: Sonnet plans+synthesizes (2 LLM calls), executor is mechanical ($0)
+- [x] Scope enforcement: financial context + peripherals only, speculative/ungroundable queries declined
+- [x] Cross-session memory: Level 1 (portfolio + preferences injected at session start)
+- [x] Feedback: thumbs up/down + full trace logging (query_id across LLMCallLog + ToolExecutionLog)
+- [x] No RAG — structured data via tools, unstructured (10-K sections) small enough for context
+- [x] No paid APIs — yfinance covers financials, targets, earnings, profile, growth
 
-- [ ] **Goal Decomposition** — LLM decomposes user query into sub-goals before acting:
-  - "Analyze Palantir" → [resolve ticker, ingest if needed, compute signals, get fundamentals, synthesize]
-  - "How exposed am I to China?" → [get portfolio, identify China-exposed holdings, get geopolitical events, assess risk]
-- [ ] **Plan Node** — new LangGraph node between user input and tool execution:
-  - Emits a "plan" StreamEvent so the frontend can show the agent's reasoning
-  - Plan is a list of tool calls with dependencies (DAG, not flat list)
-  - User can approve/modify plan before execution (optional, gated by tier)
-- [ ] **Agent Router (ReAct-based)** — replaces manual `agent_type` selection:
-  - Lightweight classifier determines: stock analysis, portfolio review, macro research, general Q&A
-  - Routes to specialized agent (StockAgent, PortfolioAgent, MacroAgent, GeneralAgent)
-  - Each agent has different tool access, system prompt, and model tier
-  - Router itself uses ReAct: if initial classification is uncertain, ask a clarifying question
-- [ ] **Query Classifier** — determines complexity tier + required tools:
-  - Complexity: simple (lookup/news) vs analytical (multi-tool reasoning) vs deep (cross-source synthesis)
-  - Required tool categories: which data sources the query actually needs
-  - Estimated token budget: how much context this query needs
-- [ ] **Model Tier System** — map complexity to model:
-  - Tier 1 (Simple): Groq Llama / cheap fast model — lookups, news, simple Q&A
-  - Tier 2 (Analytical): Claude Haiku or Sonnet — tool-calling, signal analysis
-  - Tier 3 (Deep): Claude Sonnet/Opus — multi-step reasoning, portfolio synthesis, SEC filing analysis
-- [ ] **Pre-compiled Graph Pool** — N graphs (tier x agent type) compiled at startup, router picks per request
-- [ ] **Cost Tracking + Budgets** — per-user token/cost tracking via LLMCallLog, daily/monthly budget caps
-- [ ] **Escalation Logic** — if cheap model fails or returns low-confidence, auto-escalate to next tier
-- [ ] **Fallback Guarantees** — every tier has a fallback; no query goes unanswered
+**7 implementation chunks:**
+- [ ] **KAN-62:** Enriched data layer — DB models (extend Stock, EarningsSnapshot), migration, ingest pipeline extension, 4 new tools reading from DB
+- [ ] **KAN-63:** DB migration — feedback on ChatMessage, tier+query_id on logs
+- [ ] **KAN-64:** Agent V2 core — feature flag, user context builder, result validator, simple formatter, planner (scope + plan), mechanical executor
+- [ ] **KAN-65:** Synthesizer + Graph V2 — synthesizer node, LLMClient tier routing, 3-phase StateGraph
+- [ ] **KAN-66:** Stream events + router — new NDJSON types, concurrent query guard, context injection, feedback endpoint
+- [ ] **KAN-67:** Frontend — plan display, evidence section, feedback buttons, decline messages
+- [ ] **KAN-68:** Full regression + E2E verification
 
-**Agent Orchestration Gaps (identified Session 38):**
+**Deferred to Phase 4D.1:**
+- Celery nightly pre-computation for watchlist stocks (B+C caching)
+- Post-synthesis claim verification (hallucination safety net)
+- Per-query cost estimation logging
 
-- [ ] **IngestStockTool lacks recommendation generation** — the router's `ingest_ticker` generates portfolio-aware recommendations after ingestion, but the agent tool doesn't. Need to wire `ContextVar` user_id into recommendation generation within IngestStockTool.
-- [ ] **System prompts don't show search→ingest→analyze chain** — the `{tools}` placeholder auto-populates tool descriptions, but the few-shot examples in `stock_agent.md` don't demonstrate the discovery flow. Add an example showing the multi-step chain for unknown stocks.
-- [ ] **MemorySaver is in-memory only** — LangGraph checkpoints lost on server restart. DB-backed checkpointer needed for production (conversation state survives restarts). Chat messages persist in DB, but LangGraph's internal state (tool call history, iteration count) does not.
-- [ ] **No cross-session memory** — agent has no memory of prior conversations. A user who asked "Analyze AAPL" yesterday gets no context today. Need a user-scoped memory store (not just session messages).
+**Deferred to later phases:**
+- Monetization (user tiers, usage metering, paywall, BYOK) — needs real usage data first
+- Report generation + PDF/Excel export
+- MemorySaver → DB-backed checkpointer
+- Cross-session memory Level 2+ (analysis summaries, user facts)
 
-**Monetization Foundation (product decisions needed in brainstorm):**
+#### Phase 4D.2 — Stock Detail Page Enrichment (after 4D)
 
-- [ ] **User Tier Model** — Free / Pro / Premium with different:
-  - Model access (free = Tier 1 only, Pro = Tier 1+2, Premium = all tiers)
-  - Daily query limits (free = 20/day, Pro = 100/day, Premium = unlimited)
-  - Tool access (free = basic tools, Pro = all internal, Premium = all + MCP adapters)
-  - Context window budget (free = 4K, Pro = 16K, Premium = 32K)
-- [ ] **Usage Metering** — track tokens, tool calls, model tier per user per day
-- [ ] **Paywall UI** — upgrade prompts when hitting limits, tier comparison page
-- [ ] **API key management** — users bring their own keys (BYOK) as an alternative to paid tiers
+Once Phase 4D materializes enriched data into the DB, the stock detail page should display it:
+- [ ] **Revenue, net income, margins, growth rates** — new FundamentalsCard section or expanded existing card
+- [ ] **Analyst price targets** — current vs target range (bar or gauge visualization)
+- [ ] **Earnings history** — EPS estimate vs actual chart, beat/miss streak
+- [ ] **Company profile** — business summary, employees, website, market cap
+- [ ] **Analyst consensus** — buy/hold/sell bar chart
 
-**Why this is separate from 4C:** Routing is a backend optimization + product decision. 4C needs to ship a working chat UI first. Once real conversations generate LLMCallLog data, we'll have actual cost data to set routing thresholds — not guesses.
-
-**Report Generation + Export (brainstorm with routing):**
-- [ ] **"Generate Report" agent tool** — agent calls multiple tools, synthesizes into structured document
-- [ ] **PDF generation** — `react-pdf` (client) or server-side (Puppeteer/wkhtmltopdf)
-- [ ] **Excel export** — SheetJS (`xlsx`) for formatted spreadsheets
-- [ ] **Report templates** — "Portfolio Summary", "Stock Analysis", "Screener Results"
-- [ ] **Monetization tie-in** — Free: CSV only. Pro: PDF. Premium: branded reports + Excel
-
-**Dependencies:** Phase 4C complete (chat working end-to-end), LLMCallLog data accumulating.
+**Dependencies:** Phase 4D Chunk 1 (KAN-62) must be complete — data needs to be in the DB first.
 
 #### Phase 4E — Quick Security Fixes (after 4C/4D, before Phase 5)
 
