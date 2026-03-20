@@ -48,6 +48,7 @@ class StockSearchResponse(BaseModel):
     name: str
     exchange: str | None = None
     sector: str | None = None
+    in_db: bool = True
 
     model_config = {"from_attributes": True}
 

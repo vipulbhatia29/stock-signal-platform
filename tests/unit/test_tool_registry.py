@@ -253,22 +253,26 @@ def test_get_langchain_tools_fallback_for_no_args_schema(registry):
 
 
 def test_all_internal_tools_have_args_schema():
-    """All 7 internal tool classes define an explicit args_schema."""
+    """All 9 internal tool classes define an explicit args_schema."""
     from backend.tools.analyze_stock import AnalyzeStockTool
     from backend.tools.compute_signals_tool import ComputeSignalsTool
     from backend.tools.geopolitical import GeopoliticalEventsTool
+    from backend.tools.ingest_stock_tool import IngestStockTool
     from backend.tools.portfolio_exposure import PortfolioExposureTool
     from backend.tools.recommendations_tool import RecommendationsTool
     from backend.tools.screen_stocks import ScreenStocksTool
+    from backend.tools.search_stocks_tool import SearchStocksTool
     from backend.tools.web_search import WebSearchTool
 
     tools = [
         AnalyzeStockTool,
         ComputeSignalsTool,
         GeopoliticalEventsTool,
+        IngestStockTool,
         PortfolioExposureTool,
         RecommendationsTool,
         ScreenStocksTool,
+        SearchStocksTool,
         WebSearchTool,
     ]
     for tool_cls in tools:
