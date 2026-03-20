@@ -25,6 +25,21 @@ The planner receives the user's query plus their portfolio context (injected at 
 - Estimate confidence range based on which data sources are available
 - Stream a `plan` event to the frontend so the user sees "Here's what I'm researching..."
 
+**Scope enforcement (first check before planning):**
+
+The planner's first job is to determine if the query is in scope. The scope is **financial context and peripherals** — anything that a financial analyst would reasonably discuss with a client:
+
+- ✅ In scope: stocks, ETFs, portfolios, signals, fundamentals, macro, sectors, interest rates, company business models, earnings, dividends, risk, market news, geopolitical events affecting markets
+- ✅ In scope (peripherals): "How does the war in Ukraine affect oil stocks?" (geopolitical → financial impact), "What does Apple do?" (company overview → investment context), "Explain P/E ratio" (financial education)
+- ❌ Out of scope: general knowledge, personal advice unrelated to investing, coding, math, creative writing, weather, politics without financial context
+
+When the query is ambiguous, **default to financial interpretation.** "Tell me about Apple" → company analysis, not fruit.
+
+When out of scope, the planner returns `intent: "out_of_scope"` with a polite redirect:
+> "I'm your financial analysis assistant — I can help with stock analysis, portfolio management, and market insights. What would you like to know about your investments?"
+
+**No tools fire, no synthesizer runs.** Total cost: 1 planner call.
+
 **Planner output schema:**
 ```python
 {
@@ -375,8 +390,12 @@ Key sections:
   1. "Analyze Palantir" → search → ingest → signals → fundamentals → portfolio → news → earnings
   2. "Should I rebalance?" → portfolio exposure → for top 3 holdings: signals + recommendations
   3. "What's AAPL's price?" → single tool call (get_latest_price), no synthesis needed
-  4. "Compare Apple's 10-K risk factors across 2020-2025" → graceful decline
+  4. "Compare Apple's 10-K risk factors across 2020-2025" → graceful decline (high-token)
   5. "How's the market looking?" → FRED macro data → sector performance → geopolitical events
+  6. "What is the capital of Uganda?" → out_of_scope, polite redirect to financial topics
+  7. "How does the Ukraine war affect energy stocks?" → in scope (geopolitical peripheral → financial)
+  8. "Tell me about Apple" → in scope, default to financial interpretation (company analysis)
+  9. "Write me a poem about stocks" → out_of_scope
 
 ### Executor prompt (`executor.md`)
 
