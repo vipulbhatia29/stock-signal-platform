@@ -98,17 +98,11 @@ class IngestStockTool(BaseTool):
                 piotroski = fundamentals.piotroski_score
 
                 # 4b. Persist enriched fundamentals + analyst data
-                analyst_data = await loop.run_in_executor(
-                    None, fetch_analyst_data, ticker
-                )
-                await persist_enriched_fundamentals(
-                    stock, fundamentals, analyst_data, session
-                )
+                analyst_data = await loop.run_in_executor(None, fetch_analyst_data, ticker)
+                await persist_enriched_fundamentals(stock, fundamentals, analyst_data, session)
 
                 # 4c. Persist earnings history
-                earnings = await loop.run_in_executor(
-                    None, fetch_earnings_history, ticker
-                )
+                earnings = await loop.run_in_executor(None, fetch_earnings_history, ticker)
                 await persist_earnings_snapshots(ticker, earnings, session)
 
                 # 5. Compute and store signals

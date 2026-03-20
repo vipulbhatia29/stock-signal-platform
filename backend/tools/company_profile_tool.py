@@ -59,9 +59,7 @@ class CompanyProfileTool(BaseTool):
             from backend.models.stock import Stock
 
             async with async_session_factory() as session:
-                result = await session.execute(
-                    select(Stock).where(Stock.ticker == ticker)
-                )
+                result = await session.execute(select(Stock).where(Stock.ticker == ticker))
                 stock = result.scalar_one_or_none()
 
             if stock is None:

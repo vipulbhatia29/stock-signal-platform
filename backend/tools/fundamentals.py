@@ -347,13 +347,9 @@ def fetch_analyst_data(ticker: str) -> dict:
         rec_summary = t.recommendations
         if rec_summary is not None and not rec_summary.empty:
             latest = rec_summary.iloc[-1]
-            result["analyst_buy"] = int(latest.get("strongBuy", 0)) + int(
-                latest.get("buy", 0)
-            )
+            result["analyst_buy"] = int(latest.get("strongBuy", 0)) + int(latest.get("buy", 0))
             result["analyst_hold"] = int(latest.get("hold", 0))
-            result["analyst_sell"] = int(latest.get("sell", 0)) + int(
-                latest.get("strongSell", 0)
-            )
+            result["analyst_sell"] = int(latest.get("sell", 0)) + int(latest.get("strongSell", 0))
     except Exception:
         pass
 
