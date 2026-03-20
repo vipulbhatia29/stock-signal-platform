@@ -271,20 +271,36 @@ For queries requiring unsupported operations:
 
 ## §5 Enriched Data Layer (yfinance Extension)
 
-Extend existing `fetch_fundamentals()` and add new tool functions to pull richer data from yfinance. **No paid APIs. No new dependencies.**
+Extend the ingestion pipeline to pull richer data from yfinance and **materialize it into the database**. This data serves both the stock detail page (frontend) and the agent tools (chat). **No paid APIs. No new dependencies.**
 
-### New data to pull (all from yfinance, free)
+### Data materialization principle
 
-| Data | yfinance source | New tool or extend existing? |
-|---|---|---|
-| Full income statement (revenue, net income, EBITDA, margins) | `Ticker.quarterly_income_stmt` | Extend `fetch_fundamentals()` |
-| Balance sheet (debt, equity, cash, assets) | `Ticker.quarterly_balance_sheet` | Extend `fetch_fundamentals()` |
-| Cash flow (FCF, capex, operating cash flow) | `Ticker.quarterly_cashflow` | Extend `fetch_fundamentals()` |
-| Revenue/earnings growth rates, margins | `Ticker.info` (revenueGrowth, grossMargins, etc.) | Extend `fetch_fundamentals()` |
-| Analyst price targets (current, high, low, mean, median) | `Ticker.analyst_price_targets` | New: `get_analyst_targets` tool |
-| Earnings history + surprise % | `Ticker.earnings_history` | New: `get_earnings_history` tool |
-| Company profile (summary, employees, market cap) | `Ticker.info` | New: `get_company_profile` tool |
-| Analyst recommendations (buy/hold/sell counts) | `Ticker.recommendations` | Extend Finnhub adapter or replace |
+All enriched data is **fetched during ingestion** (via `ingest_ticker` endpoint or Celery nightly refresh) and stored in Postgres. Agent tools **read from the DB**, not from yfinance at runtime. This means:
+- Stock detail page can display the same data (revenue, targets, earnings, profile)
+- Agent gets instant responses from DB (no yfinance latency during chat)
+- No rate-limit risk during chat sessions
+- Dashboard and chat always show consistent data
+- Celery nightly refresh keeps everything current
+
+### New data to materialize (all from yfinance, free)
+
+| Data | yfinance source | Storage | Fetched during |
+|---|---|---|---|
+| Full income statement (revenue, net income, EBITDA, margins) | `Ticker.quarterly_income_stmt` | New `FinancialSnapshot` model or extend `Stock` | `ingest_ticker` + Celery nightly |
+| Balance sheet (debt, equity, cash, assets) | `Ticker.quarterly_balance_sheet` | Same model | Same |
+| Cash flow (FCF, capex, operating cash flow) | `Ticker.quarterly_cashflow` | Same model | Same |
+| Revenue/earnings growth rates, margins | `Ticker.info` | Extend `Stock` model with growth/margin columns | Same |
+| Analyst price targets (current, high, low, mean, median) | `Ticker.analyst_price_targets` | New `AnalystTarget` model or columns on `Stock` | Same |
+| Earnings history + surprise % | `Ticker.earnings_history` | New `EarningsSnapshot` hypertable (ticker, quarter, eps_estimate, eps_actual, surprise_pct) | Same |
+| Company profile (summary, employees, market cap) | `Ticker.info` | Extend `Stock` model (business_summary, employees, website, market_cap) | Same |
+| Analyst recommendations (buy/hold/sell counts) | `Ticker.recommendations` | New `AnalystConsensus` model or columns on `Stock` | Same |
+
+### Agent tools read from DB
+
+The new agent tools (`get_fundamentals_extended`, `get_analyst_targets`, `get_earnings_history`, `get_company_profile`) **query the database**, not yfinance. The ingestion pipeline is the only code that touches yfinance. This separation means:
+- Tools are fast (DB query, not HTTP call)
+- Tools work offline (cached data)
+- Tools return timestamped data with freshness metadata for the evidence tree
 
 ### Tool name mapping (spec → implementation)
 
