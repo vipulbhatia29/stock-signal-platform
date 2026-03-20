@@ -461,18 +461,18 @@ Refinement: 19-task plan written+approved (KAN-20/21), LangGraph adopted (spec r
 - Frontend: TickerSearch shows "In watchlist universe" vs "Add from market" groups
 - 6 new Yahoo search unit tests
 
-### Agent Architecture Analysis
-Documented current LangGraph architecture (ReAct loop) and identified 4 gaps:
-1. Agent routing is manual (frontend sends `agent_type`) — needs ReAct-based auto-router
-2. IngestStockTool lacks recommendation generation (no user context)
-3. System prompts don't demonstrate search→ingest→analyze chain
-4. MemorySaver is in-memory only — checkpoints lost on restart
-5. No cross-session memory
-
-Gaps filed into Phase 4D (agent routing + Goal-Plan-Action) in `project-plan.md`. User wants to refine with ReAct loop principle + goal-plan-action pattern.
+### Phase 4D Architecture Design (brainstorm + spec + plan)
+- Deep research: 8 topics (ReAct, GPA, hallucination, routing, RAG, cost, feedback, memory) from production teams (Anthropic, Harvey AI, Perplexity, LangChain)
+- Brainstorming: 6 clarifying questions resolved — factual-first analyst, B+C response strategy, confidence ≥65%, scenario framing, no RAG, model tiering, Level 1 memory, scope enforcement, data-grounded only
+- Architecture: Plan→Execute→Synthesize (GPA outer frame + ReAct tactics). Executor is mechanical (no LLM per tool call). Sonnet plans+synthesizes, Groq reserved for future.
+- Spec: 13 sections, reviewed (2C+9I found, all fixed), approved
+- Plan: 24 tasks, 7 chunks, ~14h/4-5 sessions, reviewed (3C+7I found, all fixed)
+- Data layer: yfinance covers 5/6 gaps (financials, targets, earnings, growth, profile). No paid APIs needed.
+- JIRA: Epic KAN-61 + 7 Stories (KAN-62 through KAN-68) created
 
 ### JIRA
 - KAN-60: Done, KAN-58: Done, KAN-56: Done, KAN-59: Done
+- KAN-61: Epic created (Phase 4D), 7 Stories (KAN-62-68) To Do
 - JIRA cloud ID changed: `vipulbhatia29.atlassian.net` (was `sigmoid.atlassian.net`)
 
 **Key gotchas:**

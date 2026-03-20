@@ -312,7 +312,11 @@ Full UI/UX redesign based on Lovable prototype. 9 phases (UI-1 through UI-9):
 
 **Dependencies:** Phase 4C.1 (quality fixes) must be done first. UI-1 → UI-2 sequential. UI-3/4/5/7 parallelizable. UI-6 needs backend endpoints.
 
-#### Phase 4D — Agent Routing + ReAct Orchestration (after 4F) — NEEDS REFINEMENT
+#### Phase 4D — Agent Intelligence Architecture — SPEC + PLAN APPROVED
+
+**JIRA Epic:** KAN-61 | **Stories:** KAN-62 through KAN-68 (7 chunks)
+**Spec:** `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
+**Plan:** `docs/superpowers/plans/2026-03-20-phase-4d-agent-intelligence.md`
 
 **Problem:** All queries currently hit the same model with all tools bound. No intelligent routing, no goal decomposition, no plan-then-act. The agent just calls tools reactively.
 

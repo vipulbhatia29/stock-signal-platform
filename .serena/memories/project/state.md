@@ -18,11 +18,11 @@ updated_by: session-38
 - **JIRA Cloud ID:** `vipulbhatia29.atlassian.net` (changed from sigmoid)
 
 ## What's Next
-1. **KAN-57** (Medium): New user onboarding — empty state UX
-2. **Phase 4E** security fixes (MCP auth bypass, chat IDOR, exception leak, UUID leak)
-3. **Phase 4D refinement** — ReAct loop + Goal-Plan-Action agent routing (user wants to brainstorm)
-4. **Phase 4C.1** chat UI polish (25 items)
-5. **Phase 4F** UI migration (9 stories, ~26h)
+1. **Phase 4D implementation** — start with KAN-62 (Chunk 1: yfinance tools), branch from develop
+2. JIRA Epic KAN-61 with 7 Stories (KAN-62 through KAN-68), all To Do
+3. Spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
+4. Plan: `docs/superpowers/plans/2026-03-20-phase-4d-agent-intelligence.md`
+5. After 4D: KAN-57 (onboarding), Phase 4E security, Phase 4C.1, Phase 4F UI migration
 
 ## Agent Orchestration Gaps (Session 38 analysis)
 - Agent routing is manual (`agent_type` from frontend) — needs ReAct-based auto-router
