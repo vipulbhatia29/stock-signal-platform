@@ -5,9 +5,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from backend.tools.base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
+
+
+class RecommendationsInput(BaseModel):
+    """Input schema for get_recommendations tool."""
+
+    ticker: str = Field(description="Stock ticker symbol")
 
 
 class RecommendationsTool(BaseTool):
@@ -26,6 +34,7 @@ class RecommendationsTool(BaseTool):
         },
         "required": ["ticker"],
     }
+    args_schema = RecommendationsInput
     timeout_seconds = 15.0
 
     async def execute(self, params: dict[str, Any]) -> ToolResult:

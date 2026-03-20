@@ -5,9 +5,18 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import BaseModel
+
 from backend.tools.base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
+
+
+class PortfolioExposureInput(BaseModel):
+    """Input schema for get_portfolio_exposure tool.
+
+    No LLM-facing parameters — user_id is injected via ContextVar.
+    """
 
 
 class PortfolioExposureTool(BaseTool):
@@ -21,11 +30,9 @@ class PortfolioExposureTool(BaseTool):
     category = "portfolio"
     parameters = {
         "type": "object",
-        "properties": {
-            "user_id": {"type": "string", "description": "User UUID (injected by agent)"},
-        },
-        "required": ["user_id"],
+        "properties": {},
     }
+    args_schema = PortfolioExposureInput
     timeout_seconds = 10.0
 
     async def execute(self, params: dict[str, Any]) -> ToolResult:

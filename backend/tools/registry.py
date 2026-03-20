@@ -62,8 +62,11 @@ class ToolRegistry:
 
         Each tool's execute(params: dict) -> ToolResult is wrapped to:
         1. Accept **kwargs (LangChain passes LLM args as keyword args)
-        2. Unwrap nested 'kwargs' key if present (StructuredTool quirk)
-        3. Return a JSON string (LangChain ToolMessage expects string content)
+        2. Return a JSON string (LangChain ToolMessage expects string content)
+
+        Uses explicit args_schema (Pydantic model) when available on the tool,
+        falling back to dynamic schema generation from the parameters dict
+        for ProxiedTools.
         """
         import json
 
@@ -75,22 +78,71 @@ class ToolRegistry:
                 original_execute = tool.execute
 
                 async def _wrapper(_exec=original_execute, **kwargs: Any) -> str:
-                    # Unwrap nested kwargs if StructuredTool double-wrapped
-                    params = kwargs.get("kwargs", kwargs) if "kwargs" in kwargs else kwargs
-                    result = await _exec(params)
+                    result = await _exec(kwargs)
                     if hasattr(result, "data") and result.data is not None:
                         return json.dumps(result.data, default=str)
                     if hasattr(result, "error") and result.error:
                         return json.dumps({"error": result.error})
                     return json.dumps({"status": getattr(result, "status", "ok")})
 
+                # Resolve args_schema: explicit on tool, or build from parameters dict
+                schema = tool.args_schema
+                if schema is None:
+                    schema = self._build_schema_from_params(tool.name, tool.parameters)
+
                 lc_tool = StructuredTool.from_function(
                     coroutine=_wrapper,
                     name=tool.name,
                     description=tool.description,
+                    args_schema=schema,
                 )
                 lc_tools.append(lc_tool)
         return lc_tools
+
+    @staticmethod
+    def _build_schema_from_params(tool_name: str, parameters: dict[str, Any]) -> type:
+        """Build a Pydantic model from a JSON Schema parameters dict.
+
+        Used as a fallback for ProxiedTools that don't have a static args_schema.
+        """
+        from pydantic import Field, create_model
+
+        properties = parameters.get("properties", {})
+        required = set(parameters.get("required", []))
+
+        field_definitions: dict[str, Any] = {}
+        type_map = {
+            "string": str,
+            "integer": int,
+            "number": float,
+            "boolean": bool,
+            "array": list,
+            "object": dict,
+        }
+
+        for name, prop in properties.items():
+            py_type = type_map.get(prop.get("type", "string"), str)
+            desc = prop.get("description", "")
+            default = prop.get("default", ...)
+
+            if name in required:
+                field_definitions[name] = (py_type, Field(description=desc))
+            else:
+                if default is ...:
+                    field_definitions[name] = (
+                        py_type | None,
+                        Field(default=None, description=desc),
+                    )
+                else:
+                    field_definitions[name] = (
+                        py_type,
+                        Field(default=default, description=desc),
+                    )
+
+        schema_name = (
+            "".join(part.capitalize() for part in tool_name.replace("-", "_").split("_")) + "Input"
+        )
+        return create_model(schema_name, **field_definitions)
 
     def health(self) -> dict[str, bool]:
         """Return health status for all registered tools."""

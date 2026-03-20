@@ -5,9 +5,17 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from backend.tools.base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
+
+
+class ComputeSignalsInput(BaseModel):
+    """Input schema for compute_signals tool."""
+
+    ticker: str = Field(description="Stock ticker symbol (e.g., AAPL)")
 
 
 class ComputeSignalsTool(BaseTool):
@@ -26,6 +34,7 @@ class ComputeSignalsTool(BaseTool):
         },
         "required": ["ticker"],
     }
+    args_schema = ComputeSignalsInput
     timeout_seconds = 10.0
 
     async def execute(self, params: dict[str, Any]) -> ToolResult:
