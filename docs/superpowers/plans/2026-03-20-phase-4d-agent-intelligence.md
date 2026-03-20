@@ -17,10 +17,11 @@
 ### New Files
 | File | Responsibility |
 |---|---|
-| `backend/tools/fundamentals_tool.py` | Registered tool wrapping extended `fetch_fundamentals()` — financials, growth, margins |
-| `backend/tools/analyst_targets_tool.py` | Registered tool: yfinance analyst price targets (current, high, low, mean, median) |
-| `backend/tools/earnings_history_tool.py` | Registered tool: yfinance earnings history + surprise % |
-| `backend/tools/company_profile_tool.py` | Registered tool: yfinance company profile (summary, sector, employees, market cap) |
+| `backend/models/earnings.py` | `EarningsSnapshot` model — quarterly EPS estimate, actual, surprise % |
+| `backend/tools/fundamentals_tool.py` | Registered tool — reads extended fundamentals from DB (not yfinance at runtime) |
+| `backend/tools/analyst_targets_tool.py` | Registered tool — reads analyst targets from Stock model columns in DB |
+| `backend/tools/earnings_history_tool.py` | Registered tool — reads earnings history from EarningsSnapshot table in DB |
+| `backend/tools/company_profile_tool.py` | Registered tool — reads company profile from Stock model columns in DB |
 | `backend/agents/planner.py` | Plan node: classifies intent, checks scope, generates tool plan |
 | `backend/agents/executor.py` | Mechanical executor: runs tool plan, validates results, handles $PREV_RESULT |
 | `backend/agents/synthesizer.py` | Synthesis node: builds confidence, scenarios, evidence tree |
@@ -59,7 +60,10 @@
 | `backend/config.py` | Add `AGENT_V2: bool = False` setting |
 | `backend/models/chat.py` | Add `feedback` column |
 | `backend/models/logs.py` | Add `tier`, `query_id` to LLMCallLog; `query_id` to ToolExecutionLog |
+| `backend/models/stock.py` | Extend Stock with profile, growth, margins, analyst target columns |
 | `backend/tools/fundamentals.py` | Extend `fetch_fundamentals()` to return financials, growth, margins |
+| `backend/tools/ingest_stock_tool.py` | Extend to store enriched data during ingestion |
+| `backend/routers/stocks.py` | Extend `ingest_ticker` to store enriched data during ingestion |
 | `frontend/src/types/api.ts` | Add new StreamEvent types, FeedbackRequest |
 | `frontend/src/components/chat/message-bubble.tsx` | Add feedback buttons, evidence section |
 | `frontend/src/components/chat-panel.tsx` | Handle new event types (plan, evidence, decline) |
@@ -67,9 +71,63 @@
 
 ---
 
-## Chunk 1: New yfinance Tools (Tasks 1-4)
+## Chunk 1: Enriched Data Layer — DB Models + Ingestion + Tools (Tasks 1-5)
 
 Independent of agent rewrite. Enriches data layer. Ship first.
+
+**Key principle:** All yfinance data is materialized into the database during ingestion. Agent tools and the stock detail page both read from DB, never from yfinance at runtime.
+
+### Task 0: DB Models + Migration for Enriched Data
+
+**Files:**
+- Modify: `backend/models/stock.py` — extend `Stock` model with profile + growth columns
+- Create: `backend/models/financials.py` — `FinancialSnapshot` model (quarterly financials)
+- Create: `backend/models/earnings.py` — `EarningsSnapshot` hypertable (quarterly EPS + surprise)
+- Modify: `backend/models/__init__.py` — register new models
+- Migration: Alembic 009 (or combine with agent V2 migration)
+
+- [ ] **Step 1: Extend Stock model with profile + growth columns**
+
+```python
+# Add to backend/models/stock.py Stock class:
+business_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+employees: Mapped[int | None] = mapped_column(Integer, nullable=True)
+website: Mapped[str | None] = mapped_column(String(255), nullable=True)
+market_cap: Mapped[float | None] = mapped_column(Float, nullable=True)
+revenue_growth: Mapped[float | None] = mapped_column(Float, nullable=True)
+gross_margins: Mapped[float | None] = mapped_column(Float, nullable=True)
+operating_margins: Mapped[float | None] = mapped_column(Float, nullable=True)
+profit_margins: Mapped[float | None] = mapped_column(Float, nullable=True)
+return_on_equity: Mapped[float | None] = mapped_column(Float, nullable=True)
+analyst_target_mean: Mapped[float | None] = mapped_column(Float, nullable=True)
+analyst_target_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+analyst_target_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+analyst_buy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+analyst_hold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+analyst_sell: Mapped[int | None] = mapped_column(Integer, nullable=True)
+```
+
+- [ ] **Step 2: Create EarningsSnapshot model**
+
+```python
+# backend/models/earnings.py
+class EarningsSnapshot(Base):
+    __tablename__ = "earnings_snapshots"
+    ticker: Mapped[str]  # FK to stocks
+    quarter: Mapped[str]  # "2025-12-31"
+    eps_estimate: Mapped[float | None]
+    eps_actual: Mapped[float | None]
+    surprise_pct: Mapped[float | None]
+    reported_at: Mapped[datetime]  # when we fetched this
+```
+
+- [ ] **Step 3: Generate + review Alembic migration**
+
+Run: `uv run alembic revision --autogenerate -m "009 enriched stock data"`
+Review for false TimescaleDB drops. Apply: `uv run alembic upgrade head`
+
+- [ ] **Step 4: Run existing tests to verify migration doesn't break anything**
+- [ ] **Step 5: Commit**
 
 ### Task 1: Extend fetch_fundamentals with full financial data
 
@@ -132,19 +190,23 @@ Add new fields to `FundamentalResult` dataclass and pull from `yf.Ticker.info`:
 
 Run: `uv run pytest tests/unit/test_fundamentals_tool.py -v`
 
-- [ ] **Step 5: Create registered FundamentalsTool**
+- [ ] **Step 5: Update ingest pipeline to store extended fundamentals**
 
-Create `backend/tools/fundamentals_tool.py` — a `BaseTool` subclass with `args_schema` that wraps `fetch_fundamentals()` and returns the extended data as a tool result.
+Modify `ingest_ticker` (in `backend/routers/stocks.py`) and `IngestStockTool` (in `backend/tools/ingest_stock_tool.py`) to call the extended `fetch_fundamentals()` and persist growth rates, margins, market cap, analyst targets, and recommendations to the `Stock` model columns added in Task 0.
 
-- [ ] **Step 6: Write test for FundamentalsTool.execute()**
+- [ ] **Step 6: Create registered FundamentalsTool that reads from DB**
 
-- [ ] **Step 7: Register in main.py**
+Create `backend/tools/fundamentals_tool.py` — a `BaseTool` subclass with `args_schema` that **reads from the DB** (Stock model + existing FundamentalResult), NOT from yfinance at runtime. The data was materialized during ingestion.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Write test for FundamentalsTool.execute() (reads DB, not yfinance)**
+
+- [ ] **Step 8: Register in main.py**
+
+- [ ] **Step 9: Commit**
 
 ```bash
-git add backend/tools/fundamentals.py backend/tools/fundamentals_tool.py tests/unit/test_fundamentals_tool.py backend/main.py
-git commit -m "feat(KAN-4D): extend fundamentals with financials + register as tool"
+git add backend/tools/fundamentals.py backend/tools/fundamentals_tool.py backend/routers/stocks.py backend/tools/ingest_stock_tool.py tests/unit/test_fundamentals_tool.py backend/main.py
+git commit -m "feat(KAN-4D): extend fundamentals + materialize to DB + register tool"
 ```
 
 ### Task 2: Analyst Price Targets Tool
@@ -178,9 +240,9 @@ async def test_analyst_targets_returns_data():
 ```
 
 - [ ] **Step 2: Run to verify fail**
-- [ ] **Step 3: Implement AnalystTargetsTool**
+- [ ] **Step 3: Implement AnalystTargetsTool (reads from DB)**
 
-`BaseTool` subclass with `AnalystTargetsInput(ticker: str)` schema. Calls `yf.Ticker(ticker).analyst_price_targets` in executor thread. Returns `{current_price, target_high, target_low, target_mean, target_median, upside_pct}`.
+`BaseTool` subclass with `AnalystTargetsInput(ticker: str)` schema. **Reads from Stock model columns** (analyst_target_mean, analyst_target_high, analyst_target_low, analyst_buy/hold/sell) that were populated during ingestion. Returns `{current_price, target_high, target_low, target_mean, upside_pct, buy_count, hold_count, sell_count}`.
 
 - [ ] **Step 4: Write edge case test (no targets available)**
 - [ ] **Step 5: Register in main.py**
@@ -196,9 +258,9 @@ async def test_analyst_targets_returns_data():
 
 Test that tool returns EPS estimate, actual, surprise %, and a `beat_count` summary (e.g., "Beat 3 of last 4 quarters").
 
-- [ ] **Step 2: Implement EarningsHistoryTool**
+- [ ] **Step 2: Implement EarningsHistoryTool (reads from DB)**
 
-`BaseTool` wrapping `yf.Ticker(ticker).earnings_history`. Returns list of `{quarter, eps_estimate, eps_actual, surprise_pct}` + `{beat_count, total_quarters}` summary.
+`BaseTool` that **reads from `EarningsSnapshot` table** (materialized during ingestion). Returns list of `{quarter, eps_estimate, eps_actual, surprise_pct}` + `{beat_count, total_quarters}` summary. Also add earnings ingestion to `ingest_ticker` pipeline — fetch `yf.Ticker.earnings_history` and store in `EarningsSnapshot`.
 
 - [ ] **Step 3: Edge case test (no earnings data)**
 - [ ] **Step 4: Register in main.py, run all tests, commit**
@@ -213,14 +275,14 @@ Test that tool returns EPS estimate, actual, surprise %, and a `beat_count` summ
 
 Test that tool returns business summary, sector, industry, employees, website, market cap.
 
-- [ ] **Step 2: Implement CompanyProfileTool**
+- [ ] **Step 2: Implement CompanyProfileTool (reads from DB)**
 
-`BaseTool` wrapping `yf.Ticker(ticker).info`. Returns `{ticker, name, summary (truncated to 500 chars), sector, industry, employees, website, market_cap}`.
+`BaseTool` that **reads from `Stock` model** (business_summary, employees, website, market_cap, sector, industry — all materialized during ingestion). Returns `{ticker, name, summary (truncated to 500 chars), sector, industry, employees, website, market_cap}`.
 
 - [ ] **Step 3: Edge case test (delisted/invalid ticker)**
 - [ ] **Step 4: Register in main.py, run all tests, commit**
 
-**Chunk 1 checkpoint:** Run full unit test suite. Baseline + 4 new tools with tests. All existing tests still green. Commit + push.
+**Chunk 1 checkpoint:** Run full unit test suite. Baseline + DB migration + 4 new tools reading from DB + ingest pipeline extended. All existing tests still green. Stock detail page can now display enriched data. Commit + push.
 
 ---
 
