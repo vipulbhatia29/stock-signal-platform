@@ -662,7 +662,13 @@ async def ingest_ticker(
             detail="Invalid ticker format. Use alphanumeric characters, dots, and hyphens only.",
         )
 
-    from backend.tools.fundamentals import fetch_fundamentals
+    from backend.tools.fundamentals import (
+        fetch_analyst_data,
+        fetch_earnings_history,
+        fetch_fundamentals,
+        persist_earnings_snapshots,
+        persist_enriched_fundamentals,
+    )
     from backend.tools.market_data import (
         ensure_stock_exists,
         fetch_prices_delta,
@@ -700,6 +706,14 @@ async def ingest_ticker(
     loop = asyncio.get_event_loop()
     fundamentals = await loop.run_in_executor(None, fetch_fundamentals, ticker)
     piotroski = fundamentals.piotroski_score
+
+    # Persist enriched fundamentals + analyst data to Stock model
+    analyst_data = await loop.run_in_executor(None, fetch_analyst_data, ticker)
+    await persist_enriched_fundamentals(stock, fundamentals, analyst_data, db)
+
+    # Persist earnings history
+    earnings = await loop.run_in_executor(None, fetch_earnings_history, ticker)
+    await persist_earnings_snapshots(ticker, earnings, db)
 
     # Compute signals if we have enough data
     composite_score = None
@@ -984,18 +998,14 @@ async def get_fundamentals(
 ) -> FundamentalsResponse:
     """Get fundamental financial metrics for a stock.
 
-    Fetches live fundamental data from yfinance including:
-      - P/E ratio: How much investors pay per dollar of earnings.
-      - PEG ratio: P/E adjusted for earnings growth rate.
-      - FCF yield: Free cash flow as a fraction of market cap (>5% is healthy).
-      - Debt-to-equity: Financial leverage ratio.
-      - Piotroski F-Score (0-9): Composite financial health score with
-        per-criterion breakdown across profitability, leverage, and efficiency.
+    Returns enriched fundamental data from the database (materialized
+    during ingestion) including valuation ratios, growth rates, margins,
+    analyst targets, and Piotroski F-Score.
 
-    Note: yfinance data may be missing for ETFs, SPACs, or very new listings.
-    Missing fields are returned as null — the frontend should handle this gracefully.
+    Note: Data is refreshed on each ingest. If fields are null, run
+    ingest first. ETFs, SPACs, or very new listings may have missing data.
     """
-    await _require_stock(ticker, db)
+    stock = await _require_stock(ticker, db)
     ticker = ticker.upper().strip()
 
     import asyncio
@@ -1010,6 +1020,19 @@ async def get_fundamentals(
         debt_to_equity=result.debt_to_equity,
         piotroski_score=result.piotroski_score,
         piotroski_breakdown=PiotroskiBreakdown(**(result.piotroski_breakdown or {})),
+        # Enriched fields from Stock model (materialized during ingestion)
+        revenue_growth=stock.revenue_growth,
+        gross_margins=stock.gross_margins,
+        operating_margins=stock.operating_margins,
+        profit_margins=stock.profit_margins,
+        return_on_equity=stock.return_on_equity,
+        market_cap=stock.market_cap,
+        analyst_target_mean=stock.analyst_target_mean,
+        analyst_target_high=stock.analyst_target_high,
+        analyst_target_low=stock.analyst_target_low,
+        analyst_buy=stock.analyst_buy,
+        analyst_hold=stock.analyst_hold,
+        analyst_sell=stock.analyst_sell,
     )
 
 

@@ -589,3 +589,61 @@ JIRA: 5-column board, 2 automation rules, transition IDs, `conventions/jira-sdlc
 3. Frontend: chat UI panel (floating or dedicated `/chat` page)
 
 ---
+
+## Session 39 — Phase 4D Chunk 1: Enriched Data Layer (KAN-62)
+
+**Date:** 2026-03-20
+**Branch:** `feat/KAN-62-enriched-data-layer` (from `develop`)
+**JIRA:** KAN-62 → In Progress → Done
+
+**What was done:**
+
+### DB Layer
+- [x] Extended `Stock` model with 15 new columns: profile (business_summary, employees, website), market data (market_cap), growth/margins (revenue_growth, gross_margins, operating_margins, profit_margins, return_on_equity), analyst targets (analyst_target_mean/high/low, analyst_buy/hold/sell)
+- [x] Created `EarningsSnapshot` model — quarterly EPS estimates, actuals, surprise % (ticker+quarter composite PK)
+- [x] Alembic migration 009 — manually written (autogenerate falsely detects all tables as new due to TimescaleDB)
+- [x] Fixed stale DB state (alembic_version pointed to 008 but tables were missing) — cleared version, ran all migrations from scratch
+
+### Extended Fundamentals
+- [x] Added 7 fields to `FundamentalResult` dataclass: revenue_growth, gross_margins, operating_margins, profit_margins, return_on_equity, market_cap, enterprise_value
+- [x] Extended `fetch_fundamentals()` to populate new fields from yfinance
+- [x] Created `fetch_analyst_data()` — fetches analyst targets, recommendations breakdown, profile data
+- [x] Created `fetch_earnings_history()` — fetches quarterly EPS from yfinance
+- [x] Created `persist_enriched_fundamentals()` — writes growth/margins/analyst data to Stock model
+- [x] Created `persist_earnings_snapshots()` — upserts earnings data to EarningsSnapshot table
+
+### Ingest Pipeline Extension
+- [x] `ingest_ticker` endpoint (stocks router) now calls enrichment + earnings persistence during ingestion
+- [x] `IngestStockTool` (agent tool) likewise enriches and persists all data during ingestion
+
+### 4 New Registered Tools (all read from DB, not yfinance at runtime)
+- [x] `FundamentalsTool` (get_fundamentals) — returns growth, margins, ROE, market cap from Stock model
+- [x] `AnalystTargetsTool` (get_analyst_targets) — returns target prices + buy/hold/sell counts
+- [x] `EarningsHistoryTool` (get_earnings_history) — returns quarterly EPS + beat/miss summary
+- [x] `CompanyProfileTool` (get_company_profile) — returns business summary, sector, employees, website
+- [x] All 4 tools registered in `main.py` — total internal tools: 13 (was 9)
+
+### API + Schema Updates
+- [x] Extended `FundamentalsResponse` Pydantic schema with 12 new fields (growth, margins, analyst targets)
+- [x] Updated `GET /stocks/{ticker}/fundamentals` endpoint to return enriched data from Stock model
+- [x] Updated frontend `FundamentalsResponse` TypeScript interface to match
+
+### Tests
+- [x] 21 new unit tests across 4 files: `test_fundamentals_tool.py` (8), `test_analyst_targets.py` (4), `test_earnings_history.py` (5), `test_company_profile.py` (4)
+- [x] Full regression: 276 unit tests passing (was 255)
+- [x] Lint clean (ruff), TypeScript type check clean
+
+**Key decisions:**
+- "Ingest-time enrichment" pattern: all yfinance data fetched once during ingestion, agent tools read from DB at query time (fast, reliable, offline-capable)
+- EarningsSnapshot is a separate table (not Stock columns) because earnings are per-quarter time-series data (many rows per ticker)
+- `fetch_analyst_data()` is a separate function from `fetch_fundamentals()` because it needs `t.recommendations` DataFrame (not just `t.info` dict)
+- CompanyProfileTool truncates business_summary to 500 chars to keep agent context concise
+- AsyncMock pattern for testing DB tools: create `mock_cm` with `__aenter__`/`__aexit__`, not just `AsyncMock()` as session
+
+**Test count:** 276 unit + 132 API + 57 frontend = 465 total
+**Alembic head:** `4bd056089124` (migration 009)
+**Current branch:** `feat/KAN-62-enriched-data-layer`
+
+**Next:** KAN-63 (DB migration: feedback, query_id, tier columns) → KAN-64-68 → Phase 4D complete
+
+---

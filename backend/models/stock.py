@@ -9,8 +9,11 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     Boolean,
     DateTime,
+    Float,
     ForeignKey,
+    Integer,
     String,
+    Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -32,6 +35,29 @@ class Stock(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     industry: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Profile (materialized from yfinance during ingestion)
+    business_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    employees: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    website: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Market data
+    market_cap: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Growth & margins
+    revenue_growth: Mapped[float | None] = mapped_column(Float, nullable=True)
+    gross_margins: Mapped[float | None] = mapped_column(Float, nullable=True)
+    operating_margins: Mapped[float | None] = mapped_column(Float, nullable=True)
+    profit_margins: Mapped[float | None] = mapped_column(Float, nullable=True)
+    return_on_equity: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Analyst targets
+    analyst_target_mean: Mapped[float | None] = mapped_column(Float, nullable=True)
+    analyst_target_high: Mapped[float | None] = mapped_column(Float, nullable=True)
+    analyst_target_low: Mapped[float | None] = mapped_column(Float, nullable=True)
+    analyst_buy: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    analyst_hold: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    analyst_sell: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class Watchlist(UUIDPrimaryKeyMixin, Base):

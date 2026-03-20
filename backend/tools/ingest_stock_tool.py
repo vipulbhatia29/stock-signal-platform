@@ -54,7 +54,13 @@ class IngestStockTool(BaseTool):
 
         try:
             from backend.database import async_session_factory
-            from backend.tools.fundamentals import fetch_fundamentals
+            from backend.tools.fundamentals import (
+                fetch_analyst_data,
+                fetch_earnings_history,
+                fetch_fundamentals,
+                persist_earnings_snapshots,
+                persist_enriched_fundamentals,
+            )
             from backend.tools.market_data import (
                 ensure_stock_exists,
                 fetch_prices_delta,
@@ -90,6 +96,20 @@ class IngestStockTool(BaseTool):
                 loop = asyncio.get_event_loop()
                 fundamentals = await loop.run_in_executor(None, fetch_fundamentals, ticker)
                 piotroski = fundamentals.piotroski_score
+
+                # 4b. Persist enriched fundamentals + analyst data
+                analyst_data = await loop.run_in_executor(
+                    None, fetch_analyst_data, ticker
+                )
+                await persist_enriched_fundamentals(
+                    stock, fundamentals, analyst_data, session
+                )
+
+                # 4c. Persist earnings history
+                earnings = await loop.run_in_executor(
+                    None, fetch_earnings_history, ticker
+                )
+                await persist_earnings_snapshots(ticker, earnings, session)
 
                 # 5. Compute and store signals
                 composite_score = None

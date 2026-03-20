@@ -1,6 +1,6 @@
 # Project Index: stock-signal-platform
 
-Generated: 2026-03-15 | Phase: 4A Complete, 4B Next
+Generated: 2026-03-20 | Phase: 4D Chunk 1 (KAN-62) Complete, KAN-63 Next
 
 ---
 
@@ -21,7 +21,7 @@ stock-signal-platform/
 │   ├── tools/                  Business logic tools (future MCP servers)
 │   ├── tasks/                  Celery background jobs
 │   ├── services/               Service layer (thin — mostly in tools/)
-│   └── migrations/             Alembic versions (head: 821eb511d146 = 007)
+│   └── migrations/             Alembic versions (head: 4bd056089124 = 009)
 ├── frontend/                   Next.js 15, TypeScript, Tailwind v4, shadcn/ui v4
 │   └── src/
 │       ├── app/                App Router pages + layouts
@@ -75,7 +75,11 @@ stock-signal-platform/
 | `signals.py` | `compute_signals()`, `SignalResult` | RSI, MACD, SMA, Bollinger, composite score 0-10 |
 | `recommendations.py` | `generate_recommendation()`, `calculate_position_size()` | BUY/HOLD/SELL + portfolio-aware sizing |
 | `market_data.py` | `fetch_prices()`, `ensure_stock_exists()` | yfinance OHLCV → TimescaleDB |
-| `fundamentals.py` | `fetch_fundamentals()` | P/E, PEG, FCF yield, Piotroski F-Score (sync — use run_in_executor) |
+| `fundamentals.py` | `fetch_fundamentals()`, `fetch_analyst_data()`, `fetch_earnings_history()`, `persist_enriched_fundamentals()`, `persist_earnings_snapshots()` | P/E, PEG, FCF yield, Piotroski, growth/margins, analyst targets, earnings — all materialized to DB during ingestion |
+| `fundamentals_tool.py` | `FundamentalsTool` | Registered tool — reads enriched fundamentals from DB |
+| `analyst_targets_tool.py` | `AnalystTargetsTool` | Registered tool — reads analyst price targets from DB |
+| `earnings_history_tool.py` | `EarningsHistoryTool` | Registered tool — reads quarterly earnings from DB |
+| `company_profile_tool.py` | `CompanyProfileTool` | Registered tool — reads company profile from DB |
 | `portfolio.py` | `get_positions_with_pnl()`, `_run_fifo()`, `get_portfolio_summary()` | FIFO positions, P&L, sector allocation |
 | `dividends.py` | `get_dividend_summary()` | Dividend history + trailing 12-month yield |
 | `divestment.py` | `check_divestment_rules()` | Stop-loss, concentration, fundamental alerts |
@@ -97,20 +101,21 @@ stock-signal-platform/
 | Model | Table | Notes |
 |-------|-------|-------|
 | `User` | `users` | JWT auth, bcrypt pw, UserRole enum |
-| `Stock` | `stocks` | ticker PK, sector, last_synced_at |
+| `Stock` | `stocks` | ticker PK, sector, last_synced_at + enriched: profile, growth, margins, analyst targets |
+| `EarningsSnapshot` | `earnings_snapshots` | Quarterly EPS estimates, actuals, surprise % (ticker+quarter PK) |
 | `StockPrice` | `stock_prices` | TimescaleDB hypertable (ticker, time) |
 | `SignalSnapshot` | `signal_snapshots` | TimescaleDB hypertable |
 | `Portfolio` | `portfolios` | One per user |
 | `Transaction` | `transactions` | FIFO ledger, immutable |
 | `Position` | `positions` | Computed from transactions |
 | `PortfolioSnapshot` | `portfolio_snapshots` | TimescaleDB hypertable (daily) |
-| `DividendPayment` | `dividend_payments` | TimescaleDB hypertable — migration 007 (HEAD) |
+| `DividendPayment` | `dividend_payments` | TimescaleDB hypertable |
 | `UserPreference` | `user_preferences` | max_position_pct, max_sector_pct, stop_loss pct |
 
-### `backend/agents/` — Phase 4B (stubs only)
+### `backend/agents/` — Phase 4B Complete, 4D In Progress
 
-Directory exists with `__init__.py`. Phase 4B will add:
-`base.py`, `general_agent.py`, `stock_agent.py`, `loop.py`, `stream.py`
+LangGraph-based agent system with ReAct loop. Phase 4D replaces this with Plan→Execute→Synthesize:
+`base.py`, `general_agent.py`, `stock_agent.py`, `loop.py`, `stream.py`, `llm_client.py`, `providers/`
 
 ---
 
@@ -167,11 +172,10 @@ Directory exists with `__init__.py`. Phase 4B will add:
 
 ## 🧪 Test Coverage
 
-- **Backend unit:** 143 tests in `tests/unit/` (no Docker required)
-- **Backend API:** 124 tests in `tests/api/` (needs Postgres + Redis)
-- **Frontend component:** 20 tests in `frontend/src/__tests__/components/`
-- **Frontend lib:** `frontend/src/lib/__tests__/market-hours.test.ts`
-- **Total backend:** 267 passing
+- **Backend unit:** 276 tests in `tests/unit/` (no Docker required)
+- **Backend API:** 132 tests in `tests/api/` (needs Postgres + Redis)
+- **Frontend component:** 57 tests in `frontend/src/__tests__/`
+- **Total:** 465 passing (276 unit + 132 API + 57 frontend)
 - **Integration:** `tests/integration/` — stub only (Phase 4.5)
 
 **Run commands:**
@@ -202,8 +206,9 @@ cd frontend && npx jest                          # component tests
 
 - **PostgreSQL 16 + TimescaleDB** — Docker port 5433
 - **Redis 7** — Docker port 6380
-- **Alembic head:** `821eb511d146` (migration 007 — dividend_payments)
+- **Alembic head:** `4bd056089124` (migration 009 — enriched stock data + earnings snapshots)
 - **Hypertables:** `stock_prices`, `signal_snapshots`, `portfolio_snapshots`, `dividend_payments`
+- **New tables (Session 39):** `earnings_snapshots` (ticker+quarter PK)
 - **Upsert pattern:** TimescaleDB hypertables need `constraint="tablename_pkey"` (named constraint)
 
 ---
@@ -224,6 +229,8 @@ cd frontend && npx jest                          # component tests
 | `docs/TDD.md` | API contracts + technical architecture |
 | `docs/data-architecture.md` | DB schema + TimescaleDB patterns |
 | `docs/superpowers/specs/2026-03-15-cicd-branching-design.md` | CI/CD + branching strategy (Phase 4.5) |
+| `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md` | Phase 4D Agent Intelligence spec |
+| `docs/superpowers/plans/2026-03-20-phase-4d-agent-intelligence.md` | Phase 4D implementation plan (24 tasks, 7 chunks) |
 | `PROGRESS.md` | Session log — read this first each session |
 | `project-plan.md` | Phase roadmap with ✅ completions |
 | `CLAUDE.md` | All coding conventions + anti-patterns |
@@ -245,8 +252,8 @@ uv run uvicorn backend.main:app --reload --port 8181
 cd frontend && npm install && npm run dev
 
 # 4. Verify
-uv run pytest tests/unit/ -v          # should be 143/143 green
-cd frontend && npx jest                # should be 20/20 green
+uv run pytest tests/unit/ -v          # should be 276/276 green
+cd frontend && npx jest                # should be 57/57 green
 ```
 
 ---
@@ -260,8 +267,14 @@ cd frontend && npx jest                # should be 20/20 green
 | 2.5 — Design System + Polish | ✅ Complete | merged |
 | 3 — Security + Portfolio | ✅ Complete | merged |
 | 3.5 — Advanced Portfolio | ✅ Complete | merged (PR #5) |
-| 4A — UI Redesign (navy dark shell) | ✅ Complete | feat/phase-4b-ai-chatbot |
-| **4B — AI Chatbot Backend** | 🔄 **NEXT** | feat/phase-4b-ai-chatbot |
-| 4.5 — CI/CD + Branching | 📋 Spec ready | post-4B |
+| 4A — UI Redesign | ✅ Complete | merged |
+| 4B — AI Chatbot Backend | ✅ Complete | merged (PRs #12+#13) |
+| 4C — Frontend Chat UI | ✅ Complete | merged (PRs #15+#16) |
+| 4.5 — CI/CD + Branching | ✅ Complete | merged |
+| 4 — Bug Sprint | ✅ Complete | merged (PRs #18-21) |
+| **4D — Agent Intelligence** | 🔄 **KAN-62 done, KAN-63 next** | feat/KAN-62-enriched-data-layer |
+| 4C.1 — Chat Polish | ⬜ Planned | — |
+| 4E — Security Fixes | ⬜ Planned | — |
+| 4F — UI Migration | ⬜ Planned | — |
 | 5 — Background Jobs + Alerts | ⬜ Planned | — |
 | 6 — Deployment (Azure + Terraform) | ⬜ Planned | — |
