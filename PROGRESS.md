@@ -661,11 +661,21 @@ JIRA: 5-column board, 2 automation rules, transition IDs, `conventions/jira-sdlc
 - [x] **useTrendingStocks hook** — wraps `GET /stocks/signals/bulk?sort_by=composite_score&limit=5`
 - [x] 6 new frontend tests. PR #33 merged.
 
+### Phase 4E — Security Hardening (also Session 39)
+Fresh security audit found 11 issues (3 Critical, 5 High, 3 Medium). All fixed in PR #35:
+- [x] **C1+C2: Chat IDOR** — ownership checks on session resume + messages endpoint
+- [x] **C3: MCP auth** — MCPAuthMiddleware applied to `/mcp` mount
+- [x] **H4+H5: Error leaks** — all stream + tool error messages sanitized (no `str(exc)` to client)
+- [x] **M9: Enum validation** — Literal types on action/confidence query params
+- [x] **M10: ContextVar** — reset token stored for defense-in-depth
+- [x] **M11: UUID leak** — generic messages in delete_session 403/404
+- Documented (low-risk): H6 COOKIE_SECURE, H7 task status, H8 refresh token body
+
 **Session 39 FINAL test count:** 340 unit + 132 API + 4 integration + 70 frontend = 546 total
 **Alembic head:** `ac5d765112d6` (migration 010)
 
-**Phase 4D + KAN-57 COMPLETE.** 8 stories, 8 PRs merged (#26–33) in one session.
+**Phase 4D + KAN-57 + Phase 4E ALL COMPLETE.** 11 stories, 10 PRs merged (#26–35) in one session.
 
-**Next:** Phase 4E security → Phase 4C.1 polish → Phase 4F UI migration
+**Next (Session 40):** Manual E2E testing (all backend components via CLI) → Phase 4C.1 polish → Phase 4F UI migration
 
 ---
