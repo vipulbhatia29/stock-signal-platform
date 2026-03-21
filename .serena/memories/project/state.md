@@ -9,12 +9,12 @@ updated_by: session-39-final
 - **Current Phase:** Phase 4D Agent Intelligence COMPLETE. All 7 stories shipped.
 - **Current Branch:** `develop` (clean after KAN-68 merge)
 - **Alembic Head:** ac5d765112d6 (migration 010 — agent v2 fields)
-- **Test Count:** 340 unit + 132 API + 4 integration + 64 frontend = 540 total
+- **Test Count:** 340 unit + 132 API + 4 integration + 70 frontend = 546 total
 - **CI/CD:** Fully operational — actions v6/v7 (Node.js 24)
 - **Internal Tools:** 13 (FundamentalsTool, AnalystTargetsTool, EarningsHistoryTool, CompanyProfileTool added Session 39)
 - **JIRA:** KAN-62–68 all Done. Epic KAN-61 complete.
-- **JIRA Remaining Bugs:** KAN-57 (Medium, onboarding — NOT STARTED)
-- **PRs merged this session:** #26 (KAN-62), #27 (KAN-63), #28 (KAN-64), #29 (KAN-65), #30 (KAN-66), #31 (KAN-67)
+- **JIRA Remaining Bugs:** None — KAN-57 onboarding shipped (PR #33)
+- **PRs merged this session:** #26 (KAN-62), #27 (KAN-63), #28 (KAN-64), #29 (KAN-65), #30 (KAN-66), #31 (KAN-67), #32 (KAN-68), #33 (KAN-57)
 - **JIRA Cloud ID:** `vipulbhatia29.atlassian.net`
 
 ## What's Next
