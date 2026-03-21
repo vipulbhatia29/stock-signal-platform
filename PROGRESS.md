@@ -654,6 +654,18 @@ JIRA: 5-column board, 2 automation rules, transition IDs, `conventions/jira-sdlc
 
 **Phase 4D COMPLETE.** All 7 stories (KAN-62–68) shipped in one session. 7 PRs merged to develop.
 
-**Next:** KAN-57 (onboarding) → Phase 4E security → Phase 4C.1 polish → Phase 4F UI migration
+### KAN-57 — New User Onboarding (also Session 39)
+- [x] **WelcomeBanner** — localStorage-based first-visit detection, dismissible, 5 one-click ticker buttons (AAPL, MSFT, GOOGL, TSLA, NVDA) that ingest + add to watchlist
+- [x] **TrendingStocks** — top 5 by composite score from existing bulk signals endpoint, with sparklines. Visible even with empty watchlist.
+- [x] **Empty state** — quick-add buttons for popular tickers replace generic "Search above" text
+- [x] **useTrendingStocks hook** — wraps `GET /stocks/signals/bulk?sort_by=composite_score&limit=5`
+- [x] 6 new frontend tests. PR #33 merged.
+
+**Session 39 FINAL test count:** 340 unit + 132 API + 4 integration + 70 frontend = 546 total
+**Alembic head:** `ac5d765112d6` (migration 010)
+
+**Phase 4D + KAN-57 COMPLETE.** 8 stories, 8 PRs merged (#26–33) in one session.
+
+**Next:** Phase 4E security → Phase 4C.1 polish → Phase 4F UI migration
 
 ---
