@@ -6,6 +6,13 @@ export interface ToolCall {
   result?: unknown;
 }
 
+export interface EvidenceItem {
+  claim: string;
+  source_tool: string;
+  value?: string;
+  timestamp?: string;
+}
+
 export interface ChatMessageUI {
   id: string;
   role: "user" | "assistant";
@@ -13,6 +20,9 @@ export interface ChatMessageUI {
   toolCalls: ToolCall[];
   isStreaming: boolean;
   model?: string;
+  plan?: { steps: string[]; reasoning: string };
+  evidence?: EvidenceItem[];
+  isDecline?: boolean;
 }
 
 export interface ChatState {
@@ -32,6 +42,10 @@ export type ChatAction =
   | { type: "STREAM_DONE"; usage: Record<string, unknown> }
   | { type: "STREAM_ERROR"; error: string }
   | { type: "PROVIDER_FALLBACK"; content: string }
+  | { type: "PLAN"; steps: string[]; reasoning: string }
+  | { type: "EVIDENCE"; items: EvidenceItem[] }
+  | { type: "DECLINE"; content: string }
+  | { type: "TOOL_ERROR"; tool: string; error: string }
   | { type: "LOAD_HISTORY"; messages: ChatMessageUI[] }
   | { type: "SET_SESSION"; sessionId: string; agentType: "stock" | "general" }
   | { type: "CLEAR" };
@@ -166,6 +180,51 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
             : `_Provider fallback: ${action.content}_`,
         })),
       };
+
+    case "PLAN":
+      return {
+        ...state,
+        messages: updateLastAssistant(state.messages, (msg) => ({
+          ...msg,
+          plan: { steps: action.steps, reasoning: action.reasoning },
+        })),
+      };
+
+    case "EVIDENCE":
+      return {
+        ...state,
+        messages: updateLastAssistant(state.messages, (msg) => ({
+          ...msg,
+          evidence: action.items,
+        })),
+      };
+
+    case "DECLINE":
+      return {
+        ...state,
+        messages: updateLastAssistant(state.messages, (msg) => ({
+          ...msg,
+          content: action.content,
+          isDecline: true,
+        })),
+      };
+
+    case "TOOL_ERROR": {
+      const errorCall: ToolCall = {
+        id: genId(),
+        tool: action.tool,
+        params: {},
+        status: "error",
+        result: action.error,
+      };
+      return {
+        ...state,
+        messages: updateLastAssistant(state.messages, (msg) => ({
+          ...msg,
+          toolCalls: [...msg.toolCalls, errorCall],
+        })),
+      };
+    }
 
     case "LOAD_HISTORY":
       return {

@@ -3,16 +3,32 @@
 import { MarkdownContent } from "./markdown-content";
 import { ToolCard } from "./tool-card";
 import { MessageActions } from "./message-actions";
-import type { ToolCall } from "@/hooks/chat-reducer";
+import { PlanDisplay } from "./plan-display";
+import { EvidenceSection } from "./evidence-section";
+import { DeclineMessage } from "./decline-message";
+import type { ToolCall, EvidenceItem } from "@/hooks/chat-reducer";
 
 interface MessageBubbleProps {
   role: "user" | "assistant";
   content: string;
   toolCalls: ToolCall[];
   isStreaming: boolean;
+  plan?: { steps: string[]; reasoning: string };
+  evidence?: EvidenceItem[];
+  isDecline?: boolean;
+  sessionId?: string;
+  messageId?: string;
 }
 
-export function MessageBubble({ role, content, toolCalls, isStreaming }: MessageBubbleProps) {
+export function MessageBubble({
+  role,
+  content,
+  toolCalls,
+  isStreaming,
+  plan,
+  evidence,
+  isDecline,
+}: MessageBubbleProps) {
   if (role === "user") {
     return (
       <div className="flex justify-end px-4 py-2">
@@ -26,6 +42,15 @@ export function MessageBubble({ role, content, toolCalls, isStreaming }: Message
   return (
     <div className="group px-4 py-2">
       <div className="max-w-full">
+        {plan && plan.steps.length > 0 && (
+          <div className="mb-2">
+            <PlanDisplay
+              steps={plan.steps}
+              reasoning={plan.reasoning}
+              toolCalls={toolCalls}
+            />
+          </div>
+        )}
         {toolCalls.map((tc) => (
           <ToolCard
             key={tc.id}
@@ -35,10 +60,17 @@ export function MessageBubble({ role, content, toolCalls, isStreaming }: Message
             result={tc.result}
           />
         ))}
-        {content && (
-          <MarkdownContent content={content} isStreaming={isStreaming} />
+        {isDecline && content ? (
+          <DeclineMessage content={content} />
+        ) : (
+          content && (
+            <MarkdownContent content={content} isStreaming={isStreaming} />
+          )
         )}
-        {!isStreaming && content && (
+        {evidence && evidence.length > 0 && (
+          <EvidenceSection evidence={evidence} />
+        )}
+        {!isStreaming && content && !isDecline && (
           <div className="mt-1">
             <MessageActions content={content} />
           </div>
