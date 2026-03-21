@@ -65,9 +65,8 @@ async def test_chat_session_messages_requires_auth(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_chat_session_messages_empty(authenticated_client: AsyncClient):
-    """GET /chat/sessions/{id}/messages returns empty list for unknown session."""
+async def test_chat_session_messages_unknown_returns_404(authenticated_client: AsyncClient):
+    """GET /chat/sessions/{id}/messages returns 404 for unknown/unowned session."""
     fake_id = uuid.uuid4()
     resp = await authenticated_client.get(f"/api/v1/chat/sessions/{fake_id}/messages")
-    assert resp.status_code == 200
-    assert resp.json() == []
+    assert resp.status_code == 404

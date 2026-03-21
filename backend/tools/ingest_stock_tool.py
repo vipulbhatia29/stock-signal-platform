@@ -133,4 +133,4 @@ class IngestStockTool(BaseTool):
                 "ingest_stock_failed",
                 extra={"ticker": ticker, "error": str(e)},
             )
-            return ToolResult(status="error", error=str(e))
+            return ToolResult(status="error", error=f"Failed to ingest {ticker}")

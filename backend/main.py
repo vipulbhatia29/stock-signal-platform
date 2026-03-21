@@ -145,10 +145,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     elif settings.AGENT_V2:
         logger.warning("AGENT_V2=true but no LLM providers — V2 graph not built")
 
-    # 5. MCP server (Layer 3 — Expose)
+    # 5. MCP server (Layer 3 — Expose) with JWT auth middleware
+    from backend.mcp_server.auth import MCPAuthMiddleware
+
     mcp_server = create_mcp_app(registry)
-    app.mount("/mcp", mcp_server.http_app())
-    logger.info("FastMCP server mounted at /mcp")
+    mcp_app = mcp_server.http_app()
+    mcp_app.add_middleware(MCPAuthMiddleware)
+    app.mount("/mcp", mcp_app)
+    logger.info("FastMCP server mounted at /mcp (JWT auth enforced)")
 
     # Store on app.state (not module globals — rule #7)
     app.state.registry = registry
