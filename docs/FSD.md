@@ -399,7 +399,7 @@ Users can override weights via UserPreference.composite_weights.
 - Typography: Sora (UI labels) + JetBrains Mono (numbers/metrics) loaded via `next/font/google`
 - All components restyed to navy design tokens (card2, hov, bhi, warning, cyan)
 
-### FR-8: AI Chatbot — Financial Intelligence Platform (Phase 4B backend ✅ + 4C frontend ✅ IMPLEMENTED)
+### FR-8: AI Chatbot — Financial Intelligence Platform (Phase 4B ✅ + 4C ✅ + 4D ✅ IMPLEMENTED)
 
 **FR-8.1: Agent Selection**
 - General Agent: web search + news Q&A (limited tool access)
@@ -408,12 +408,16 @@ Users can override weights via UserPreference.composite_weights.
 - Agent type bound at session creation (cannot switch mid-session)
 
 **FR-8.2: Tool Orchestration**
-- Tool Registry with pluggable internal tools and MCPAdapter for external sources
-- Agent uses LLM tool-calling to invoke registered tools
-- Maximum 15 tool calls per conversation turn
+- Tool Registry with 13 internal tools and 4 MCPAdapter external sources
+- V1 (AGENT_V2=false): LLM tool-calling ReAct loop, max 15 iterations
+- V2 (AGENT_V2=true): Plan→Execute→Synthesize three-phase architecture:
+  - Planner (LLM): classifies intent, generates ordered tool plan (max 10 steps)
+  - Executor (mechanical, no LLM): runs tools via registry, $PREV_RESULT resolution, retries, circuit breaker
+  - Synthesizer (LLM): confidence scoring, bull/base/bear scenarios, evidence tree with citations
 - All data in responses must come from tool results (no hallucination)
-- If a tool fails, agent explains the failure and continues with available data
-- Few-shot prompted agents for reliable tool selection
+- If a tool fails, result marked "unavailable" with reason; synthesizer acknowledges gap
+- Scope enforcement: financial-only queries. Non-financial/speculative queries declined gracefully.
+- Phase 4D tools (get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile) read from DB — data materialized during ingestion
 
 **FR-8.3: External Data Integration (5 layers)**
 - SEC Filings: 10-K, 10-Q, 8-K, 13F, Form 4 (via EdgarTools MCP)
@@ -430,9 +434,13 @@ Users can override weights via UserPreference.composite_weights.
 
 **FR-8.5: Streaming**
 - Response streams via NDJSON over SSE
-- Stream events: thinking, tool_start, tool_result, token, done, provider_fallback, degraded
-- Frontend renders incrementally as tokens arrive ✅ (Phase 4C, Session 37)
-- Tool execution status shown as progress indicators ✅ (Phase 4C — ToolCard component)
+- V1 events: thinking, tool_start, tool_result, token, done, provider_fallback, error
+- V2 events (Phase 4D): plan, tool_error, evidence, decline (+ all V1 events)
+- Frontend renders incrementally as tokens arrive ✅ (Phase 4C)
+- Tool execution status shown as progress indicators ✅ (ToolCard component)
+- Plan display shows research steps with checkmarks ✅ (Phase 4D — PlanDisplay)
+- Evidence section with collapsible source citations ✅ (Phase 4D — EvidenceSection)
+- Decline messages for out-of-scope queries ✅ (Phase 4D — DeclineMessage)
 
 **FR-8.6: Conversation History**
 - Stored per ChatSession (user + agent_type)
@@ -453,6 +461,29 @@ Users can override weights via UserPreference.composite_weights.
 - Exponential backoff for transient errors, immediate switch for quota/timeout
 - MCP server health tracking — disconnected adapters excluded from tool set
 - User informed of degraded data availability in response
+
+**FR-8.9: Evidence Display & User Feedback (Phase 4D) ✅ IMPLEMENTED**
+- Every assistant response can include an evidence section showing source citations
+- Evidence items: claim text, source tool name, value, timestamp
+- Evidence section is collapsible (hidden by default, "Show Evidence" toggle)
+- Users can provide thumbs up/down feedback on any assistant message
+- Feedback persisted via `PATCH /chat/sessions/{id}/messages/{id}/feedback`
+- Feedback stored as "up"/"down" on ChatMessage model
+
+**FR-8.10: Onboarding Experience (KAN-57) ✅ IMPLEMENTED**
+- Welcome banner on first visit (localStorage-based detection, dismissible)
+- Banner shows 5 suggested tickers (AAPL, MSFT, GOOGL, TSLA, NVDA) as one-click add buttons
+- Quick-add: ingests stock data + adds to watchlist in one action
+- Empty watchlist state shows quick-add buttons for popular tickers
+- Trending stocks section on dashboard (top 5 by composite score, visible even with empty watchlist)
+- Uses existing `GET /stocks/signals/bulk?sort_by=composite_score&limit=5` endpoint
+
+**FR-8.11: Enriched Data Layer (Phase 4D) ✅ IMPLEMENTED**
+- All yfinance data materialized to DB during ingestion (ingest-time enrichment pattern)
+- Stock model enriched with: business summary, employees, website, market cap, revenue growth, gross/operating/profit margins, ROE, analyst targets (mean/high/low), analyst buy/hold/sell counts
+- Quarterly earnings stored in EarningsSnapshot table (EPS estimate, actual, surprise %)
+- `GET /stocks/{ticker}/fundamentals` returns all enriched fields
+- Agent tools read from DB at query time (fast, reliable, no external API calls)
 
 ### FR-9: Alerts & Notifications (Phase 5)
 
