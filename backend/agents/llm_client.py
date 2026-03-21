@@ -132,9 +132,11 @@ class LLMClient:
         self,
         providers: list[LLMProvider],
         retry_policy: RetryPolicy | None = None,
+        tier_config: dict[str, list[LLMProvider]] | None = None,
     ) -> None:
         self._providers = providers
         self._retry_policy = retry_policy or RetryPolicy()
+        self._tier_config = tier_config
 
     def get_active_chat_model(self) -> Any:
         """Return the LangChain chat model from the first healthy provider."""
@@ -148,11 +150,24 @@ class LLMClient:
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]],
         stream: bool = False,
+        tier: str | None = None,
     ) -> LLMResponse:
-        """Call the LLM with fallback chain. Tries each provider in order."""
+        """Call the LLM with fallback chain. Tries each provider in order.
+
+        Args:
+            messages: Chat messages.
+            tools: Tool schemas for function calling.
+            stream: Whether to stream the response.
+            tier: Optional tier name (e.g., "planner", "synthesizer").
+                If provided and tier_config exists, uses that tier's providers.
+        """
+        providers = self._providers
+        if tier and self._tier_config and tier in self._tier_config:
+            providers = self._tier_config[tier]
+
         errors: list[tuple[str, Exception]] = []
 
-        for provider in self._providers:
+        for provider in providers:
             if not provider.health.is_available():
                 logger.info(
                     "provider_skipped",
@@ -179,7 +194,7 @@ class LLMClient:
                 continue
 
         raise AllProvidersFailedError(
-            f"All {len(self._providers)} providers failed: "
+            f"All {len(providers)} providers failed: "
             + ", ".join(f"{name}: {err}" for name, err in errors)
         )
 
