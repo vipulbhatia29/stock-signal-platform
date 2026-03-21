@@ -5,7 +5,7 @@
 **Epic:** [KAN-73](https://vipulbhatia29.atlassian.net/browse/KAN-73)
 **Branch:** `feat/backend-hardening-spec`
 **JIRA Stories:** KAN-74 (S0), KAN-75 (S1), KAN-76 (S2), KAN-77 (S3), KAN-78 (S4), KAN-79 (S5), KAN-80 (S6), KAN-81 (S7), KAN-82 (S8), KAN-83 (S9), KAN-84 (S10)
-**Estimated Tests:** ~197 new tests
+**Estimated Tests:** ~211 new tests
 **Sessions:** 2-3 (implementation), 1 (frontend hardening in next phase)
 
 ---
@@ -254,7 +254,7 @@ Adopted from Sigmoid/Pfizer Architecture Best Practices audit (pages 11-12).
 - **Location:** `tests/e2e/eval/results/` (timestamped JSON logs)
 - **Trigger:** Before release, weekly review
 
-### Eval Dimensions (7)
+### Eval Dimensions (8)
 
 | # | Dimension | Score | Fail Threshold | Triage on Fail |
 |---|-----------|-------|----------------|----------------|
@@ -265,6 +265,7 @@ Adopted from Sigmoid/Pfizer Architecture Best Practices audit (pages 11-12).
 | 5 | Evidence Quality | 1-5 | < 3 | Backlog |
 | 6 | Scope Compliance | 1-5 | < 4 | Bug |
 | 7 | Personalization | 1-5 | < 3 | Backlog |
+| 8 | Context Relevance | 1-5 | < 3 | Backlog |
 
 ### Drift Detection
 
@@ -456,7 +457,7 @@ Backlog                                ↓
 ### S4: Agent V2 — Mocked Regression Suite
 
 **Files:** `tests/unit/agents/test_agent_v2_regression.py` + `tests/unit/adversarial/test_agent_adversarial.py`
-**Tests:** ~40
+**Tests:** ~45
 **JIRA:** Story under Phase 4G Epic
 
 #### S4a: Intent Classification & Tool Planning (15 tests)
@@ -479,7 +480,7 @@ Backlog                                ↓
 | 14 | Nonexistent ticker | "Analyze FAKECO123" | ingest_stock fails → "ticker not found" | Yes |
 | 15 | Vague query | "What should I invest in?" | intent=portfolio or market_overview, not out_of_scope | Yes |
 
-#### S4b: Executor & Synthesizer Hardening (15 tests, same file: `test_agent_v2_regression.py`)
+#### S4b: Executor, Synthesizer & Context Hardening (20 tests, same file: `test_agent_v2_regression.py`)
 
 | # | Test | Scenario | Expected | Pre-commit |
 |---|------|----------|----------|------------|
@@ -498,6 +499,11 @@ Backlog                                ↓
 | 13 | Error event | Tool failure | error event with sanitized message | Yes |
 | 14 | Decline flow | Out-of-scope | decline event, no tool_start events | Yes |
 | 15 | Simple lookup — no synthesis | "Price of AMZN" | No synthesis step, direct response | Yes |
+| 16 | Context window size | 50-message history → build_context_window() | Output ≤ max_tokens (16K) | Yes |
+| 17 | Context window keeps recent | 30 messages, truncated | Most recent messages always present, oldest dropped | Yes |
+| 18 | Multi-turn comparison — pronoun resolution | History: "Analyze AAPL" → "What about MSFT?" → "Compare them" | Plan includes tools for BOTH AAPL and MSFT | Yes |
+| 19 | Multi-turn comparison — fresh tool calls | Same history as #18 | Plan calls tools for both tickers (not reuse stale prior-turn data) | Yes |
+| 20 | Ambiguous "compare" — no prior context | Empty session → "Compare them" | Agent asks clarification or declines — NOT hallucinate tickers | Yes |
 
 #### S4c: Adversarial & Guardrail Tests (10 tests)
 
@@ -521,7 +527,7 @@ Backlog                                ↓
 ### S5: Agent V2 — Live LLM + Eval Pyramid
 
 **Files:** `tests/e2e/test_agent_v2_live.py` + `tests/e2e/test_agent_v2_eval.py` + `tests/e2e/eval/`
-**Tests:** ~24 (12 structural + 12 quality evals)
+**Tests:** ~26 (13 structural + 13 quality evals)
 **JIRA:** Story under Phase 4G Epic
 **Gating:** Only runs when files under `backend/agents/` or `backend/tools/` change
 **Requirements:** `GROQ_API_KEY` in `.env` (primary); `ANTHROPIC_API_KEY` optional (fallback + judge)
@@ -535,7 +541,8 @@ Backlog                                ↓
 | 3 | "How is my portfolio doing?" | References holdings, allocation %, P&L |
 | 4 | "What's the price of MSFT?" | No synthesis step, latency < 10s |
 | 5 | "Should I buy Bitcoin?" | Decline event, no tool calls |
-| 6 | "Compare AAPL and MSFT" | Both tickers analyzed, comparison structure |
+| 6 | "Compare AAPL and MSFT" (single-turn) | Both tickers analyzed, comparison structure |
+| 6b | Multi-turn: T1 "Analyze AAPL" → T2 "What about MSFT?" → T3 "Compare them" | T3 resolves "them" to AAPL+MSFT, tools called for both, comparison structure |
 | 7 | "Is KO's dividend sustainable?" | References payout ratio or FCF |
 | 8 | "What are the risks for TSLA?" | Risk factors, references volatility |
 | 9 | "Analyze [stale ticker]" | Ingest triggered when last_fetched_at > 24h |
@@ -545,7 +552,7 @@ Backlog                                ↓
 
 #### Layer 3: System Evals — LLM-as-Judge Quality (12 tests)
 
-Same 12 prompts, each additionally scored by Haiku judge on 7 dimensions:
+Same 13 prompts, each additionally scored by Haiku judge on 8 dimensions:
 
 | Dimension | Fail Threshold | Triage |
 |-----------|---------------|--------|
@@ -556,6 +563,9 @@ Same 12 prompts, each additionally scored by Haiku judge on 7 dimensions:
 | Evidence Quality | < 3 | Backlog |
 | Scope Compliance | < 4 | Bug |
 | Personalization | < 3 | Backlog |
+| Context Relevance | < 3 | Backlog |
+
+> **Context Relevance** checks: Does the response use data from the current query's context? Does it correctly resolve pronoun references ("them", "both") to entities from prior turns? Does it use fresh tool data rather than stale prior-turn results?
 
 #### Eval Infrastructure
 
@@ -679,7 +689,7 @@ Same 12 prompts, each additionally scored by Haiku judge on 7 dimensions:
 ### S9: API Contract Hardening
 
 **File:** `tests/api/test_api_contracts.py`
-**Tests:** ~25
+**Tests:** ~29
 **JIRA:** Story under Phase 4G Epic
 
 #### Response Schema Validation (7 tests)
@@ -727,7 +737,16 @@ Same 12 prompts, each additionally scored by Haiku judge on 7 dimensions:
 | 3 | CORS headers | Preflight returns correct Access-Control-Allow-* | No |
 | 4 | No server version leak | No Server: uvicorn or Python version in headers | No |
 
-**Triage output:** Schema mismatch → Bug (Medium). Missing field → Bug (High). Server version leak → Bug (Medium, OWASP). Pagination crash → Bug (High).
+#### Resource Cleanup (4 tests)
+
+| # | Test | Assertion | Pre-commit |
+|---|------|-----------|------------|
+| 1 | DB session cleanup | Connection pool count unchanged after 10 sequential requests | No |
+| 2 | ContextVar reset | `request_context` is `None` after response completes | Yes |
+| 3 | Stream buffer cleanup | After `/chat/stream` completes, no dangling async generators | No |
+| 4 | Celery event loop cleanup | After task completes (success or failure), no orphaned event loops | No |
+
+**Triage output:** Schema mismatch → Bug (Medium). Missing field → Bug (High). Server version leak → Bug (Medium, OWASP). Pagination crash → Bug (High). Resource leak → Bug (High).
 
 ---
 
@@ -817,7 +836,9 @@ These are real investor needs discovered during research (not bugs — feature g
 
 | Item | Description | Target Phase |
 |------|-------------|-------------|
-| Stock comparison tool | Dedicated compare_stocks tool with structured side-by-side output | Phase 5 |
+| Session entity registry | Track discussed tickers + data freshness per chat session (Option C: in-memory dict on graph state). Enables pronoun resolution ("them", "both") and lazy re-fetch (skip if data < 5min old) | Phase 5 |
+| Stock comparison tool | Dedicated compare_stocks tool with structured side-by-side output, depends on entity registry | Phase 5 |
+| Context-aware planner prompt | Extend planner prompt with `recently_discussed_tickers` from entity registry | Phase 5 |
 | Dividend sustainability tool | Payout ratio, FCF coverage, dividend growth history analysis | Phase 5 |
 | Risk narrative tool | Ranked risk factors with monitoring indicators | Phase 5 |
 | Red flag scanner | Controversies, short interest, insider selling patterns | Phase 5 |
