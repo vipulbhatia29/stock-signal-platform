@@ -1,6 +1,5 @@
 """Tests for mechanical executor."""
 
-
 import pytest
 
 from backend.agents.executor import (
@@ -67,9 +66,7 @@ class TestExecutePlan:
         async def mock_executor(tool_name: str, params: dict) -> ToolResult:
             captured_params.append(params)
             if tool_name == "search_stocks":
-                return ToolResult(
-                    status="ok", data=[{"ticker": "PLTR", "name": "Palantir"}]
-                )
+                return ToolResult(status="ok", data=[{"ticker": "PLTR", "name": "Palantir"}])
             return ToolResult(status="ok", data={"ticker": params.get("ticker")})
 
         steps = [

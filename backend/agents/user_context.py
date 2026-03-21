@@ -70,9 +70,7 @@ async def build_user_context(user_id: uuid.UUID, db: AsyncSession) -> dict[str, 
 
     try:
         # User preferences
-        result = await db.execute(
-            select(UserPreference).where(UserPreference.user_id == user_id)
-        )
+        result = await db.execute(select(UserPreference).where(UserPreference.user_id == user_id))
         pref = result.scalar_one_or_none()
         if pref is not None:
             context["preferences"] = {
@@ -85,9 +83,7 @@ async def build_user_context(user_id: uuid.UUID, db: AsyncSession) -> dict[str, 
 
     try:
         # Watchlist
-        result = await db.execute(
-            select(Watchlist.ticker).where(Watchlist.user_id == user_id)
-        )
+        result = await db.execute(select(Watchlist.ticker).where(Watchlist.user_id == user_id))
         context["watchlist"] = [row[0] for row in result.all()]
     except Exception:
         logger.warning("user_context_watchlist_failed", extra={"user_id": str(user_id)})

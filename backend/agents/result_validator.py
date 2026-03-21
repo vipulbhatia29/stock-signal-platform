@@ -77,9 +77,7 @@ def validate_tool_result(
     reason = None
 
     if tool_name in _PRICE_TOOLS and isinstance(result.data, dict):
-        last_updated = result.data.get("last_fetched_at") or result.data.get(
-            "computed_at"
-        )
+        last_updated = result.data.get("last_fetched_at") or result.data.get("computed_at")
         if last_updated:
             try:
                 if isinstance(last_updated, str):

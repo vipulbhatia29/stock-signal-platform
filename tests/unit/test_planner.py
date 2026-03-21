@@ -80,9 +80,7 @@ class TestParsePlanResponse:
 
     def test_rejects_step_without_tool(self) -> None:
         """Step missing 'tool' key should raise ValueError."""
-        response = json.dumps(
-            {"intent": "stock_analysis", "steps": [{"params": {"ticker": "X"}}]}
-        )
+        response = json.dumps({"intent": "stock_analysis", "steps": [{"params": {"ticker": "X"}}]})
         with pytest.raises(ValueError, match="missing 'tool'"):
             parse_plan_response(response)
 
