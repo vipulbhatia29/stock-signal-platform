@@ -1,6 +1,6 @@
 # Project Index: stock-signal-platform
 
-Generated: 2026-03-20 | Phase: 4D Chunk 1 (KAN-62) Complete, KAN-63 Next
+Generated: 2026-03-20 | Phase: 4D COMPLETE (all 7 chunks), KAN-57 Next
 
 ---
 
@@ -172,11 +172,11 @@ LangGraph-based agent system with ReAct loop. Phase 4D replaces this with Plan�
 
 ## 🧪 Test Coverage
 
-- **Backend unit:** 276 tests in `tests/unit/` (no Docker required)
+- **Backend unit:** 340 tests in `tests/unit/` (no Docker required)
 - **Backend API:** 132 tests in `tests/api/` (needs Postgres + Redis)
-- **Frontend component:** 57 tests in `frontend/src/__tests__/`
-- **Total:** 465 passing (276 unit + 132 API + 57 frontend)
-- **Integration:** `tests/integration/` — stub only (Phase 4.5)
+- **Backend integration:** 4 tests in `tests/integration/` (Agent V2 flow)
+- **Frontend:** 64 tests in `frontend/src/__tests__/`
+- **Total:** 540 passing (340 unit + 132 API + 4 integration + 64 frontend)
 
 **Run commands:**
 ```bash
@@ -252,8 +252,8 @@ uv run uvicorn backend.main:app --reload --port 8181
 cd frontend && npm install && npm run dev
 
 # 4. Verify
-uv run pytest tests/unit/ -v          # should be 276/276 green
-cd frontend && npx jest                # should be 57/57 green
+uv run pytest tests/unit/ -v          # should be 340/340 green
+cd frontend && npx jest                # should be 64/64 green
 ```
 
 ---
@@ -272,7 +272,7 @@ cd frontend && npx jest                # should be 57/57 green
 | 4C — Frontend Chat UI | ✅ Complete | merged (PRs #15+#16) |
 | 4.5 — CI/CD + Branching | ✅ Complete | merged |
 | 4 — Bug Sprint | ✅ Complete | merged (PRs #18-21) |
-| **4D — Agent Intelligence** | 🔄 **KAN-62 done, KAN-63 next** | feat/KAN-62-enriched-data-layer |
+| **4D — Agent Intelligence** | ✅ **Complete** (PRs #26-31) | merged |
 | 4C.1 — Chat Polish | ⬜ Planned | — |
 | 4E — Security Fixes | ⬜ Planned | — |
 | 4F — UI Migration | ⬜ Planned | — |
