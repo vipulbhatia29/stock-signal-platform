@@ -33,6 +33,12 @@ class ChatSessionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class FeedbackRequest(BaseModel):
+    """Request body for PATCH /chat/sessions/{id}/messages/{id}/feedback."""
+
+    feedback: Literal["up", "down"] = Field(..., description="Thumbs up or down")
+
+
 class ChatMessageResponse(BaseModel):
     """Response schema for chat message history."""
 
