@@ -88,9 +88,9 @@ async def stream_graph_events(
                     status="ok",
                     data=serializable,
                 )
-    except Exception as exc:
+    except Exception:
         logger.exception("stream_graph_events error")
-        yield StreamEvent(type="error", error=str(exc))
+        yield StreamEvent(type="error", error="An internal error occurred. Please try again.")
 
     yield StreamEvent(type="done", usage={})
 
@@ -160,8 +160,8 @@ async def stream_graph_v2_events(
         if response_text:
             yield StreamEvent(type="token", content=response_text)
 
-    except Exception as exc:
+    except Exception:
         logger.exception("stream_graph_v2_events error")
-        yield StreamEvent(type="error", error=str(exc))
+        yield StreamEvent(type="error", error="An internal error occurred. Please try again.")
 
     yield StreamEvent(type="done", usage={})

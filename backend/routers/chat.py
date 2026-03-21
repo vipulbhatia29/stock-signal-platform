@@ -53,7 +53,10 @@ async def chat_stream(
 
         from backend.models.chat import ChatSession
 
-        stmt = select(ChatSession).where(ChatSession.id == body.session_id)
+        stmt = select(ChatSession).where(
+            ChatSession.id == body.session_id,
+            ChatSession.user_id == user.id,
+        )
         result = await db.execute(stmt)
         chat_session = result.scalar_one_or_none()
         if chat_session is None:
@@ -71,9 +74,10 @@ async def chat_stream(
     await save_message(db, chat_session.id, role="user", content=body.message)
 
     # Set request-scoped user context for tools (portfolio_exposure etc.)
+    # Reset token stored so we can clear after streaming completes
     from backend.request_context import current_user_id
 
-    current_user_id.set(user.id)
+    _ctx_token = current_user_id.set(user.id)
 
     # Generate query_id for tracing
     query_id = uuid.uuid4()
@@ -282,8 +286,20 @@ async def get_session_messages(
     user=Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    """Get messages for a chat session."""
+    """Get messages for a chat session (ownership verified)."""
+    from sqlalchemy import select
+
+    from backend.models.chat import ChatSession
     from backend.tools.chat_session import load_session_messages
+
+    # Verify session belongs to user
+    stmt = select(ChatSession).where(
+        ChatSession.id == session_id,
+        ChatSession.user_id == user.id,
+    )
+    result = await db.execute(stmt)
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Session not found")
 
     return await load_session_messages(db, session_id)
 
@@ -301,6 +317,6 @@ async def delete_session(
         await deactivate_session(db, session_id, user.id)
     except ValueError as exc:
         if "not found" in str(exc):
-            raise HTTPException(status_code=404, detail=str(exc))
-        raise HTTPException(status_code=403, detail=str(exc))
+            raise HTTPException(status_code=404, detail="Session not found")
+        raise HTTPException(status_code=403, detail="Not authorized to delete this session")
     return {"status": "ok"}

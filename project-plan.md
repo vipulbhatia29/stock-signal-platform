@@ -366,16 +366,28 @@ KAN-62 (Session 39) materialized all enriched data to DB and extended the `GET /
 
 **Dependencies:** ~~Phase 4D Chunk 1 (KAN-62) must be complete~~ ✅ API + data layer done. Only frontend visualization remains.
 
-#### Phase 4E — Quick Security Fixes (after 4C/4D, before Phase 5)
+#### Phase 4E — Security Hardening (Session 39 — fresh audit post-4D)
 
-HIGH-severity findings from security + code analysis audits. Trivial fixes (~20 min total).
+11 findings from comprehensive security review. 3 Critical, 5 High, 3 Medium.
 
-- [ ] **MCP auth bypass** (`backend/main.py:94`) — Apply `MCPAuthMiddleware` to `/mcp` mount. Currently all 22+ tools callable without auth. Fix: 3 lines. Test: verify 401 without JWT.
-- [ ] **Chat session IDOR** (`backend/routers/chat.py`) — Add `user_id` ownership check when resuming sessions (`chat_stream`) and loading messages (`get_session_messages`). Fix: ~10 lines. Test: User B cannot access User A's sessions.
-- [ ] **Exception info leak** (`backend/agents/stream.py`) — Replace `str(exc)` in error StreamEvent with generic message. Raw exceptions from LangGraph/SQLAlchemy/LLM providers can leak internal hostnames, DB connection strings, file paths. Fix: 1 line. The full exception is already logged server-side via `logger.exception`.
-- [ ] **UUID leak in delete 403** (`backend/routers/chat.py:164`) — `str(exc)` in HTTPException detail exposes user UUID + session UUID. Fix: generic "Not authorized to delete this session" message.
+**Critical (fix immediately):**
+- [ ] **C1: Chat IDOR — messages endpoint** — `GET /sessions/{id}/messages` returns any user's messages (no ownership check)
+- [ ] **C2: Chat IDOR — stream resume** — `POST /chat/stream` with `session_id` lets any user inject into any session
+- [ ] **C3: MCP server unauthenticated** — `MCPAuthMiddleware` defined but never applied. All 13 tools callable without token.
 
-**Dependencies:** None — can be done anytime. Placed here to not interrupt 4C/4D feature flow.
+**High (fix before production):**
+- [ ] **H4: Exception strings in NDJSON errors** — `str(exc)` in stream error events leaks internal paths/SQL to client
+- [ ] **H5: Raw exceptions in tool errors** — `IngestStockTool`, `SearchStocksTool` expose `str(e)` to client
+- [ ] **H6: COOKIE_SECURE default** — `False` with no enforcement outside prod. Document deployment requirement.
+- [ ] **H7: Task status no ownership check** — any user can poll any Celery task ID
+- [ ] **H8: Refresh token in JSON body** — enables localStorage theft via XSS
+
+**Medium (cleanup):**
+- [ ] **M9: No enum validation on action/confidence** — silent filter bypass on recommendations endpoint
+- [ ] **M10: ContextVar not cleared after stream** — potential user bleed in edge cases
+- [ ] **M11: UUID leak in delete 403** — `str(exc)` exposes user UUID + session UUID
+
+**Dependencies:** None. Positive findings: AGENT_V2 flag server-side only ✅, $PREV_RESULT no injection path ✅, .env gitignored + JWT validated ✅.
 
 #### Phase 4 Bug Sprint (Session 38) ✅ COMPLETE
 
@@ -470,7 +482,7 @@ recommendation outcomes evaluated at 30/90/180d horizons with SPY benchmark.
 ## Phase 5.5: Security Hardening (Pre-Launch Gate)
 
 ### Goal
-Fix remaining MEDIUM-severity security findings before deployment. (HIGH items already fixed in Phase 4E.)
+Fix remaining security findings not covered in Phase 4E.
 
 ### Deliverables
 
@@ -478,12 +490,8 @@ Fix remaining MEDIUM-severity security findings before deployment. (HIGH items a
    Old refresh tokens valid for 7 days after refresh/logout. No server-side revocation.
    Fix: Redis blocklist for revoked token JTI claims. (Was backlog item B1, deferred from Phase 3.)
 
-2. **Task status lacks ownership** (`backend/routers/tasks.py`)
-   Any authenticated user can poll any task ID.
-   Fix: Store task_id to user_id in Redis, check on GET.
-
 ### Success Criteria
-Both fixed, tests added, security re-audit clean. Dependencies: Phase 4E complete.
+Fixed, tests added, security re-audit clean. Dependencies: Phase 4E complete.
 
 ---
 

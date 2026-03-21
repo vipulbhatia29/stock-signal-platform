@@ -28,6 +28,7 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -594,10 +595,10 @@ async def refresh_all_watchlist(
 
 @router.get("/recommendations", response_model=list[RecommendationResponse])
 async def get_recommendations(
-    action: str | None = Query(
+    action: Literal["BUY", "WATCH", "AVOID", "HOLD", "SELL"] | None = Query(
         default=None, description="Filter by action: BUY, WATCH, AVOID, HOLD, SELL"
     ),
-    confidence: str | None = Query(
+    confidence: Literal["HIGH", "MEDIUM", "LOW"] | None = Query(
         default=None, description="Filter by confidence: HIGH, MEDIUM, LOW"
     ),
     db: AsyncSession = Depends(get_async_session),

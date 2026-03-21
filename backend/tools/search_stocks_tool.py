@@ -147,4 +147,4 @@ class SearchStocksTool(BaseTool):
 
         except Exception as e:
             logger.error("search_stocks_failed", extra={"query": query, "error": str(e)})
-            return ToolResult(status="error", error=str(e))
+            return ToolResult(status="error", error="Search failed. Please try again.")
