@@ -101,6 +101,50 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.general_graph = None
         logger.warning("No LLM providers configured — chat disabled")
 
+    # 4b. Build Agent V2 graph when feature flag is enabled
+    if settings.AGENT_V2 and providers:
+        from backend.agents.executor import execute_plan
+        from backend.agents.graph_v2 import build_agent_graph_v2
+        from backend.agents.planner import plan_query
+        from backend.agents.simple_formatter import format_simple_result
+        from backend.agents.synthesizer import synthesize_results
+
+        # Build tools description for planner prompt
+        tool_infos = registry.discover()
+        tools_desc = "\n".join(f"- **{t.name}**: {t.description}" for t in tool_infos)
+
+        # Tool executor: calls registry by name
+        async def _tool_executor(tool_name: str, params: dict):  # noqa: ANN202
+            return await registry.execute(tool_name, params)
+
+        # Bind LLM to plan/synthesize functions
+        async def _plan_fn(query: str, tools_description: str, user_context: dict) -> dict:
+            return await plan_query(
+                query=query,
+                tools_description=tools_description,
+                user_context=user_context,
+                llm_chat=lambda **kw: llm_client.chat(**kw, tier="planner"),
+            )
+
+        async def _synthesize_fn(tool_results: list, user_context: dict) -> dict:
+            return await synthesize_results(
+                tool_results=tool_results,
+                user_context=user_context,
+                llm_chat=lambda **kw: llm_client.chat(**kw, tier="synthesizer"),
+            )
+
+        app.state.agent_v2_graph = build_agent_graph_v2(
+            plan_fn=_plan_fn,
+            execute_fn=execute_plan,
+            synthesize_fn=_synthesize_fn,
+            format_simple_fn=format_simple_result,
+            tool_executor=_tool_executor,
+            tools_description=tools_desc,
+        )
+        logger.info("Agent V2 graph compiled (Plan→Execute→Synthesize)")
+    elif settings.AGENT_V2:
+        logger.warning("AGENT_V2=true but no LLM providers — V2 graph not built")
+
     # 5. MCP server (Layer 3 — Expose)
     mcp_server = create_mcp_app(registry)
     app.mount("/mcp", mcp_server.http_app())
