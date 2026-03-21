@@ -429,6 +429,50 @@ Can ask natural language questions via API (curl/MCP client) and get tool-backed
 
 ---
 
+## Phase 4G: Backend Hardening — Testing, Eval Pyramid, Pre-commit Hooks
+
+**JIRA Epic:** [KAN-73](https://vipulbhatia29.atlassian.net/browse/KAN-73) | **Stories:** KAN-74 through KAN-84 (11 stories, ~211 tests)
+**Spec:** `docs/superpowers/specs/2026-03-21-backend-hardening-design.md`
+
+### Goal
+Comprehensive backend hardening: test directory restructure, ~211 new tests across 11 stories, LLM-as-Judge evaluation pyramid, pre-commit hooks with agent-aware gating, auto-triage workflow for bugs and backlog.
+
+### Deliverables
+- [ ] **S0 (KAN-74):** Test directory restructure — flat → domain-organized (signals/, agents/, tools/, portfolio/, pipeline/, infra/, adversarial/, e2e/)
+- [ ] **S1 (KAN-75):** Auth & security hardening (~15 tests) — IDOR, injection, cookies, rate limiting
+- [ ] **S2 (KAN-76):** Ingest & data pipeline (~15 tests) — full ingest, delta refresh, idempotency, stale detection
+- [ ] **S3 (KAN-77):** Signal & recommendation engine (~14 tests) — edge cases, Piotroski blending, portfolio-aware
+- [ ] **S4 (KAN-78):** Agent V2 mocked regression + adversarial (~45 tests) — intent classification, tool plans, executor, synthesizer, context-aware multi-turn, pronoun resolution, adversarial guardrails
+- [ ] **S5 (KAN-79):** Agent V2 live LLM + eval pyramid (~26 tests) — structural validation + LLM-as-Judge with 8 eval dimensions + drift detection
+- [ ] **S6 (KAN-80):** Stock search → ingest flow (~10 tests) — DB → Yahoo fallback → ingest → data available
+- [ ] **S7 (KAN-81):** Celery & background jobs (~15 tests) — task execution, retry, idempotency, asyncio bridge
+- [ ] **S8 (KAN-82):** Tool & MCP coverage (~39 tests) — all 13 internal tools, 4 MCP adapters, MCP auth
+- [ ] **S9 (KAN-83):** API contract hardening (~29 tests) — schemas, pagination, status codes, headers, resource cleanup
+- [ ] **S10 (KAN-84):** Pre-commit hooks & test gating — 7-stage pipeline, agent gate, ci-eval.yml workflow
+
+### Backlog Items (identified during design, target Phase 5)
+- [ ] **Session entity registry** — Track discussed tickers + data freshness per chat session (in-memory dict on graph state). Enables pronoun resolution ("them", "both") and lazy re-fetch
+- [ ] **Stock comparison tool** — Dedicated compare_stocks tool with structured side-by-side output, depends on entity registry
+- [ ] **Context-aware planner prompt** — Extend planner prompt with `recently_discussed_tickers` from entity registry
+- [ ] **Dividend sustainability tool** — Payout ratio, FCF coverage, dividend growth history
+- [ ] **Risk narrative tool** — Ranked risk factors with monitoring indicators
+- [ ] **Red flag scanner** — Controversies, short interest, insider selling patterns
+
+### GitHub Secrets Required
+- [ ] **CI_GROQ_API_KEY** (required) — primary LLM for agent eval calls
+- [ ] CI_ANTHROPIC_API_KEY (optional) — fallback + Haiku judge for eval scoring
+
+### Success Criteria
+- ~211 new tests passing
+- Test directory restructured, all existing 546 tests still green
+- Pre-commit hooks installed and working
+- Eval baseline established (all 8 dimensions above threshold)
+- 0 hallucinations in eval suite
+- All bugs auto-triaged to JIRA
+- All backlog items assigned to Phase 5
+
+---
+
 ## Phase 5: Background Jobs + Alerts (Weeks 9-10)
 
 ### Goal

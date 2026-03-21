@@ -679,3 +679,52 @@ Fresh security audit found 11 issues (3 Critical, 5 High, 3 Medium). All fixed i
 **Next (Session 40):** Manual E2E testing (all backend components via CLI) → Phase 4C.1 polish → Phase 4F UI migration
 
 ---
+
+## Session 40 — Phase 4G: Backend Hardening Spec + Plan (Design Session)
+
+**Date:** 2026-03-21
+**Branch:** `feat/backend-hardening-spec` (from `develop`)
+**JIRA:** Epic KAN-73 + 11 Stories (KAN-74 through KAN-84)
+
+**What was done:**
+
+### Backend Hardening Spec (Design Phase)
+- [x] Deep codebase exploration — 3 parallel agents analyzed all API routes, agents, tools, Celery tasks, auth, MCP, test coverage gaps
+- [x] Researched real investor prompt patterns (financial AI chatbot use cases, LLM eval frameworks, LLM-as-Judge methodology)
+- [x] Referenced Sigmoid/Pfizer Architecture Best Practices audit (pages 11-12) for Evaluation Pyramid
+- [x] Designed 10 stories (S1-S10) + 1 restructure story (S0) iteratively with PM approval per section
+- [x] Spec: `docs/superpowers/specs/2026-03-21-backend-hardening-design.md` (865 lines)
+- [x] 2 spec review rounds — 5 important issues found and fixed (S8 count, S0 section, test_divestment placement, CI gating, portfolio/ subdirectory)
+
+### Implementation Plan
+- [x] Plan: `docs/superpowers/plans/2026-03-21-backend-hardening-plan.md` (16 tasks, 8 chunks, 3 sessions)
+- [x] Plan review against spec — 1 critical + 4 important issues found and fixed (divestment placement, stale counts, eval dimensions, golden set prompts, observability assertions)
+
+### JIRA Board
+- [x] Epic KAN-73 created
+- [x] 11 Stories created (KAN-74 through KAN-84), all linked to Epic, all To Do
+
+### Key Design Decisions
+- **Test directory restructure:** flat → domain-organized (signals/, agents/, tools/, portfolio/, pipeline/, infra/, adversarial/, e2e/)
+- **Evaluation pyramid:** Unit Evals (mocked LLM) → Component Evals (real LLM, structural) → System Evals (LLM-as-Judge, 8 dimensions) → Human Evals (manual review)
+- **LLM routing for CI:** Groq primary (cheap), Anthropic fallback + Haiku judge. GitHub Secrets: CI_GROQ_API_KEY + CI_ANTHROPIC_API_KEY both created.
+- **Pre-commit hooks:** 7-stage pipeline with agent-aware gating (only runs live LLM tests when backend/agents/ or backend/tools/ change)
+- **Auto-triage:** test failures classified as Bug (Critical/High/Medium) or Backlog (assigned to appropriate phase) → JIRA + project-plan
+- **Context relevance:** Added 8th eval dimension for multi-turn pronoun resolution and stale data detection
+- **Resource cleanup:** 4 tests for DB session, ContextVar, stream buffer, Celery event loop cleanup
+- **Session entity registry:** Designed Option C (in-memory dict on graph state) for multi-turn ticker tracking — deferred to Phase 5 backlog
+
+### Backlog Items Identified (Phase 5)
+- Session entity registry (pronoun resolution, lazy re-fetch)
+- Stock comparison tool (structured side-by-side)
+- Context-aware planner prompt
+- Dividend sustainability tool
+- Risk narrative tool
+- Red flag scanner
+
+**Test count:** 546 (unchanged — design session, no code)
+**Branch:** `feat/backend-hardening-spec` (3 commits pushed)
+
+**Next (Session 41):** Start implementation — Chunk 1 (S0 directory restructure) → Chunk 2 (S1 auth hardening) → Chunk 3 (S2+S3 pipeline + signals). ~44 tests.
+
+---
