@@ -336,13 +336,13 @@ Three-phase Plan→Execute→Synthesize agent replacing current ReAct loop:
 - [x] No paid APIs — yfinance covers financials, targets, earnings, profile, growth
 
 **7 implementation chunks:**
-- [x] **KAN-62:** Enriched data layer — DB models (extend Stock, EarningsSnapshot), migration, ingest pipeline extension, 4 new tools reading from DB ✅ Session 39
-- [ ] **KAN-63:** DB migration — feedback on ChatMessage, tier+query_id on logs
-- [ ] **KAN-64:** Agent V2 core — feature flag, user context builder, result validator, simple formatter, planner (scope + plan), mechanical executor
-- [ ] **KAN-65:** Synthesizer + Graph V2 — synthesizer node, LLMClient tier routing, 3-phase StateGraph
-- [ ] **KAN-66:** Stream events + router — new NDJSON types, concurrent query guard, context injection, feedback endpoint
-- [ ] **KAN-67:** Frontend — plan display, evidence section, feedback buttons, decline messages
-- [ ] **KAN-68:** Full regression + E2E verification
+- [x] **KAN-62:** Enriched data layer — DB models, migration, ingest pipeline, 4 new tools ✅ Session 39
+- [x] **KAN-63:** DB migration — feedback, tier, query_id columns ✅ Session 39
+- [x] **KAN-64:** Agent V2 core — feature flag, context, validator, formatter, planner, executor ✅ Session 39
+- [x] **KAN-65:** Synthesizer + Graph V2 — synthesizer node, LLMClient tier, 3-phase StateGraph ✅ Session 39
+- [x] **KAN-66:** Stream events + router — NDJSON types, feature flag, context injection, feedback ✅ Session 39
+- [x] **KAN-67:** Frontend — plan display, evidence, feedback buttons, decline messages ✅ Session 39
+- [x] **KAN-68:** Full regression + docs update ✅ Session 39
 
 **Deferred to Phase 4D.1:**
 - Celery nightly pre-computation for watchlist stocks (B+C caching)

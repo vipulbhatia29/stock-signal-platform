@@ -640,10 +640,20 @@ JIRA: 5-column board, 2 automation rules, transition IDs, `conventions/jira-sdlc
 - CompanyProfileTool truncates business_summary to 500 chars to keep agent context concise
 - AsyncMock pattern for testing DB tools: create `mock_cm` with `__aenter__`/`__aexit__`, not just `AsyncMock()` as session
 
-**Test count:** 276 unit + 132 API + 57 frontend = 465 total
-**Alembic head:** `4bd056089124` (migration 009)
-**Current branch:** `feat/KAN-62-enriched-data-layer`
+### KAN-63–68 (also Session 39)
+- [x] **KAN-63:** Alembic migration 010 — feedback on ChatMessage, tier+query_id on LLMCallLog, query_id on ToolExecutionLog. PR #27 merged.
+- [x] **KAN-64:** Agent V2 core — AGENT_V2 feature flag, user_context.py, result_validator.py, simple_formatter.py, planner.py + planner.md (13 few-shots), executor.py ($PREV_RESULT, retries, circuit breaker). 42 new tests. PR #28 merged.
+- [x] **KAN-65:** Synthesizer + Graph V2 — synthesizer.py + synthesizer.md (confidence, scenarios, evidence), LLMClient tier_config support, graph_v2.py (LangGraph StateGraph plan→execute→synthesize). 17 new tests. PR #29 merged.
+- [x] **KAN-66:** Stream events + router wiring — 4 new NDJSON types (plan, tool_error, evidence, decline), stream_graph_v2_events(), chat router feature flag, user context injection, query_id tracking, feedback PATCH endpoint. 9 new tests. PR #30 merged.
+- [x] **KAN-67:** Frontend — PlanDisplay, EvidenceSection, FeedbackButtons, DeclineMessage components, TS types + chat-reducer + useStreamChat extended, MessageBubble + ChatPanel wired. 7 new tests. PR #31 merged.
+- [x] **KAN-68:** Full regression (340 unit + 4 integration + 64 frontend = 408 tests). Lint clean, TS clean. Docs updated.
 
-**Next:** KAN-63 (DB migration: feedback, query_id, tier columns) → KAN-64-68 → Phase 4D complete
+**Test count:** 340 unit + 132 API + 4 integration + 64 frontend = 540 total
+**Alembic head:** `ac5d765112d6` (migration 010 — agent v2 fields)
+**Current branch:** `feat/KAN-68-regression-docs`
+
+**Phase 4D COMPLETE.** All 7 stories (KAN-62–68) shipped in one session. 7 PRs merged to develop.
+
+**Next:** KAN-57 (onboarding) → Phase 4E security → Phase 4C.1 polish → Phase 4F UI migration
 
 ---
