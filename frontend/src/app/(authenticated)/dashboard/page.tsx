@@ -10,6 +10,7 @@ import {
 import {
   useIndexes,
   useWatchlist,
+  useAddToWatchlist,
   useRemoveFromWatchlist,
   usePortfolioSummary,
   usePositions,
@@ -29,6 +30,8 @@ import * as api from "@/lib/api";
 import type { TaskStatus, RefreshTask } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { WelcomeBanner } from "@/components/welcome-banner";
+import { TrendingStocks } from "@/components/trending-stocks";
 
 export default function DashboardPage() {
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
@@ -36,8 +39,10 @@ export default function DashboardPage() {
 
   const queryClient = useQueryClient();
 
+  const [addingTickers, setAddingTickers] = useState<Set<string>>(new Set());
   const { data: indexes, isLoading: indexesLoading } = useIndexes();
   const { data: watchlist, isLoading: watchlistLoading } = useWatchlist();
+  const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
 
   // ── Refresh All mutation ────────────────────────────────────────────────────
@@ -166,8 +171,32 @@ export default function DashboardPage() {
     return watchlist.filter((w) => w.sector === sectorFilter);
   }, [watchlist, sectorFilter]);
 
+  const handleQuickAdd = async (ticker: string) => {
+    setAddingTickers((prev) => new Set(prev).add(ticker));
+    try {
+      // Ingest first (ensures stock exists with fresh data)
+      await api.post(`/stocks/${ticker}/ingest`);
+      // Then add to watchlist
+      addToWatchlist.mutate(ticker);
+    } catch {
+      toast.error(`Failed to add ${ticker}`);
+    } finally {
+      setAddingTickers((prev) => {
+        const next = new Set(prev);
+        next.delete(ticker);
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="space-y-8">
+      {/* Welcome Banner (new users) */}
+      <WelcomeBanner onAddTicker={handleQuickAdd} addingTickers={addingTickers} />
+
+      {/* Trending Stocks (visible even with empty watchlist) */}
+      <TrendingStocks />
+
       {/* Index Cards */}
       <section>
         <SectionHeading>Market Indexes</SectionHeading>
@@ -329,7 +358,22 @@ export default function DashboardPage() {
           <EmptyState
             icon={StarIcon}
             title="No stocks in your watchlist"
-            description="Search for a ticker above to start tracking stocks"
+            description="Search for a ticker above, or add a popular stock to get started"
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                {["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA"].map((ticker) => (
+                  <Button
+                    key={ticker}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleQuickAdd(ticker)}
+                    disabled={addingTickers.has(ticker)}
+                  >
+                    + {ticker}
+                  </Button>
+                ))}
+              </div>
+            }
           />
         ) : (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
