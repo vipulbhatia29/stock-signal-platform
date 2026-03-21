@@ -128,3 +128,63 @@ def test_get_active_chat_model():
     client = LLMClient(providers=[p])
     model = client.get_active_chat_model()
     assert model is None  # FakeProvider returns None
+
+
+# ─── Tier routing tests ──────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_tier_routing_uses_tier_providers():
+    """LLMClient with tier_config routes to correct provider per tier."""
+    default_resp = LLMResponse("default", [], "default-model", 10, 5)
+    planner_resp = LLMResponse("planner", [], "planner-model", 20, 10)
+
+    default_provider = FakeProvider("default", response=default_resp)
+    planner_provider = FakeProvider("planner", response=planner_resp)
+
+    client = LLMClient(
+        providers=[default_provider],
+        tier_config={"planner": [planner_provider]},
+    )
+
+    # With tier → uses planner provider
+    result = await client.chat(
+        messages=[{"role": "user", "content": "plan"}], tools=[], tier="planner"
+    )
+    assert result.content == "planner"
+    assert result.model == "planner-model"
+
+    # Without tier → uses default provider
+    result = await client.chat(messages=[{"role": "user", "content": "hi"}], tools=[])
+    assert result.content == "default"
+
+
+@pytest.mark.asyncio
+async def test_tier_fallback_to_default():
+    """If tier not found in config, falls back to default providers."""
+    resp = LLMResponse("fallback", [], "model", 10, 5)
+    default_provider = FakeProvider("default", response=resp)
+
+    client = LLMClient(
+        providers=[default_provider],
+        tier_config={"planner": []},  # empty planner tier
+    )
+
+    # Unknown tier → falls back to default
+    result = await client.chat(
+        messages=[{"role": "user", "content": "test"}],
+        tools=[],
+        tier="unknown_tier",
+    )
+    assert result.content == "fallback"
+
+
+@pytest.mark.asyncio
+async def test_backward_compat_no_tier_config():
+    """Old constructor style (no tier_config) still works."""
+    resp = LLMResponse("ok", [], "model", 10, 5)
+    p = FakeProvider("groq", response=resp)
+    client = LLMClient(providers=[p])
+
+    result = await client.chat(messages=[{"role": "user", "content": "hi"}], tools=[])
+    assert result.content == "ok"
