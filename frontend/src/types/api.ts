@@ -418,11 +418,15 @@ export type StreamEventType =
   | "thinking"
   | "tool_start"
   | "tool_result"
+  | "tool_error"
   | "token"
   | "done"
   | "error"
   | "provider_fallback"
-  | "context_truncated";
+  | "context_truncated"
+  | "plan"
+  | "evidence"
+  | "decline";
 
 export interface StreamEvent {
   type: StreamEventType;
@@ -433,4 +437,16 @@ export interface StreamEvent {
   data?: unknown;
   usage?: Record<string, unknown>;
   error?: string;
+}
+
+// Agent V2 event data types
+export interface EvidenceItem {
+  claim: string;
+  source_tool: string;
+  value?: string;
+  timestamp?: string;
+}
+
+export interface FeedbackRequest {
+  feedback: "up" | "down";
 }

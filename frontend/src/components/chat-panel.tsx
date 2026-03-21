@@ -232,6 +232,9 @@ export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
             content={msg.content}
             toolCalls={msg.toolCalls}
             isStreaming={msg.isStreaming}
+            plan={msg.plan}
+            evidence={msg.evidence}
+            isDecline={msg.isDecline}
           />
         ))}
 

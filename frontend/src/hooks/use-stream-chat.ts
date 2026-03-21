@@ -193,6 +193,37 @@ export function useStreamChat() {
               case "context_truncated":
                 // Informational — no user action needed
                 break;
+              case "plan":
+                dispatch({
+                  type: "PLAN",
+                  steps: ((event.data as Record<string, unknown>)?.steps as string[]) ?? [],
+                  reasoning: event.content ?? "",
+                });
+                break;
+              case "evidence":
+                dispatch({
+                  type: "EVIDENCE",
+                  items: (event.data as Array<{
+                    claim: string;
+                    source_tool: string;
+                    value?: string;
+                    timestamp?: string;
+                  }>) ?? [],
+                });
+                break;
+              case "decline":
+                dispatch({
+                  type: "DECLINE",
+                  content: event.content ?? "I can only help with financial analysis.",
+                });
+                break;
+              case "tool_error":
+                dispatch({
+                  type: "TOOL_ERROR",
+                  tool: event.tool ?? "unknown",
+                  error: event.error ?? "Tool failed",
+                });
+                break;
             }
           }
         }
