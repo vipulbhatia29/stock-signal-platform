@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     ALPHA_VANTAGE_API_KEY: str = ""
     FINNHUB_API_KEY: str = ""
 
+    # --- Agent ---
+    AGENT_V2: bool = False  # Feature flag: Plan→Execute→Synthesize agent
+
     # --- Logging ---
     LOG_LEVEL: str = "INFO"
 
