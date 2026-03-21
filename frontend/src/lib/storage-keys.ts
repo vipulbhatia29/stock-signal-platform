@@ -4,4 +4,5 @@ export const STORAGE_KEYS = {
   CHAT_PANEL_WIDTH: "stocksignal:cp-width",
   SCREENER_DENSITY: "stocksignal:density",
   CHAT_ACTIVE_SESSION: "stocksignal:active-session",
+  ONBOARDING_DISMISSED: "stocksignal:onboarding-dismissed",
 } as const;

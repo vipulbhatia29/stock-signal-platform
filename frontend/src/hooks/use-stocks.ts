@@ -152,6 +152,17 @@ export function useBulkSignals(filters: ScreenerFilters) {
   });
 }
 
+export function useTrendingStocks(limit = 5) {
+  return useQuery({
+    queryKey: ["trending-stocks", limit],
+    queryFn: () =>
+      get<BulkSignalsResponse>(
+        `/stocks/signals/bulk?sort_by=composite_score&sort_order=desc&limit=${limit}`
+      ),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 // ── Prices ────────────────────────────────────────────────────────────────────
 
 export function usePrices(ticker: string, period: PricePeriod) {
