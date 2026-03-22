@@ -14,6 +14,7 @@ celery_app = Celery(
         "backend.tasks.warm_data",
         "backend.tasks.recommendations",
         "backend.tasks.forecasting",
+        "backend.tasks.evaluation",
         "backend.tasks.pipeline",
     ],
 )
