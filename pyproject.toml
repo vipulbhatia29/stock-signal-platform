@@ -56,6 +56,11 @@ testpaths = ["tests"]
 filterwarnings = [
     "ignore::DeprecationWarning",
 ]
+markers = [
+    "pre_commit: fast tests for pre-commit hook",
+    "ci_only: tests that only run in CI pipeline",
+    "agent_gated: tests gated by agent/tool code changes",
+]
 
 [tool.ruff]
 target-version = "py312"

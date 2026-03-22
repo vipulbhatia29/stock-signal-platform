@@ -43,7 +43,7 @@ def test_general_agent_system_prompt():
 
 def test_prompt_files_exist():
     """Prompt markdown files exist on disk."""
-    prompts_dir = Path(__file__).resolve().parents[2] / "backend" / "agents" / "prompts"
+    prompts_dir = Path(__file__).resolve().parents[3] / "backend" / "agents" / "prompts"
     assert (prompts_dir / "stock_agent.md").exists()
     assert (prompts_dir / "general_agent.md").exists()
 
