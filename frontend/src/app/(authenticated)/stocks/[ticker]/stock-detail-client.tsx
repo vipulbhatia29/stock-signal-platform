@@ -87,12 +87,6 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
 
   return (
     <div className="space-y-8">
-      <Breadcrumbs
-        items={[
-          { label: "Dashboard", href: "/dashboard" },
-          { label: ticker },
-        ]}
-      />
 
       {signalsLoading ? (
         <div className="space-y-2">

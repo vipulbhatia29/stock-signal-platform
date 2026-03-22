@@ -291,10 +291,10 @@ Three-layer MCP architecture: consume external MCPs → enrich in backend → ex
 
 Full UI/UX redesign based on Lovable prototype. 9 phases (UI-1 through UI-9):
 
-- [ ] **UI-1: Shell + Design Tokens** (~3h) — Sidebar (logo glow, Sectors nav, active indicator, logout), Topbar (centered search, `/` hint, Refresh All, bell stub, pulsing market dot), framer-motion install, `card2`/`hov`/`pulse-subtle` tokens, ChatContext grid adaptation
-- [ ] **UI-2: Shared Components** (~2h) — New: ScoreBar, RefreshIndicator, IndexCard. Updated: ScoreBadge, SignalBadge, ChangeIndicator, AllocationDonut, StatTile. Backend: expose `last_fetched_at`
-- [ ] **UI-3: Dashboard Redesign** (~3h) — Market Indexes section, Action Required (recommendations with reasoning), Sector Allocation link to /sectors, watchlist cards (Held badge, ScoreBar, RefreshIndicator). Backend: recommendation reasoning, index values endpoint
-- [ ] **UI-4: Screener + Stock Detail** (~3h) — ScoreBar inline, Fresh column, Held badge, Performance tab. Candlestick chart toggle, benchmark comparison chart, signal descriptions, watchlist toggle. Backend: OHLC format, benchmark prices
+- [x] **UI-1: Shell + Design Tokens** (~3h) — PR #41 merged (Session 43). Sidebar (Sectors nav, shadcn Tooltips, LogOut button), Topbar (Activity icon, Bell stub, pulsing dot, AI glow toggle), ChatContext, framer-motion, pulse-subtle/blink/scrollbar-thin tokens
+- [x] **UI-2: Shared Components** (~2h) — PR #42 merged (Session 43). ScoreBar, ScoreBadge xs size, SignalBadge WATCH/AVOID/SMA labels, ChangeIndicator prefix/showIcon, AllocationDonut sector link, IndexCard with value/change/sparkline
+- [x] **UI-3: Dashboard Redesign** (~3h) — PR #43 merged (Session 43). KPI 5→3 col grid adapt, Market Indexes grid adapt, Action Required + RecommendationRow, Sector Allocation card, Watchlist 4→3 col adapt, useRecommendations hook
+- [x] **UI-4: Screener + Stock Detail** (~3h) — PR #44 (Session 43). ScoreBar inline, Held badge, signal descriptions (RSI/MACD/SMA/Bollinger), StockHeader redesign (Close, breadcrumb, Bookmark toggle, price display). Candlestick + benchmark deferred (backend needed)
 - [ ] **UI-5: Portfolio Redesign** (~2h) — Cost basis overlay on chart, alert icons (AlertOctagon/Triangle), framer-motion settings sheet + transaction modal
 - [ ] **UI-6: Sectors Page (NEW)** (~4h) — New page + 3 backend endpoints (sectors, stocks-by-sector, correlation). AllocationDonut, sector accordions, comparison table, correlation heatmap + table
 - [ ] **UI-7: Auth Redesign** (~2h) — Split-panel login/register, brand showcase, Google OAuth stub, input glow effects, animated decorations
@@ -448,6 +448,11 @@ Comprehensive backend hardening: test directory restructure, ~211 new tests acro
 - [ ] **Dividend sustainability tool** — Payout ratio, FCF coverage, dividend growth history
 - [ ] **Risk narrative tool** — Ranked risk factors with monitoring indicators
 - [ ] **Red flag scanner** — Controversies, short interest, insider selling patterns
+
+### Deferred Backend Work (from Phase 4F UI-4, Session 43)
+- [ ] **Candlestick chart toggle** — Add `format=ohlc` query param to `GET /api/v1/stocks/{ticker}/prices`. OHLC data already exists in `stock_prices` table. Frontend: Line/Candle pill toggle on stock detail price chart.
+- [ ] **Benchmark comparison chart** — Add `GET /api/v1/stocks/{ticker}/benchmark` endpoint. Fetch ^GSPC + ^IXIC price history (yfinance or cache), normalize to % change from start date. Frontend: 3-line chart (stock cyan, S&P green dashed, NASDAQ amber dashed) with zero reference line.
+- [ ] **KAN-98: Hydration mismatch** — `isNYSEOpen()` in Topbar causes server/client time mismatch. Fix with client-only render (`useState` + `useEffect`) or `suppressHydrationWarning`.
 
 ### GitHub Secrets Required
 - [ ] **CI_GROQ_API_KEY** (required) — primary LLM for agent eval calls

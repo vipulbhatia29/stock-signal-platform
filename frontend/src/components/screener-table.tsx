@@ -13,8 +13,10 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Briefcase } from "lucide-react";
 import { ChangeIndicator } from "@/components/change-indicator";
 import { ScoreBadge } from "@/components/score-badge";
+import { ScoreBar } from "@/components/score-bar";
 import { SignalBadge } from "@/components/signal-badge";
 import { SignalMeter } from "@/components/signal-meter";
 import { formatNumber, formatPercent } from "@/lib/format";
@@ -29,7 +31,7 @@ interface Column {
   key: string;
   label: string;
   sortable: boolean;
-  render: (item: BulkSignalItem) => React.ReactNode;
+  render: (item: BulkSignalItem, heldTickers?: Set<string>) => React.ReactNode;
 }
 
 const COL: Record<string, Column> = {
@@ -37,14 +39,21 @@ const COL: Record<string, Column> = {
     key: "ticker",
     label: "Ticker",
     sortable: true,
-    render: (item) => (
-      <Link
-        href={`/stocks/${item.ticker}`}
-        className="font-mono font-semibold hover:underline"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {item.ticker}
-      </Link>
+    render: (item, heldSet) => (
+      <div className="flex items-center gap-1.5">
+        <Link
+          href={`/stocks/${item.ticker}`}
+          className="font-mono font-semibold hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {item.ticker}
+        </Link>
+        {heldSet?.has(item.ticker) && (
+          <span className="flex items-center gap-0.5 rounded bg-[var(--cdim)] px-1 py-0.5 text-[8px] font-semibold text-cyan">
+            <Briefcase className="h-2.5 w-2.5" />
+          </span>
+        )}
+      </div>
     ),
   },
   name: {
@@ -102,7 +111,12 @@ const COL: Record<string, Column> = {
     key: "composite_score",
     label: "Score",
     sortable: true,
-    render: (item) => <ScoreBadge score={item.composite_score} size="sm" />,
+    render: (item) => (
+      <div className="flex items-center gap-2">
+        <ScoreBar score={(item.composite_score ?? 0) * 10} className="w-20" />
+        <ScoreBadge score={item.composite_score} size="xs" />
+      </div>
+    ),
   },
   meter: {
     key: "composite_score_meter",
@@ -166,6 +180,7 @@ interface ScreenerTableProps {
   isLoading: boolean;
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
+  heldTickers?: Set<string>;
 }
 
 function SortIcon({
@@ -195,6 +210,7 @@ export function ScreenerTable({
   isLoading,
   activeTab,
   onTabChange,
+  heldTickers,
 }: ScreenerTableProps) {
   const router = useRouter();
   const { density } = useDensity();
@@ -275,7 +291,7 @@ export function ScreenerTable({
                         key={col.key}
                         className={cn(rowPadding, textSize)}
                       >
-                        {col.render(item)}
+                        {col.render(item, heldTickers)}
                       </TableCell>
                     ))}
                   </TableRow>
