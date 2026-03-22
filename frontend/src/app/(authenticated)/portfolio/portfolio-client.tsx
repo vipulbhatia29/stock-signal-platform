@@ -30,6 +30,7 @@ import { PortfolioValueChart } from "@/components/portfolio-value-chart";
 import { PortfolioSettingsSheet } from "@/components/portfolio-settings-sheet";
 import { RebalancingPanel } from "@/components/rebalancing-panel";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { PageTransition } from "@/components/motion-primitives";
 import type {
   DivestmentAlert,
   Position,
@@ -344,7 +345,7 @@ export function PortfolioClient() {
   const deleteTransaction = useDeleteTransaction();
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
+    <PageTransition className="mx-auto max-w-7xl space-y-6 px-4 py-6">
       <div className="flex items-center justify-between">
         <SectionHeading>Portfolio</SectionHeading>
         <div className="flex items-center gap-2">
@@ -415,6 +416,6 @@ export function PortfolioClient() {
       {rebalancing && rebalancing.suggestions.length > 0 && (
         <RebalancingPanel suggestions={rebalancing.suggestions} />
       )}
-    </div>
+    </PageTransition>
   );
 }

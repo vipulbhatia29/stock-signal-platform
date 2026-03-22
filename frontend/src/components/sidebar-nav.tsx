@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { StaggerGroup, StaggerItem } from "@/components/motion-primitives";
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -51,14 +52,15 @@ export function SidebarNav() {
       </div>
 
       {/* Nav items */}
-      <nav className="flex flex-col items-center gap-1 flex-1 w-full">
+      <StaggerGroup className="flex flex-col items-center gap-1 flex-1 w-full" stagger={0.05}>
         {NAV_ITEMS.map((item) => {
           const isActive = item.href === "/dashboard"
             ? pathname === "/dashboard" || pathname === "/"
             : pathname.startsWith(item.href);
           const Icon = item.icon;
           return (
-            <Tooltip key={item.href}>
+            <StaggerItem key={item.href}>
+            <Tooltip>
               <TooltipTrigger
                 render={
                   <Link
@@ -92,9 +94,10 @@ export function SidebarNav() {
                 {item.label}
               </TooltipContent>
             </Tooltip>
+            </StaggerItem>
           );
         })}
-      </nav>
+      </StaggerGroup>
 
       {/* Bottom: settings + logout */}
       <div className="flex flex-col items-center gap-1 w-full">

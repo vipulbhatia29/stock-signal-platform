@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import type { PricePeriod } from "@/types/api";
+import { PageTransition } from "@/components/motion-primitives";
 
 interface StockDetailClientProps {
   ticker: string;
@@ -86,7 +87,7 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
   }
 
   return (
-    <div className="space-y-8">
+    <PageTransition className="space-y-8">
 
       {signalsLoading ? (
         <div className="space-y-2">
@@ -129,6 +130,6 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
       <section>
         <DividendCard dividends={dividends} isLoading={divLoading} />
       </section>
-    </div>
+    </PageTransition>
   );
 }

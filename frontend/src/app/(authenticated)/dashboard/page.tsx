@@ -36,6 +36,7 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { WelcomeBanner } from "@/components/welcome-banner";
 import { TrendingStocks } from "@/components/trending-stocks";
+import { PageTransition, StaggerGroup, StaggerItem } from "@/components/motion-primitives";
 
 export default function DashboardPage() {
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
@@ -212,7 +213,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <PageTransition className="space-y-6">
       {/* Welcome Banner (new users) */}
       <WelcomeBanner onAddTicker={handleQuickAdd} addingTickers={addingTickers} />
 
@@ -221,38 +222,43 @@ export default function DashboardPage() {
 
       {/* KPI Stat Tiles — 5-col grid, 3-col when chat open */}
       <section>
-        <div className={cn(
+        <StaggerGroup className={cn(
           "grid grid-cols-2 gap-3 transition-all duration-300",
           chatIsOpen ? "lg:grid-cols-3 xl:grid-cols-5" : "lg:grid-cols-5"
         )}>
           {/* Portfolio Value */}
-          <StatTile
-            label="Portfolio Value"
-            value={summary ? formatCurrency(summary.total_value) : "—"}
-            sub={
-              summary?.unrealized_pnl != null ? (
-                <ChangeIndicator value={summary.unrealized_pnl} format="currency" size="sm" showIcon={false} prefix="$" />
-              ) : undefined
-            }
-            accentColor="cyan"
-            onClick={() => setDrawerOpen(true)}
-          />
+          <StaggerItem>
+            <StatTile
+              label="Portfolio Value"
+              value={summary ? formatCurrency(summary.total_value) : "—"}
+              sub={
+                summary?.unrealized_pnl != null ? (
+                  <ChangeIndicator value={summary.unrealized_pnl} format="currency" size="sm" showIcon={false} prefix="$" />
+                ) : undefined
+              }
+              accentColor="cyan"
+              onClick={() => setDrawerOpen(true)}
+            />
+          </StaggerItem>
 
           {/* Unrealized P&L */}
-          <StatTile
-            label="Unrealized P&L"
-            value={summary ? formatCurrency(summary.unrealized_pnl) : "—"}
-            sub={
-              summary?.unrealized_pnl_pct != null ? (
-                <ChangeIndicator value={summary.unrealized_pnl_pct} format="percent" size="sm" showIcon={false} />
-              ) : undefined
-            }
-            accentColor={
-              (summary?.unrealized_pnl ?? 0) >= 0 ? "gain" : "loss"
-            }
-          />
+          <StaggerItem>
+            <StatTile
+              label="Unrealized P&L"
+              value={summary ? formatCurrency(summary.unrealized_pnl) : "—"}
+              sub={
+                summary?.unrealized_pnl_pct != null ? (
+                  <ChangeIndicator value={summary.unrealized_pnl_pct} format="percent" size="sm" showIcon={false} />
+                ) : undefined
+              }
+              accentColor={
+                (summary?.unrealized_pnl ?? 0) >= 0 ? "gain" : "loss"
+              }
+            />
+          </StaggerItem>
 
           {/* Signals */}
+          <StaggerItem>
           <StatTile label="Signals" accentColor="warn">
             <div className="grid grid-cols-3 gap-[5px] mt-[7px]">
               <div className="text-center rounded-[6px] py-[7px] bg-[var(--gdim)]">
@@ -269,8 +275,10 @@ export default function DashboardPage() {
               </div>
             </div>
           </StatTile>
+          </StaggerItem>
 
           {/* Top Signal */}
+          <StaggerItem>
           <StatTile label="Top Signal" accentColor="gain">
             {topSignal ? (
               <div className="mt-1">
@@ -284,16 +292,19 @@ export default function DashboardPage() {
               <div className="text-[10px] text-subtle mt-2">No strong signals</div>
             )}
           </StatTile>
+          </StaggerItem>
 
           {/* Allocation */}
-          <StatTile label="Allocation" accentColor="cyan">
-            <AllocationDonut
-              allocations={allocations}
-              stockCount={positions?.length}
-              showSectorLink
-            />
-          </StatTile>
-        </div>
+          <StaggerItem>
+            <StatTile label="Allocation" accentColor="cyan">
+              <AllocationDonut
+                allocations={allocations}
+                stockCount={positions?.length}
+                showSectorLink
+              />
+            </StatTile>
+          </StaggerItem>
+        </StaggerGroup>
       </section>
 
       {/* Market Indexes — 3-col, adapts with chat */}
@@ -475,6 +486,6 @@ export default function DashboardPage() {
           </div>
         )}
       </section>
-    </div>
+    </PageTransition>
   );
 }
