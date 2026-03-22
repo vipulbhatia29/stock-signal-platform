@@ -823,3 +823,48 @@ Spec (865 lines) + plan (16 tasks, 8 chunks) for backend hardening. 11 stories (
 **Next (Session 43):** Phase 4F UI Migration (UI-1: Shell + Design Tokens)
 
 ---
+
+## Session 43 — Phase 4F UI Migration: UI-1 through UI-3
+
+**Date:** 2026-03-22
+**Branch:** `feat/KAN-89-ui1-shell-tokens` → `feat/KAN-90-ui2-shared-components` → `feat/KAN-91-ui3-dashboard-redesign`
+**Epic:** KAN-88 (Phase 4F — UI Migration, Lovable → Production)
+
+### Setup
+- Created JIRA Epic KAN-88 + 9 Stories (KAN-89 through KAN-97)
+- Captured Lovable prototype screenshots (7 pages) for visual reference
+- Confirmed fonts (Sora + JetBrains Mono) already installed
+
+### KAN-89 [UI-1] Shell + Design Tokens (PR #41, MERGED)
+- Design tokens: `pulse-subtle`/`blink` animations, `scrollbar-thin`, `cyan-muted`
+- Installed `framer-motion`
+- Sidebar: added Sectors nav (PieChart), shadcn Tooltips (replaced CSS), LogOut button (replaced avatar), icons updated (Search, Briefcase)
+- Topbar: ChatContext (replaces prop drilling), Activity icon, Bell stub, pulsing green dot, AI Analyst glow toggle
+- ChatContext: new `ChatProvider` — Dashboard + PortfolioDrawer consume `useChat()`
+
+### KAN-90 [UI-2] Shared Components (PR #42, MERGED)
+- ScoreBadge: `xs` size, `font-mono`, `justify-center`
+- SignalBadge: WATCH/AVOID + GOLDEN_CROSS/DEATH_CROSS/ABOVE_200/BELOW_200 with custom labels
+- ChangeIndicator: `prefix`, `showSign`, `showIcon` props
+- AllocationDonut: `showSectorLink` prop
+- IndexCard: `value`, `changePct`, `sparklineData` props + ChevronRight
+- 17 new tests
+
+### KAN-91 [UI-3] Dashboard Redesign (PR #43, OPEN)
+- KPI tiles: 5-col → 3-col when chat open
+- Market Indexes: grid adapts with chat state
+- NEW: Action Required section (2/3) with RecommendationRow component
+- NEW: Sector Allocation card (1/3) linking to /sectors
+- Watchlist: 4-col → 3-col when chat open
+- `useRecommendations` hook added
+- Template-based reasoning fallback
+
+### Bug Logged
+- **KAN-98**: Hydration mismatch from `isNYSEOpen()` in Topbar — server/client time mismatch causes React hydration error. Console-only, no visual impact. Fix in UI-9 or earlier.
+
+**Test count:** 440 unit + 157 API + 7 e2e + 4 integration + 88 frontend = 696 total (was 678)
+**Alembic head:** `ac5d765112d6` (migration 010 — unchanged)
+
+**Resume point:** PR #43 pending merge → next story KAN-92 [UI-4] Screener + Stock Detail
+
+---
