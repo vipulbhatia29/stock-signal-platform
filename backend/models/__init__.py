@@ -1,11 +1,14 @@
 """Database models package — import all models so Alembic can discover them."""
 
+from backend.models.alert import InAppAlert
 from backend.models.base import Base
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.dividend import DividendPayment
 from backend.models.earnings import EarningsSnapshot
+from backend.models.forecast import ForecastResult, ModelVersion, RecommendationOutcome
 from backend.models.index import StockIndex, StockIndexMembership
 from backend.models.logs import LLMCallLog, ToolExecutionLog
+from backend.models.pipeline import PipelineRun, PipelineWatermark
 from backend.models.portfolio import (  # noqa: F401
     Portfolio,
     PortfolioSnapshot,
@@ -24,10 +27,16 @@ __all__ = [
     "ChatSession",
     "DividendPayment",
     "EarningsSnapshot",
+    "ForecastResult",
+    "InAppAlert",
     "LLMCallLog",
+    "ModelVersion",
+    "PipelineRun",
+    "PipelineWatermark",
     "Portfolio",
     "PortfolioSnapshot",
     "Position",
+    "RecommendationOutcome",
     "RecommendationSnapshot",
     "SignalSnapshot",
     "Stock",
