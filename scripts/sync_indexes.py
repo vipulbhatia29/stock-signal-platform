@@ -75,7 +75,7 @@ def fetch_index_tickers(slug: str) -> list[str]:
         timeout=15,
     )
     resp.raise_for_status()
-    tables = pd.read_html(StringIO(resp.text))
+    tables = pd.read_html(StringIO(resp.text), flavor="html.parser")  # nosemgrep: trailofbits.python.lxml-in-pandas.lxml-in-pandas  # html.parser has no XXE risk; input is from known Wikipedia pages
     df = tables[source["table_index"]]
 
     tickers = df[source["ticker_column"]].str.replace(".", "-", regex=False).str.strip().tolist()
