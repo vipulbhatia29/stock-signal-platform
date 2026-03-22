@@ -1,4 +1,5 @@
 """E2E test fixtures — real user, portfolio, LLM key gating."""
+
 import os
 
 import pytest

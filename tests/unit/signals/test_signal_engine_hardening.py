@@ -2,10 +2,8 @@
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from backend.tools.signals import compute_composite_score, compute_signals
-
 
 # ---------------------------------------------------------------------------
 # Helpers

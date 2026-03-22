@@ -1,13 +1,11 @@
 """Tool hardening tests — ToolResult format, args_schema, error handling."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from backend.tools.base import BaseTool, ToolFilter, ToolInfo, ToolResult
 from backend.tools.registry import ToolRegistry
-
 
 # ---------------------------------------------------------------------------
 # Fake tools for testing

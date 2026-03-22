@@ -1,10 +1,7 @@
 """Recommendation engine hardening tests — portfolio-aware logic, thresholds, edge cases."""
 
-import pytest
-
 from backend.tools.recommendations import generate_recommendation
 from backend.tools.signals import SignalResult
-
 
 # ---------------------------------------------------------------------------
 # Helpers

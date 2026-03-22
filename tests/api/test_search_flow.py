@@ -8,7 +8,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from tests.conftest import StockFactory, UserFactory, UserPreferenceFactory
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -116,9 +115,7 @@ class TestSearchFlow:
         assert resp.status_code == 401
 
     @pytest.mark.asyncio
-    async def test_search_empty_query_rejected(
-        self, authenticated_client: AsyncClient
-    ) -> None:
+    async def test_search_empty_query_rejected(self, authenticated_client: AsyncClient) -> None:
         """Empty search query is rejected (min_length=1)."""
         resp = await authenticated_client.get("/api/v1/stocks/search", params={"q": ""})
         assert resp.status_code == 422
@@ -142,9 +139,7 @@ class TestSearchFlow:
         await ac.aclose()
 
     @pytest.mark.asyncio
-    async def test_search_results_have_required_fields(
-        self, client: AsyncClient, db_url
-    ) -> None:
+    async def test_search_results_have_required_fields(self, client: AsyncClient, db_url) -> None:
         """Search results contain all required schema fields."""
         await _seed_stock(db_url, "NVDA", "NVIDIA Corp")
         ac = await _make_auth_client(client, db_url)

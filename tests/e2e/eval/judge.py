@@ -73,7 +73,7 @@ Do NOT include any text outside the JSON object."""
         # Strip markdown fences if present
         if content.startswith("```"):
             lines = content.split("\n")
-            lines = [l for l in lines if not l.strip().startswith("```")]
+            lines = [line for line in lines if not line.strip().startswith("```")]
             content = "\n".join(lines)
 
         scores = json.loads(content)

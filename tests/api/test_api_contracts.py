@@ -1,7 +1,6 @@
 """API contract hardening tests — schemas, pagination, status codes, headers."""
 
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -10,13 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from backend.dependencies import create_access_token
 from tests.conftest import (
     StockFactory,
-    StockPriceFactory,
-    SignalSnapshotFactory,
     UserFactory,
     UserPreferenceFactory,
     WatchlistFactory,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -168,17 +164,13 @@ class TestHTTPStatusCodes:
         await ac.aclose()
 
     @pytest.mark.asyncio
-    async def test_404_unknown_watchlist_ticker(
-        self, authenticated_client: AsyncClient
-    ) -> None:
+    async def test_404_unknown_watchlist_ticker(self, authenticated_client: AsyncClient) -> None:
         """Removing a ticker not in watchlist returns 404."""
         resp = await authenticated_client.delete("/api/v1/stocks/watchlist/XYZNOTREAL")
         assert resp.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_422_invalid_transaction(
-        self, authenticated_client: AsyncClient
-    ) -> None:
+    async def test_422_invalid_transaction(self, authenticated_client: AsyncClient) -> None:
         """Invalid transaction data returns 422."""
         resp = await authenticated_client.post(
             "/api/v1/portfolio/transactions",

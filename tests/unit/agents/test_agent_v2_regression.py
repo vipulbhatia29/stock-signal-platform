@@ -1,7 +1,6 @@
 """Agent V2 mocked regression tests — intent classification, executor edge cases, context window."""
 
 import json
-import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,7 +13,6 @@ from backend.agents.executor import (
 from backend.agents.planner import VALID_INTENTS, parse_plan_response, plan_query
 from backend.agents.synthesizer import parse_synthesis_response, synthesize_results
 from backend.tools.chat_session import build_context_window
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -76,9 +74,7 @@ class TestIntentClassification:
     @pytest.mark.asyncio
     async def test_stock_analysis_intent(self):
         """'Analyze AAPL' should produce stock_analysis intent."""
-        mock_llm = AsyncMock(
-            return_value=_llm_response(_plan_json(intent="stock_analysis"))
-        )
+        mock_llm = AsyncMock(return_value=_llm_response(_plan_json(intent="stock_analysis")))
         plan = await plan_query("Analyze AAPL", "tools", {}, mock_llm)
         assert plan["intent"] == "stock_analysis"
 
@@ -162,9 +158,7 @@ class TestIntentClassification:
             {"tool": "analyze_stock", "params": {"ticker": "$PREV_RESULT.ticker"}},
             {"tool": "get_fundamentals", "params": {"ticker": "$PREV_RESULT.ticker"}},
         ]
-        mock_llm = AsyncMock(
-            return_value=_llm_response(_plan_json(steps=steps))
-        )
+        mock_llm = AsyncMock(return_value=_llm_response(_plan_json(steps=steps)))
         plan = await plan_query("Tell me about Apple", "tools", {}, mock_llm)
         assert len(plan["steps"]) == 3
         assert plan["steps"][1]["params"]["ticker"] == "$PREV_RESULT.ticker"
@@ -382,13 +376,15 @@ class TestSynthesizerEdgeCases:
             "bear": {"thesis": "Downturn", "probability": 0.2},
         }
         synthesis = parse_synthesis_response(
-            json.dumps({
-                "confidence": 0.7,
-                "summary": "Mixed",
-                "scenarios": scenarios,
-                "evidence": [],
-                "gaps": [],
-            })
+            json.dumps(
+                {
+                    "confidence": 0.7,
+                    "summary": "Mixed",
+                    "scenarios": scenarios,
+                    "evidence": [],
+                    "gaps": [],
+                }
+            )
         )
         assert "bull" in synthesis["scenarios"]
         assert synthesis["scenarios"]["bull"]["probability"] == 0.4
@@ -399,12 +395,14 @@ class TestSynthesizerEdgeCases:
             {"claim": "Score 8.2", "source_tool": "analyze_stock", "value": "8.2"},
         ]
         synthesis = parse_synthesis_response(
-            json.dumps({
-                "confidence": 0.8,
-                "summary": "Strong",
-                "evidence": evidence,
-                "gaps": [],
-            })
+            json.dumps(
+                {
+                    "confidence": 0.8,
+                    "summary": "Strong",
+                    "evidence": evidence,
+                    "gaps": [],
+                }
+            )
         )
         assert len(synthesis["evidence"]) == 1
         assert synthesis["evidence"][0]["source_tool"] == "analyze_stock"
@@ -412,12 +410,14 @@ class TestSynthesizerEdgeCases:
     def test_gaps_from_unavailable_tools(self):
         """Gaps list is preserved for unavailable tool data."""
         synthesis = parse_synthesis_response(
-            json.dumps({
-                "confidence": 0.6,
-                "summary": "Partial",
-                "evidence": [],
-                "gaps": ["Fundamentals unavailable (timeout)"],
-            })
+            json.dumps(
+                {
+                    "confidence": 0.6,
+                    "summary": "Partial",
+                    "evidence": [],
+                    "gaps": ["Fundamentals unavailable (timeout)"],
+                }
+            )
         )
         assert len(synthesis["gaps"]) == 1
 
@@ -426,12 +426,14 @@ class TestSynthesizerEdgeCases:
         """synthesize_results calls LLM and returns parsed response."""
         mock_llm = AsyncMock(
             return_value=_llm_response(
-                json.dumps({
-                    "confidence": 0.75,
-                    "summary": "AAPL looks strong",
-                    "evidence": [],
-                    "gaps": [],
-                })
+                json.dumps(
+                    {
+                        "confidence": 0.75,
+                        "summary": "AAPL looks strong",
+                        "evidence": [],
+                        "gaps": [],
+                    }
+                )
             )
         )
         tool_results = [
@@ -443,12 +445,14 @@ class TestSynthesizerEdgeCases:
 
     def test_markdown_fenced_synthesis_parsed(self):
         """Synthesis wrapped in markdown fences is parsed."""
-        inner = json.dumps({
-            "confidence": 0.6,
-            "summary": "Test",
-            "evidence": [],
-            "gaps": [],
-        })
+        inner = json.dumps(
+            {
+                "confidence": 0.6,
+                "summary": "Test",
+                "evidence": [],
+                "gaps": [],
+            }
+        )
         fenced = f"```json\n{inner}\n```"
         synthesis = parse_synthesis_response(fenced)
         assert synthesis["summary"] == "Test"
@@ -473,19 +477,13 @@ class TestContextWindow:
 
     def test_long_history_truncated(self):
         """Long history is truncated to fit within max_tokens."""
-        messages = [
-            {"role": "user", "content": f"Message {i} " * 100}
-            for i in range(100)
-        ]
+        messages = [{"role": "user", "content": f"Message {i} " * 100} for i in range(100)]
         result = build_context_window(messages, max_tokens=1000)
         assert len(result) < len(messages)
 
     def test_recent_messages_preserved(self):
         """Most recent messages survive truncation."""
-        messages = [
-            {"role": "user", "content": f"Old message {i} " * 50}
-            for i in range(20)
-        ]
+        messages = [{"role": "user", "content": f"Old message {i} " * 50} for i in range(20)]
         messages.append({"role": "user", "content": "Latest message"})
         result = build_context_window(messages, max_tokens=500)
         assert result[-1]["content"] == "Latest message"

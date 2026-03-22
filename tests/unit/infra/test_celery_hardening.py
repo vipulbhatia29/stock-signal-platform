@@ -1,9 +1,8 @@
 """Celery & background jobs hardening tests — tasks, beat schedule, asyncio bridge."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
-
 
 # ===========================================================================
 # Beat schedule verification
@@ -163,7 +162,7 @@ class TestWarmDataTasks:
     def test_fred_indicators_task_returns_series(self):
         """FRED indicators task returns series list."""
         with (
-            patch("backend.tasks.warm_data._get_redis_client") as mock_redis,
+            patch("backend.tasks.warm_data._get_redis_client"),
             patch("backend.tasks.warm_data.asyncio.run", return_value=None),
         ):
             from backend.tasks.warm_data import sync_fred_indicators_task

@@ -2,20 +2,17 @@
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
 
 import pytest
 from freezegun import freeze_time
 from httpx import AsyncClient
 from jose import jwt
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.config import settings
 from backend.dependencies import create_access_token, create_refresh_token
-from backend.models import ChatSession, Portfolio, Transaction, User, Watchlist
+from backend.models import ChatSession, User, Watchlist
 from tests.conftest import StockFactory, UserFactory, UserPreferenceFactory
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -173,9 +170,7 @@ class TestIDOR:
         engine = create_async_engine(db_url, echo=False)
         factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory_() as session:
-            chat_session = ChatSession(
-                user_id=user_b.id, title="B's session", agent_type="stock"
-            )
+            chat_session = ChatSession(user_id=user_b.id, title="B's session", agent_type="stock")
             session.add(chat_session)
             await session.commit()
             session_id = chat_session.id
@@ -306,9 +301,7 @@ class TestInactiveUser:
     @pytest.mark.asyncio
     async def test_inactive_user_rejected(self, client: AsyncClient, db_url):
         """Users with is_active=False get 401 on protected endpoints."""
-        inactive_client, _ = await _make_authenticated_client(
-            client, db_url, is_active=False
-        )
+        inactive_client, _ = await _make_authenticated_client(client, db_url, is_active=False)
         resp = await inactive_client.get("/api/v1/stocks/watchlist")
         assert resp.status_code == 401
         await inactive_client.aclose()

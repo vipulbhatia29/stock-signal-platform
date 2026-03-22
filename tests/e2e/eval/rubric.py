@@ -24,7 +24,7 @@ DIMENSIONS = {
         "scale": "binary",
         "criteria": {
             0: "FAIL — contains fabricated prices, scores, or statistics not in tool results",
-            1: "PASS — all numerical claims traceable to tool results or clearly marked as estimates",
+            1: "PASS — all claims traceable to tool results or marked as estimates",
         },
         "fail_threshold": 0,
     },

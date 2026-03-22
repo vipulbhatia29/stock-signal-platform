@@ -1,4 +1,5 @@
 """Custom pytest markers for test gating."""
+
 import pytest
 
 pre_commit = pytest.mark.pre_commit
