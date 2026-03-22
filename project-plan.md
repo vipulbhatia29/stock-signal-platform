@@ -296,10 +296,10 @@ Full UI/UX redesign based on Lovable prototype. 9 phases (UI-1 through UI-9):
 - [x] **UI-3: Dashboard Redesign** (~3h) — PR #43 merged (Session 43). KPI 5→3 col grid adapt, Market Indexes grid adapt, Action Required + RecommendationRow, Sector Allocation card, Watchlist 4→3 col adapt, useRecommendations hook
 - [x] **UI-4: Screener + Stock Detail** (~3h) — PR #44 (Session 43). ScoreBar inline, Held badge, signal descriptions (RSI/MACD/SMA/Bollinger), StockHeader redesign (Close, breadcrumb, Bookmark toggle, price display). Candlestick + benchmark deferred (backend needed)
 - [x] **UI-5: Portfolio Redesign** (~2h) — PR #45 (Session 43). Alert icons (AlertOctagon/AlertTriangle), KPI StatTiles with accent gradients, sector concentration warning banner. framer-motion animations deferred to UI-9.
-- [ ] **UI-6: Sectors Page (NEW)** (~4h) — New page + 3 backend endpoints (sectors, stocks-by-sector, correlation). AllocationDonut, sector accordions, comparison table, correlation heatmap + table
+- [ ] **UI-6: Sectors Page (NEW)** (~9.5h, 2-3 sessions) — Spec: `docs/superpowers/specs/2026-03-22-sectors-page-design.md`. Plan: `docs/superpowers/plans/2026-03-22-sectors-page-implementation.md`. 7 chunks: backend router+schemas, backend tests, frontend types+hooks, 5 new components (SectorAccordion, SectorStocksTable, CorrelationHeatmap, CorrelationTable, CorrelationTickerChips), page assembly, dashboard cleanup (remove duplicate donut, bigger StatTile), frontend tests
 - [x] **UI-7: Auth Redesign** (~2h) — PR #46 (Session 43). Split-panel login/register, brand showcase (logo glow, feature bullets, sparkline SVG, glowing orbs), Google OAuth stub (toast), styled inputs with icon prefix + focus glow
 - [x] **UI-8: Chat Panel Polish** (~1.5h) — PR #47 (Session 43). Agent selector cards (BarChart3/Globe icons, "Choose an Agent"), suggestion chips fill-not-send, pulsing cyan dots thinking indicator, ChatInput forwardRef
-- [ ] **UI-9: Animations + Final Polish** (~1.5h) — framer-motion staggered fade-up on all grids, glow effects on CTAs + inputs, scrollbar styling, chat-open grid adaptation on all pages, Playwright E2E verification
+- [x] **UI-9: Animations + Final Polish** (~1.5h) — PR #50 (Session 44). motion-primitives.tsx (PageTransition, StaggerGroup, StaggerItem, FadeIn). Applied to dashboard (page + KPI tiles stagger), screener, portfolio, stock detail, sidebar nav. Remaining: glow effects, scrollbar styling, Playwright E2E (deferred)
 
 **Dependencies:** Phase 4C.1 (quality fixes) must be done first. UI-1 → UI-2 sequential. UI-3/4/5/7 parallelizable. UI-6 needs backend endpoints.
 
@@ -452,7 +452,7 @@ Comprehensive backend hardening: test directory restructure, ~211 new tests acro
 ### Deferred Backend Work (from Phase 4F UI-4, Session 43)
 - [ ] **Candlestick chart toggle** — Add `format=ohlc` query param to `GET /api/v1/stocks/{ticker}/prices`. OHLC data already exists in `stock_prices` table. Frontend: Line/Candle pill toggle on stock detail price chart.
 - [ ] **Benchmark comparison chart** — Add `GET /api/v1/stocks/{ticker}/benchmark` endpoint. Fetch ^GSPC + ^IXIC price history (yfinance or cache), normalize to % change from start date. Frontend: 3-line chart (stock cyan, S&P green dashed, NASDAQ amber dashed) with zero reference line.
-- [ ] **KAN-98: Hydration mismatch** — `isNYSEOpen()` in Topbar causes server/client time mismatch. Fix with client-only render (`useState` + `useEffect`) or `suppressHydrationWarning`.
+- [x] **KAN-98: Hydration mismatch** — Fixed (Session 44, PR #50). Ref-based DOM update in Topbar defers `isNYSEOpen()` to client.
 
 ### GitHub Secrets Required
 - [ ] **CI_GROQ_API_KEY** (required) — primary LLM for agent eval calls

@@ -866,3 +866,29 @@ Spec (865 lines) + plan (16 tasks, 8 chunks) for backend hardening. 11 stories (
 **Resume point (Session 44):** KAN-94 [UI-6] Sectors Page (new page + 3 backend endpoints) → KAN-97 [UI-9] Animations + Final Polish
 
 ---
+
+## Session 44 — KAN-98 + KAN-97 Quick Fixes + KAN-94 Design (2026-03-22)
+
+**Branch:** `feat/KAN-98-97-quick-fixes` (PR #50, merged to develop) + `feat/KAN-94-sectors-design`
+**Epic:** KAN-88 (Phase 4F — UI Migration)
+
+### Quick Fixes (PR #50 — squash-merged)
+- **KAN-98: Hydration mismatch fix** — Replaced `isNYSEOpen()` direct call in Topbar with `useRef` + DOM update pattern. Market status hidden via `visibility:hidden` until client hydrates. Fixed ESLint `set-state-in-effect` rule (ref-based, not useState/useEffect).
+- **KAN-97: Entrance animations** — Created `motion-primitives.tsx` with `PageTransition`, `StaggerGroup`, `StaggerItem`, `FadeIn` wrappers. Applied to dashboard (page fade + KPI stagger), screener, portfolio, stock detail (page fade), sidebar nav (stagger). framer-motion was already installed.
+
+### KAN-94 Sectors Page — Design Complete
+- **Brainstorm:** Discussed sector correlation strategy — user's stocks within a sector (not full 20x20), comparison table for discovery, on-demand single-stock correlation. Portfolio donut only (not watchlist). Dashboard cleanup: remove duplicate Sector Allocation section.
+- **Spec:** `docs/superpowers/specs/2026-03-22-sectors-page-design.md` — 3 endpoints, 5 new components, scope toggle, heatmap + table correlation views
+- **Spec review:** 3 critical fixes (wrong model name, URL encoding, market_value join), 5 important fixes (NULL sectors, return_pct fallback, daily returns not raw prices, excluded_tickers field, scope default)
+- **Plan:** `docs/superpowers/plans/2026-03-22-sectors-page-implementation.md` — 7 chunks, 19 tasks, ~9.5h estimated across 2-3 sessions
+- **Plan review:** 3 important fixes applied (return_pct fallback, aggregation unit tests, validation order)
+
+### UI-9 Status
+- KAN-97 animations done (motion-primitives). Remaining: glow effects, scrollbar styling, Playwright E2E (deferred).
+
+**Test count:** 440 unit + 157 API + 7 e2e + 4 integration + 88 frontend = 696 total (unchanged — no new tests this session)
+**Alembic head:** `ac5d765112d6` (migration 010 — unchanged)
+
+**Resume point (Session 45):** Implement KAN-94 Sectors Page — start with Chunk 1 (backend router + schemas) on `feat/KAN-94-sectors-page` branch
+
+---
