@@ -486,14 +486,18 @@ async def get_sector_correlation(
     series_dict: dict[str, pd.Series] = {}
     for ticker in sufficient_tickers:
         times, prices = zip(*price_data[ticker])
-        s = pd.Series(data=prices, index=pd.DatetimeIndex(times), name=ticker)
+        # Normalize to date to align across tickers
+        date_index = pd.DatetimeIndex(times).normalize()
+        s = pd.Series(data=prices, index=date_index, name=ticker)
         # Deduplicate dates (keep last)
         s = s[~s.index.duplicated(keep="last")]
         series_dict[ticker] = s
 
     df = pd.DataFrame(series_dict)
+    # Drop rows with any NaN (dates where not all tickers have data)
+    df = df.dropna()
     # Compute daily returns correlation
-    returns_df = df.pct_change().dropna()
+    returns_df = df.pct_change(fill_method=None).dropna()
     corr_matrix = returns_df.corr()
 
     # Replace NaN with 0.0 (can happen if a ticker has constant price)
