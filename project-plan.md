@@ -452,7 +452,13 @@ Comprehensive backend hardening: test directory restructure, ~211 new tests acro
 ### Deferred Backend Work (from Phase 4F UI-4, Session 43)
 - [ ] **Candlestick chart toggle** — Add `format=ohlc` query param to `GET /api/v1/stocks/{ticker}/prices`. OHLC data already exists in `stock_prices` table. Frontend: Line/Candle pill toggle on stock detail price chart.
 - [ ] **Benchmark comparison chart** — Add `GET /api/v1/stocks/{ticker}/benchmark` endpoint. Fetch ^GSPC + ^IXIC price history (yfinance or cache), normalize to % change from start date. Frontend: 3-line chart (stock cyan, S&P green dashed, NASDAQ amber dashed) with zero reference line.
-- [ ] **KAN-98: Hydration mismatch** — `isNYSEOpen()` in Topbar causes server/client time mismatch. Fix with client-only render (`useState` + `useEffect`) or `suppressHydrationWarning`.
+- [x] **KAN-98: Hydration mismatch** — Fixed in Session 44 (PR #50). Ref-based DOM update for isNYSEOpen.
+
+### Deferred to Phase 5.1 (identified during Phase 5 design, Session 45)
+- [ ] **Red flag scanner** — Controversies, short interest, insider selling patterns. Needs new data sources (insider transactions, short interest from yfinance). Deferred due to uncertain data quality.
+- [ ] **Telegram notifications** — External notification channel. Deferred in favor of in-app alerts (bell icon). Can be added once pipeline data is flowing reliably.
+- [ ] **Forecast blending into composite score** — Confidence-weighted 3-way blend (tech + fundamental + forecast). Deferred until forecast accuracy is validated. Phase 5 keeps forecasts as a parallel signal.
+- [ ] **Live LLM eval tests** — Deferred from Phase 4G. Needs CI_GROQ_API_KEY secret.
 
 ### GitHub Secrets Required
 - [ ] **CI_GROQ_API_KEY** (required) — primary LLM for agent eval calls
