@@ -680,52 +680,10 @@ Fresh security audit found 11 issues (3 Critical, 5 High, 3 Medium). All fixed i
 
 ---
 
-## Session 40 — Phase 4G: Backend Hardening Spec + Plan (Design Session)
+## Session 40 — Phase 4G Backend Hardening Spec + Plan *(compact)*
 
-**Date:** 2026-03-21
-**Branch:** `feat/backend-hardening-spec` (from `develop`)
-**JIRA:** Epic KAN-73 + 11 Stories (KAN-74 through KAN-84)
-
-**What was done:**
-
-### Backend Hardening Spec (Design Phase)
-- [x] Deep codebase exploration — 3 parallel agents analyzed all API routes, agents, tools, Celery tasks, auth, MCP, test coverage gaps
-- [x] Researched real investor prompt patterns (financial AI chatbot use cases, LLM eval frameworks, LLM-as-Judge methodology)
-- [x] Referenced Sigmoid/Pfizer Architecture Best Practices audit (pages 11-12) for Evaluation Pyramid
-- [x] Designed 10 stories (S1-S10) + 1 restructure story (S0) iteratively with PM approval per section
-- [x] Spec: `docs/superpowers/specs/2026-03-21-backend-hardening-design.md` (865 lines)
-- [x] 2 spec review rounds — 5 important issues found and fixed (S8 count, S0 section, test_divestment placement, CI gating, portfolio/ subdirectory)
-
-### Implementation Plan
-- [x] Plan: `docs/superpowers/plans/2026-03-21-backend-hardening-plan.md` (16 tasks, 8 chunks, 3 sessions)
-- [x] Plan review against spec — 1 critical + 4 important issues found and fixed (divestment placement, stale counts, eval dimensions, golden set prompts, observability assertions)
-
-### JIRA Board
-- [x] Epic KAN-73 created
-- [x] 11 Stories created (KAN-74 through KAN-84), all linked to Epic, all To Do
-
-### Key Design Decisions
-- **Test directory restructure:** flat → domain-organized (signals/, agents/, tools/, portfolio/, pipeline/, infra/, adversarial/, e2e/)
-- **Evaluation pyramid:** Unit Evals (mocked LLM) → Component Evals (real LLM, structural) → System Evals (LLM-as-Judge, 8 dimensions) → Human Evals (manual review)
-- **LLM routing for CI:** Groq primary (cheap), Anthropic fallback + Haiku judge. GitHub Secrets: CI_GROQ_API_KEY + CI_ANTHROPIC_API_KEY both created.
-- **Pre-commit hooks:** 7-stage pipeline with agent-aware gating (only runs live LLM tests when backend/agents/ or backend/tools/ change)
-- **Auto-triage:** test failures classified as Bug (Critical/High/Medium) or Backlog (assigned to appropriate phase) → JIRA + project-plan
-- **Context relevance:** Added 8th eval dimension for multi-turn pronoun resolution and stale data detection
-- **Resource cleanup:** 4 tests for DB session, ContextVar, stream buffer, Celery event loop cleanup
-- **Session entity registry:** Designed Option C (in-memory dict on graph state) for multi-turn ticker tracking — deferred to Phase 5 backlog
-
-### Backlog Items Identified (Phase 5)
-- Session entity registry (pronoun resolution, lazy re-fetch)
-- Stock comparison tool (structured side-by-side)
-- Context-aware planner prompt
-- Dividend sustainability tool
-- Risk narrative tool
-- Red flag scanner
-
-**Test count:** 546 (unchanged — design session, no code)
-**Branch:** `feat/backend-hardening-spec` (3 commits pushed)
-
-**Next (Session 41):** Start implementation — Chunk 1 (S0 directory restructure) → Chunk 2 (S1 auth hardening) → Chunk 3 (S2+S3 pipeline + signals). ~44 tests.
+**Date:** 2026-03-21 | **Tests:** unchanged (design session)
+Spec (865 lines) + plan (16 tasks, 8 chunks) for backend hardening. 11 stories (KAN-74-84) under Epic KAN-73. Key decisions: domain-organized test dirs, LLM-as-Judge eval pyramid (8 dimensions), agent-aware pre-commit hooks, 6 Phase 5 backlog items identified.
 
 ---
 
@@ -810,5 +768,58 @@ Fresh security audit found 11 issues (3 Critical, 5 High, 3 Medium). All fixed i
 **DB writes verified:** users, stocks, stock_prices, signal_snapshots, watchlist, transactions, portfolios, user_preferences
 
 **Next:** Phase 4C.1 polish → Phase 4F UI migration
+
+---
+
+## Session 42 — Phase 4C.1: Chat UI Polish (KAN-87)
+
+**Date:** 2026-03-21
+**Branch:** `feat/KAN-87-chat-ui-polish` (from `develop`)
+**JIRA:** KAN-87 (Story, In Progress)
+
+**What was done:**
+
+### JIRA Cleanup
+- [x] Transitioned KAN-37–53 (17 Phase 4C subtasks) from Ready for Verification → Done
+- [x] Transitioned KAN-69 (Phase 4E Epic) from To Do → Done
+
+### Functional Fixes (4)
+- [x] **CSV wired to tool cards** — `extractCsvData()` in message-bubble.tsx extracts tabular data from completed tool results (screen_stocks, recommendations, array results) and passes as `csvData` prop to `MessageActions`
+- [x] **Session expiry prompt** — session-list.tsx now shows warning with "Start New Chat" / "View Anyway" buttons when clicking an expired session (was silently loading)
+- [x] **localStorage session restore** — useStreamChat reads `CHAT_ACTIVE_SESSION` on mount, restores active session across page reloads
+- [x] **`tool_calls` type hint** — fixed `save_message()` param from `dict | None` to `list[dict] | None`; matching fix in `ChatMessageResponse` schema
+
+### Code Quality Fixes (8)
+- [x] **Mutable `nextId`** → `crypto.randomUUID()` with jsdom fallback (`Date.now()-random`)
+- [x] **Type annotations** — `user: User = Depends(...)` on all 5 chat endpoints
+- [x] **OpenAPI metadata** — `summary`, `description`, `responses` on all chat endpoint decorators
+- [x] **Graph guard** — `getattr()` + 503 fallback for missing V1/V2 graphs on startup failure
+- [x] **`data: Any` on StreamEvent** → `dict[str, Any] | list | str | None`
+- [x] **`CLEAR_ERROR`** — new action type in chat-reducer (was abusing `STREAM_ERROR("")`)
+- [x] **Lazy imports** → all 7 inline imports moved to top-of-file in chat router
+- [x] **`_get_session()` helper** — extracted from 3 duplicated inline ownership lookups
+
+### Performance Fixes (5)
+- [x] **ReactMarkdown plugin arrays** — hoisted `[remarkGfm]`/`[rehypeHighlight]` to module constants
+- [x] **Artifact dispatch** — gated on `!isStreaming` (was firing on every token flush)
+- [x] **Stale `activeSessionId`** — uses `activeSessionIdRef` for cache invalidation in closures
+- [x] **`React.memo()`** — applied to MessageBubble (prevents re-render of all bubbles on each token)
+- [x] **`dispatch` removed** — exposed `setAgentType` named callback instead of raw dispatch
+
+### Bonus Fix
+- [x] **Pre-existing test failure** — `test_analyze_stock_tool_error_handling` was environment-dependent (relied on no DB running). Fixed: patched `async_session_factory` at source module to deterministically test error path.
+
+### Docs
+- [x] PROJECT_INDEX.md — full refresh (file counts, test counts, phase roadmap, new components)
+- [x] PROGRESS.md — Session 42 entry, Session 40 compacted
+- [x] project-plan.md — 4C.1 items checked off
+- [x] Serena `project/state` — updated
+- [x] MEMORY.md — updated project state + new feedback memory
+
+**Files modified:** 9 (6 frontend, 3 backend) + 1 test file
+**Test count:** 440 unit + 157 API + 7 e2e + 4 integration + 70 frontend = 678 total
+**Alembic head:** `ac5d765112d6` (migration 010 — unchanged)
+
+**Next (Session 43):** Phase 4F UI Migration (UI-1: Shell + Design Tokens)
 
 ---

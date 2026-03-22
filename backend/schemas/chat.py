@@ -45,7 +45,7 @@ class ChatMessageResponse(BaseModel):
     id: uuid.UUID
     role: str
     content: str | None
-    tool_calls: dict | None
+    tool_calls: list[dict] | None
     model_used: str | None
     tokens_used: int | None
     created_at: datetime

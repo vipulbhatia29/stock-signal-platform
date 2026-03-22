@@ -16,12 +16,17 @@ async def test_analyze_stock_tool_metadata():
 
 @pytest.mark.asyncio
 async def test_analyze_stock_tool_error_handling():
-    """AnalyzeStockTool returns error ToolResult on exception."""
+    """AnalyzeStockTool returns error ToolResult on DB failure."""
+    from unittest.mock import patch
+
     from backend.tools.analyze_stock import AnalyzeStockTool
 
     tool = AnalyzeStockTool()
-    # No DB running in unit tests — should return error, not raise
-    result = await tool.execute({"ticker": "AAPL"})
+    with patch(
+        "backend.database.async_session_factory",
+        side_effect=Exception("DB unavailable"),
+    ):
+        result = await tool.execute({"ticker": "AAPL"})
     assert result.status == "error"
     assert result.error is not None
 

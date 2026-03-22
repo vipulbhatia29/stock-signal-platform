@@ -48,6 +48,7 @@ export type ChatAction =
   | { type: "TOOL_ERROR"; tool: string; error: string }
   | { type: "LOAD_HISTORY"; messages: ChatMessageUI[] }
   | { type: "SET_SESSION"; sessionId: string; agentType: "stock" | "general" }
+  | { type: "CLEAR_ERROR" }
   | { type: "CLEAR" };
 
 export const initialChatState: ChatState = {
@@ -58,9 +59,11 @@ export const initialChatState: ChatState = {
   agentType: "stock",
 };
 
-let nextId = 0;
 function genId(): string {
-  return `msg-${Date.now()}-${nextId++}`;
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
 }
 
 function updateLastAssistant(
@@ -239,6 +242,12 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         ...state,
         activeSessionId: action.sessionId || null,
         agentType: action.agentType,
+      };
+
+    case "CLEAR_ERROR":
+      return {
+        ...state,
+        error: null,
       };
 
     case "CLEAR":

@@ -45,7 +45,7 @@ export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
     retry,
     switchSession,
     startNewSession,
-    dispatch,
+    setAgentType,
   } = useStreamChat();
 
   const { data: sessions } = useChatSessions();
@@ -66,8 +66,9 @@ export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
     }
   }, [messages]);
 
-  // Artifact dispatch: when a tool_result arrives for a pinnable tool, notify parent
+  // Artifact dispatch: only after streaming completes (not on every token flush)
   useEffect(() => {
+    if (isStreaming) return;
     if (messages.length === 0) return;
     const lastMsg = messages[messages.length - 1];
     if (lastMsg.role !== "assistant") return;
@@ -81,7 +82,7 @@ export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
         data: completedPinnable.result,
       });
     }
-  }, [messages, onArtifact]);
+  }, [isStreaming, messages, onArtifact]);
 
   // Drag-resize logic (preserved from stub)
   useEffect(() => {
@@ -206,7 +207,7 @@ export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
       {!activeSessionId && messages.length === 0 && (
         <AgentSelector
           value={agentType}
-          onChange={(agent) => dispatch({ type: "SET_SESSION", sessionId: "", agentType: agent })}
+          onChange={(agent) => setAgentType(agent)}
           disabled={isStreaming}
         />
       )}

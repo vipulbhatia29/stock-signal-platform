@@ -32,7 +32,7 @@ class StreamEvent:
     tool: str | None = None
     params: dict[str, Any] | None = None
     status: str | None = None
-    data: Any = None
+    data: dict[str, Any] | list | str | None = None
     usage: dict[str, Any] | None = None
     error: str | None = None
 

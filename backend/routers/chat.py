@@ -7,15 +7,29 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.database import get_async_session
+from backend.config import settings
+from backend.database import async_session_factory, get_async_session
 from backend.dependencies import get_current_user
+from backend.models.chat import ChatMessage, ChatSession
+from backend.models.user import User
+from backend.request_context import current_user_id
 from backend.schemas.chat import (
     ChatMessageResponse,
     ChatRequest,
     ChatSessionResponse,
     FeedbackRequest,
+)
+from backend.tools.chat_session import (
+    auto_title,
+    build_context_window,
+    create_session,
+    deactivate_session,
+    list_user_sessions,
+    load_session_messages,
+    save_message,
 )
 
 logger = logging.getLogger(__name__)
@@ -23,13 +37,47 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-@router.post("/stream")
+async def _get_session(
+    db: AsyncSession,
+    session_id: uuid.UUID,
+    user_id: uuid.UUID,
+) -> ChatSession:
+    """Look up a chat session with ownership verification.
+
+    Args:
+        db: Async database session.
+        session_id: The session ID to look up.
+        user_id: The requesting user's ID.
+
+    Returns:
+        The ChatSession if found and owned by the user.
+
+    Raises:
+        HTTPException: 404 if session not found or not owned by user.
+    """
+    stmt = select(ChatSession).where(
+        ChatSession.id == session_id,
+        ChatSession.user_id == user_id,
+    )
+    result = await db.execute(stmt)
+    session = result.scalar_one_or_none()
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
+
+
+@router.post(
+    "/stream",
+    summary="Stream a chat response",
+    description="Stream a chat response via NDJSON. Creates a new session if no session_id.",
+    responses={401: {"description": "Not authenticated"}, 422: {"description": "Validation error"}},
+)
 async def chat_stream(
     body: ChatRequest,
     request: Request,
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> StreamingResponse:
     """Stream a chat response via NDJSON.
 
     Creates a new session if no session_id is provided (requires agent_type).
@@ -38,29 +86,10 @@ async def chat_stream(
     When AGENT_V2=true, uses the Plan→Execute→Synthesize graph.
     Otherwise, uses the V1 ReAct graph.
     """
-    from backend.tools.chat_session import (
-        auto_title,
-        create_session,
-        load_session_messages,
-        save_message,
-    )
-
     # Resolve or create session
     if body.session_id:
         session_messages = await load_session_messages(db, body.session_id)
-        # Load agent_type from the session record
-        from sqlalchemy import select
-
-        from backend.models.chat import ChatSession
-
-        stmt = select(ChatSession).where(
-            ChatSession.id == body.session_id,
-            ChatSession.user_id == user.id,
-        )
-        result = await db.execute(stmt)
-        chat_session = result.scalar_one_or_none()
-        if chat_session is None:
-            raise HTTPException(status_code=404, detail="Session not found")
+        chat_session = await _get_session(db, body.session_id, user.id)
         agent_type = chat_session.agent_type
     else:
         if not body.agent_type:
@@ -74,17 +103,12 @@ async def chat_stream(
     await save_message(db, chat_session.id, role="user", content=body.message)
 
     # Set request-scoped user context for tools (portfolio_exposure etc.)
-    # Reset token stored so we can clear after streaming completes
-    from backend.request_context import current_user_id
-
-    _ctx_token = current_user_id.set(user.id)
+    _ctx_token = current_user_id.set(user.id)  # noqa: F841
 
     # Generate query_id for tracing
     query_id = uuid.uuid4()
 
     # Feature flag: select V1 or V2 graph
-    from backend.config import settings
-
     use_v2 = settings.AGENT_V2 and hasattr(request.app.state, "agent_v2_graph")
 
     if use_v2:
@@ -94,15 +118,20 @@ async def chat_stream(
         )
 
     # V1 path (existing ReAct graph)
-    graph = (
-        request.app.state.stock_graph if agent_type == "stock" else request.app.state.general_graph
-    )
+    stock_graph = getattr(request.app.state, "stock_graph", None)
+    general_graph = getattr(request.app.state, "general_graph", None)
+    graph = stock_graph if agent_type == "stock" else general_graph
+
+    if graph is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Chat service is starting up. Please try again in a moment.",
+        )
 
     async def event_generator():
         """Yield NDJSON stream events and persist assistant message after."""
         from backend.agents.graph import AgentState
         from backend.agents.stream import stream_graph_events
-        from backend.tools.chat_session import build_context_window, save_message
 
         # Build context from history + new message
         context = build_context_window(session_messages)
@@ -138,8 +167,6 @@ async def chat_stream(
         final_content = "".join(collected_tokens) if collected_tokens else None
         tool_calls_json = collected_tool_calls if collected_tool_calls else None
 
-        from backend.database import async_session_factory
-
         async with async_session_factory() as persist_db:
             await save_message(
                 persist_db,
@@ -158,17 +185,15 @@ async def chat_stream(
 async def _event_generator_v2(
     request: Request,
     body: ChatRequest,
-    chat_session,
-    session_messages: list,
-    user,
+    chat_session: ChatSession,
+    session_messages: list[dict],
+    user: User,
     query_id: uuid.UUID,
 ):
     """Yield NDJSON events from the V2 Plan→Execute→Synthesize graph."""
     from backend.agents.graph_v2 import AgentStateV2
     from backend.agents.stream import stream_graph_v2_events
     from backend.agents.user_context import build_user_context
-    from backend.database import async_session_factory
-    from backend.tools.chat_session import build_context_window, save_message
 
     # Build user context for personalization
     async with async_session_factory() as ctx_db:
@@ -194,7 +219,17 @@ async def _event_generator_v2(
         decline_message="",
     )
 
-    graph = request.app.state.agent_v2_graph
+    graph = getattr(request.app.state, "agent_v2_graph", None)
+    if graph is None:
+        from backend.agents.stream import StreamEvent
+
+        yield (
+            StreamEvent(
+                type="error", error="Chat service is starting up. Please try again in a moment."
+            ).to_ndjson()
+            + "\n"
+        )
+        return
 
     collected_tokens: list[str] = []
     collected_tool_calls: list[dict] = []
@@ -230,27 +265,20 @@ async def _event_generator_v2(
 @router.patch(
     "/sessions/{session_id}/messages/{message_id}/feedback",
     response_model=dict,
+    summary="Set message feedback",
+    description="Set thumbs up/down feedback on a chat message.",
+    responses={404: {"description": "Session or message not found"}},
 )
 async def set_feedback(
     session_id: uuid.UUID,
     message_id: uuid.UUID,
     body: FeedbackRequest,
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict:
     """Set thumbs up/down feedback on a chat message."""
-    from sqlalchemy import select
-
-    from backend.models.chat import ChatMessage, ChatSession
-
     # Verify session belongs to user
-    stmt = select(ChatSession).where(
-        ChatSession.id == session_id,
-        ChatSession.user_id == user.id,
-    )
-    result = await db.execute(stmt)
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Session not found")
+    await _get_session(db, session_id, user.id)
 
     # Find message
     stmt = select(ChatMessage).where(
@@ -269,50 +297,49 @@ async def set_feedback(
     return {"status": "ok", "feedback": body.feedback}
 
 
-@router.get("/sessions", response_model=list[ChatSessionResponse])
+@router.get(
+    "/sessions",
+    response_model=list[ChatSessionResponse],
+    summary="List chat sessions",
+    description="List the current user's active chat sessions, ordered by most recent first.",
+)
 async def list_sessions(
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> list[ChatSessionResponse]:
     """List user's active chat sessions."""
-    from backend.tools.chat_session import list_user_sessions
-
     return await list_user_sessions(db, user.id)
 
 
-@router.get("/sessions/{session_id}/messages", response_model=list[ChatMessageResponse])
+@router.get(
+    "/sessions/{session_id}/messages",
+    response_model=list[ChatMessageResponse],
+    summary="Get session messages",
+    description="Get messages for a chat session. Ownership is verified.",
+    responses={404: {"description": "Session not found"}},
+)
 async def get_session_messages(
     session_id: uuid.UUID,
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> list[ChatMessageResponse]:
     """Get messages for a chat session (ownership verified)."""
-    from sqlalchemy import select
-
-    from backend.models.chat import ChatSession
-    from backend.tools.chat_session import load_session_messages
-
-    # Verify session belongs to user
-    stmt = select(ChatSession).where(
-        ChatSession.id == session_id,
-        ChatSession.user_id == user.id,
-    )
-    result = await db.execute(stmt)
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="Session not found")
-
+    await _get_session(db, session_id, user.id)
     return await load_session_messages(db, session_id)
 
 
-@router.delete("/sessions/{session_id}")
+@router.delete(
+    "/sessions/{session_id}",
+    summary="Delete a chat session",
+    description="Soft-delete a chat session (set is_active=False).",
+    responses={404: {"description": "Session not found"}, 403: {"description": "Not authorized"}},
+)
 async def delete_session(
     session_id: uuid.UUID,
-    user=Depends(get_current_user),
+    user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
-):
+) -> dict:
     """Soft-delete a chat session (set is_active=False)."""
-    from backend.tools.chat_session import deactivate_session
-
     try:
         await deactivate_session(db, session_id, user.id)
     except ValueError as exc:

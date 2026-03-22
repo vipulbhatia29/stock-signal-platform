@@ -1,6 +1,6 @@
 # Project Index: stock-signal-platform
 
-Generated: 2026-03-20 | Phase: 4D + KAN-57 COMPLETE | Next: Phase 4E Security
+Generated: 2026-03-21 | Phase: 4C.1 IN PROGRESS | Next: Phase 4F UI Migration
 
 ---
 
@@ -8,7 +8,7 @@ Generated: 2026-03-20 | Phase: 4D + KAN-57 COMPLETE | Next: Phase 4E Security
 
 ```
 stock-signal-platform/
-├── backend/                    Python FastAPI backend (65 .py files)
+├── backend/                    Python FastAPI backend (90 .py files)
 │   ├── main.py                 App entry point, router mounts, startup (V1+V2 graphs)
 │   ├── config.py               Pydantic Settings (reads .env) — incl. AGENT_V2 flag
 │   ├── database.py             Async SQLAlchemy engine + async_session_factory
@@ -31,36 +31,48 @@ stock-signal-platform/
 │   │   ├── general_agent.py    V1 general agent
 │   │   ├── providers/          LLM providers (Anthropic, Groq)
 │   │   └── prompts/            planner.md, synthesizer.md, stock_agent.md, general_agent.md
-│   ├── models/                 SQLAlchemy 2.0 ORM models (13 files)
+│   ├── models/                 SQLAlchemy 2.0 ORM models (15 files)
 │   ├── routers/                FastAPI endpoint handlers (7 routers)
 │   ├── schemas/                Pydantic v2 request/response schemas
 │   ├── tools/                  Business logic + 13 registered tools + 4 MCP adapters
 │   ├── tasks/                  Celery background jobs (refresh, snapshots)
 │   ├── services/               Service layer (thin — mostly in tools/)
+│   ├── mcp_server/             FastMCP server at /mcp (Streamable HTTP, JWT auth)
 │   └── migrations/             Alembic versions (head: ac5d765112d6 = 010)
 ├── frontend/                   Next.js 15, TypeScript, Tailwind v4, shadcn/ui v4
 │   └── src/
-│       ├── app/                App Router pages + layouts
+│       ├── app/                App Router pages + layouts (7 pages)
 │       ├── components/         39 UI components + 14 chat components + 21 UI primitives
-│       ├── hooks/              TanStack Query hooks (26 hooks in use-stocks.ts)
+│       ├── hooks/              TanStack Query hooks + chat state management
 │       ├── lib/                Utilities, auth, design tokens, formatters
 │       └── types/api.ts        Shared TypeScript API types
-├── tests/
+├── tests/                      10 domain subdirs (Phase 4G restructured)
 │   ├── conftest.py             Shared fixtures: DB, Redis, factories, auth
-│   ├── unit/                   38 test files — 340 tests, no external deps
-│   ├── api/                    15 test files — 132 tests, needs Postgres + Redis
-│   └── integration/            1 test file — 4 Agent V2 flow tests
+│   ├── unit/                   ~40 test files — 440 tests, no external deps
+│   │   ├── agents/             Agent V2, planner, executor, synthesizer, stream
+│   │   ├── auth/               JWT, dependencies
+│   │   ├── chat/               Session management, schemas, models
+│   │   ├── infra/              MCP, Celery, health, user context
+│   │   ├── pipeline/           Sync, seed, warm data
+│   │   ├── portfolio/          FIFO, divestment
+│   │   ├── recommendations/    Recommendation engine
+│   │   ├── signals/            Signal computation
+│   │   ├── tools/              Internal tools, registry, hardening
+│   │   └── adversarial/        Agent adversarial tests
+│   ├── api/                    15 test files — 157 tests, needs Postgres + Redis
+│   ├── integration/            1 file — 4 Agent V2 flow tests
+│   └── e2e/                    eval/ (rubric, judge, golden set) + 7 live LLM tests
 ├── docs/
 │   ├── PRD.md                  Product requirements (WHAT + WHY)
 │   ├── FSD.md                  Functional spec (acceptance criteria)
 │   ├── TDD.md                  Technical design (HOW + API contracts)
 │   ├── data-architecture.md    DB schema, TimescaleDB, model versioning
 │   └── superpowers/
-│       ├── specs/              Active design specs
-│       ├── plans/              Active implementation plans
+│       ├── specs/              Active design specs (7 files)
+│       ├── plans/              Active implementation plans (8 files)
 │       └── archive/            Completed specs + plans
-├── scripts/                    seed_prices.py, sync_sp500.py
-├── .github/workflows/          ci-pr.yml, ci-merge.yml (3 workflows)
+├── scripts/                    seed_prices.py, sync_sp500.py, sync_indexes.py
+├── .github/workflows/          ci-pr.yml, ci-merge.yml, ci-eval.yml, deploy.yml
 ├── CLAUDE.md                   Project instructions for Claude
 ├── PROGRESS.md                 Session log (full detail last 3 sessions)
 ├── project-plan.md             Phased build plan with ✅ completions
@@ -81,7 +93,10 @@ stock-signal-platform/
 | Tests (unit) | `tests/unit/` | `uv run pytest tests/unit/ -v` |
 | Tests (api) | `tests/api/` | `uv run pytest tests/api/ -v` |
 | Tests (integration) | `tests/integration/` | `uv run pytest tests/integration/ -v` |
+| Tests (e2e/eval) | `tests/e2e/` | `uv run pytest tests/e2e/ -v` (needs GROQ_API_KEY) |
 | Tests (frontend) | `frontend/` | `cd frontend && npx jest` |
+| Lint (backend) | — | `uv run ruff check --fix && uv run ruff format` |
+| Lint (frontend) | `frontend/` | `cd frontend && npx tsc --noEmit` |
 
 ---
 
@@ -116,6 +131,7 @@ stock-signal-platform/
 | `market_data.py` | `fetch_prices()`, `ensure_stock_exists()` | yfinance OHLCV → TimescaleDB |
 | `fundamentals.py` | `fetch_fundamentals()`, `fetch_analyst_data()`, `fetch_earnings_history()`, `persist_*()` | All yfinance data materialized to DB during ingestion |
 | `portfolio.py` | `get_positions_with_pnl()`, `_run_fifo()` | FIFO positions, P&L, sector allocation |
+| `chat_session.py` | `create_session()`, `save_message()`, `build_context_window()` | Session CRUD, message persistence, token windowing |
 
 ### `backend/agents/` — V1 ReAct + V2 Plan→Execute→Synthesize
 
@@ -144,7 +160,7 @@ stock-signal-platform/
 | `indexes.py` | `/api/v1/indexes` | S&P 500, NASDAQ, Dow index cards |
 | `tasks.py` | `/api/v1/tasks` | POST /refresh-watchlist (Celery trigger) |
 
-### `backend/models/` — ORM Models (13 files)
+### `backend/models/` — ORM Models (15 files)
 
 | Model | Table | Notes |
 |-------|-------|-------|
@@ -159,7 +175,7 @@ stock-signal-platform/
 | `PortfolioSnapshot` | `portfolio_snapshots` | TimescaleDB hypertable (daily) |
 | `DividendPayment` | `dividend_payments` | TimescaleDB hypertable |
 | `ChatSession` | `chat_session` | Agent type, user, last_active |
-| `ChatMessage` | `chat_message` | Content, tool_calls, feedback (up/down) |
+| `ChatMessage` | `chat_message` | Content, tool_calls (list[dict]), feedback (up/down) |
 | `LLMCallLog` | `llm_call_log` | Provider, model, tokens, cost, tier, query_id |
 | `ToolExecutionLog` | `tool_execution_log` | Tool name, params, latency, cache_hit, query_id |
 | `UserPreference` | `user_preferences` | max_position_pct, max_sector_pct, stop_loss |
@@ -181,42 +197,34 @@ stock-signal-platform/
 
 | Component | Purpose |
 |-----------|---------|
-| `chat/message-bubble.tsx` | Message rendering with plan, evidence, decline, feedback |
+| `chat/message-bubble.tsx` | Memoized message rendering with plan, evidence, decline, CSV extraction |
 | `chat/plan-display.tsx` | Research plan with step checkmarks |
 | `chat/evidence-section.tsx` | Collapsible evidence tree with source citations |
 | `chat/feedback-buttons.tsx` | Thumbs up/down with PATCH API |
 | `chat/decline-message.tsx` | Styled out-of-scope message |
 | `chat/tool-card.tsx` | Tool execution card (name, params, result) |
-| `chat/markdown-content.tsx` | Markdown rendering for assistant messages |
+| `chat/markdown-content.tsx` | Markdown rendering (hoisted plugin arrays for perf) |
 | `chat/thinking-indicator.tsx` | Pulsing dots during analysis |
 | `chat/chat-input.tsx` | Message input with submit |
 | `chat/agent-selector.tsx` | Stock/General agent toggle |
-| `chat/session-list.tsx` | Session history sidebar |
+| `chat/session-list.tsx` | Session history with expired session warning prompt |
 | `chat/artifact-bar.tsx` | Pinned artifact display |
 | `chat/error-bubble.tsx` | Error state display |
 | `chat/message-actions.tsx` | Copy/CSV export actions |
 
-### Dashboard (Phase 4A + KAN-57)
+### Hooks
 
-| Component | Purpose |
-|-----------|---------|
-| `welcome-banner.tsx` | First-visit onboarding with quick-add tickers |
-| `trending-stocks.tsx` | Top 5 stocks by composite score |
-| `stat-tile.tsx` | Dashboard KPI tile with accent gradient |
-| `allocation-donut.tsx` | CSS conic-gradient pie |
-| `portfolio-drawer.tsx` | Bottom slide-up with portfolio chart |
-| `stock-card.tsx` | Watchlist card with score + signal badge |
-| `empty-state.tsx` | Empty state with optional action buttons |
-
-### Hooks (26 exported from `hooks/use-stocks.ts`)
-
+**Data fetching (26 from `hooks/use-stocks.ts`):**
 `useWatchlist`, `useAddToWatchlist`, `useRemoveFromWatchlist`, `useStockSearch`,
 `useIngestTicker`, `useBulkSignals`, `useTrendingStocks`, `usePrices`, `useSignals`,
 `useSignalHistory`, `useIsInWatchlist`, `useStockMeta`, `useFundamentals`,
 `useDividends`, `usePreferences`, `useUpdatePreferences`, `useRebalancing`,
 `usePositions`, `usePortfolioSummary`, `usePortfolioHistory`, `useIndexes`
 
-Chat: `useStreamChat` (hooks/use-stream-chat.ts), `chatReducer` (hooks/chat-reducer.ts)
+**Chat state:**
+- `hooks/use-stream-chat.ts` — NDJSON streaming, RAF token batching, abort, auth retry, session restore
+- `hooks/chat-reducer.ts` — Pure state machine (16 action types incl. CLEAR_ERROR)
+- `hooks/use-chat.ts` — TanStack Query hooks for session CRUD
 
 ---
 
@@ -224,11 +232,12 @@ Chat: `useStreamChat` (hooks/use-stream-chat.ts), `chatReducer` (hooks/chat-redu
 
 | Suite | Files | Tests | Command |
 |-------|-------|-------|---------|
-| Backend unit | 38 | 340 | `uv run pytest tests/unit/ -v` |
-| Backend API | 15 | 132 | `uv run pytest tests/api/ -v` |
+| Backend unit | ~40 | 440 | `uv run pytest tests/unit/ -v` |
+| Backend API | 15 | 157 | `uv run pytest tests/api/ -v` |
 | Backend integration | 1 | 4 | `uv run pytest tests/integration/ -v` |
+| Backend e2e/eval | 1 | 7 | `uv run pytest tests/e2e/ -v` (needs API key) |
 | Frontend | 20 | 70 | `cd frontend && npx jest` |
-| **Total** | **74** | **546** | |
+| **Total** | **~77** | **~678** | |
 
 ---
 
@@ -245,9 +254,9 @@ Chat: `useStreamChat` (hooks/use-stream-chat.ts), `chatReducer` (hooks/chat-redu
 
 ## 🔗 Key Dependencies
 
-**Python:** fastapi, sqlalchemy[asyncio], asyncpg, alembic, pydantic[v2], celery, redis, yfinance, pandas-ta, langchain, langgraph, python-jose, passlib, bcrypt==4.2.1, slowapi, httpx, pytest, testcontainers, factory-boy
+**Python:** fastapi, sqlalchemy[asyncio], asyncpg, alembic, pydantic[v2], celery, redis, yfinance, pandas-ta, langchain, langgraph, python-jose, passlib, bcrypt==4.2.1, slowapi, httpx, tiktoken, pytest, testcontainers, factory-boy
 
-**Node:** next 15, react 19, typescript, tailwindcss v4, @base-ui/react (shadcn v4), @tanstack/react-query, recharts, sonner, next-themes, jest, @testing-library/react
+**Node:** next 15, react 19, typescript, tailwindcss v4, @base-ui/react (shadcn v4), @tanstack/react-query, recharts, react-markdown, remark-gfm, rehype-highlight, sonner, next-themes, jest, @testing-library/react
 
 ---
 
@@ -259,9 +268,10 @@ Chat: `useStreamChat` (hooks/use-stream-chat.ts), `chatReducer` (hooks/chat-redu
 | `docs/FSD.md` | Functional spec + acceptance criteria |
 | `docs/TDD.md` | API contracts + technical architecture |
 | `docs/data-architecture.md` | DB schema + TimescaleDB patterns |
-| `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md` | Phase 4D spec (13 sections) |
-| `docs/superpowers/plans/2026-03-20-phase-4d-agent-intelligence.md` | Phase 4D plan (24 tasks, 7 chunks) |
-| `docs/superpowers/specs/2026-03-15-cicd-branching-design.md` | CI/CD + branching strategy |
+| `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md` | Phase 4D spec |
+| `docs/superpowers/specs/2026-03-21-backend-hardening-design.md` | Phase 4G spec |
+| `docs/superpowers/plans/2026-03-19-ui-migration-workflow.md` | Phase 4F UI migration workflow |
+| `docs/lovable/migration-gap-analysis.md` | Phase 4F gap analysis |
 | `PROGRESS.md` | Session log — read first each session |
 | `project-plan.md` | Phase roadmap with ✅ completions |
 
@@ -282,7 +292,7 @@ uv run uvicorn backend.main:app --reload --port 8181
 cd frontend && npm install && npm run dev
 
 # 4. Verify
-uv run pytest tests/unit/ -v          # 340 green
+uv run pytest tests/unit/ -v          # 440 green
 cd frontend && npx jest                # 70 green
 
 # 5. Enable Agent V2 (optional)
@@ -305,10 +315,13 @@ echo "AGENT_V2=true" >> backend/.env
 | 4C — Frontend Chat UI | ✅ Complete | PRs #15-16 |
 | 4.5 — CI/CD + Branching | ✅ Complete | PRs #7-9 |
 | Bug Sprint | ✅ Complete | PRs #18-21 |
-| **4D — Agent Intelligence** | ✅ **Complete** | **PRs #26-32** |
-| **KAN-57 — Onboarding** | ✅ **Complete** | **PR #33** |
-| 4C.1 — Chat Polish | ⬜ Planned (25 items) | — |
-| 4E — Security Fixes | ⬜ Planned (4 items) | — |
-| 4F — UI Migration | ⬜ Planned (9 stories) | — |
+| 4D — Agent Intelligence | ✅ Complete | PRs #26-32 |
+| KAN-57 — Onboarding | ✅ Complete | PR #33 |
+| 4E — Security Hardening | ✅ Complete | PR #35 |
+| 4G — Backend Hardening | ✅ Complete | PR #38 |
+| **4C.1 — Chat UI Polish** | 🟡 **In Progress** | KAN-87 |
+| 4D.2 — Stock Detail Enrichment | ⬜ Planned (5 items) | — |
+| 4F — UI Migration | ⬜ Planned (9 stories, ~26h) | — |
 | 5 — Background Jobs + Alerts | ⬜ Planned | — |
-| 6 — Deployment (Azure + Terraform) | ⬜ Planned | — |
+| 5.5 — Security (refresh token revocation) | ⬜ Planned | — |
+| 6 — Deployment (Docker + Terraform) | ⬜ Planned | — |
