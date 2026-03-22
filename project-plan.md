@@ -449,6 +449,11 @@ Comprehensive backend hardening: test directory restructure, ~211 new tests acro
 - [ ] **Risk narrative tool** — Ranked risk factors with monitoring indicators
 - [ ] **Red flag scanner** — Controversies, short interest, insider selling patterns
 
+### Deferred Backend Work (from Phase 4F UI-4, Session 43)
+- [ ] **Candlestick chart toggle** — Add `format=ohlc` query param to `GET /api/v1/stocks/{ticker}/prices`. OHLC data already exists in `stock_prices` table. Frontend: Line/Candle pill toggle on stock detail price chart.
+- [ ] **Benchmark comparison chart** — Add `GET /api/v1/stocks/{ticker}/benchmark` endpoint. Fetch ^GSPC + ^IXIC price history (yfinance or cache), normalize to % change from start date. Frontend: 3-line chart (stock cyan, S&P green dashed, NASDAQ amber dashed) with zero reference line.
+- [ ] **KAN-98: Hydration mismatch** — `isNYSEOpen()` in Topbar causes server/client time mismatch. Fix with client-only render (`useState` + `useEffect`) or `suppressHydrationWarning`.
+
 ### GitHub Secrets Required
 - [ ] **CI_GROQ_API_KEY** (required) — primary LLM for agent eval calls
 - [ ] CI_ANTHROPIC_API_KEY (optional) — fallback + Haiku judge for eval scoring
