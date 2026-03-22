@@ -9,7 +9,7 @@ const SCORE_COLOR_CLASSES: Record<string, string> = {
 
 interface ScoreBadgeProps {
   score: number | null;
-  size?: "sm" | "default" | "lg";
+  size?: "xs" | "sm" | "default" | "lg";
 }
 
 export function ScoreBadge({ score, size = "default" }: ScoreBadgeProps) {
@@ -19,9 +19,10 @@ export function ScoreBadge({ score, size = "default" }: ScoreBadgeProps) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-md font-semibold tabular-nums",
+        "inline-flex items-center justify-center rounded-md font-mono font-semibold tabular-nums",
         colorClass,
-        size === "sm" && "px-1.5 py-0.5 text-xs",
+        size === "xs" && "h-4 min-w-[22px] px-1 text-[9px]",
+        size === "sm" && "h-5 min-w-[28px] px-1 text-[10px]",
         size === "default" && "px-2 py-0.5 text-sm",
         size === "lg" && "px-3 py-1 text-lg"
       )}
