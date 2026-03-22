@@ -775,12 +775,13 @@ Fresh security audit found 11 issues (3 Critical, 5 High, 3 Medium). All fixed i
 - [x] `scripts/pre-commit-agent-gate.sh`: conditional agent test execution
 - [x] `.github/workflows/ci-eval.yml`: path-filtered PRs + weekly cron + manual dispatch
 
-**Test count:** 411 unit + 157 API + 4 integration + 70 frontend = 642 total (+96 from hardening, net of restructure)
-**New tests this session:** 147 (15 auth + 39 pipeline/signals + 42 agent + 51 search/celery/tools/contracts)
-**Commits:** 10 on feat/backend-hardening-spec
+**Test count:** 411 unit + 157 API + 7 e2e + 4 integration + 70 frontend = 649 total
+**New tests this session:** 154 (15 auth + 39 pipeline/signals + 42 agent + 51 search/celery/tools/contracts + 7 live LLM)
+**Commits:** 17 on feat/backend-hardening-spec (PR #38)
+**Bugs found:** 0 application bugs, 0 regressions
 
-**Phase 4G Stories status:** KAN-74–78, 80–84 implementation complete. KAN-79 infrastructure built (live LLM tests deferred to when keys available).
+**Phase 4G COMPLETE.** All 11 stories (KAN-74–84) implemented. PR #38 merged to develop.
 
-**Next:** PR to develop → manual E2E smoke test → Phase 4C.1 → Phase 4F
+**Next (Session 42):** Manual E2E smoke test → Phase 4C.1 polish → Phase 4F UI migration
 
 ---

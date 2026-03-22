@@ -9,7 +9,7 @@ updated_by: session-41-eod
 - **Current Phase:** Phase 4G Backend Hardening — IMPLEMENTATION COMPLETE
 - **Current Branch:** `feat/backend-hardening-spec` (10 commits ahead of develop)
 - **Alembic Head:** ac5d765112d6 (migration 010)
-- **Test Count:** 411 unit + 157 API + 4 integration + 70 frontend = 642 total
+- **Test Count:** 411 unit + 157 API + 7 e2e + 4 integration + 70 frontend = 649 total
 - **CI/CD:** Fully operational. ci-eval.yml added for agent regression. Pre-commit hooks configured.
 - **Internal Tools:** 13 + 4 MCP adapters = 17 total
 - **JIRA:** KAN-73 (Epic) + KAN-74-84 (11 Stories), all implementation complete
