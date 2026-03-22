@@ -59,6 +59,9 @@ class Stock(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     analyst_hold: Mapped[int | None] = mapped_column(Integer, nullable=True)
     analyst_sell: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # ETF flag
+    is_etf: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
 
 class Watchlist(UUIDPrimaryKeyMixin, Base):
     """User's watchlist entry."""
