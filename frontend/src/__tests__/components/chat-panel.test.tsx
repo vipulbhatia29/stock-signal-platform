@@ -6,6 +6,11 @@ import { ChatPanel } from "@/components/chat-panel";
 jest.mock("lucide-react", () => ({
   SendIcon: () => <svg data-testid="send-icon" />,
   XIcon: () => <svg data-testid="x-icon" />,
+  Sparkles: () => <svg data-testid="sparkles-icon" />,
+  BarChart3: () => <svg data-testid="barchart-icon" />,
+  Globe: () => <svg data-testid="globe-icon" />,
+  Bot: () => <svg data-testid="bot-icon" />,
+  MessageSquare: () => <svg data-testid="message-icon" />,
 }));
 
 // Mock the hooks
