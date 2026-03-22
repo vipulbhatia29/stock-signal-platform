@@ -824,47 +824,45 @@ Spec (865 lines) + plan (16 tasks, 8 chunks) for backend hardening. 11 stories (
 
 ---
 
-## Session 43 — Phase 4F UI Migration: UI-1 through UI-3
+## Session 43 — Phase 4F UI Migration: 7 of 9 Stories Complete
 
 **Date:** 2026-03-22
-**Branch:** `feat/KAN-89-ui1-shell-tokens` → `feat/KAN-90-ui2-shared-components` → `feat/KAN-91-ui3-dashboard-redesign`
 **Epic:** KAN-88 (Phase 4F — UI Migration, Lovable → Production)
+**PRs:** #41–#47 (all merged to develop)
 
 ### Setup
 - Created JIRA Epic KAN-88 + 9 Stories (KAN-89 through KAN-97)
 - Captured Lovable prototype screenshots (7 pages) for visual reference
 - Confirmed fonts (Sora + JetBrains Mono) already installed
 
-### KAN-89 [UI-1] Shell + Design Tokens (PR #41, MERGED)
-- Design tokens: `pulse-subtle`/`blink` animations, `scrollbar-thin`, `cyan-muted`
-- Installed `framer-motion`
-- Sidebar: added Sectors nav (PieChart), shadcn Tooltips (replaced CSS), LogOut button (replaced avatar), icons updated (Search, Briefcase)
-- Topbar: ChatContext (replaces prop drilling), Activity icon, Bell stub, pulsing green dot, AI Analyst glow toggle
-- ChatContext: new `ChatProvider` — Dashboard + PortfolioDrawer consume `useChat()`
+### Stories Completed (7/9)
 
-### KAN-90 [UI-2] Shared Components (PR #42, MERGED)
-- ScoreBadge: `xs` size, `font-mono`, `justify-center`
-- SignalBadge: WATCH/AVOID + GOLDEN_CROSS/DEATH_CROSS/ABOVE_200/BELOW_200 with custom labels
-- ChangeIndicator: `prefix`, `showSign`, `showIcon` props
-- AllocationDonut: `showSectorLink` prop
-- IndexCard: `value`, `changePct`, `sparklineData` props + ChevronRight
-- 17 new tests
+| Story | PR | Summary |
+|---|---|---|
+| KAN-89 [UI-1] Shell + Tokens | #41 | Design tokens (pulse-subtle, blink, scrollbar-thin, cyan-muted), framer-motion, Sidebar (Sectors nav, shadcn Tooltips, LogOut), Topbar (Activity, Bell stub, pulsing dot, AI glow), ChatContext |
+| KAN-90 [UI-2] Shared Components | #42 | ScoreBadge xs, SignalBadge WATCH/AVOID/SMA labels, ChangeIndicator prefix/showIcon, AllocationDonut sectorLink, IndexCard value/change/sparkline, ScoreBar (NEW). 17 new tests |
+| KAN-91 [UI-3] Dashboard Redesign | #43 | KPI 5→3 col grid adapt, Market Indexes adapt, Action Required + RecommendationRow (NEW), Sector Allocation card, Watchlist 4→3 col, useRecommendations hook |
+| KAN-92 [UI-4] Screener + Detail | #44 | ScoreBar inline, Held badge, signal descriptions (RSI/MACD/SMA/Bollinger), StockHeader redesign (Close, breadcrumb, Bookmark toggle, price display) |
+| KAN-93 [UI-5] Portfolio | #45 | Alert icons (AlertOctagon/AlertTriangle), KPI StatTiles with accents, sector concentration warning banner |
+| KAN-95 [UI-7] Auth Redesign | #46 | Split-panel login/register, brand showcase (logo glow, feature bullets, sparkline SVG, glowing orbs), Google OAuth stub, styled AuthInput with focus glow |
+| KAN-96 [UI-8] Chat Polish | #47 | Agent selector cards (BarChart3/Globe icons, "Choose an Agent"), suggestion chips fill-not-send, pulsing cyan dots thinking indicator, ChatInput forwardRef |
 
-### KAN-91 [UI-3] Dashboard Redesign (PR #43, OPEN)
-- KPI tiles: 5-col → 3-col when chat open
-- Market Indexes: grid adapts with chat state
-- NEW: Action Required section (2/3) with RecommendationRow component
-- NEW: Sector Allocation card (1/3) linking to /sectors
-- Watchlist: 4-col → 3-col when chat open
-- `useRecommendations` hook added
-- Template-based reasoning fallback
+### New Components
+- `ScoreBar` — 10-segment color-coded bar
+- `RecommendationRow` — action icon, confidence badge, reasoning, composite score, Held badge
+- `ChatContext` (`contexts/chat-context.tsx`) — replaces prop drilling for chat state
 
 ### Bug Logged
-- **KAN-98**: Hydration mismatch from `isNYSEOpen()` in Topbar — server/client time mismatch causes React hydration error. Console-only, no visual impact. Fix in UI-9 or earlier.
+- **KAN-98**: Hydration mismatch from `isNYSEOpen()` in Topbar — server/client time mismatch. Console-only. Fix in UI-9.
+
+### Deferred (logged in project-plan backlog)
+- Candlestick chart toggle (backend: OHLC format param)
+- Benchmark comparison chart (backend: index price endpoint)
+- framer-motion animations on settings sheet + transaction modal (UI-9)
 
 **Test count:** 440 unit + 157 API + 7 e2e + 4 integration + 88 frontend = 696 total (was 678)
 **Alembic head:** `ac5d765112d6` (migration 010 — unchanged)
 
-**Resume point:** PR #43 pending merge → next story KAN-92 [UI-4] Screener + Stock Detail
+**Resume point (Session 44):** KAN-94 [UI-6] Sectors Page (new page + 3 backend endpoints) → KAN-97 [UI-9] Animations + Final Polish
 
 ---
