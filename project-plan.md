@@ -475,53 +475,45 @@ Comprehensive backend hardening: test directory restructure, ~211 new tests acro
 
 ---
 
-## Phase 5: Background Jobs + Alerts (Weeks 9-10)
+## Phase 5: Forecasting, Evaluation & Background Automation (~33h, 6-7 sessions)
 
 ### Goal
-Pre-compute signals and send notifications.
+Self-healing nightly pipeline, Prophet forecasting (stocks + sector ETFs + portfolio), recommendation evaluation against actuals, drift detection, in-app alerts, 6 new agent tools.
 
-### Deliverables
-1. **Database models:** ModelVersion, ForecastResult (hypertable), MacroSnapshot (hypertable)
-2. **Model versioning:**
-   - ModelVersion table tracks training data range, hyperparameters, metrics, artifact path
-   - Every ForecastResult links to model_version_id
-   - `data/models/` directory for serialized model artifacts
-   - Auto-increment version on retrain, only one active per (model_type, ticker)
-3. **Celery worker + beat scheduler**
-4. **`backend/tasks/refresh_data.py`** — nightly fetch for all watchlist tickers
-5. **`backend/tasks/compute_signals.py`** — nightly signal computation + store snapshots
-6. **`backend/tasks/run_forecasts.py`** — weekly Prophet forecast with model versioning:
-   - Train Prophet per ticker → create ModelVersion row → save artifact → store ForecastResult
-   - 3 horizons per ticker: 90d, 180d, 270d
-7. **`backend/tasks/evaluate_forecasts.py`** — nightly forecast evaluation loop:
-   - Find ForecastResult where target_date ≤ today AND actual_price IS NULL
-   - Fill in actual_price and error_pct from StockPrice
-   - Aggregate metrics per model_version_id → update ModelVersion.metrics
-   - Trigger retrain if accuracy degrades below threshold
-8. **`backend/tasks/check_alerts.py`** — check trailing stops, concentration, fundamentals
-9. **`backend/tasks/generate_recommendations.py`** — daily recommendation generation:
-   - Run after signal computation
-   - Apply decision rules from recommendation engine
-   - Factor in portfolio state + macro regime
-   - Store RecommendationSnapshot rows with price_at_recommendation
-10. **`backend/tasks/evaluate_recommendations.py`** — nightly recommendation evaluation:
-    - Find recommendations where generated_at + horizon ≤ today AND no outcome exists
-    - Evaluate at 3 horizons: 30d, 90d, 180d
-    - Compute return vs SPY benchmark, alpha, action_was_correct
-    - Store RecommendationOutcome rows
-    - Requires SPY in stock universe with daily price data
-11. **Notification system:**
-    - Telegram bot integration (python-telegram-bot)
-    - Daily morning briefing: "3 stocks hit buy signals, portfolio up 1.2%"
-    - Real-time alerts for stop-loss triggers
-12. **Macro overlay:**
-    - FRED API integration for yield curve, VIX proxy, unemployment claims
-    - Market regime indicator (risk-on / risk-off / neutral)
-13. **Dashboard updates:** pre-computed data loads instantly, last-updated timestamps
+### Design Docs
+- **Spec:** `docs/superpowers/specs/2026-03-22-phase5-forecasting-design.md`
+- **Plan:** `docs/superpowers/plans/2026-03-22-phase5-forecasting-implementation.md`
+- **JIRA Epic:** KAN-106 (11 Stories: KAN-107–117)
+
+### Stories (11)
+- [ ] **S1 (KAN-107):** DB Models + Migration + ETF Seeding (~3h)
+- [ ] **S2 (KAN-108):** Pipeline Infrastructure — watermark, run logging, gap recovery (~3h)
+- [ ] **S3 (KAN-109):** Nightly Pipeline Chain + Beat Schedule (~3h)
+- [ ] **S4 (KAN-110):** Prophet Forecasting Engine — training, prediction, model versioning (~4h)
+- [ ] **S5 (KAN-111):** Forecast + Recommendation Evaluation + Drift Detection (~3h)
+- [ ] **S6 (KAN-112):** In-App Alerts Backend + API (~3h)
+- [ ] **S7 (KAN-113):** Forecast + Scorecard API Endpoints (~2h)
+- [ ] **S8 (KAN-114):** Agent Tools — Forecast + Comparison + Entity Registry (~4h)
+- [ ] **S9 (KAN-115):** Agent Tools — Scorecard + Sustainability + Risk (~3h)
+- [ ] **S10 (KAN-116):** Frontend — Forecast Card + Dashboard Tiles (~3h)
+- [ ] **S11 (KAN-117):** Frontend — Scorecard Modal + Alert Bell + Sectors ETF (~2h)
+
+### Key Architecture Decisions (from Session 45 brainstorm)
+- Stock-level Prophet forecasts + 11 SPDR sector ETFs; portfolio forecast derived by weighted aggregation with correlation-based confidence bands
+- Biweekly retrain (Sunday 2 AM), daily predict-only refresh, drift-triggered retrain on MAPE >20% or volatility spike
+- Forecasts as parallel signal (not blended into composite score — deferred to 5.1 pending accuracy validation)
+- BUY/SELL recommendations evaluated at 30/90/180d vs SPY benchmark
+- In-app alerts only (Telegram deferred to 5.1)
+- PipelineWatermark for gap detection, PipelineRun for observability, per-ticker atomicity
+- VIX regime flag for forecast confidence overlay
+- Sharpe direction enrichment on every forecast
 
 ### Success Criteria
-Signals pre-computed nightly, Telegram alerts firing for configured triggers,
-recommendation outcomes evaluated at 30/90/180d horizons with SPY benchmark.
+- Nightly pipeline runs end-to-end (price → signal → recommendation → forecast → evaluation → alerts)
+- Self-healing: gap recovery, rate limit retry, partial success
+- ~80 new tests passing
+- Agent can answer "forecast for AAPL", "compare AAPL and MSFT", "how accurate are your calls"
+- Scorecard modal + alert bell + forecast card visible in UI
 
 ---
 

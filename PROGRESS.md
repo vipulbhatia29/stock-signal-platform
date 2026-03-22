@@ -824,6 +824,39 @@ Spec (865 lines) + plan (16 tasks, 8 chunks) for backend hardening. 11 stories (
 
 ---
 
+## Session 45 — KAN-94 Sectors Page + Phase 5 Design
+
+**Date:** 2026-03-22
+**Branch:** `feat/KAN-94-sectors-page` → merged as PR #52
+**Epic:** KAN-88 (Phase 4F complete), KAN-106 (Phase 5 design)
+
+### Phase 4F Completion — KAN-94 Sectors Page (PR #52)
+All 7 subtasks (KAN-99–105) shipped in one session:
+
+| Subtask | Summary |
+|---------|---------|
+| KAN-99 (C1) | Backend: 3 endpoints (GET /sectors, GET /sectors/{sector}/stocks, GET /sectors/{sector}/correlation) + 6 Pydantic schemas |
+| KAN-100 (C2) | 27 unit + 17 API tests. Fixed pandas pct_change deprecation, date normalization for correlation |
+| KAN-101 (C3) | TypeScript types + 3 TanStack Query hooks (useSectors, useSectorStocks, useSectorCorrelation) |
+| KAN-102 (C4) | 5 new components: SectorAccordion, SectorStocksTable, CorrelationHeatmap, CorrelationTable, CorrelationTickerChips |
+| KAN-103 (C5) | Sectors page assembly — scope toggle, AllocationDonut, accordion drill-down, click-to-correlate |
+| KAN-104 (C6) | Dashboard cleanup — removed duplicate sector allocation card, Action Required full width |
+| KAN-105 (C7) | 19 frontend tests + TSC/ESLint verification |
+
+**Phase 4F: 9/9 stories COMPLETE.** KAN-88 Epic Done.
+
+### Phase 5 Design — Forecasting & Automation
+- Brainstormed with PM: user persona (active analyst), forecast granularity (stock + 11 SPDR ETFs + portfolio derived), drift detection, pipeline self-healing, gap recovery
+- Key decisions: biweekly Prophet retrain, correlation-based confidence bands, BUY/SELL evaluation at 30/90/180d vs SPY, in-app alerts (no Telegram), Sharpe direction enrichment
+- Spec written: `docs/superpowers/specs/2026-03-22-phase5-forecasting-design.md`
+- Plan written: `docs/superpowers/plans/2026-03-22-phase5-forecasting-implementation.md`
+- JIRA: Epic KAN-106 + 11 Stories (KAN-107–117), ~33h estimated over 6-7 sessions
+
+**Test count:** 467 unit + 174 API + 7 e2e + 4 integration + 107 frontend = 759 total
+**Resume point (Session 46):** Start Phase 5 implementation — KAN-107 (DB Models + Migration + ETF Seeding)
+
+---
+
 ## Session 43 — Phase 4F UI Migration: 7 of 9 Stories Complete
 
 **Date:** 2026-03-22
