@@ -1,6 +1,8 @@
 // AllocationDonut — CSS conic-gradient pie chart with legend.
 // Used in the Dashboard Overview tiles row.
 
+import Link from "next/link";
+
 const DONUT_COLORS = [
   "#38bdf8", // cyan
   "#fbbf24", // warning/amber
@@ -19,6 +21,8 @@ interface AllocationItem {
 interface AllocationDonutProps {
   allocations: AllocationItem[];
   stockCount?: number;
+  /** Show "Click to explore sectors →" link below the legend */
+  showSectorLink?: boolean;
 }
 
 export function buildGradient(allocations: AllocationItem[]): string {
@@ -31,7 +35,7 @@ export function buildGradient(allocations: AllocationItem[]): string {
   return `conic-gradient(${stops.join(", ")})`;
 }
 
-export function AllocationDonut({ allocations, stockCount }: AllocationDonutProps) {
+export function AllocationDonut({ allocations, stockCount, showSectorLink = false }: AllocationDonutProps) {
   if (!allocations.length) {
     return (
       <div className="text-[10px] text-subtle mt-2">No positions</div>
@@ -77,6 +81,11 @@ export function AllocationDonut({ allocations, stockCount }: AllocationDonutProp
         ))}
         {remainder > 0 && (
           <div className="text-[9px] text-subtle">+{remainder} more</div>
+        )}
+        {showSectorLink && (
+          <Link href="/sectors" className="text-[9px] text-cyan hover:underline mt-1">
+            Click to explore sectors →
+          </Link>
         )}
       </div>
     </div>
