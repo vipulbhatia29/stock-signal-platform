@@ -11,6 +11,6 @@ test("defaults to stock agent", () => {
 test("calls onChange when toggled", async () => {
   const onChange = jest.fn();
   render(<AgentSelector value="stock" onChange={onChange} />);
-  await userEvent.click(screen.getByText(/General Assistant/));
+  await userEvent.click(screen.getByText("General"));
   expect(onChange).toHaveBeenCalledWith("general");
 });

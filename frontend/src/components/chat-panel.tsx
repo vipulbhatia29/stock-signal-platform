@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import { XIcon } from "lucide-react";
+import { XIcon, Sparkles } from "lucide-react";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 import { useStreamChat } from "@/hooks/use-stream-chat";
 import { useChatSessions, useDeleteSession } from "@/hooks/use-chat";
@@ -11,7 +11,7 @@ import { ThinkingIndicator } from "@/components/chat/thinking-indicator";
 import { ErrorBubble } from "@/components/chat/error-bubble";
 import { AgentSelector } from "@/components/chat/agent-selector";
 import { SessionList } from "@/components/chat/session-list";
-import { ChatInput } from "@/components/chat/chat-input";
+import { ChatInput, type ChatInputHandle } from "@/components/chat/chat-input";
 
 interface ChatPanelProps {
   isOpen: boolean;
@@ -28,6 +28,7 @@ const SUGGESTIONS = [
 
 export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
   const asideRef = useRef<HTMLElement>(null);
+  const chatInputRef = useRef<ChatInputHandle>(null);
   const handleRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -248,23 +249,30 @@ export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Suggestion chips (shown when no messages) */}
+      {/* Suggestion chips (shown when no messages) — fill input, don't auto-send */}
       {messages.length === 0 && !isStreaming && (
-        <div className="flex flex-wrap gap-1.5 px-3.5 py-2 border-t border-border flex-shrink-0">
-          {SUGGESTIONS.map((s) => (
-            <button
-              key={s}
-              onClick={() => sendMessage(s)}
-              className="bg-card2 border border-border text-muted-foreground hover:border-[var(--bhi)] hover:text-cyan px-2.5 py-1 rounded-full text-[10.5px] transition-colors whitespace-nowrap"
-            >
-              {s}
-            </button>
-          ))}
+        <div className="px-3.5 py-2 border-t border-border flex-shrink-0 space-y-2">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Sparkles size={12} className="text-cyan" />
+            <span className="text-[10px]">Suggestions</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => chatInputRef.current?.fillText(s)}
+                className="bg-card2 border border-border text-muted-foreground hover:border-[var(--bhi)] hover:text-cyan px-2.5 py-1 rounded-full text-[10.5px] transition-colors whitespace-nowrap"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
       {/* Input */}
       <ChatInput
+        ref={chatInputRef}
         onSend={sendMessage}
         onStop={stopGeneration}
         isStreaming={isStreaming}
