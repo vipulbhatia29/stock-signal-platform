@@ -38,13 +38,36 @@ export function SignalCards({ signals, isLoading }: SignalCardsProps) {
 
   if (!signals) return null;
 
+  const rsiDesc = signals.rsi.value !== null
+    ? signals.rsi.value < 30 ? "Below 30 — potential oversold bounce"
+    : signals.rsi.value > 70 ? "Above 70 — overbought, watch for pullback"
+    : "Between 30-70 — balanced momentum"
+    : null;
+
+  const macdDesc = signals.macd.signal === "BULLISH"
+    ? "Histogram positive — upward pressure"
+    : signals.macd.signal === "BEARISH"
+    ? "Histogram negative — downward pressure"
+    : null;
+
+  const smaDesc = signals.sma.signal === "GOLDEN_CROSS" ? "50-day crossed above 200-day SMA"
+    : signals.sma.signal === "DEATH_CROSS" ? "50-day crossed below 200-day SMA"
+    : signals.sma.signal === "ABOVE_200" ? "Price above 200-day SMA"
+    : signals.sma.signal === "BELOW_200" ? "Price below 200-day SMA"
+    : null;
+
+  const bbDesc = signals.bollinger.position === "UPPER" ? "Near upper band — potential resistance"
+    : signals.bollinger.position === "LOWER" ? "Near lower band — potential support"
+    : "Within normal range";
+
   const cards = [
     {
-      title: "RSI",
+      title: "RSI (14)",
       value: formatNumber(signals.rsi.value, 1),
       signal: signals.rsi.signal,
       type: "rsi" as const,
       subtitle: signals.rsi.value !== null ? `${formatNumber(signals.rsi.value, 0)} / 100` : null,
+      description: rsiDesc,
     },
     {
       title: "MACD",
@@ -52,9 +75,10 @@ export function SignalCards({ signals, isLoading }: SignalCardsProps) {
       signal: signals.macd.signal,
       type: "macd" as const,
       subtitle: signals.macd.value !== null ? `Line: ${formatNumber(signals.macd.value, 4)}` : null,
+      description: macdDesc,
     },
     {
-      title: "SMA",
+      title: "SMA Crossover",
       value:
         signals.sma.sma_50 !== null
           ? `50: ${formatNumber(signals.sma.sma_50, 0)}`
@@ -62,6 +86,7 @@ export function SignalCards({ signals, isLoading }: SignalCardsProps) {
       signal: signals.sma.signal,
       type: "sma" as const,
       subtitle: signals.sma.sma_200 !== null ? `200: ${formatNumber(signals.sma.sma_200, 0)}` : null,
+      description: smaDesc,
     },
     {
       title: "Bollinger",
@@ -72,6 +97,7 @@ export function SignalCards({ signals, isLoading }: SignalCardsProps) {
       signal: signals.bollinger.position,
       type: "bollinger" as const,
       subtitle: null,
+      description: bbDesc,
     },
   ];
 
@@ -105,6 +131,9 @@ export function SignalCards({ signals, isLoading }: SignalCardsProps) {
               <div className="mt-2">
                 <SignalBadge signal={card.signal} type={card.type} />
               </div>
+              {card.description && (
+                <p className="mt-1.5 text-[10px] text-muted-foreground">{card.description}</p>
+              )}
             </CardContent>
           </Card>
         );
