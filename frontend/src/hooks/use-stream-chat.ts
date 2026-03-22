@@ -14,16 +14,26 @@ export function useStreamChat() {
   const rafRef = useRef<number>(0);
   const mountedRef = useRef(true);
   const lastUserMessageRef = useRef<string>("");
+  const activeSessionIdRef = useRef<string | null>(state.activeSessionId);
 
-  // Cleanup on unmount
+  // Restore active session from localStorage on mount + cleanup on unmount
   useEffect(() => {
     mountedRef.current = true;
+    const savedSessionId = localStorage.getItem(STORAGE_KEYS.CHAT_ACTIVE_SESSION);
+    if (savedSessionId) {
+      dispatch({ type: "SET_SESSION", sessionId: savedSessionId, agentType: "stock" });
+    }
     return () => {
       mountedRef.current = false;
       abortRef.current?.abort();
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
+
+  // Keep ref in sync with state to avoid stale closure in sendMessage
+  useEffect(() => {
+    activeSessionIdRef.current = state.activeSessionId;
+  }, [state.activeSessionId]);
 
   // Token batching: accumulate in ref, flush via RAF
   const scheduleFlush = useCallback(() => {
@@ -172,9 +182,9 @@ export function useStreamChat() {
                 queryClient.invalidateQueries({
                   queryKey: ["chat", "sessions"],
                 });
-                if (state.activeSessionId) {
+                if (activeSessionIdRef.current) {
                   queryClient.invalidateQueries({
-                    queryKey: ["chat", "messages", state.activeSessionId],
+                    queryKey: ["chat", "messages", activeSessionIdRef.current],
                   });
                 }
                 break;
@@ -286,7 +296,11 @@ export function useStreamChat() {
   );
 
   const clearError = useCallback(() => {
-    dispatch({ type: "STREAM_ERROR", error: "" });
+    dispatch({ type: "CLEAR_ERROR" });
+  }, []);
+
+  const setAgentType = useCallback((agentType: "stock" | "general") => {
+    dispatch({ type: "SET_SESSION", sessionId: "", agentType });
   }, []);
 
   return {
@@ -301,6 +315,6 @@ export function useStreamChat() {
     switchSession,
     startNewSession,
     clearError,
-    dispatch,
+    setAgentType,
   };
 }

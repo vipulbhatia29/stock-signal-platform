@@ -252,44 +252,35 @@ Three-layer MCP architecture: consume external MCPs → enrich in backend → ex
 - [x] ArtifactBar with shouldPin rules + ChatPanel major rewrite + layout wiring (Session 37)
 - [x] 40 new tests (3 backend + 37 frontend) — 297 total (Session 37)
 
-#### Phase 4C.1 — Chat UI Polish + Code Analysis Fixes
+#### Phase 4C.1 — Chat UI Polish + Code Analysis Fixes ✅ COMPLETE (Session 42)
 
-Gaps from spec audit + code analysis (Session 37). Grouped by priority.
+**JIRA:** KAN-87 | **Branch:** `feat/KAN-87-chat-ui-polish`
 
-**Functional fixes (should fix before 4D):**
-- [ ] **CSV not wired to in-chat tool cards** — `MessageBubble` renders `MessageActions` with only `content`, never passes `csvData`. Dead code. Fix: extract tabular data from `ToolCall.result` and pass as `csvData` prop.
-- [ ] **Session expiry prompt** — clicking an expired session silently loads it. Spec requires a warning prompt with "Start New Chat" button when `is_active === false`.
-- [ ] **localStorage session restore** — `CHAT_ACTIVE_SESSION` is saved on switch but never read on mount. Active session lost on page reload.
-- [ ] **`tool_calls` type hint** — `save_message()` parameter typed as `dict | None` but receives `list[dict]` at runtime. Fix: `list[dict] | None`.
+**Functional fixes:** ✅ ALL DONE
+- [x] CSV wired to tool cards — `extractCsvData()` in MessageBubble
+- [x] Session expiry prompt — warning with "Start New Chat" / "View Anyway"
+- [x] localStorage session restore — reads `CHAT_ACTIVE_SESSION` on mount
+- [x] `tool_calls` type hint — `list[dict] | None` in save_message + schema
 
-**Code quality fixes (should fix before 4D):**
-- [ ] **Mutable module state** — `let nextId = 0` in `chat-reducer.ts` violates CLAUDE.md rule #7. Fix: use `crypto.randomUUID()`.
-- [ ] **Missing type annotations** — `user=Depends(get_current_user)` on all 4 chat endpoints lacks type hint. Fix: `user: User = Depends(...)`.
-- [ ] **No OpenAPI metadata** — chat router endpoints have no `summary`/`description` in decorators.
-- [ ] **Missing graph guard** — `app.state.stock_graph` access will `AttributeError` if startup failed. Fix: `getattr()` + 503 fallback.
-- [ ] **`data: Any` on StreamEvent** — leaks `Any` type across streaming pipeline. Fix: `dict[str, Any] | None`.
-- [ ] **`clearError` semantics** — dispatches `STREAM_ERROR("")` to clear. Fix: add `CLEAR_ERROR` action type.
-- [ ] **Lazy imports in chat router** — 7 inline imports with no circular dep justification. Move to top-of-file.
-- [ ] **Session lookup in router** — inline SQLAlchemy query for session should be a `get_session()` function in `chat_session.py`.
+**Code quality fixes:** ✅ ALL DONE
+- [x] `crypto.randomUUID()` with jsdom fallback
+- [x] `user: User = Depends(...)` on all 5 chat endpoints
+- [x] OpenAPI `summary`/`description`/`responses` on all chat decorators
+- [x] `getattr()` + 503 fallback for missing graphs
+- [x] `data: dict[str, Any] | list | str | None` on StreamEvent
+- [x] `CLEAR_ERROR` action type added to chat reducer
+- [x] All 7 lazy imports moved to top-of-file in chat router
+- [x] `_get_session()` helper extracted from 3 inline lookups
 
-**Performance fixes:**
-- [ ] **ReactMarkdown plugin arrays** (HIGH) — `[remarkGfm]` and `[rehypeHighlight]` recreated every render → plugin pipeline reinitializes on each token flush. Fix: hoist to module-level constants.
-- [ ] **Artifact dispatch on every flush** — `useEffect` for artifact dispatch fires on every token update. Fix: gate with `!isStreaming` or track dispatched artifacts.
-- [ ] **Stale `activeSessionId` in closure** — `queryClient.invalidateQueries` in `sendMessage` captures stale session ID for new-session flows. Fix: use ref.
-- [ ] **MessageBubble not memoized** — all bubbles re-render on every token flush. Fix: `React.memo()`.
-- [ ] **`dispatch` exposed publicly** — `useStreamChat` exposes raw dispatch, breaking encapsulation. Fix: remove from return, add named callbacks.
+**Performance fixes:** ✅ ALL DONE
+- [x] Plugin arrays hoisted to module constants
+- [x] Artifact dispatch gated on `!isStreaming`
+- [x] `activeSessionIdRef` for stale closure fix
+- [x] `React.memo()` on MessageBubble
+- [x] `dispatch` removed, `setAgentType` exposed
 
-**UI polish (can defer to post-4D):**
-- [ ] **Artifact bar enhancements** — add Copy button + summary line; persist across page navigation (React context)
-- [ ] **Tool card expanded state** — add Copy + CSV buttons in expanded JSON view
-- [ ] **Missing tool summaries** — add `portfolio_exposure`, `get_economic_series`, `get_news_sentiment` to `getToolSummary()`
-- [ ] **"New messages" scroll pill** — show "↓ New messages" when user scrolled up during streaming
-- [ ] **Agent type badge in header** — show "Stock"/"General" badge next to "AI Analyst"
-- [ ] **Auto-retry on reconnect** — `navigator.onLine` event listener
-- [ ] **Bubble styling alignment** — user: cyan left border; assistant: `bg-card2 border-border`
-- [ ] **Duplicated API_BASE + auth retry** — `use-stream-chat.ts` duplicates `API_BASE` and 401 refresh logic from `lib/api.ts`. Extract shared `authenticatedFetch`.
-
-**Dependencies:** None — can be done independently. Functional + code quality + performance fixes should precede Phase 4D.
+**UI polish (deferred to Phase 4F):**
+- [ ] Artifact bar enhancements, tool card buttons, missing tool summaries, scroll pill, agent badge, auto-retry, bubble styling, duplicated API_BASE extraction
 
 #### Phase 4F — UI Migration: Lovable → Production (~26h, 5-6 sessions)
 

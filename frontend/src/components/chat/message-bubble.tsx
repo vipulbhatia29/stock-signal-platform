@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { MarkdownContent } from "./markdown-content";
 import { ToolCard } from "./tool-card";
 import { MessageActions } from "./message-actions";
@@ -20,7 +21,25 @@ interface MessageBubbleProps {
   messageId?: string;
 }
 
-export function MessageBubble({
+/**
+ * Extract tabular data from completed tool calls for CSV export.
+ * Only tools that return arrays of records produce meaningful CSV data.
+ */
+function extractCsvData(toolCalls: ToolCall[]): Record<string, unknown>[] | undefined {
+  for (const tc of toolCalls) {
+    if (tc.status !== "completed" || !tc.result) continue;
+    const r = tc.result as Record<string, unknown>;
+    // screen_stocks returns { results: [...] }
+    if (Array.isArray(r.results) && r.results.length > 0) return r.results as Record<string, unknown>[];
+    // recommendations returns { recommendations: [...] }
+    if (Array.isArray(r.recommendations) && r.recommendations.length > 0) return r.recommendations as Record<string, unknown>[];
+    // Direct array result
+    if (Array.isArray(tc.result) && tc.result.length > 0) return tc.result as Record<string, unknown>[];
+  }
+  return undefined;
+}
+
+export const MessageBubble = memo(function MessageBubble({
   role,
   content,
   toolCalls,
@@ -72,10 +91,10 @@ export function MessageBubble({
         )}
         {!isStreaming && content && !isDecline && (
           <div className="mt-1">
-            <MessageActions content={content} />
+            <MessageActions content={content} csvData={extractCsvData(toolCalls)} />
           </div>
         )}
       </div>
     </div>
   );
-}
+});

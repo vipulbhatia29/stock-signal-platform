@@ -233,7 +233,7 @@ async def save_message(
     session_id: uuid.UUID,
     role: str,
     content: str | None,
-    tool_calls: dict | None = None,
+    tool_calls: list[dict] | None = None,
     model_used: str | None = None,
     tokens_used: int | None = None,
 ) -> ChatMessage:

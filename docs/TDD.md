@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Living Document (Phase 1-4C complete, 4D/5/6 planned)
+**Status:** Living Document (Phase 1-4G complete, 4C.1 done, 4F/5/6 planned)
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
