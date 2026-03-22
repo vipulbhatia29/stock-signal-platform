@@ -31,7 +31,9 @@ export function useStreamChat() {
   }, []);
 
   // Keep ref in sync with state to avoid stale closure in sendMessage
-  activeSessionIdRef.current = state.activeSessionId;
+  useEffect(() => {
+    activeSessionIdRef.current = state.activeSessionId;
+  }, [state.activeSessionId]);
 
   // Token batching: accumulate in ref, flush via RAF
   const scheduleFlush = useCallback(() => {
