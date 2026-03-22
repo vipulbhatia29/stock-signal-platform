@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Activity, Bell, Bot } from "lucide-react";
 import { TickerSearch } from "@/components/ticker-search";
@@ -26,8 +27,13 @@ const PAGE_LABELS: Record<string, string> = {
 
 export function Topbar({ onAddTicker }: TopbarProps) {
   const pathname = usePathname();
-  const marketOpen = isNYSEOpen();
   const { chatOpen, toggleChat } = useChat();
+
+  // Defer market-status to client to avoid SSR hydration mismatch (KAN-98)
+  const [marketOpen, setMarketOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    setMarketOpen(isNYSEOpen());
+  }, []);
 
   const { data: watchlist } = useWatchlist();
   const signalCount =
@@ -54,20 +60,22 @@ export function Topbar({ onAddTicker }: TopbarProps) {
 
       {/* Right: status + controls */}
       <div className="flex items-center gap-2">
-        {/* Market status */}
-        <div className="flex items-center gap-1.5">
-          <span
-            className={cn(
-              "h-1.5 w-1.5 rounded-full",
-              marketOpen
-                ? "bg-gain animate-pulse-subtle"
-                : "bg-muted-foreground"
-            )}
-          />
-          <span className="text-[10px] text-muted-foreground">
-            {marketOpen ? "Market Open" : "Market Closed"}
-          </span>
-        </div>
+        {/* Market status — hidden until client hydrates */}
+        {marketOpen != null && (
+          <div className="flex items-center gap-1.5">
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                marketOpen
+                  ? "bg-gain animate-pulse-subtle"
+                  : "bg-muted-foreground"
+              )}
+            />
+            <span className="text-[10px] text-muted-foreground">
+              {marketOpen ? "Market Open" : "Market Closed"}
+            </span>
+          </div>
+        )}
 
         {/* Signal count */}
         {signalCount > 0 && (
