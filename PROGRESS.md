@@ -785,3 +785,30 @@ Fresh security audit found 11 issues (3 Critical, 5 High, 3 Medium). All fixed i
 **Next (Session 42):** Manual E2E smoke test → Phase 4C.1 polish → Phase 4F UI migration
 
 ---
+
+## Manual E2E Smoke Test (KAN-86) — Session 41 continued
+
+**Date:** 2026-03-22
+**Branch:** `feat/KAN-85-e2e-smoke-test`
+**JIRA:** KAN-86
+
+### Results — ALL PASS
+1. **alembic upgrade head** — 10 migrations ran successfully, 20 tables created
+2. **Health endpoint** — `GET /health` → 200 `{"status": "ok"}`
+3. **Register** — `POST /auth/register` → 201, user created in `users` table
+4. **Login** — `POST /auth/login` → 200, JWT token returned with cookies
+5. **Ingest AAPL** — `POST /stocks/AAPL/ingest` → 200, 2515 price rows fetched, composite_score=3.11
+   - `stocks` table: AAPL (Apple Inc., NMS, Technology)
+   - `stock_prices` table: 2515 rows
+   - `signal_snapshots` table: RSI=NEUTRAL, MACD=BEARISH, composite=3.11
+6. **Watchlist** — `POST /stocks/watchlist` → 201, `GET /stocks/watchlist` → 1 item with score
+7. **Portfolio** — `POST /portfolio/transactions` → 201 (10 shares AAPL @ $195.50), `GET /portfolio/positions` → 1 position
+8. **Preferences** — `GET /preferences` → 200 with default thresholds
+9. **Search** — `GET /stocks/search?q=App` → 200 with results
+
+**Bugs found:** 0
+**DB writes verified:** users, stocks, stock_prices, signal_snapshots, watchlist, transactions, portfolios, user_preferences
+
+**Next:** Phase 4C.1 polish → Phase 4F UI migration
+
+---
