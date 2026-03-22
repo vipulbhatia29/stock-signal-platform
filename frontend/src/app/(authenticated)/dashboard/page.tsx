@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { StarIcon, RefreshCw } from "lucide-react";
-import Link from "next/link";
 import { useChat } from "@/contexts/chat-context";
 import {
   useQuery,
@@ -119,6 +119,7 @@ export default function DashboardPage() {
 
   // ── Portfolio overview ──────────────────────────────────────────────────────
 
+  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const { data: summary } = usePortfolioSummary();
@@ -296,7 +297,7 @@ export default function DashboardPage() {
 
           {/* Allocation */}
           <StaggerItem>
-            <StatTile label="Allocation" accentColor="cyan">
+            <StatTile label="Allocation" accentColor="cyan" onClick={() => router.push("/sectors")}>
               <AllocationDonut
                 allocations={allocations}
                 stockCount={positions?.length}
@@ -346,43 +347,24 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {/* Action Required + Sector Allocation — 2/3 + 1/3 */}
+      {/* Action Required — full width */}
       {(recommendations?.length ?? 0) > 0 && (
-        <div className={cn(
-          "grid grid-cols-1 gap-6 transition-all duration-300",
-          chatIsOpen ? "lg:grid-cols-1 xl:grid-cols-3" : "lg:grid-cols-3"
-        )}>
-          <section className={cn(chatIsOpen ? "xl:col-span-2" : "lg:col-span-2")}>
-            <SectionHeading>Action Required</SectionHeading>
-            <div className="space-y-2">
-              {recommendations?.slice(0, 5).map((rec) => (
-                <RecommendationRow
-                  key={rec.ticker}
-                  ticker={rec.ticker}
-                  action={rec.action}
-                  confidence={rec.confidence}
-                  compositeScore={rec.composite_score * 10}
-                  reasoning={getReasoningText(rec)}
-                  isHeld={heldTickers.has(rec.ticker)}
-                />
-              ))}
-            </div>
-          </section>
-          <div>
-            <SectionHeading>Sector Allocation</SectionHeading>
-            <Link href="/sectors">
-              <div className="rounded-lg border border-border bg-card p-4 cursor-pointer hover:border-[var(--bhi)] transition-colors group">
-                <AllocationDonut
-                  allocations={allocations}
-                  stockCount={positions?.length}
-                />
-                <p className="text-[9px] text-muted-foreground group-hover:text-cyan transition-colors mt-3 text-center">
-                  Click to explore sector performance →
-                </p>
-              </div>
-            </Link>
+        <section>
+          <SectionHeading>Action Required</SectionHeading>
+          <div className="space-y-2">
+            {recommendations?.slice(0, 5).map((rec) => (
+              <RecommendationRow
+                key={rec.ticker}
+                ticker={rec.ticker}
+                action={rec.action}
+                confidence={rec.confidence}
+                compositeScore={rec.composite_score * 10}
+                reasoning={getReasoningText(rec)}
+                isHeld={heldTickers.has(rec.ticker)}
+              />
+            ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Portfolio Drawer */}
