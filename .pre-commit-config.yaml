@@ -1,0 +1,64 @@
+# Pre-commit hooks — 7-stage pipeline for stock-signal-platform.
+# Install: uv run pre-commit install
+# Run all: uv run pre-commit run --all-files
+
+repos:
+  # Stage 1: Python linting
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: uv run ruff check --fix
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  # Stage 2: Python formatting
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run ruff format
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  # Stage 3: Frontend linting
+  - repo: local
+    hooks:
+      - id: frontend-lint
+        name: frontend lint
+        entry: bash -c 'cd frontend && npm run lint -- --max-warnings 0'
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+
+  # Stage 4: Unit tests (pre_commit marker — fast subset)
+  - repo: local
+    hooks:
+      - id: unit-tests
+        name: unit tests (fast)
+        entry: uv run pytest tests/unit/ -x -q --tb=short
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # Stage 5: Agent gate (conditional — only when agent/tool code changes)
+  - repo: local
+    hooks:
+      - id: agent-gate
+        name: agent gate
+        entry: bash scripts/pre-commit-agent-gate.sh
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+  # Stage 6: No secrets check
+  - repo: local
+    hooks:
+      - id: no-secrets
+        name: no secrets
+        entry: bash -c 'git diff --cached --name-only | xargs grep -l -E "(sk-[a-zA-Z0-9]{20,}|AKIA[A-Z0-9]{16}|ghp_[a-zA-Z0-9]{36})" 2>/dev/null && echo "❌ Possible secret detected!" && exit 1 || exit 0'
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]

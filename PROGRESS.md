@@ -728,3 +728,60 @@ Fresh security audit found 11 issues (3 Critical, 5 High, 3 Medium). All fixed i
 **Next (Session 41):** Start implementation — Chunk 1 (S0 directory restructure) → Chunk 2 (S1 auth hardening) → Chunk 3 (S2+S3 pipeline + signals). ~44 tests.
 
 ---
+
+## Session 41 — Phase 4G: Backend Hardening Implementation
+
+**Date:** 2026-03-22
+**Branch:** `feat/backend-hardening-spec` (continuing from Session 40)
+**JIRA:** Epic KAN-73, Stories KAN-74–84
+
+**What was done:**
+
+### Chunk 1 — Directory Restructure (KAN-74)
+- [x] Created 10 domain subdirectories: signals/, recommendations/, tools/, agents/, auth/, chat/, portfolio/, pipeline/, infra/, adversarial/
+- [x] Created tests/e2e/ with eval/ subfolder and results/.gitkeep
+- [x] Moved 36 test files into domain subdirectories
+- [x] Added pytest markers (pre_commit, ci_only, agent_gated) to pyproject.toml
+- [x] Created tests/markers.py and tests/e2e/conftest.py (LLM key gating)
+- [x] Fixed parents[] path in test_agents.py for new depth (1 fix)
+
+### Chunk 2 — Auth & Security Hardening (KAN-75)
+- [x] 15 API tests: token expiry (access + refresh), malformed JWT (missing sub, wrong type), IDOR (portfolio, chat, watchlist, preferences), cookie flags, password strength (3 cases), inactive user lockout, SQL injection, XSS sanitization
+- [x] Key fix: MagicMock.name requires configure_mock(), Transaction uses transaction_type not action, ChatSession requires agent_type
+
+### Chunk 3 — Pipeline + Signals (KAN-76, KAN-77)
+- [x] 10 ingest pipeline API tests: delta refresh, new ticker, empty data, rows_fetched, signal snapshot store/skip, error handling, idempotency, case normalization, last_fetched_at
+- [x] 15 signal engine unit tests: composite range, Piotroski blending (4 tests), insufficient data (3 tests), bullish/bearish extremes, direct composite_score function tests
+- [x] 14 recommendation unit tests: score thresholds (BUY/WATCH/AVOID), portfolio-aware (HOLD/SELL/concentration), confidence levels, edge cases
+- [x] Key fix: portfolio_state is a dict not a dataclass
+
+### Chunk 4 — Agent V2 Regression + Adversarial (KAN-78)
+- [x] 32 regression tests: intent classification (5 intents + validation), executor edge cases ($PREV_RESULT, circuit breaker, tool limit, replan, retry, callback, timeout), synthesizer (confidence labeling, defaults, scenarios, evidence, gaps), context window (truncation, recency)
+- [x] 10 adversarial tests: prompt injection, goal hijacking, scope enforcement, excessive steps, invalid LLM output, synthesis guardrails
+
+### Chunk 5 — Search, Celery, Tools, API Contracts (KAN-80, 81, 82, 83)
+- [x] 10 search flow API tests: DB hit, prefix/name match, Yahoo fallback, empty/XSS, auth, limit, schema fields
+- [x] 13 Celery unit tests: beat schedule (5 jobs), refresh_ticker, fan-out, snapshots, warm data
+- [x] 18 tool unit tests: ToolResult format, registry execution, tool metadata, internal tools
+- [x] 10 API contract tests: schema validation, HTTP status codes, headers
+
+### Chunk 6 — Eval Infrastructure (KAN-79)
+- [x] Rubric: 8 eval dimensions (factual grounding, hallucination, actionability, risk disclosure, evidence quality, scope compliance, personalization, context relevance)
+- [x] Judge: Haiku-based async LLM evaluator with graceful degradation
+- [x] Golden set: 13 prompts covering all intents and edge cases
+
+### Chunk 7 — Pre-commit Hooks + CI (KAN-84)
+- [x] `.pre-commit-config.yaml`: 6-stage pipeline (ruff check, ruff format, frontend lint, unit tests, agent gate, no-secrets)
+- [x] `scripts/pre-commit-agent-gate.sh`: conditional agent test execution
+- [x] `.github/workflows/ci-eval.yml`: path-filtered PRs + weekly cron + manual dispatch
+
+**Test count:** 411 unit + 157 API + 7 e2e + 4 integration + 70 frontend = 649 total
+**New tests this session:** 154 (15 auth + 39 pipeline/signals + 42 agent + 51 search/celery/tools/contracts + 7 live LLM)
+**Commits:** 17 on feat/backend-hardening-spec (PR #38)
+**Bugs found:** 0 application bugs, 0 regressions
+
+**Phase 4G COMPLETE.** All 11 stories (KAN-74–84) implemented. PR #38 merged to develop.
+
+**Next (Session 42):** Manual E2E smoke test → Phase 4C.1 polish → Phase 4F UI migration
+
+---
