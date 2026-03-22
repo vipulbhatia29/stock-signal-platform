@@ -13,6 +13,7 @@ celery_app = Celery(
         "backend.tasks.portfolio",
         "backend.tasks.warm_data",
         "backend.tasks.recommendations",
+        "backend.tasks.forecasting",
         "backend.tasks.pipeline",
     ],
 )
@@ -54,5 +55,11 @@ celery_app.conf.beat_schedule = {
     "sync-institutional-holders": {
         "task": "backend.tasks.warm_data.sync_institutional_holders_task",
         "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET
+    },
+    # ── Biweekly model retrain (every other Sunday 2 AM ET) ──
+    "model-retrain-biweekly": {
+        "task": "backend.tasks.forecasting.model_retrain_all_task",
+        "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET
+        # Biweekly filtering handled at task level (check last retrain date)
     },
 }

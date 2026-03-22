@@ -70,3 +70,6 @@ redis_data/
 
 # LLM eval results (generated per run)
 tests/e2e/eval/results/*.json
+
+# Serialized model artifacts (Prophet .pkl files)
+data/models/prophet/*.pkl
