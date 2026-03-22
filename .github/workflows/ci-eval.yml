@@ -1,0 +1,64 @@
+# CI Eval — runs agent regression tests when agent/tool code changes.
+# Triggers: PRs touching backend/agents/ or backend/tools/, weekly cron, manual dispatch.
+
+name: CI Eval — Agent Regression
+
+on:
+  pull_request:
+    paths:
+      - 'backend/agents/**'
+      - 'backend/tools/**'
+      - 'tests/unit/agents/**'
+      - 'tests/unit/adversarial/**'
+      - 'tests/e2e/**'
+  schedule:
+    # Weekly on Sunday at 06:00 UTC
+    - cron: '0 6 * * 0'
+  workflow_dispatch:
+
+jobs:
+  agent-regression:
+    name: Agent Regression Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: stocksignal
+          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+          POSTGRES_DB: stocksignal_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+      REDIS_URL: ${{ secrets.CI_REDIS_URL }}
+      JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
+      JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+      GROQ_API_KEY: ${{ secrets.CI_GROQ_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.CI_ANTHROPIC_API_KEY }}
+      CI: true
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run agent unit tests
+        run: uv run pytest tests/unit/agents/ tests/unit/adversarial/ -v --tb=short
+
+      - name: Run e2e structural tests (if LLM key available)
+        if: env.GROQ_API_KEY != '' || env.ANTHROPIC_API_KEY != ''
+        run: uv run pytest tests/e2e/ -v --timeout=120 --tb=short
+        continue-on-error: true
