@@ -21,6 +21,7 @@ import type {
   Position,
   PortfolioSummary,
   PortfolioSnapshot,
+  Recommendation,
 } from "@/types/api";
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -294,5 +295,13 @@ export function usePortfolioHistory(days = 365) {
     queryKey: ["portfolio", "history", days],
     queryFn: () => get<PortfolioSnapshot[]>(`/portfolio/history?days=${days}`),
     staleTime: 15 * 60 * 1000,
+  });
+}
+
+export function useRecommendations() {
+  return useQuery<Recommendation[]>({
+    queryKey: ["recommendations"],
+    queryFn: () => get<Recommendation[]>("/stocks/recommendations"),
+    staleTime: 5 * 60 * 1000,
   });
 }
