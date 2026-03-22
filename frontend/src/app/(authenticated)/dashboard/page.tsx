@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { StarIcon, RefreshCw } from "lucide-react";
+import { useChat } from "@/contexts/chat-context";
 import {
   useQuery,
   useMutation,
@@ -113,7 +114,7 @@ export default function DashboardPage() {
   // ── Portfolio overview ──────────────────────────────────────────────────────
 
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const chatIsOpen = false; // TODO: wire from layout context
+  const { chatOpen: chatIsOpen } = useChat();
 
   const { data: summary } = usePortfolioSummary();
   const { data: positions } = usePositions();
@@ -308,7 +309,6 @@ export default function DashboardPage() {
       <PortfolioDrawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        chatIsOpen={chatIsOpen}
       />
 
       {/* Watchlist */}

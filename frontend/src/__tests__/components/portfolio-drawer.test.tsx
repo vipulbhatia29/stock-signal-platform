@@ -13,6 +13,11 @@ jest.mock("@/hooks/use-stocks", () => ({
   usePortfolioHistory: () => ({ data: [] }),
 }));
 
+// Mock ChatContext
+jest.mock("@/contexts/chat-context", () => ({
+  useChat: () => ({ chatOpen: false, setChatOpen: jest.fn(), toggleChat: jest.fn() }),
+}));
+
 // Mock PortfolioValueChart
 jest.mock("@/components/portfolio-value-chart", () => ({
   PortfolioValueChart: () => <div data-testid="portfolio-value-chart" />,
@@ -25,9 +30,8 @@ jest.mock("@/lib/format", () => ({
 
 test("drawer has height 0 when closed", () => {
   const { container } = render(
-    <PortfolioDrawer isOpen={false} onClose={jest.fn()} chatIsOpen={false} />
+    <PortfolioDrawer isOpen={false} onClose={jest.fn()} />
   );
-  // Find the fixed drawer (not the backdrop) by checking for height:0
   const allDivs = container.querySelectorAll("div[style]");
   const drawerDiv = Array.from(allDivs).find(
     (el) => (el as HTMLElement).style.height === "0px" || (el as HTMLElement).style.height === "0"
@@ -37,7 +41,7 @@ test("drawer has height 0 when closed", () => {
 
 test("renders close button when open", () => {
   render(
-    <PortfolioDrawer isOpen={true} onClose={jest.fn()} chatIsOpen={false} />
+    <PortfolioDrawer isOpen={true} onClose={jest.fn()} />
   );
   expect(screen.getByLabelText("Close portfolio chart")).toBeInTheDocument();
 });
