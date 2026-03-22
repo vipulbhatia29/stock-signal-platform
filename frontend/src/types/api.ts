@@ -450,3 +450,48 @@ export interface EvidenceItem {
 export interface FeedbackRequest {
   feedback: "up" | "down";
 }
+
+// ── Sectors ──────────────────────────────────────────────────────────────────
+
+export type SectorScope = "portfolio" | "watchlist" | "all";
+
+export interface SectorSummary {
+  sector: string;
+  stock_count: number;
+  avg_composite_score: number | null;
+  avg_return_pct: number | null;
+  your_stock_count: number;
+  allocation_pct: number | null;
+}
+
+export interface SectorSummaryResponse {
+  sectors: SectorSummary[];
+}
+
+export interface SectorStock {
+  ticker: string;
+  name: string;
+  composite_score: number | null;
+  current_price: number | null;
+  return_pct: number | null;
+  is_held: boolean;
+  is_watched: boolean;
+}
+
+export interface SectorStocksResponse {
+  sector: string;
+  stocks: SectorStock[];
+}
+
+export interface ExcludedTicker {
+  ticker: string;
+  reason: string;
+}
+
+export interface CorrelationData {
+  sector: string;
+  tickers: string[];
+  matrix: number[][];
+  period_days: number;
+  excluded_tickers: ExcludedTicker[];
+}
