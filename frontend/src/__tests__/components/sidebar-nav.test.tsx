@@ -5,6 +5,7 @@ import { SidebarNav } from "@/components/sidebar-nav";
 // Mock next/navigation
 jest.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
+  useRouter: () => ({ push: jest.fn() }),
 }));
 
 // Mock next/link
@@ -23,41 +24,34 @@ jest.mock("@/lib/auth", () => ({
   useAuth: () => ({ logout: jest.fn() }),
 }));
 
-// Mock shadcn UI Popover components
-jest.mock("@/components/ui/popover", () => ({
-  Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  PopoverTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  PopoverContent: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
-// Mock shadcn Button
-jest.mock("@/components/ui/button", () => ({
-  Button: ({ children, onClick, ...props }: { children: React.ReactNode; onClick?: () => void; [key: string]: unknown }) => (
-    <button onClick={onClick} {...props}>
-      {children}
-    </button>
-  ),
+// Mock shadcn UI Tooltip components
+jest.mock("@/components/ui/tooltip", () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ render }: { render: React.ReactElement }) => <>{render}</>,
+  TooltipContent: ({ children }: { children: React.ReactNode }) => <span data-testid="tooltip">{children}</span>,
 }));
 
 // Mock lucide-react icons
 jest.mock("lucide-react", () => ({
   LayoutDashboard: () => <svg data-testid="icon-dashboard" />,
-  SlidersHorizontal: () => <svg data-testid="icon-screener" />,
-  PieChart: () => <svg data-testid="icon-portfolio" />,
+  Search: () => <svg data-testid="icon-screener" />,
+  Briefcase: () => <svg data-testid="icon-portfolio" />,
+  PieChart: () => <svg data-testid="icon-sectors" />,
   Settings: () => <svg data-testid="icon-settings" />,
+  LogOut: () => <svg data-testid="icon-logout" />,
 }));
 
-test("renders navigation links", () => {
+test("renders all navigation links including Sectors", () => {
   render(<SidebarNav />);
   expect(screen.getByLabelText("Dashboard")).toBeInTheDocument();
   expect(screen.getByLabelText("Screener")).toBeInTheDocument();
   expect(screen.getByLabelText("Portfolio")).toBeInTheDocument();
+  expect(screen.getByLabelText("Sectors")).toBeInTheDocument();
 });
 
 test("Dashboard link has active styling when on /dashboard", () => {
   render(<SidebarNav />);
   const dashboardLink = screen.getByLabelText("Dashboard");
-  // Active link has text-cyan class applied
   expect(dashboardLink.className).toContain("text-cyan");
 });
 
@@ -65,4 +59,9 @@ test("non-active link does not have active styling", () => {
   render(<SidebarNav />);
   const screenerLink = screen.getByLabelText("Screener");
   expect(screenerLink.className).not.toContain("text-cyan");
+});
+
+test("renders logout button", () => {
+  render(<SidebarNav />);
+  expect(screen.getByTestId("icon-logout")).toBeInTheDocument();
 });

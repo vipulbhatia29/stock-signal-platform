@@ -3,15 +3,16 @@
 import { XIcon } from "lucide-react";
 import { PortfolioValueChart } from "@/components/portfolio-value-chart";
 import { usePortfolioSummary, usePortfolioHistory } from "@/hooks/use-stocks";
+import { useChat } from "@/contexts/chat-context";
 import { formatCurrency } from "@/lib/format";
 
 interface PortfolioDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  chatIsOpen: boolean;
 }
 
-export function PortfolioDrawer({ isOpen, onClose, chatIsOpen }: PortfolioDrawerProps) {
+export function PortfolioDrawer({ isOpen, onClose }: PortfolioDrawerProps) {
+  const { chatOpen: chatIsOpen } = useChat();
   const { data: summary } = usePortfolioSummary();
   const { data: snapshots = [] } = usePortfolioHistory(365);
 
