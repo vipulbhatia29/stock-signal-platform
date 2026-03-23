@@ -12,6 +12,7 @@ import {
   useFundamentals,
   useDividends,
 } from "@/hooks/use-stocks";
+import { useForecast } from "@/hooks/use-forecasts";
 import { StockHeader } from "@/components/stock-header";
 import { PriceChart } from "@/components/price-chart";
 import { SignalCards } from "@/components/signal-cards";
@@ -19,6 +20,7 @@ import { SignalHistoryChart } from "@/components/signal-history-chart";
 import { RiskReturnCard } from "@/components/risk-return-card";
 import { FundamentalsCard } from "@/components/fundamentals-card";
 import { DividendCard } from "@/components/dividend-card";
+import { ForecastCard } from "@/components/forecast-card";
 import { EmptyState } from "@/components/empty-state";
 import { Breadcrumbs } from "@/components/breadcrumbs";
 import { SectionHeading } from "@/components/section-heading";
@@ -42,6 +44,7 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
   const ingestTicker = useIngestTicker();
   const { data: fundamentals, isLoading: fundLoading } = useFundamentals(ticker);
   const { data: dividends, isLoading: divLoading } = useDividends(ticker);
+  const { data: forecast, isLoading: forecastLoading } = useForecast(ticker);
 
   function handleToggleWatchlist() {
     if (isInWatchlist) {
@@ -125,6 +128,14 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
 
       <section>
         <FundamentalsCard fundamentals={fundamentals} isLoading={fundLoading} />
+      </section>
+
+      <section>
+        <ForecastCard
+          horizons={forecast?.horizons}
+          isLoading={forecastLoading}
+          currentPrice={undefined}
+        />
       </section>
 
       <section>
