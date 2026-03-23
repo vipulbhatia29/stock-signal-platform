@@ -116,24 +116,54 @@ class TestNightlyPriceRefresh:
 class TestNightlyPipelineChain:
     """Tests for the nightly_pipeline_chain_task."""
 
+    @patch("backend.tasks.alerts.generate_alerts_task")
+    @patch("backend.tasks.evaluation.check_drift_task")
+    @patch("backend.tasks.evaluation.evaluate_recommendations_task")
+    @patch("backend.tasks.evaluation.evaluate_forecasts_task")
     @patch("backend.tasks.portfolio.snapshot_all_portfolios_task")
     @patch("backend.tasks.recommendations.generate_recommendations_task")
+    @patch("backend.tasks.forecasting.forecast_refresh_task")
     @patch("backend.tasks.market_data.nightly_price_refresh_task")
-    def test_chain_calls_all_steps(self, mock_price, mock_recs, mock_snapshot) -> None:
-        """Chain should call price refresh, recommendations, and snapshot."""
+    def test_chain_calls_all_steps(
+        self,
+        mock_price,
+        mock_forecast,
+        mock_recs,
+        mock_snapshot,
+        mock_eval_fc,
+        mock_eval_rec,
+        mock_drift,
+        mock_alerts,
+    ) -> None:
+        """Chain should call all 8 pipeline steps in order."""
         from backend.tasks.market_data import nightly_pipeline_chain_task
 
         mock_price.return_value = {"status": "success"}
+        mock_forecast.return_value = {"status": "success", "refreshed": 10}
         mock_recs.return_value = {"status": "success", "recommendations": 5}
+        mock_eval_fc.return_value = {"status": "no_pending", "evaluated": 0}
+        mock_eval_rec.return_value = {"status": "success", "evaluated": 0}
+        mock_drift.return_value = {"degraded": [], "retrain_triggered": []}
+        mock_alerts.return_value = {"alerts_created": 2}
         mock_snapshot.return_value = {"snapshots_created": 3}
 
         result = nightly_pipeline_chain_task()
 
         assert result["price_refresh"]["status"] == "success"
+        assert result["forecast_refresh"]["refreshed"] == 10
         assert result["recommendations"]["recommendations"] == 5
+        assert result["forecast_evaluation"]["status"] == "no_pending"
+        assert result["recommendation_evaluation"]["evaluated"] == 0
+        assert result["drift"]["degraded"] == []
+        assert result["alerts"]["alerts_created"] == 2
         assert result["portfolio_snapshots"]["snapshots_created"] == 3
         mock_price.assert_called_once()
+        mock_forecast.assert_called_once()
         mock_recs.assert_called_once()
+        mock_eval_fc.assert_called_once()
+        mock_eval_rec.assert_called_once()
+        mock_drift.assert_called_once()
+        mock_alerts.assert_called_once()
         mock_snapshot.assert_called_once()
 
 
