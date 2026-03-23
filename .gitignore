@@ -1,3 +1,6 @@
+# Large files / personal docs
+*.pdf
+
 # Python
 __pycache__/
 *.py[cod]
