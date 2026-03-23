@@ -32,6 +32,7 @@ class AgentStateV2(TypedDict):
     skip_synthesis: bool
     response_text: str
     decline_message: str
+    entity_registry: dict[str, Any]
 
 
 def build_agent_graph_v2(
@@ -58,6 +59,8 @@ def build_agent_graph_v2(
 
     async def plan_node(state: AgentStateV2) -> dict:
         """Plan phase: classify intent and generate tool plan."""
+        from backend.agents.entity_registry import EntityInfo, EntityRegistry
+
         messages = state["messages"]
         query = ""
         for msg in reversed(messages):
@@ -69,12 +72,31 @@ def build_agent_graph_v2(
                     query = msg.content
                     break
 
+        # Resolve pronoun references via entity registry
+        registry_data = state.get("entity_registry", {})
+        registry = EntityRegistry(
+            discussed_tickers={
+                k: EntityInfo(**v) for k, v in registry_data.get("discussed_tickers", {}).items()
+            }
+            if registry_data
+            else {}
+        )
+        resolved = registry.resolve_pronouns(query)
+
+        # Inject entity context into user_context for the planner
+        user_context = dict(state.get("user_context", {}))
+        if resolved:
+            user_context["resolved_pronouns"] = resolved
+        entity_prompt = registry.format_for_prompt()
+        if entity_prompt:
+            user_context["entity_context"] = entity_prompt
+
         plan = state.get("plan") or {}
         # Use the injected plan_fn which already has llm_chat bound
         plan = await plan_fn(
             query=query,
             tools_description=tools_description,
-            user_context=state.get("user_context", {}),
+            user_context=user_context,
         )
 
         return {
@@ -86,15 +108,43 @@ def build_agent_graph_v2(
 
     async def execute_node(state: AgentStateV2) -> dict:
         """Execute phase: run tool plan mechanically."""
+        from backend.agents.entity_registry import EntityInfo, EntityRegistry
+
         plan = state.get("plan", {})
         steps = plan.get("steps", [])
 
         result = await execute_fn(steps, tool_executor)
 
+        # Update entity registry from tool results
+        registry_data = state.get("entity_registry", {})
+        registry = EntityRegistry(
+            discussed_tickers={
+                k: EntityInfo(**v) for k, v in registry_data.get("discussed_tickers", {}).items()
+            }
+            if registry_data
+            else {}
+        )
+        for tr in result.get("results", []):
+            registry.extract_from_tool_result(
+                tool_name=tr.get("tool", ""),
+                result=tr,
+            )
+
         new_state: dict[str, Any] = {
             "tool_results": result["results"],
             "phase": "execute",
             "iteration": state.get("iteration", 0) + 1,
+            "entity_registry": {
+                "discussed_tickers": {
+                    k: {
+                        "ticker": v.ticker,
+                        "name": v.name,
+                        "source_tool": v.source_tool,
+                        "mention_count": v.mention_count,
+                    }
+                    for k, v in registry.discussed_tickers.items()
+                }
+            },
         }
 
         # If replan needed and we haven't exceeded limit
