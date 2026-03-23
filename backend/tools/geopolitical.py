@@ -5,9 +5,19 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import BaseModel, Field
+
 from backend.tools.base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
+
+
+class GeopoliticalEventsInput(BaseModel):
+    """Input schema for get_geopolitical_events tool."""
+
+    query: str = Field(description="Search query (e.g., 'Iran oil sanctions')")
+    days: int = Field(default=7, description="Look back N days (default 7)")
+    max_results: int = Field(default=10, description="Max articles (default 10)")
 
 
 class GeopoliticalEventsTool(BaseTool):
@@ -37,6 +47,7 @@ class GeopoliticalEventsTool(BaseTool):
         },
         "required": ["query"],
     }
+    args_schema = GeopoliticalEventsInput
     timeout_seconds = 15.0
 
     async def execute(self, params: dict[str, Any]) -> ToolResult:

@@ -1,5 +1,5 @@
-// ChangeIndicator — displays a signed numeric change with color, icon, and sign.
-// Combines all three redundant cues (color + icon + sign) for color-blind safety.
+// ChangeIndicator — displays a signed numeric change with color.
+// Combines color + sign for color-blind safety. Icon optional.
 
 import { TrendingUpIcon, TrendingDownIcon, MinusIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,9 @@ interface ChangeIndicatorProps {
   value: number | null;
   format?: "percent" | "currency";
   size?: "sm" | "default";
+  prefix?: string;
+  showSign?: boolean;
+  showIcon?: boolean;
   className?: string;
 }
 
@@ -16,6 +19,9 @@ export function ChangeIndicator({
   value,
   format = "percent",
   size = "default",
+  prefix = "",
+  showSign = true,
+  showIcon = true,
   className,
 }: ChangeIndicatorProps) {
   if (value === null) {
@@ -28,7 +34,7 @@ export function ChangeIndicator({
   const isNegative = value < 0;
   const formatted =
     format === "percent" ? formatPercent(value) : formatCurrency(value);
-  const sign = isPositive ? "+" : "";
+  const sign = showSign && isPositive ? "+" : "";
 
   const iconSize = size === "sm" ? "size-3" : "size-4";
   const textSize = size === "sm" ? "text-xs" : "text-sm";
@@ -48,10 +54,10 @@ export function ChangeIndicator({
   return (
     <span
       className={cn("inline-flex items-center gap-1 font-mono font-medium tabular-nums", textSize, colorClass, className)}
-      aria-label={`${isPositive ? "up" : isNegative ? "down" : "unchanged"} ${sign}${formatted}`}
+      aria-label={`${isPositive ? "up" : isNegative ? "down" : "unchanged"} ${sign}${prefix}${formatted}`}
     >
-      <Icon className={iconSize} aria-hidden="true" />
-      {sign}{formatted}
+      {showIcon && <Icon className={iconSize} aria-hidden="true" />}
+      {sign}{prefix}{formatted}
     </span>
   );
 }

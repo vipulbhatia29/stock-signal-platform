@@ -28,7 +28,9 @@ import asyncio
 import logging
 import re
 from datetime import datetime, timedelta, timezone
+from typing import Literal
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import Float, delete, func, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by
@@ -70,7 +72,64 @@ logger = logging.getLogger(__name__)
 
 TICKER_PATTERN = re.compile(r"^[A-Za-z0-9.\-]{1,10}$")
 
+# Yahoo Finance search — allowed quote types (equities + ETFs)
+_YF_ALLOWED_TYPES = {"EQUITY", "ETF"}
+
 router = APIRouter()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Yahoo Finance external search
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def _yahoo_search(query: str, limit: int = 8) -> list[StockSearchResponse]:
+    """Search Yahoo Finance for stocks and ETFs by name or ticker.
+
+    Returns results not yet in our database, so the frontend can offer
+    an "Add" action. Only US-listed equities and ETFs are included.
+    """
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                "https://query2.finance.yahoo.com/v1/finance/search",
+                params={
+                    "q": query,
+                    "quotesCount": limit,
+                    "newsCount": 0,
+                    "listsCount": 0,
+                },
+                headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; StockSignalPlatform/1.0)",
+                },
+            )
+            resp.raise_for_status()
+            quotes = resp.json().get("quotes", [])
+    except Exception:
+        logger.warning("yahoo_search_failed", extra={"query": query})
+        return []
+
+    results = []
+    for q_item in quotes:
+        if q_item.get("quoteType") not in _YF_ALLOWED_TYPES:
+            continue
+        # Yahoo uses "." for multi-class shares (BRK.B), yfinance uses "-"
+        ticker = q_item.get("symbol", "").replace(".", "-")
+        # Skip non-US listings (contain "." after dash conversion → still have "-")
+        # US tickers: AAPL, MSFT, BRK-B. Non-US: PTX-F, PLTR-WA
+        exchange = q_item.get("exchDisp", "")
+        if exchange not in {"NASDAQ", "NYSE", "NYSEArca", "NasdaqGS", "NasdaqGM", "NasdaqCM"}:
+            continue
+        results.append(
+            StockSearchResponse(
+                ticker=ticker,
+                name=q_item.get("longname") or q_item.get("shortname", ""),
+                exchange=exchange,
+                sector=q_item.get("sectorDisp"),
+                in_db=False,
+            )
+        )
+    return results
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -85,28 +144,47 @@ async def search_stocks(
     ),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
-) -> list[Stock]:
+) -> list[StockSearchResponse]:
     """Search stocks by ticker symbol or company name.
 
-    Performs a case-insensitive prefix match on both the ticker and name
-    columns. For example, searching "APP" would match "AAPL" (ticker)
-    and "Apple Inc" (name).
-
-    The ILIKE operator is PostgreSQL-specific and does case-insensitive
-    pattern matching. The '%' is a wildcard that matches any characters.
+    First searches the local database (instant), then supplements with
+    Yahoo Finance results for stocks not yet in the DB. External results
+    have ``in_db=False`` so the frontend can show an "Add" action.
     """
-    # ILIKE = case-Insensitive LIKE. The f"{q}%" pattern means
-    # "starts with q" (prefix match). We search both ticker and name.
-    query = (
+    limit = 10
+
+    # 1. Local DB search (fast)
+    db_query = (
         select(Stock)
         .where((Stock.ticker.ilike(f"{q}%")) | (Stock.name.ilike(f"%{q}%")))
         .where(Stock.is_active.is_(True))
         .order_by(Stock.ticker)
-        .limit(20)  # Cap results to avoid returning thousands of rows
+        .limit(limit)
     )
+    result = await db.execute(db_query)
+    db_stocks = list(result.scalars().all())
 
-    result = await db.execute(query)
-    return list(result.scalars().all())
+    db_results = [
+        StockSearchResponse(
+            ticker=s.ticker,
+            name=s.name,
+            exchange=s.exchange,
+            sector=s.sector,
+            in_db=True,
+        )
+        for s in db_stocks
+    ]
+
+    # 2. If DB has enough results, skip external search
+    if len(db_results) >= limit:
+        return db_results
+
+    # 3. Supplement with Yahoo Finance (only for stocks not in DB)
+    db_tickers = {r.ticker for r in db_results}
+    external = await _yahoo_search(q, limit=limit - len(db_results))
+    external_filtered = [r for r in external if r.ticker not in db_tickers]
+
+    return db_results + external_filtered[: limit - len(db_results)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -517,10 +595,10 @@ async def refresh_all_watchlist(
 
 @router.get("/recommendations", response_model=list[RecommendationResponse])
 async def get_recommendations(
-    action: str | None = Query(
+    action: Literal["BUY", "WATCH", "AVOID", "HOLD", "SELL"] | None = Query(
         default=None, description="Filter by action: BUY, WATCH, AVOID, HOLD, SELL"
     ),
-    confidence: str | None = Query(
+    confidence: Literal["HIGH", "MEDIUM", "LOW"] | None = Query(
         default=None, description="Filter by confidence: HIGH, MEDIUM, LOW"
     ),
     db: AsyncSession = Depends(get_async_session),
@@ -585,7 +663,13 @@ async def ingest_ticker(
             detail="Invalid ticker format. Use alphanumeric characters, dots, and hyphens only.",
         )
 
-    from backend.tools.fundamentals import fetch_fundamentals
+    from backend.tools.fundamentals import (
+        fetch_analyst_data,
+        fetch_earnings_history,
+        fetch_fundamentals,
+        persist_earnings_snapshots,
+        persist_enriched_fundamentals,
+    )
     from backend.tools.market_data import (
         ensure_stock_exists,
         fetch_prices_delta,
@@ -623,6 +707,14 @@ async def ingest_ticker(
     loop = asyncio.get_event_loop()
     fundamentals = await loop.run_in_executor(None, fetch_fundamentals, ticker)
     piotroski = fundamentals.piotroski_score
+
+    # Persist enriched fundamentals + analyst data to Stock model
+    analyst_data = await loop.run_in_executor(None, fetch_analyst_data, ticker)
+    await persist_enriched_fundamentals(stock, fundamentals, analyst_data, db)
+
+    # Persist earnings history
+    earnings = await loop.run_in_executor(None, fetch_earnings_history, ticker)
+    await persist_earnings_snapshots(ticker, earnings, db)
 
     # Compute signals if we have enough data
     composite_score = None
@@ -907,18 +999,14 @@ async def get_fundamentals(
 ) -> FundamentalsResponse:
     """Get fundamental financial metrics for a stock.
 
-    Fetches live fundamental data from yfinance including:
-      - P/E ratio: How much investors pay per dollar of earnings.
-      - PEG ratio: P/E adjusted for earnings growth rate.
-      - FCF yield: Free cash flow as a fraction of market cap (>5% is healthy).
-      - Debt-to-equity: Financial leverage ratio.
-      - Piotroski F-Score (0-9): Composite financial health score with
-        per-criterion breakdown across profitability, leverage, and efficiency.
+    Returns enriched fundamental data from the database (materialized
+    during ingestion) including valuation ratios, growth rates, margins,
+    analyst targets, and Piotroski F-Score.
 
-    Note: yfinance data may be missing for ETFs, SPACs, or very new listings.
-    Missing fields are returned as null — the frontend should handle this gracefully.
+    Note: Data is refreshed on each ingest. If fields are null, run
+    ingest first. ETFs, SPACs, or very new listings may have missing data.
     """
-    await _require_stock(ticker, db)
+    stock = await _require_stock(ticker, db)
     ticker = ticker.upper().strip()
 
     import asyncio
@@ -933,6 +1021,19 @@ async def get_fundamentals(
         debt_to_equity=result.debt_to_equity,
         piotroski_score=result.piotroski_score,
         piotroski_breakdown=PiotroskiBreakdown(**(result.piotroski_breakdown or {})),
+        # Enriched fields from Stock model (materialized during ingestion)
+        revenue_growth=stock.revenue_growth,
+        gross_margins=stock.gross_margins,
+        operating_margins=stock.operating_margins,
+        profit_margins=stock.profit_margins,
+        return_on_equity=stock.return_on_equity,
+        market_cap=stock.market_cap,
+        analyst_target_mean=stock.analyst_target_mean,
+        analyst_target_high=stock.analyst_target_high,
+        analyst_target_low=stock.analyst_target_low,
+        analyst_buy=stock.analyst_buy,
+        analyst_hold=stock.analyst_hold,
+        analyst_sell=stock.analyst_sell,
     )
 
 

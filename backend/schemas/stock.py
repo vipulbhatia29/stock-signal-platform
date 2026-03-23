@@ -48,6 +48,7 @@ class StockSearchResponse(BaseModel):
     name: str
     exchange: str | None = None
     sector: str | None = None
+    in_db: bool = True
 
     model_config = {"from_attributes": True}
 
@@ -310,3 +311,19 @@ class FundamentalsResponse(BaseModel):
         default_factory=PiotroskiBreakdown,
         description="Per-criterion breakdown of the Piotroski score",
     )
+
+    # Enriched fields (materialized during ingestion)
+    revenue_growth: float | None = Field(None, description="Revenue growth rate")
+    gross_margins: float | None = Field(None, description="Gross margins")
+    operating_margins: float | None = Field(None, description="Operating margins")
+    profit_margins: float | None = Field(None, description="Profit margins")
+    return_on_equity: float | None = Field(None, description="Return on equity")
+    market_cap: float | None = Field(None, description="Market capitalization")
+
+    # Analyst targets
+    analyst_target_mean: float | None = Field(None, description="Mean analyst price target")
+    analyst_target_high: float | None = Field(None, description="Highest analyst price target")
+    analyst_target_low: float | None = Field(None, description="Lowest analyst price target")
+    analyst_buy: int | None = Field(None, description="Number of buy recommendations")
+    analyst_hold: int | None = Field(None, description="Number of hold recommendations")
+    analyst_sell: int | None = Field(None, description="Number of sell recommendations")

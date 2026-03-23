@@ -47,8 +47,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import yfinance as yf
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from backend.models.stock import Stock
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +82,16 @@ class FundamentalResult:
 
     # Piotroski
     piotroski_score: int | None  # 0–9
+
+    # Growth & margins (materialized to Stock model during ingestion)
+    revenue_growth: float | None = None
+    gross_margins: float | None = None
+    operating_margins: float | None = None
+    profit_margins: float | None = None
+    return_on_equity: float | None = None
+    market_cap: float | None = None
+    enterprise_value: float | None = None
+
     piotroski_breakdown: dict = field(default_factory=dict)  # 9 binary criteria
 
 
@@ -232,6 +248,14 @@ def fetch_fundamentals(ticker: str) -> FundamentalResult:
     else:
         fcf_yield = None
 
+    # ── Growth & margins ─────────────────────────────────────────────
+    revenue_growth = _get("revenueGrowth")
+    gross_margins = _get("grossMargins")
+    operating_margins = _get("operatingMargins")
+    profit_margins = _get("profitMargins")
+    return_on_equity = _get("returnOnEquity")
+    enterprise_value = _get("enterpriseValue")
+
     # ── Piotroski F-Score ────────────────────────────────────────────
     piotroski_score, piotroski_breakdown = compute_piotroski(info)
 
@@ -250,6 +274,233 @@ def fetch_fundamentals(ticker: str) -> FundamentalResult:
         peg_ratio=peg_ratio,
         fcf_yield=fcf_yield,
         debt_to_equity=debt_to_equity,
+        revenue_growth=revenue_growth,
+        gross_margins=gross_margins,
+        operating_margins=operating_margins,
+        profit_margins=profit_margins,
+        return_on_equity=return_on_equity,
+        market_cap=market_cap,
+        enterprise_value=enterprise_value,
         piotroski_score=piotroski_score,
         piotroski_breakdown=piotroski_breakdown,
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Persist enriched data to Stock model
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def fetch_analyst_data(ticker: str) -> dict:
+    """Fetch analyst target and recommendation data from yfinance.
+
+    Args:
+        ticker: Stock symbol.
+
+    Returns:
+        Dict with analyst_target_mean/high/low, analyst_buy/hold/sell,
+        business_summary, employees, website. Missing keys are omitted.
+    """
+    ticker = ticker.upper().strip()
+    try:
+        t = yf.Ticker(ticker)
+        info = t.info or {}
+    except Exception:
+        logger.warning("yfinance failed for %s analyst data", ticker)
+        return {}
+
+    def _get_float(key: str) -> float | None:
+        val = info.get(key)
+        try:
+            return float(val) if val is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _get_int(key: str) -> int | None:
+        val = info.get(key)
+        try:
+            return int(val) if val is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    result: dict = {}
+
+    # Analyst targets
+    for key, field_name in [
+        ("targetMeanPrice", "analyst_target_mean"),
+        ("targetHighPrice", "analyst_target_high"),
+        ("targetLowPrice", "analyst_target_low"),
+    ]:
+        val = _get_float(key)
+        if val is not None:
+            result[field_name] = val
+
+    # Recommendation breakdown
+    recs = info.get("recommendationKey")  # noqa: F841 — we use breakdown below
+    for key, field_name in [
+        ("numberOfAnalystOpinions", "analyst_buy"),  # approximate; see below
+    ]:
+        pass  # yfinance doesn't split buy/hold/sell reliably from .info
+
+    # Use .recommendations_summary if available for buy/hold/sell counts
+    try:
+        rec_summary = t.recommendations
+        if rec_summary is not None and not rec_summary.empty:
+            latest = rec_summary.iloc[-1]
+            result["analyst_buy"] = int(latest.get("strongBuy", 0)) + int(latest.get("buy", 0))
+            result["analyst_hold"] = int(latest.get("hold", 0))
+            result["analyst_sell"] = int(latest.get("sell", 0)) + int(latest.get("strongSell", 0))
+    except Exception:
+        pass
+
+    # Profile data
+    summary = info.get("longBusinessSummary")
+    if summary:
+        result["business_summary"] = summary
+    employees = _get_int("fullTimeEmployees")
+    if employees is not None:
+        result["employees"] = employees
+    website = info.get("website")
+    if website:
+        result["website"] = str(website)
+
+    return result
+
+
+async def persist_enriched_fundamentals(
+    stock: Stock,
+    fundamentals: FundamentalResult,
+    analyst_data: dict,
+    db: AsyncSession,
+) -> None:
+    """Persist enriched fundamentals and analyst data to the Stock model.
+
+    Args:
+        stock: Stock ORM object to update.
+        fundamentals: FundamentalResult from fetch_fundamentals().
+        analyst_data: Dict from fetch_analyst_data().
+        db: Async database session (caller manages commit).
+    """
+    # Growth & margins from FundamentalResult
+    stock.revenue_growth = fundamentals.revenue_growth
+    stock.gross_margins = fundamentals.gross_margins
+    stock.operating_margins = fundamentals.operating_margins
+    stock.profit_margins = fundamentals.profit_margins
+    stock.return_on_equity = fundamentals.return_on_equity
+    stock.market_cap = fundamentals.market_cap
+
+    # Analyst data
+    for field_name in (
+        "analyst_target_mean",
+        "analyst_target_high",
+        "analyst_target_low",
+        "analyst_buy",
+        "analyst_hold",
+        "analyst_sell",
+        "business_summary",
+        "employees",
+        "website",
+    ):
+        val = analyst_data.get(field_name)
+        if val is not None:
+            setattr(stock, field_name, val)
+
+    db.add(stock)
+    logger.info("Persisted enriched fundamentals for %s", stock.ticker)
+
+
+def fetch_earnings_history(ticker: str) -> list[dict]:
+    """Fetch quarterly earnings history from yfinance.
+
+    Args:
+        ticker: Stock symbol.
+
+    Returns:
+        List of dicts with keys: quarter, eps_estimate, eps_actual, surprise_pct.
+        Empty list on failure.
+    """
+    ticker = ticker.upper().strip()
+    try:
+        t = yf.Ticker(ticker)
+        hist = t.earnings_history
+        if hist is None or hist.empty:
+            return []
+    except Exception:
+        logger.warning("yfinance failed for %s earnings history", ticker)
+        return []
+
+    results = []
+    for _, row in hist.iterrows():
+        quarter = str(row.get("Quarter", ""))
+        eps_est = row.get("epsEstimate")
+        eps_act = row.get("epsActual")
+        surprise = row.get("surprisePercent")
+
+        def _safe_float(v: object) -> float | None:
+            try:
+                return float(v) if v is not None else None
+            except (TypeError, ValueError):
+                return None
+
+        results.append(
+            {
+                "quarter": quarter,
+                "eps_estimate": _safe_float(eps_est),
+                "eps_actual": _safe_float(eps_act),
+                "surprise_pct": _safe_float(surprise),
+            }
+        )
+    return results
+
+
+async def persist_earnings_snapshots(
+    ticker: str,
+    earnings: list[dict],
+    db: AsyncSession,
+) -> int:
+    """Upsert earnings snapshots into the database.
+
+    Args:
+        ticker: Stock ticker.
+        earnings: List of dicts from fetch_earnings_history().
+        db: Async session (caller manages commit).
+
+    Returns:
+        Number of rows upserted.
+    """
+    if not earnings:
+        return 0
+
+    from sqlalchemy.dialects.postgresql import insert
+
+    from backend.models.earnings import EarningsSnapshot
+
+    rows = []
+    for e in earnings:
+        if not e.get("quarter"):
+            continue
+        rows.append(
+            {
+                "ticker": ticker.upper(),
+                "quarter": e["quarter"],
+                "eps_estimate": e.get("eps_estimate"),
+                "eps_actual": e.get("eps_actual"),
+                "surprise_pct": e.get("surprise_pct"),
+            }
+        )
+
+    if not rows:
+        return 0
+
+    stmt = insert(EarningsSnapshot).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        constraint="earnings_snapshots_pkey",
+        set_={
+            "eps_estimate": stmt.excluded.eps_estimate,
+            "eps_actual": stmt.excluded.eps_actual,
+            "surprise_pct": stmt.excluded.surprise_pct,
+        },
+    )
+    await db.execute(stmt)
+    logger.info("Upserted %d earnings snapshots for %s", len(rows), ticker)
+    return len(rows)

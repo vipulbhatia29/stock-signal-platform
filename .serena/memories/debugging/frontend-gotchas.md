@@ -33,3 +33,15 @@ category: debugging
 
 ## base-ui/shadcn v4 triggers
 - `SheetTrigger`, `PopoverTrigger`, and ALL base-ui trigger components use `render={<Button />}`, NOT `asChild`.
+
+## TypeScript strict: `unknown` in JSX
+- Props typed as `unknown` cannot be used in JSX conditionals like `{value && <div/>}`.
+- TypeScript evaluates `unknown && ReactElement` as `unknown | ReactElement` → not assignable to `ReactNode`.
+- Fix: use `{value != null && <div/>}` — the explicit null check narrows the type.
+- ESLint doesn't catch this — only `tsc --noEmit` does. Always run both locally before pushing.
+
+## ESM-only packages in Jest
+- `react-markdown` v9+, `rehype-highlight`, `remark-gfm` are ESM-only.
+- Jest runs in CJS mode and cannot import them directly.
+- Fix: add `moduleNameMapper` mocks in `jest.config.ts` pointing to CJS mock files in `__tests__/__mocks__/`.
+- Mock files use `require("react")` with `// eslint-disable-next-line @typescript-eslint/no-require-imports`.

@@ -4,7 +4,7 @@
 
 **Version:** 1.0
 **Date:** March 2026
-**Status:** Living Document (Phase 1-3.5 in progress)
+**Status:** Living Document (Phase 1-4G complete, 4C.1 done, 4F/5/6 planned)
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -261,11 +261,60 @@ GET /portfolio/positions now returns alerts[] per position (divestment alerts) �
 ```
 POST /api/v1/chat/stream
   Request:  { message: string, session_id?: uuid, agent_type: "general"|"stock" }
-  Response: SSE stream of NDJSON events:
-    { type: "token", content: "..." }
-    { type: "tool_start", tool: "signals", input: {...} }
-    { type: "tool_result", tool: "signals", output: {...} }
-    { type: "done", session_id: uuid, tokens_used: int }
+  Response: NDJSON stream of events (see §3.6.1)
+  Auth:     Required (httpOnly cookie)
+  Behavior: When AGENT_V2=true, uses Plan→Execute→Synthesize graph (§5.5).
+            When AGENT_V2=false, uses V1 ReAct graph (§5.3).
+            User context (portfolio, preferences, watchlist) injected automatically.
+            query_id (UUID) generated per request for trace correlation.
+```
+
+### 3.6.1 NDJSON Stream Events (Phase 4C + 4D)
+
+```
+V1 Events (ReAct graph):
+  { type: "thinking", content: "Analyzing your question..." }
+  { type: "tool_start", tool: "analyze_stock", params: {...} }
+  { type: "tool_result", tool: "analyze_stock", status: "ok", data: {...} }
+  { type: "token", content: "..." }                           # Streamed text
+  { type: "done", usage: {...} }
+  { type: "error", error: "..." }
+  { type: "provider_fallback", content: "Switching to..." }
+
+V2 Events (Plan→Execute→Synthesize graph, AGENT_V2=true):
+  { type: "thinking", content: "Planning research approach..." }
+  { type: "plan", content: "reasoning...", data: { steps: ["tool1", "tool2"] } }
+  { type: "tool_result", tool: "...", status: "ok", data: {...} }
+  { type: "tool_error", tool: "...", error: "API timeout" }
+  { type: "evidence", data: [{ claim, source_tool, value, timestamp }] }
+  { type: "decline", content: "I focus on financial analysis..." }
+  { type: "token", content: "..." }                           # Synthesis text
+  { type: "done", usage: {...} }
+```
+
+### 3.6.2 Feedback Endpoint (Phase 4D)
+
+```
+PATCH /api/v1/chat/sessions/{session_id}/messages/{message_id}/feedback
+  Request:  { feedback: "up" | "down" }
+  Response: { status: "ok", feedback: "up" | "down" }
+  Auth:     Required (session must belong to user)
+  Errors:   404 (session or message not found)
+```
+
+### 3.6.3 Extended Fundamentals Endpoint (Phase 4D)
+
+```
+GET /api/v1/stocks/{ticker}/fundamentals
+  Response: { ticker, pe_ratio, peg_ratio, fcf_yield, debt_to_equity,
+              piotroski_score, piotroski_breakdown,
+              revenue_growth, gross_margins, operating_margins, profit_margins,
+              return_on_equity, market_cap,
+              analyst_target_mean, analyst_target_high, analyst_target_low,
+              analyst_buy, analyst_hold, analyst_sell }
+  Auth:     Required
+  Note:     Enriched fields from Stock model (materialized during ingestion).
+            P/E, PEG, FCF yield, Piotroski still fetched live from yfinance.
 ```
 
 ### 3.7 Index Endpoints (Phase 2)
@@ -322,6 +371,43 @@ GET /api/v1/stocks/{ticker}/signals/history?days={90}&limit={100}
                macd_value, macd_signal, sma_signal, bollinger_signal }]
   Auth:     Required
   Default:  90 days, max 365 days
+```
+
+### 3.11 Forecast Endpoints (Phase 5) ✅ IMPLEMENTED
+
+```
+GET /api/v1/forecasts/{ticker}
+  Response: ForecastResponse { ticker, horizons: ForecastHorizon[], model_mape, model_status }
+  Auth:     Required
+
+GET /api/v1/forecasts/portfolio
+  Response: PortfolioForecastResponse { horizons: PortfolioForecastHorizon[], ticker_count, vix_regime }
+  Auth:     Required
+
+GET /api/v1/forecasts/sector/{sector}
+  Response: SectorForecastResponse { sector, etf_ticker, horizons[], user_exposure_pct, user_tickers_in_sector }
+  Auth:     Required
+
+GET /api/v1/recommendations/scorecard
+  Response: ScorecardResponse { total_outcomes, overall_hit_rate, avg_alpha, buy_hit_rate, sell_hit_rate, worst_miss_pct, worst_miss_ticker, by_horizon[] }
+  Auth:     Required
+```
+
+### 3.12 Alert Endpoints (Phase 5) ✅ IMPLEMENTED
+
+```
+GET /api/v1/alerts
+  Response: AlertResponse[] { id, alert_type, severity, title, message, ticker, is_read, created_at, metadata }
+  Auth:     Required
+
+GET /api/v1/alerts/unread-count
+  Response: { unread_count: int }
+  Auth:     Required
+
+PATCH /api/v1/alerts/read
+  Body:     { alert_ids: string[] }
+  Response: { updated: int }
+  Auth:     Required
 ```
 
 ---
@@ -406,7 +492,7 @@ async def get_signal_service(
 
 ## 5. Agent Architecture
 
-> **Implementation status:** Phase 4B spec complete (Session 34). Full design: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md`. Implementation plan pending. The `backend/agents/` directory exists as a placeholder.
+> **Implementation status:** Phase 4B ✅ (V1 ReAct, PRs #12-13) + Phase 4D ✅ (V2 Plan→Execute→Synthesize, PRs #26-32). V2 behind `AGENT_V2=true` feature flag. Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`.
 
 ### 5.1 Three-Layer Architecture
 
@@ -429,9 +515,16 @@ class ToolRegistry:
     def health() -> dict[str, bool]
 ```
 
-Internal tools: `analyze_stock`, `get_portfolio_exposure`, `screen_stocks`, `get_recommendations`, `compute_signals`, `get_geopolitical_events`, `web_search`
+Internal tools (20):
+- **Original (9):** `analyze_stock`, `get_portfolio_exposure`, `screen_stocks`, `get_recommendations`, `compute_signals`, `get_geopolitical_events`, `web_search`, `search_stocks`, `ingest_stock`
+- **Phase 4D (4):** `get_fundamentals`, `get_analyst_targets`, `get_earnings_history`, `get_company_profile` — read from DB, data materialized during `ingest_stock`
+- **Phase 5 (7):** `get_forecast`, `get_sector_forecast`, `get_portfolio_forecast`, `compare_stocks`, `get_recommendation_scorecard`, `dividend_sustainability`, `risk_narrative`
 
-MCPAdapter proxied tools: `get_10k_section`, `get_13f_holdings`, `get_insider_trades`, `get_news_sentiment`, `get_economic_series`, `get_analyst_ratings`, `get_social_sentiment`, `get_etf_holdings`
+Phase 5 tools: forecast tools read pre-computed Prophet data from DB. `dividend_sustainability` is the only runtime yfinance call (payout ratio not persisted). `risk_narrative` combines signals + fundamentals + forecast + sector ETF context.
+
+**Entity Registry** (`backend/agents/entity_registry.py`): session-scoped ticker tracking for pronoun resolution ("compare them", "what about it?"). Wired into AgentStateV2 — execute_node extracts entities from tool results, plan_node resolves pronouns.
+
+MCPAdapter proxied tools (4 adapters): EdgarAdapter (SEC filings), AlphaVantageAdapter (news), FredAdapter (macro), FinnhubAdapter (analyst/ESG)
 
 Agent types = registry filters:
 - Stock agent: all categories (analysis, data, portfolio, macro, news, sec)
@@ -449,7 +542,72 @@ Max 15 iterations. Few-shot prompted (prompt templates in `backend/agents/prompt
 Provider-agnostic abstraction. Fallback: Groq → Anthropic → Local.
 Retry policy: exponential backoff (1s, 2s, 4s) for transient errors. Immediate switch for quota exhaustion, timeouts, connection failures. Provider health tracking skips exhausted providers.
 
-See spec §4 for full retry/fallback strategy.
+**Tier routing (Phase 4D):** `tier_config` dict maps tier names to provider lists. `chat(tier="planner")` selects providers from tier config. Falls back to default providers if tier not found. Backward compatible — existing code works without tier param.
+
+### 5.5 Agent V2 — Plan→Execute→Synthesize (Phase 4D) ✅ IMPLEMENTED
+
+> **Full spec:** `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
+> **Feature flag:** `AGENT_V2=true` in `backend/config.py`. When false, V1 ReAct loop (§5.3) is used.
+
+**Three-phase LangGraph StateGraph:**
+
+```
+START → plan → [execute | done(decline)]
+execute → [synthesize | plan(replan) | format_simple(skip)]
+synthesize → END
+format_simple → END
+```
+
+**Phase 1 — Plan (`planner.py`):**
+- LLM (tier=planner) classifies intent: stock_analysis, portfolio, market_overview, simple_lookup, out_of_scope
+- Generates ordered list of tool calls (max 10 steps)
+- Scope enforcement: financial-only, data-grounded. Speculative/non-financial queries declined.
+- `$PREV_RESULT` references for chaining tool outputs
+- Prompt: `backend/agents/prompts/planner.md` (13 few-shot examples)
+
+**Phase 2 — Execute (`executor.py`):**
+- **Mechanical** — no LLM calls. Runs tool plan via ToolRegistry.
+- Resolves `$PREV_RESULT.ticker` references from prior tool outputs
+- Retry: 1 retry per tool on failure
+- Circuit breaker: 3 consecutive failures → exit to synthesis with partial data
+- Wall clock timeout: 45 seconds
+- Replan: empty `search_stocks` result triggers replan (max 1)
+- Each result validated via `result_validator.py` (null check, staleness, source annotation)
+
+**Phase 3 — Synthesize (`synthesizer.py`):**
+- LLM (tier=synthesizer) produces structured analysis from validated tool results
+- Output: confidence score (0-1), bull/base/bear scenarios, evidence tree, portfolio note
+- Every claim must cite a tool result with timestamp (enforced by prompt)
+- Gaps explicitly acknowledged when tools failed or data stale
+- Prompt: `backend/agents/prompts/synthesizer.md`
+
+**Simple path:** For `simple_lookup` intent (e.g., "What's AAPL price?"), skips synthesis entirely. Uses `simple_formatter.py` template-based output.
+
+**State schema (`AgentStateV2`):**
+```python
+messages, phase, plan, tool_results, synthesis, iteration, replan_count,
+start_time, user_context, query_id, skip_synthesis, response_text, decline_message
+```
+
+**User context injection:** `build_user_context(user_id, db)` queries portfolio positions, sector allocation, preferences, watchlist. Injected into planner + synthesizer prompts for personalization.
+
+### 5.6 Database Schema Changes (Phase 4D)
+
+**New table:** `earnings_snapshots` (PK: ticker+quarter)
+- `eps_estimate`, `eps_actual`, `surprise_pct`, `reported_at`
+- Materialized from yfinance during ingestion
+
+**Extended `stocks` table (+15 columns):**
+- Profile: `business_summary` (Text), `employees` (Int), `website` (String)
+- Market: `market_cap` (Float)
+- Growth: `revenue_growth`, `gross_margins`, `operating_margins`, `profit_margins`, `return_on_equity` (Float)
+- Analyst: `analyst_target_mean/high/low` (Float), `analyst_buy/hold/sell` (Int)
+
+**Extended `chat_message`:** `feedback` (String, "up"|"down")
+**Extended `llm_call_log`:** `tier` (String), `query_id` (UUID, indexed)
+**Extended `tool_execution_log`:** `query_id` (UUID, indexed)
+
+**Migrations:** 009 (enriched stock data + earnings), 010 (feedback + tier + query_id)
 
 ---
 
@@ -553,7 +711,18 @@ frontend/
 │   ├── ui/                     # shadcn/ui v4 primitives (@base-ui/react, not Radix)
 │   ├── sidebar-nav.tsx         # 54px icon-only nav, CSS tooltips, Popover logout
 │   ├── topbar.tsx              # Market status chip, signal count chip, AI toggle
-│   ├── chat-panel.tsx          # Docked right panel, drag-resize, stub (Phase 4B wires backend)
+│   ├── chat-panel.tsx          # Docked right panel, drag-resize, live streaming chat (Phase 4C)
+│   ├── chat/                   # Chat sub-components (Phase 4C)
+│   │   ├── thinking-indicator.tsx  # Pulsing dots animation
+│   │   ├── error-bubble.tsx        # Error card with retry button
+│   │   ├── message-actions.tsx     # Copy + CSV export hover bar
+│   │   ├── markdown-content.tsx    # react-markdown wrapper with navy styling
+│   │   ├── tool-card.tsx           # Running/completed/error/expanded tool states
+│   │   ├── message-bubble.tsx      # User + assistant message rendering
+│   │   ├── agent-selector.tsx      # Stock/general agent toggle
+│   │   ├── session-list.tsx        # Session list with active/expired/delete
+│   │   ├── chat-input.tsx          # Auto-growing textarea, Enter to send, stop button
+│   │   └── artifact-bar.tsx        # Pinned tool results with shouldPin rules + CSV export
 │   ├── stat-tile.tsx           # Dashboard KPI tile with accent gradient top border
 │   ├── allocation-donut.tsx    # CSS conic-gradient donut; exported buildGradient()
 │   ├── portfolio-drawer.tsx    # Bottom slide-up; right offset tracks chatIsOpen state
@@ -577,10 +746,16 @@ frontend/
 │   └── metric-card.tsx         # Standardized KPI block
 ├── hooks/
 │   ├── use-stocks.ts           # 15+ TanStack Query hooks (all API data, portfolio hooks extracted here)
+│   ├── use-chat.ts             # TanStack Query hooks: useChatSessions, useChatMessages, useDeleteSession (Phase 4C)
+│   ├── use-stream-chat.ts      # Streaming fetch + NDJSON parsing + RAF token batching + abort (Phase 4C)
+│   ├── chat-reducer.ts         # Pure state machine: 11 action types, ChatState/ChatMessageUI/ToolCall types (Phase 4C)
 │   └── use-container-width.ts  # ResizeObserver for responsive grids
 ├── lib/
 │   ├── api.ts                  # Centralized fetch with cookie auth + auto-refresh
 │   ├── auth.ts                 # AuthContext + useAuth hook
+│   ├── ndjson-parser.ts        # parseNDJSONLines() with buffer carry-over for streaming (Phase 4C)
+│   ├── csv-export.ts           # buildCSV() + downloadCSV() for tabular tool results (Phase 4C)
+│   ├── storage-keys.ts         # Namespaced localStorage keys (CHAT_PANEL_WIDTH, DENSITY, ACTIVE_SESSION)
 │   ├── signals.ts              # Sentiment classification, CSS var color mappings
 │   ├── format.ts               # Currency, percent, volume, date formatters
 │   ├── design-tokens.ts        # CSS variable name constants (expanded with Phase 4A tokens)
@@ -624,7 +799,7 @@ The authenticated layout is a client component that composes three side-by-side 
 |-----------|---------|
 | `SidebarNav` | Icon-only sidebar with tooltip labels |
 | `Topbar` | Market status chip, signal count, AI toggle |
-| `ChatPanel` | Drag-resize stub; Phase 4B wires to streaming backend |
+| `ChatPanel` | Live streaming chat — useStreamChat, NDJSON, tool cards, sessions, artifacts (Phase 4C) |
 | `StatTile` | Dashboard KPI tile with accent gradient top border |
 | `AllocationDonut` | CSS conic-gradient pie; no chart library |
 | `PortfolioDrawer` | Bottom slide-up with PortfolioValueChart |

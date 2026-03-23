@@ -25,6 +25,7 @@ dependencies = [
     "pandas>=2.3.3",
     "pandas-ta>=0.4.71b0",
     "passlib[bcrypt]>=1.7.4",
+    "prophet>=1.3.0",
     "pydantic>=2.12.5",
     "pydantic-settings>=2.13.1",
     "python-dotenv>=1.2.2",
@@ -55,6 +56,11 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 filterwarnings = [
     "ignore::DeprecationWarning",
+]
+markers = [
+    "pre_commit: fast tests for pre-commit hook",
+    "ci_only: tests that only run in CI pipeline",
+    "agent_gated: tests gated by agent/tool code changes",
 ]
 
 [tool.ruff]

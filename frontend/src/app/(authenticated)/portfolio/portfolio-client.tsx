@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { get, post, del } from "@/lib/api";
 import { useRebalancing, usePositions, usePortfolioSummary, usePortfolioHistory } from "@/hooks/use-stocks";
 import { toast } from "sonner";
-import { Trash2Icon } from "lucide-react";
+import { Trash2Icon, AlertOctagon, AlertTriangle } from "lucide-react";
 import {
   PieChart,
   Pie,
@@ -23,14 +23,14 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "@/components/section-heading";
-import { MetricCard } from "@/components/metric-card";
+import { StatTile } from "@/components/stat-tile";
 import { ChangeIndicator } from "@/components/change-indicator";
-import { Badge } from "@/components/ui/badge";
 import { LogTransactionDialog } from "@/components/log-transaction-dialog";
 import { PortfolioValueChart } from "@/components/portfolio-value-chart";
 import { PortfolioSettingsSheet } from "@/components/portfolio-settings-sheet";
 import { RebalancingPanel } from "@/components/rebalancing-panel";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { PageTransition } from "@/components/motion-primitives";
 import type {
   DivestmentAlert,
   Position,
@@ -96,25 +96,18 @@ const SECTOR_COLORS = [
 function KpiRow({ summary }: { summary: PortfolioSummary }) {
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      <MetricCard
-        label="Total Value"
-        value={formatCurrency(summary.total_value)}
-      />
-      <MetricCard
-        label="Cost Basis"
-        value={formatCurrency(summary.total_cost_basis)}
-      />
-      <MetricCard
+      <StatTile label="Total Value" value={formatCurrency(summary.total_value)} accentColor="cyan" />
+      <StatTile label="Cost Basis" value={formatCurrency(summary.total_cost_basis)} accentColor="cyan" />
+      <StatTile
         label="Unrealized P&L"
         value={formatCurrency(summary.unrealized_pnl)}
-        change={summary.unrealized_pnl}
-        formatChange="currency"
+        accentColor={summary.unrealized_pnl >= 0 ? "gain" : "loss"}
+        sub={<ChangeIndicator value={summary.unrealized_pnl} format="currency" size="sm" showIcon={false} />}
       />
-      <MetricCard
+      <StatTile
         label="Return"
         value={`${summary.unrealized_pnl_pct >= 0 ? "+" : ""}${summary.unrealized_pnl_pct.toFixed(2)}%`}
-        change={summary.unrealized_pnl_pct}
-        formatChange="percent"
+        accentColor={summary.unrealized_pnl_pct >= 0 ? "gain" : "loss"}
       />
     </div>
   );
@@ -327,20 +320,16 @@ function AlertBadges({ alerts }: { alerts: DivestmentAlert[] }) {
   if (!alerts || alerts.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-1">
-      {alerts.map((alert) => (
-        <Badge
-          key={alert.rule}
-          variant="outline"
-          className={
-            alert.severity === "critical"
-              ? "bg-red-500/10 text-loss border-red-500/20 text-xs"
-              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-xs"
-          }
-        >
-          {alert.message}
-        </Badge>
-      ))}
+    <div className="flex items-center gap-1">
+      {alerts.map((alert) => {
+        const Icon = alert.severity === "critical" ? AlertOctagon : AlertTriangle;
+        const colorClass = alert.severity === "critical" ? "text-loss" : "text-warning";
+        return (
+          <span key={alert.rule} title={alert.message} className={colorClass}>
+            <Icon size={16} />
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -356,7 +345,7 @@ export function PortfolioClient() {
   const deleteTransaction = useDeleteTransaction();
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 px-4 py-6">
+    <PageTransition className="mx-auto max-w-7xl space-y-6 px-4 py-6">
       <div className="flex items-center justify-between">
         <SectionHeading>Portfolio</SectionHeading>
         <div className="flex items-center gap-2">
@@ -402,7 +391,18 @@ export function PortfolioClient() {
           </h2>
           <div className="rounded-lg border p-4">
             {summary ? (
-              <AllocationPie summary={summary} sectors={summary.sectors} />
+              <>
+                <AllocationPie summary={summary} sectors={summary.sectors} />
+                {summary.sectors.filter((s) => s.over_limit).map((s) => (
+                  <div
+                    key={s.sector}
+                    className="mt-3 flex items-center gap-2 rounded-md bg-loss/10 border border-loss/20 px-3 py-2 text-xs text-loss"
+                  >
+                    <AlertTriangle size={14} />
+                    {s.sector} exceeds {summary.sectors.length > 0 ? "30%" : ""} sector limit ({s.pct.toFixed(0)}%)
+                  </div>
+                ))}
+              </>
             ) : (
               <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
                 Loading…
@@ -416,6 +416,6 @@ export function PortfolioClient() {
       {rebalancing && rebalancing.suggestions.length > 0 && (
         <RebalancingPanel suggestions={rebalancing.suggestions} />
       )}
-    </div>
+    </PageTransition>
   );
 }

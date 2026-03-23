@@ -80,7 +80,8 @@ feat/KAN-*  ← Story branches → PR to develop
 hotfix/KAN-* ← emergency fixes → PR to main + back-merge to develop
 ```
 
-- Branch per Story: `feat/KAN-[story#]-[kebab-name]`
+- **ALWAYS branch from `develop`**, never from `main`:
+  `git checkout develop && git pull origin develop && git checkout -b feat/KAN-[story#]-[kebab-name]`
 - PR title: `[KAN-X] Summary`
 - Never commit directly to main or develop
 - Never skip hooks (`--no-verify`) — fix the underlying issue

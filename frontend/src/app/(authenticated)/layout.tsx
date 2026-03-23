@@ -4,15 +4,18 @@ import { useState, useCallback } from "react";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { Topbar } from "@/components/topbar";
 import { ChatPanel } from "@/components/chat-panel";
+import { ArtifactBar } from "@/components/chat/artifact-bar";
+import { ChatProvider, useChat } from "@/contexts/chat-context";
 import { useAddToWatchlist, useIngestTicker, useWatchlist } from "@/hooks/use-stocks";
 import { toast } from "sonner";
 
-export default function AuthenticatedLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [chatIsOpen, setChatIsOpen] = useState(true); // open by default
+function AuthenticatedShell({ children }: { children: React.ReactNode }) {
+  const { chatOpen, setChatOpen } = useChat();
+  const [artifact, setArtifact] = useState<{
+    tool: string;
+    params: Record<string, unknown>;
+    data: unknown;
+  } | null>(null);
   const { data: watchlist } = useWatchlist();
   const addToWatchlist = useAddToWatchlist();
   const ingestTicker = useIngestTicker();
@@ -41,20 +44,32 @@ export default function AuthenticatedLayout({
       <SidebarNav />
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Topbar
-          chatIsOpen={chatIsOpen}
-          onToggleChat={() => setChatIsOpen((v) => !v)}
-          onAddTicker={handleAddTicker}
-        />
-        <main className="flex-1 overflow-y-auto">
+        <Topbar onAddTicker={handleAddTicker} />
+        {artifact && (
+          <ArtifactBar artifact={artifact} onDismiss={() => setArtifact(null)} />
+        )}
+        <main className="flex-1 overflow-y-auto scrollbar-thin">
           <div className="px-4 py-6 animate-fade-in">{children}</div>
         </main>
       </div>
 
       <ChatPanel
-        isOpen={chatIsOpen}
-        onClose={() => setChatIsOpen(false)}
+        isOpen={chatOpen}
+        onClose={() => setChatOpen(false)}
+        onArtifact={setArtifact}
       />
     </div>
+  );
+}
+
+export default function AuthenticatedLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <ChatProvider>
+      <AuthenticatedShell>{children}</AuthenticatedShell>
+    </ChatProvider>
   );
 }

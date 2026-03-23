@@ -22,6 +22,10 @@ class TestIngestTicker:
 
     @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
     @patch("backend.tools.signals.compute_signals")
+    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
+    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
     @patch("backend.tools.fundamentals.fetch_fundamentals")
     @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
     @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
@@ -34,6 +38,10 @@ class TestIngestTicker:
         mock_load: AsyncMock,
         mock_update: AsyncMock,
         mock_fundamentals: MagicMock,
+        _mock_analyst: MagicMock,
+        _mock_persist: AsyncMock,
+        _mock_earnings: MagicMock,
+        _mock_persist_earnings: AsyncMock,
         mock_compute: MagicMock,
         mock_store_signal: AsyncMock,
         authenticated_client: AsyncClient,
@@ -73,6 +81,10 @@ class TestIngestTicker:
 
     @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
     @patch("backend.tools.signals.compute_signals")
+    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
+    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
     @patch("backend.tools.fundamentals.fetch_fundamentals")
     @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
     @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
@@ -85,6 +97,10 @@ class TestIngestTicker:
         mock_load: AsyncMock,
         mock_update: AsyncMock,
         mock_fundamentals: MagicMock,
+        _mock_analyst: MagicMock,
+        _mock_persist: AsyncMock,
+        _mock_earnings: MagicMock,
+        _mock_persist_earnings: AsyncMock,
         mock_compute: MagicMock,
         mock_store_signal: AsyncMock,
         authenticated_client: AsyncClient,

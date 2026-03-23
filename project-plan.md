@@ -220,31 +220,172 @@ Command-center dark UI shell + natural language AI interface that orchestrates a
 #### Phase 4B — Financial Intelligence Platform Backend (Session 34+)
 
 **Spec:** `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md` ✅ COMPLETE
-**Plan:** To be written (KAN-20)
-**JIRA Epic:** KAN-1
+**Plan:** `docs/superpowers/plans/2026-03-17-phase-4b-ai-chatbot-implementation.md` ✅ COMPLETE
+**JIRA Epic:** KAN-1 ✅ DONE | **PRs:** #12 (→ develop), #13 (→ main) merged
 
 Three-layer MCP architecture: consume external MCPs → enrich in backend → expose as MCP server.
 
-- [ ] **Tool Registry** — `backend/tools/registry.py` with BaseTool, ProxiedTool, MCPAdapter, CachePolicy
-- [ ] **4 MCPAdapters** — EdgarTools (SEC filings), Alpha Vantage (news/sentiment), FRED (macro), Finnhub (analyst/ESG/social)
-- [ ] **7 Internal tools** — analyze_stock, portfolio_exposure, screen_stocks, recommendations, compute_signals, geopolitical (GDELT), web_search (SerpAPI)
-- [ ] **LLM Client** — provider-agnostic abstraction, fallback chain (Groq → Anthropic → Local), retry with exponential backoff, provider health tracking
-- [ ] **Agentic loop** — two-phase (tool-calling non-streaming + synthesis streaming), max 15 iterations, few-shot prompted
-- [ ] **Agents** — BaseAgent ABC, StockAgent (full toolkit), GeneralAgent (data + news only)
-- [ ] **MCP Server** — FastMCP at `/mcp` (Streamable HTTP), JWT auth, mirrors Tool Registry
-- [ ] **Database models** — ChatSession, ChatMessage, LLMCallLog (hypertable), ToolExecutionLog (hypertable)
-- [ ] **Chat endpoint** — `POST /api/v1/chat/stream` with NDJSON/SSE
-- [ ] **Warm data pipeline** — Celery tasks: daily analyst/FRED, weekly 13F, on-demand 10-K caching
-- [ ] **Graceful degradation** — per-tool failure isolation, provider fallback, MCP health checks
-- [ ] **Session management** — create/resume/expire (24h), sliding window (16K budget), history summary
+- [x] **Tool Registry** — `backend/tools/registry.py` with BaseTool, ProxiedTool, MCPAdapter, CachePolicy (Session 35)
+- [x] **4 MCPAdapters** — EdgarTools (SEC filings), Alpha Vantage (news/sentiment), FRED (macro), Finnhub (analyst/ESG/social) (Session 36)
+- [x] **9 Internal tools** — analyze_stock, portfolio_exposure, screen_stocks, recommendations, compute_signals, geopolitical (GDELT), web_search (SerpAPI), search_stocks (DB+Yahoo), ingest_stock (Session 35+38)
+- [x] **LLM Client** — provider-agnostic abstraction, fallback chain (Groq → Anthropic → Local), retry with exponential backoff, provider health tracking (Session 35)
+- [x] **LangGraph orchestration** — StateGraph with call_model + execute_tools nodes, MemorySaver checkpointer, max 15 iterations (Session 35)
+- [x] **Agents** — BaseAgent ABC, StockAgent (full toolkit), GeneralAgent (data + news only), few-shot prompt templates (Session 35)
+- [x] **MCP Server** — FastMCP at `/mcp` (Streamable HTTP), JWT auth middleware, mirrors Tool Registry (Session 36)
+- [x] **Database models** — ChatSession, ChatMessage, LLMCallLog (hypertable), ToolExecutionLog (hypertable), migration 008 (Session 35)
+- [x] **Chat endpoint** — `POST /api/v1/chat/stream` with NDJSON streaming, `GET/DELETE /sessions` (Session 36)
+- [x] **Warm data pipeline** — Celery Beat: daily analyst/FRED, weekly 13F, Redis caching (Session 36)
+- [x] **Graceful degradation** — per-tool failure isolation, provider fallback, MCP health checks (Session 35-36)
+- [x] **Session management** — create/resume/expire (24h), tiktoken sliding window (16K budget), auto_title (Session 36)
+- [x] **Lifespan wiring** — main.py startup: ToolRegistry + adapters + LLMClient + LangGraph graphs + MCP mount (Session 36)
 
-#### Phase 4C — Frontend Chat UI (after 4B)
-- [ ] **Wire `ChatPanel`** — connect stub UI to streaming backend
-- [ ] NDJSON event parsing + incremental rendering
-- [ ] Tool progress indicators
-- [ ] Agent selector UI
-- [ ] Conversation history UI
-- [ ] New conversation button
+#### Phase 4C — Frontend Chat UI (Session 37) ✅ COMPLETE
+
+**Spec:** `docs/superpowers/specs/2026-03-19-phase-4c-frontend-chat-ui.md` ✅
+**Plan:** `docs/superpowers/plans/2026-03-19-phase-4c-frontend-chat-ui.md` ✅
+**JIRA Epic:** KAN-30 | **Branch:** `feat/KAN-32-chat-ui` (16 commits)
+
+- [x] Backend: error StreamEvent + save_message + chat router persistence (Session 37)
+- [x] Frontend: NDJSON parser, CSV export, chat types, TanStack Query hooks (Session 37)
+- [x] chatReducer pure state machine + useStreamChat hook with RAF token batching (Session 37)
+- [x] 9 chat components: ThinkingIndicator, ErrorBubble, MessageActions, MarkdownContent, ToolCard, MessageBubble, AgentSelector, SessionList, ChatInput (Session 37)
+- [x] ArtifactBar with shouldPin rules + ChatPanel major rewrite + layout wiring (Session 37)
+- [x] 40 new tests (3 backend + 37 frontend) — 297 total (Session 37)
+
+#### Phase 4C.1 — Chat UI Polish + Code Analysis Fixes ✅ COMPLETE (Session 42)
+
+**JIRA:** KAN-87 | **Branch:** `feat/KAN-87-chat-ui-polish`
+
+**Functional fixes:** ✅ ALL DONE
+- [x] CSV wired to tool cards — `extractCsvData()` in MessageBubble
+- [x] Session expiry prompt — warning with "Start New Chat" / "View Anyway"
+- [x] localStorage session restore — reads `CHAT_ACTIVE_SESSION` on mount
+- [x] `tool_calls` type hint — `list[dict] | None` in save_message + schema
+
+**Code quality fixes:** ✅ ALL DONE
+- [x] `crypto.randomUUID()` with jsdom fallback
+- [x] `user: User = Depends(...)` on all 5 chat endpoints
+- [x] OpenAPI `summary`/`description`/`responses` on all chat decorators
+- [x] `getattr()` + 503 fallback for missing graphs
+- [x] `data: dict[str, Any] | list | str | None` on StreamEvent
+- [x] `CLEAR_ERROR` action type added to chat reducer
+- [x] All 7 lazy imports moved to top-of-file in chat router
+- [x] `_get_session()` helper extracted from 3 inline lookups
+
+**Performance fixes:** ✅ ALL DONE
+- [x] Plugin arrays hoisted to module constants
+- [x] Artifact dispatch gated on `!isStreaming`
+- [x] `activeSessionIdRef` for stale closure fix
+- [x] `React.memo()` on MessageBubble
+- [x] `dispatch` removed, `setAgentType` exposed
+
+**UI polish (deferred to Phase 4F):**
+- [ ] Artifact bar enhancements, tool card buttons, missing tool summaries, scroll pill, agent badge, auto-retry, bubble styling, duplicated API_BASE extraction
+
+#### Phase 4F — UI Migration: Lovable → Production (~26h, 5-6 sessions)
+
+**Gap Analysis:** `docs/lovable/migration-gap-analysis.md`
+**Workflow Plan:** `docs/superpowers/plans/2026-03-19-ui-migration-workflow.md`
+**Reference Prototype:** https://stocksignal29.lovable.app
+**Reference Code:** `docs/lovable/code/stocksignal-source/`
+
+Full UI/UX redesign based on Lovable prototype. 9 phases (UI-1 through UI-9):
+
+- [x] **UI-1: Shell + Design Tokens** (~3h) — PR #41 merged (Session 43). Sidebar (Sectors nav, shadcn Tooltips, LogOut button), Topbar (Activity icon, Bell stub, pulsing dot, AI glow toggle), ChatContext, framer-motion, pulse-subtle/blink/scrollbar-thin tokens
+- [x] **UI-2: Shared Components** (~2h) — PR #42 merged (Session 43). ScoreBar, ScoreBadge xs size, SignalBadge WATCH/AVOID/SMA labels, ChangeIndicator prefix/showIcon, AllocationDonut sector link, IndexCard with value/change/sparkline
+- [x] **UI-3: Dashboard Redesign** (~3h) — PR #43 merged (Session 43). KPI 5→3 col grid adapt, Market Indexes grid adapt, Action Required + RecommendationRow, Sector Allocation card, Watchlist 4→3 col adapt, useRecommendations hook
+- [x] **UI-4: Screener + Stock Detail** (~3h) — PR #44 (Session 43). ScoreBar inline, Held badge, signal descriptions (RSI/MACD/SMA/Bollinger), StockHeader redesign (Close, breadcrumb, Bookmark toggle, price display). Candlestick + benchmark deferred (backend needed)
+- [x] **UI-5: Portfolio Redesign** (~2h) — PR #45 (Session 43). Alert icons (AlertOctagon/AlertTriangle), KPI StatTiles with accent gradients, sector concentration warning banner. framer-motion animations deferred to UI-9.
+- [ ] **UI-6: Sectors Page (NEW)** (~4h) — New page + 3 backend endpoints (sectors, stocks-by-sector, correlation). AllocationDonut, sector accordions, comparison table, correlation heatmap + table
+- [x] **UI-7: Auth Redesign** (~2h) — PR #46 (Session 43). Split-panel login/register, brand showcase (logo glow, feature bullets, sparkline SVG, glowing orbs), Google OAuth stub (toast), styled inputs with icon prefix + focus glow
+- [x] **UI-8: Chat Panel Polish** (~1.5h) — PR #47 (Session 43). Agent selector cards (BarChart3/Globe icons, "Choose an Agent"), suggestion chips fill-not-send, pulsing cyan dots thinking indicator, ChatInput forwardRef
+- [ ] **UI-9: Animations + Final Polish** (~1.5h) — framer-motion staggered fade-up on all grids, glow effects on CTAs + inputs, scrollbar styling, chat-open grid adaptation on all pages, Playwright E2E verification
+
+**Dependencies:** Phase 4C.1 (quality fixes) must be done first. UI-1 → UI-2 sequential. UI-3/4/5/7 parallelizable. UI-6 needs backend endpoints.
+
+#### Phase 4D — Agent Intelligence Architecture — SPEC + PLAN APPROVED (Session 38)
+
+**JIRA Epic:** KAN-61 | **Stories:** KAN-62 through KAN-68 (7 chunks, 24 tasks, ~14h)
+**Spec:** `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
+**Plan:** `docs/superpowers/plans/2026-03-20-phase-4d-agent-intelligence.md`
+
+Three-phase Plan→Execute→Synthesize agent replacing current ReAct loop:
+- **Planner (Sonnet):** Classifies intent, enforces scope (financial only, data-grounded only), generates ordered tool plan, detects stale data → triggers refresh
+- **Executor (mechanical, no LLM):** Calls tools in plan order, validates results, retries, circuit breaker. `ingest_stock` is the universal data pipeline — materializes ALL yfinance data to DB
+- **Synthesizer (Sonnet):** Confidence scoring (≥65% actionable), bull/base/bear scenarios, collapsible evidence tree, personalized to portfolio, no claims without tool citations
+
+**Key architectural decisions:**
+- [x] All yfinance data materialized to DB during ingestion — tools read from DB, not yfinance at runtime
+- [x] `ingest_stock` is the single refresh point — chat, search bar, watchlist, Celery nightly all use it
+- [x] Chat detects stale data → "Let me refresh and analyze..." → ingest → analysis. Updates all pages.
+- [x] Feature-flagged behind `AGENT_V2=true` with rollback plan
+- [x] Model tiering: Sonnet plans+synthesizes (2 LLM calls), executor is mechanical ($0)
+- [x] Scope enforcement: financial context + peripherals only, speculative/ungroundable queries declined
+- [x] Cross-session memory: Level 1 (portfolio + preferences injected at session start)
+- [x] Feedback: thumbs up/down + full trace logging (query_id across LLMCallLog + ToolExecutionLog)
+- [x] No RAG — structured data via tools, unstructured (10-K sections) small enough for context
+- [x] No paid APIs — yfinance covers financials, targets, earnings, profile, growth
+
+**7 implementation chunks:**
+- [x] **KAN-62:** Enriched data layer — DB models, migration, ingest pipeline, 4 new tools ✅ Session 39
+- [x] **KAN-63:** DB migration — feedback, tier, query_id columns ✅ Session 39
+- [x] **KAN-64:** Agent V2 core — feature flag, context, validator, formatter, planner, executor ✅ Session 39
+- [x] **KAN-65:** Synthesizer + Graph V2 — synthesizer node, LLMClient tier, 3-phase StateGraph ✅ Session 39
+- [x] **KAN-66:** Stream events + router — NDJSON types, feature flag, context injection, feedback ✅ Session 39
+- [x] **KAN-67:** Frontend — plan display, evidence, feedback buttons, decline messages ✅ Session 39
+- [x] **KAN-68:** Full regression + docs update ✅ Session 39
+
+**Deferred to Phase 4D.1:**
+- Celery nightly pre-computation for watchlist stocks (B+C caching)
+- Post-synthesis claim verification (hallucination safety net)
+- Per-query cost estimation logging
+
+**Deferred to later phases:**
+- Monetization (user tiers, usage metering, paywall, BYOK) — needs real usage data first
+- Report generation + PDF/Excel export
+- MemorySaver → DB-backed checkpointer
+- Cross-session memory Level 2+ (analysis summaries, user facts)
+
+#### Phase 4D.2 — Stock Detail Page Enrichment (after 4D)
+
+KAN-62 (Session 39) materialized all enriched data to DB and extended the `GET /stocks/{ticker}/fundamentals` API + `FundamentalsResponse` schema. Frontend TypeScript types updated. The stock detail page can now display enriched data — remaining work is UI components:
+- [ ] **Revenue, net income, margins, growth rates** — new FundamentalsCard section or expanded existing card
+- [ ] **Analyst price targets** — current vs target range (bar or gauge visualization)
+- [ ] **Earnings history** — EPS estimate vs actual chart, beat/miss streak
+- [ ] **Company profile** — business summary, employees, website, market cap
+- [ ] **Analyst consensus** — buy/hold/sell bar chart
+
+**Dependencies:** ~~Phase 4D Chunk 1 (KAN-62) must be complete~~ ✅ API + data layer done. Only frontend visualization remains.
+
+#### Phase 4E — Security Hardening ✅ COMPLETE (Session 39, PR #35)
+
+11 findings from comprehensive post-4D security audit. All fixed.
+
+**Critical (fixed):**
+- [x] **C1: Chat IDOR — messages endpoint** — ownership check added ✅
+- [x] **C2: Chat IDOR — stream resume** — ownership check added ✅
+- [x] **C3: MCP server unauthenticated** — MCPAuthMiddleware applied ✅
+
+**High (fixed):**
+- [x] **H4: Exception strings in NDJSON errors** — generic messages ✅
+- [x] **H5: Raw exceptions in tool errors** — all 6 tools sanitized ✅
+- [x] **H6: COOKIE_SECURE default** — documented deployment requirement ✅
+- [x] **H7: Task status** — documented low-risk (UUID not enumerable) ✅
+- [x] **H8: Refresh token in body** — documented dual-transport risk ✅
+
+**Medium (fixed):**
+- [x] **M9: Enum validation** — Literal types on query params ✅
+- [x] **M10: ContextVar** — reset token stored ✅
+- [x] **M11: UUID leak in delete** — generic error messages ✅
+
+**Positive findings:** AGENT_V2 server-side only ✅, $PREV_RESULT no injection ✅, .env gitignored + JWT validated ✅.
+
+#### Phase 4 Bug Sprint (Session 38) ✅ COMPLETE
+
+- [x] **KAN-60** (Highest): Pydantic `args_schema` on all tools — eliminates kwargs double-wrapping (PR #18)
+- [x] **KAN-58** (High): Test DB isolation — `tests/api/` no longer destroys dev database (PR #19)
+- [x] **KAN-56** (High): Wikipedia 403 fix — switched to `requests` library for index seeding (PR #20)
+- [x] **KAN-59** (High): Search autocomplete — Yahoo Finance external search + `SearchStocksTool` + `IngestStockTool` for agent self-service (PR #21)
 
 ### Success Criteria
 Can ask natural language questions via API (curl/MCP client) and get tool-backed, synthesized answers with data from SEC filings, news, macro, and fundamentals. MCP server callable from Claude Code.
@@ -279,53 +420,116 @@ Can ask natural language questions via API (curl/MCP client) and get tool-backed
 
 ---
 
-## Phase 5: Background Jobs + Alerts (Weeks 9-10)
+## Phase 4G: Backend Hardening — Testing, Eval Pyramid, Pre-commit Hooks
+
+**JIRA Epic:** [KAN-73](https://vipulbhatia29.atlassian.net/browse/KAN-73) | **Stories:** KAN-74 through KAN-84 (11 stories, ~211 tests)
+**Spec:** `docs/superpowers/specs/2026-03-21-backend-hardening-design.md`
 
 ### Goal
-Pre-compute signals and send notifications.
+Comprehensive backend hardening: test directory restructure, ~211 new tests across 11 stories, LLM-as-Judge evaluation pyramid, pre-commit hooks with agent-aware gating, auto-triage workflow for bugs and backlog.
 
 ### Deliverables
-1. **Database models:** ModelVersion, ForecastResult (hypertable), MacroSnapshot (hypertable)
-2. **Model versioning:**
-   - ModelVersion table tracks training data range, hyperparameters, metrics, artifact path
-   - Every ForecastResult links to model_version_id
-   - `data/models/` directory for serialized model artifacts
-   - Auto-increment version on retrain, only one active per (model_type, ticker)
-3. **Celery worker + beat scheduler**
-4. **`backend/tasks/refresh_data.py`** — nightly fetch for all watchlist tickers
-5. **`backend/tasks/compute_signals.py`** — nightly signal computation + store snapshots
-6. **`backend/tasks/run_forecasts.py`** — weekly Prophet forecast with model versioning:
-   - Train Prophet per ticker → create ModelVersion row → save artifact → store ForecastResult
-   - 3 horizons per ticker: 90d, 180d, 270d
-7. **`backend/tasks/evaluate_forecasts.py`** — nightly forecast evaluation loop:
-   - Find ForecastResult where target_date ≤ today AND actual_price IS NULL
-   - Fill in actual_price and error_pct from StockPrice
-   - Aggregate metrics per model_version_id → update ModelVersion.metrics
-   - Trigger retrain if accuracy degrades below threshold
-8. **`backend/tasks/check_alerts.py`** — check trailing stops, concentration, fundamentals
-9. **`backend/tasks/generate_recommendations.py`** — daily recommendation generation:
-   - Run after signal computation
-   - Apply decision rules from recommendation engine
-   - Factor in portfolio state + macro regime
-   - Store RecommendationSnapshot rows with price_at_recommendation
-10. **`backend/tasks/evaluate_recommendations.py`** — nightly recommendation evaluation:
-    - Find recommendations where generated_at + horizon ≤ today AND no outcome exists
-    - Evaluate at 3 horizons: 30d, 90d, 180d
-    - Compute return vs SPY benchmark, alpha, action_was_correct
-    - Store RecommendationOutcome rows
-    - Requires SPY in stock universe with daily price data
-11. **Notification system:**
-    - Telegram bot integration (python-telegram-bot)
-    - Daily morning briefing: "3 stocks hit buy signals, portfolio up 1.2%"
-    - Real-time alerts for stop-loss triggers
-12. **Macro overlay:**
-    - FRED API integration for yield curve, VIX proxy, unemployment claims
-    - Market regime indicator (risk-on / risk-off / neutral)
-13. **Dashboard updates:** pre-computed data loads instantly, last-updated timestamps
+- [x] **S0 (KAN-74):** Test directory restructure — flat → domain-organized (Session 41)
+- [x] **S1 (KAN-75):** Auth & security hardening — 15 tests (Session 41)
+- [x] **S2 (KAN-76):** Ingest & data pipeline — 10 tests (Session 41)
+- [x] **S3 (KAN-77):** Signal & recommendation engine — 29 tests (Session 41)
+- [x] **S4 (KAN-78):** Agent V2 mocked regression + adversarial — 42 tests (Session 41)
+- [x] **S5 (KAN-79):** Eval infrastructure — rubric, judge, golden set (Session 41). Live LLM tests deferred.
+- [x] **S6 (KAN-80):** Stock search → ingest flow — 10 tests (Session 41)
+- [x] **S7 (KAN-81):** Celery & background jobs — 13 tests (Session 41)
+- [x] **S8 (KAN-82):** Tool & MCP coverage — 18 tests (Session 41)
+- [x] **S9 (KAN-83):** API contract hardening — 10 tests (Session 41)
+- [x] **S10 (KAN-84):** Pre-commit hooks + ci-eval.yml workflow (Session 41)
+
+### Backlog Items (identified during design, target Phase 5)
+- [ ] **Session entity registry** — Track discussed tickers + data freshness per chat session (in-memory dict on graph state). Enables pronoun resolution ("them", "both") and lazy re-fetch
+- [ ] **Stock comparison tool** — Dedicated compare_stocks tool with structured side-by-side output, depends on entity registry
+- [ ] **Context-aware planner prompt** — Extend planner prompt with `recently_discussed_tickers` from entity registry
+- [ ] **Dividend sustainability tool** — Payout ratio, FCF coverage, dividend growth history
+- [ ] **Risk narrative tool** — Ranked risk factors with monitoring indicators
+- [ ] **Red flag scanner** — Controversies, short interest, insider selling patterns
+
+### Deferred Backend Work (from Phase 4F UI-4, Session 43)
+- [ ] **Candlestick chart toggle** — Add `format=ohlc` query param to `GET /api/v1/stocks/{ticker}/prices`. OHLC data already exists in `stock_prices` table. Frontend: Line/Candle pill toggle on stock detail price chart.
+- [ ] **Benchmark comparison chart** — Add `GET /api/v1/stocks/{ticker}/benchmark` endpoint. Fetch ^GSPC + ^IXIC price history (yfinance or cache), normalize to % change from start date. Frontend: 3-line chart (stock cyan, S&P green dashed, NASDAQ amber dashed) with zero reference line.
+- [x] **KAN-98: Hydration mismatch** — Fixed in Session 44 (PR #50). Ref-based DOM update for isNYSEOpen.
+
+### Deferred to Phase 5.1 (identified during Phase 5 design, Session 45)
+- [ ] **Red flag scanner** — Controversies, short interest, insider selling patterns. Needs new data sources (insider transactions, short interest from yfinance). Deferred due to uncertain data quality.
+- [ ] **Telegram notifications** — External notification channel. Deferred in favor of in-app alerts (bell icon). Can be added once pipeline data is flowing reliably.
+- [ ] **Forecast blending into composite score** — Confidence-weighted 3-way blend (tech + fundamental + forecast). Deferred until forecast accuracy is validated. Phase 5 keeps forecasts as a parallel signal.
+- [ ] **Live LLM eval tests** — Deferred from Phase 4G. Needs CI_GROQ_API_KEY secret.
+
+### GitHub Secrets Required
+- [ ] **CI_GROQ_API_KEY** (required) — primary LLM for agent eval calls
+- [ ] CI_ANTHROPIC_API_KEY (optional) — fallback + Haiku judge for eval scoring
 
 ### Success Criteria
-Signals pre-computed nightly, Telegram alerts firing for configured triggers,
-recommendation outcomes evaluated at 30/90/180d horizons with SPY benchmark.
+- ~211 new tests passing
+- Test directory restructured, all existing 546 tests still green
+- Pre-commit hooks installed and working
+- Eval baseline established (all 8 dimensions above threshold)
+- 0 hallucinations in eval suite
+- All bugs auto-triaged to JIRA
+- All backlog items assigned to Phase 5
+
+---
+
+## Phase 5: Forecasting, Evaluation & Background Automation (~33h, 6-7 sessions)
+
+### Goal
+Self-healing nightly pipeline, Prophet forecasting (stocks + sector ETFs + portfolio), recommendation evaluation against actuals, drift detection, in-app alerts, 6 new agent tools.
+
+### Design Docs
+- **Spec:** `docs/superpowers/specs/2026-03-22-phase5-forecasting-design.md`
+- **Plan:** `docs/superpowers/plans/2026-03-22-phase5-forecasting-implementation.md`
+- **JIRA Epic:** KAN-106 (11 Stories: KAN-107–117)
+
+### Stories (11)
+- [x] **S1 (KAN-107):** DB Models + Migration + ETF Seeding (~3h) ✓ Session 46, PR #54
+- [x] **S2 (KAN-108):** Pipeline Infrastructure — watermark, run logging, gap recovery (~3h) ✓ Session 46, PR #55
+- [x] **S3 (KAN-109):** Nightly Pipeline Chain + Beat Schedule (~3h) ✓ Session 46, PR #56
+- [x] **S4 (KAN-110):** Prophet Forecasting Engine — training, prediction, model versioning (~4h) ✓ Session 46, PR #57
+- [x] **S5 (KAN-111):** Forecast + Recommendation Evaluation + Drift Detection (~3h) ✓ Session 46, PR #58
+- [x] **S6 (KAN-112):** In-App Alerts Backend + API (~3h) ✓ Session 46, PR #60
+- [x] **S7 (KAN-113):** Forecast + Scorecard API Endpoints (~2h) ✓ Session 46, PR #59
+- [x] **S8 (KAN-114):** Agent Tools — Forecast + Comparison + Entity Registry (~4h) ✓ Session 47, PR #62
+- [x] **S9 (KAN-115):** Agent Tools — Scorecard + Sustainability + Risk (~3h) ✓ Session 47, PR #63
+- [x] **S10 (KAN-116):** Frontend — Forecast Card + Dashboard Tiles (~3h) ✓ Session 47, PR #64
+- [x] **S11 (KAN-117):** Frontend — Scorecard Modal + Alert Bell + Sectors ETF (~2h) ✓ Session 47, PR #65
+
+### Key Architecture Decisions (from Session 45 brainstorm)
+- Stock-level Prophet forecasts + 11 SPDR sector ETFs; portfolio forecast derived by weighted aggregation with correlation-based confidence bands
+- Biweekly retrain (Sunday 2 AM), daily predict-only refresh, drift-triggered retrain on MAPE >20% or volatility spike
+- Forecasts as parallel signal (not blended into composite score — deferred to 5.1 pending accuracy validation)
+- BUY/SELL recommendations evaluated at 30/90/180d vs SPY benchmark
+- In-app alerts only (Telegram deferred to 5.1)
+- PipelineWatermark for gap detection, PipelineRun for observability, per-ticker atomicity
+- VIX regime flag for forecast confidence overlay
+- Sharpe direction enrichment on every forecast
+
+### Success Criteria
+- Nightly pipeline runs end-to-end (price → signal → recommendation → forecast → evaluation → alerts)
+- Self-healing: gap recovery, rate limit retry, partial success
+- ~80 new tests passing
+- Agent can answer "forecast for AAPL", "compare AAPL and MSFT", "how accurate are your calls"
+- Scorecard modal + alert bell + forecast card visible in UI
+
+---
+
+## Phase 5.5: Security Hardening (Pre-Launch Gate)
+
+### Goal
+Fix remaining security findings not covered in Phase 4E.
+
+### Deliverables
+
+1. **Refresh token never invalidated** (`backend/routers/auth.py`)
+   Old refresh tokens valid for 7 days after refresh/logout. No server-side revocation.
+   Fix: Redis blocklist for revoked token JTI claims. (Was backlog item B1, deferred from Phase 3.)
+
+### Success Criteria
+Fixed, tests added, security re-audit clean. Dependencies: Phase 4E complete.
 
 ---
 

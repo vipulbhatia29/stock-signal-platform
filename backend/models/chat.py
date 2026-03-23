@@ -58,6 +58,7 @@ class ChatMessage(TimestampMixin, Base):
     prompt_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     completion_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
     latency_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    feedback: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "up" | "down"
 
     session: Mapped[ChatSession] = relationship(back_populates="messages")
 

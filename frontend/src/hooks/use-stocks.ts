@@ -21,6 +21,7 @@ import type {
   Position,
   PortfolioSummary,
   PortfolioSnapshot,
+  Recommendation,
 } from "@/types/api";
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -149,6 +150,17 @@ export function useBulkSignals(filters: ScreenerFilters) {
       ),
     placeholderData: (prev) => prev,
     staleTime: 60 * 1000,
+  });
+}
+
+export function useTrendingStocks(limit = 5) {
+  return useQuery({
+    queryKey: ["trending-stocks", limit],
+    queryFn: () =>
+      get<BulkSignalsResponse>(
+        `/stocks/signals/bulk?sort_by=composite_score&sort_order=desc&limit=${limit}`
+      ),
+    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -283,5 +295,13 @@ export function usePortfolioHistory(days = 365) {
     queryKey: ["portfolio", "history", days],
     queryFn: () => get<PortfolioSnapshot[]>(`/portfolio/history?days=${days}`),
     staleTime: 15 * 60 * 1000,
+  });
+}
+
+export function useRecommendations() {
+  return useQuery<Recommendation[]>({
+    queryKey: ["recommendations"],
+    queryFn: () => get<Recommendation[]>("/stocks/recommendations"),
+    staleTime: 5 * 60 * 1000,
   });
 }

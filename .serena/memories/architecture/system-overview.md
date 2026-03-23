@@ -33,15 +33,30 @@ category: architecture
 
 - **No module-level mutable state** — all mutable state in class instances or request scope. Only constants (UPPER_CASE) and `settings` at module level.
 - **Async by default** — all FastAPI endpoints and DB operations use `async`/`await`. Celery tasks are the exception (sync, bridge via `asyncio.run()`).
-- **Tool boundary for external APIs** — yfinance, FRED, web search calls go through `backend/tools/`, never directly from routers. Routers call services or tools only.
+- **Tool boundary for external APIs** — yfinance, FRED, web search calls go through `backend/tools/`, never directly from routers. Routers call services or tools only. Exception: DividendSustainabilityTool calls yfinance on-demand.
 - **Pre-computed signals** — Celery Beat runs nightly signal computation; dashboard reads pre-computed data. Agents call tools on-demand.
 - **Three-layer MCP architecture** — Layer 1: consume external MCPs (EdgarTools, Alpha Vantage, FRED, Finnhub). Layer 2: enrich in backend (Tool Registry + caching). Layer 3: expose as MCP server at `/mcp` (Streamable HTTP). See `domain/agent-tools` memory for full details.
 
-## LLM Routing
+## LLM Routing (Phase 4D — tier-based)
 
-- **Groq** (`GROQ_API_KEY`) — primary for agentic tool-calling loops (fast, cheap)
-- **Claude Sonnet** (`ANTHROPIC_API_KEY`) — synthesis and final response generation
-- **LM Studio** — offline fallback, no key required, local inference
+LLMClient supports `tier_config` for routing different agent phases to different providers:
+- **Planner tier** — Sonnet (intent classification + tool plan)
+- **Synthesizer tier** — Sonnet (confidence scoring + evidence tree)
+- **Executor** — no LLM (mechanical tool execution)
+- **V1 ReAct** — Groq (fast tool-calling loops, backward compat)
+
+Provider fallback chain: Groq → Anthropic (Claude Sonnet). Feature-flagged: `AGENT_V2=true` enables Plan→Execute→Synthesize; `AGENT_V2=false` uses V1 ReAct.
+
+## Agent V2 Architecture (Phase 4D)
+
+Three-phase LangGraph StateGraph behind `AGENT_V2=true`:
+1. **Planner (LLM):** Classifies intent (stock_analysis/portfolio/market_overview/simple_lookup/out_of_scope), generates ordered tool plan, enforces financial-only scope
+2. **Executor (mechanical):** Runs tools via ToolRegistry, resolves `$PREV_RESULT` references, retries (max 1), circuit breaker (3 failures), 45s wall clock timeout
+3. **Synthesizer (LLM):** Produces confidence score (0-1), bull/base/bear scenarios, evidence tree with tool citations, portfolio personalization
+
+Conditional edges: out_of_scope→done (decline), simple_lookup→format_simple (no LLM), empty search→replan (max 1)
+
+20 internal tools (7 added in Phase 5: forecast, sector forecast, portfolio forecast, compare stocks, scorecard, dividend sustainability, risk narrative): get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile — all read from DB (materialized during ingestion)
 
 ## Filesystem Layout
 

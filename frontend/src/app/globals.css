@@ -25,6 +25,7 @@
 
   /* Accent */
   --color-cyan: var(--cyan);
+  --color-cyan-muted: var(--cyan-muted);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
 
@@ -137,6 +138,9 @@
   --sidebar-border: rgba(255, 255, 255, 0.07);
   --sidebar-ring: rgba(56, 189, 248, 0.4);
 
+  /* Cyan accent helpers */
+  --cyan-muted: rgba(56, 189, 248, 0.18);
+
   /* Layout */
   --sw: 54px;
   --cp: 280px;
@@ -166,12 +170,43 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
 @layer utilities {
   .animate-fade-in {
     animation: fade-in 0.4s ease both;
   }
   .animate-fade-slide-up {
     animation: fade-slide-up 0.4s cubic-bezier(.22,.68,0,1.2) var(--stagger-delay, 0ms) both;
+  }
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2s ease-in-out infinite;
+  }
+  .animate-blink {
+    animation: blink 1s step-end infinite;
+  }
+  /* Scrollbar styling */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--subtle) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--subtle);
+    border-radius: 3px;
   }
   /* Panel resize cursor helper */
   body.resizing {

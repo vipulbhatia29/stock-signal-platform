@@ -43,6 +43,7 @@ export interface StockSearchResponse {
   name: string;
   exchange: string | null;
   sector: string | null;
+  in_db: boolean;
 }
 
 // ── Price ─────────────────────────────────────────────────────────────────────
@@ -334,6 +335,22 @@ export interface FundamentalsResponse {
   debt_to_equity: number | null;
   piotroski_score: number | null;
   piotroski_breakdown: PiotroskiBreakdown;
+
+  // Enriched fields (materialized during ingestion)
+  revenue_growth: number | null;
+  gross_margins: number | null;
+  operating_margins: number | null;
+  profit_margins: number | null;
+  return_on_equity: number | null;
+  market_cap: number | null;
+
+  // Analyst targets
+  analyst_target_mean: number | null;
+  analyst_target_high: number | null;
+  analyst_target_low: number | null;
+  analyst_buy: number | null;
+  analyst_hold: number | null;
+  analyst_sell: number | null;
 }
 
 // ── User Preferences ─────────────────────────────────────────────────────────
@@ -374,4 +391,178 @@ export interface RebalancingResponse {
 
 export interface ApiError {
   detail: string;
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
+export interface ChatSession {
+  id: string;
+  agent_type: "stock" | "general";
+  title: string | null;
+  is_active: boolean;
+  created_at: string;
+  last_active_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string | null;
+  tool_calls: Record<string, unknown> | null;
+  model_used: string | null;
+  tokens_used: number | null;
+  created_at: string;
+}
+
+export type StreamEventType =
+  | "thinking"
+  | "tool_start"
+  | "tool_result"
+  | "tool_error"
+  | "token"
+  | "done"
+  | "error"
+  | "provider_fallback"
+  | "context_truncated"
+  | "plan"
+  | "evidence"
+  | "decline";
+
+export interface StreamEvent {
+  type: StreamEventType;
+  content?: string;
+  tool?: string;
+  params?: Record<string, unknown>;
+  status?: string;
+  data?: unknown;
+  usage?: Record<string, unknown>;
+  error?: string;
+}
+
+// Agent V2 event data types
+export interface EvidenceItem {
+  claim: string;
+  source_tool: string;
+  value?: string;
+  timestamp?: string;
+}
+
+export interface FeedbackRequest {
+  feedback: "up" | "down";
+}
+
+// ── Sectors ──────────────────────────────────────────────────────────────────
+
+export type SectorScope = "portfolio" | "watchlist" | "all";
+
+export interface SectorSummary {
+  sector: string;
+  stock_count: number;
+  avg_composite_score: number | null;
+  avg_return_pct: number | null;
+  your_stock_count: number;
+  allocation_pct: number | null;
+}
+
+export interface SectorSummaryResponse {
+  sectors: SectorSummary[];
+}
+
+export interface SectorStock {
+  ticker: string;
+  name: string;
+  composite_score: number | null;
+  current_price: number | null;
+  return_pct: number | null;
+  is_held: boolean;
+  is_watched: boolean;
+}
+
+export interface SectorStocksResponse {
+  sector: string;
+  stocks: SectorStock[];
+}
+
+export interface ExcludedTicker {
+  ticker: string;
+  reason: string;
+}
+
+export interface CorrelationData {
+  sector: string;
+  tickers: string[];
+  matrix: number[][];
+  period_days: number;
+  excluded_tickers: ExcludedTicker[];
+}
+
+// ── Forecast Types ────────────────────────────────────────────
+
+export interface ForecastHorizon {
+  horizon_days: number;
+  predicted_price: number;
+  predicted_lower: number;
+  predicted_upper: number;
+  target_date: string;
+  confidence_level: string;
+  sharpe_direction: string;
+}
+
+export interface ForecastResponse {
+  ticker: string;
+  horizons: ForecastHorizon[];
+  model_mape: number | null;
+  model_status: string;
+}
+
+export interface PortfolioForecastHorizon {
+  horizon_days: number;
+  expected_return_pct: number;
+  lower_pct: number;
+  upper_pct: number;
+  diversification_ratio: number;
+  confidence_level: string;
+}
+
+export interface PortfolioForecastResponse {
+  horizons: PortfolioForecastHorizon[];
+  ticker_count: number;
+  vix_regime: string;
+}
+
+export interface ScorecardHorizonBreakdown {
+  horizon_days: number;
+  total: number;
+  correct: number;
+  hit_rate: number;
+  avg_alpha: number;
+}
+
+export interface ScorecardResponse {
+  total_outcomes: number;
+  overall_hit_rate: number;
+  avg_alpha: number;
+  buy_hit_rate: number;
+  sell_hit_rate: number;
+  worst_miss_pct: number;
+  worst_miss_ticker: string;
+  by_horizon: ScorecardHorizonBreakdown[];
+}
+
+// ── Alert Types ───────────────────────────────────────────────
+
+export interface AlertResponse {
+  id: string;
+  alert_type: string;
+  severity: string;
+  title: string;
+  message: string;
+  ticker: string | null;
+  is_read: boolean;
+  created_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface UnreadAlertCount {
+  unread_count: number;
 }

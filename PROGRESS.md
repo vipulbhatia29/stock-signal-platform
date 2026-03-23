@@ -304,115 +304,188 @@ Key design decisions: Serena native `global/` prefix resolves to `~/.serena/memo
 
 ---
 
-## Session 35 — Phase 4B Plan + LangGraph Adoption + Implementation Start
+## Session 35 — Phase 4B Plan + LangGraph + Implementation *(compact)*
 
-**Date:** 2026-03-18 | **Branches:** `feat/KAN-5-conversation-history`, `feat/KAN-3-tool-orchestration` | **Tests:** 329 (267→329: +62 new)
-
-### Refinement Completed
-- [x] PR #10 (spec) already merged. PR #11 (plan) created, CI green, merged.
-- [x] KAN-20: 19-task implementation plan written across 5 chunks, reviewed (4C + 8I issues fixed)
-- [x] KAN-21: PM approved plan
-- [x] LangGraph adopted for agent orchestration (spec §5, §8, §12, §14 rewritten)
-- [x] 8 implementation subtasks revised under KAN-3/4/5 with plan task references + DoD checklists
-
-### Implementation — KAN-6 (Conversation History foundation)
-- [x] Task 1: `backend/config.py` — added ALPHA_VANTAGE_API_KEY, FINNHUB_API_KEY. Installed langgraph, langchain-*, fastmcp, mcp, edgartools, gdeltdoc, tiktoken
-- [x] Task 2: `backend/models/chat.py` (ChatSession, ChatMessage) + `backend/models/logs.py` (LLMCallLog, ToolExecutionLog)
-- [x] Task 3: Alembic migration 008 — 4 tables, 2 hypertables, cleaned false TimescaleDB index drops
-- [x] Task 4: `backend/schemas/chat.py` (ChatRequest, ChatSessionResponse, ChatMessageResponse)
-
-### Implementation — KAN-8 (Tool system)
-- [x] Task 5: `backend/tools/base.py` — BaseTool ABC, ProxiedTool, CachePolicy, ToolResult, ToolFilter, ToolInfo
-- [x] Task 6: `backend/tools/registry.py` — ToolRegistry with register_mcp, get_langchain_tools
-- [x] Task 7: 5 internal tools (analyze_stock, portfolio_exposure, screen_stocks, web_search, geopolitical)
-- [x] Task 8: 2 wrapper tools (compute_signals_tool, recommendations_tool)
-
-### Implementation — KAN-14, KAN-7, KAN-11 (LLM + Agents + Graph)
-- [x] Task 10: `backend/agents/llm_client.py` — LLMClient, RetryPolicy, ProviderHealth, fallback chain
-- [x] Task 10: 3 providers (GroqProvider, AnthropicProvider, OpenAIProvider) wrapping LangChain chat models
-- [x] Task 11: `backend/agents/base.py` + StockAgent + GeneralAgent + few-shot prompt templates
-- [x] Task 9: `backend/agents/stream.py` — StreamEvent (7 types) + stream_graph_events bridge
-- [x] Task 12: `backend/agents/graph.py` — AgentState, build_agent_graph (LangGraph StateGraph), execute_tool_safely
-
-**Test count:** 329 (267 existing + 62 new across 8 test files)
-**Alembic head:** `664e54e974c5` (migration 008)
-**JIRA:** KAN-6, KAN-8, KAN-14, KAN-7, KAN-11 → Ready for Verification
-
-**Next session — KAN-4 Streaming (Tasks 13-19):**
-1. KAN-12: MCP adapters (Edgar, AlphaVantage, FRED, Finnhub) + FastMCP server + warm data Celery tasks
-2. KAN-13: Chat router (POST /stream, GET /sessions) + session management
-3. KAN-15: Wire main.py lifespan startup + E2E smoke test
+**Date:** 2026-03-18 | **Tests:** 267→329 (+62 new)
+Refinement: 19-task plan written+approved (KAN-20/21), LangGraph adopted (spec rewrite). Implementation: KAN-6 (ChatSession/Message models, migration 008, schemas), KAN-8 (BaseTool/ProxiedTool/ToolRegistry, 7 internal tools, MCPAdapter), KAN-14/7/11 (LLMClient with fallback chain, 3 providers, StockAgent/GeneralAgent, LangGraph StateGraph, StreamEvent bridge).
 
 ---
 
-## Session 34 — JIRA SDLC + CI/CD Implementation + Phase 4B Spec *(compact)*
+## Session 36 — Phase 4B Implementation Complete + Epic Shipped
 
-**Date:** 2026-03-17 | **Branch:** `feat/KAN-16-phase4b-refinement` (PR #10) | **Tests:** 267 backend + 20 frontend (unchanged)
+**Date:** 2026-03-19 | **Branch:** `feat/KAN-4-streaming` → merged via PR #12 → PR #13 to main | **Tests:** 369 (237 unit + 132 API) + 20 frontend
 
-JIRA SDLC workflow + CI/CD pipeline + Phase 4B spec. JIRA: 5-column board, 2 automation rules, all transition IDs. CI/CD: 3 GitHub Actions workflows, fixture split, branch protection. Phase 4B: Three-layer MCP architecture spec (780+ lines), reviewed (15+1 issues fixed). PRs #7-9 merged, PR #10 open.
+### KAN-12: MCP Adapters + MCP Server + Warm Pipeline (Tasks 13-15)
+- [x] `backend/tools/adapters/base.py` — MCPAdapter ABC (name, get_tools, execute, health_check)
+- [x] `backend/tools/adapters/edgar.py` — EdgarAdapter (4 tools: 10-K sections, 13-F, insider trades, 8-K events) via edgartools
+- [x] `backend/tools/adapters/alpha_vantage.py` — AlphaVantageAdapter (news sentiment, quotes) via httpx
+- [x] `backend/tools/adapters/fred.py` — FredAdapter (economic series: DFF, CPI, 10Y, unemployment, oil) via httpx
+- [x] `backend/tools/adapters/finnhub.py` — FinnhubAdapter (analyst ratings, social sentiment, ETF holdings, ESG, supply chain) via httpx
+- [x] `backend/mcp_server/server.py` — `create_mcp_app()` dynamically registers all ToolRegistry tools with FastMCP
+- [x] `backend/mcp_server/auth.py` — MCPAuthMiddleware (JWT validation via `decode_token`)
+- [x] `backend/tasks/warm_data.py` — 3 Celery Beat tasks: `sync_analyst_consensus` (daily 6am ET), `sync_fred_indicators` (daily 7am ET), `sync_institutional_holders` (weekly Sun 2am ET)
+- [x] `backend/tasks/__init__.py` — added warm_data to Celery include + 3 Beat schedule entries
 
-**Key decisions:** Phase 4B = backend only (4C = frontend). Agent-driven JIRA. Branch per Story. Few-shot prompting.
+### KAN-13: Chat Router + Session Management (Tasks 16-17)
+- [x] `backend/tools/chat_session.py` — 7 functions: create_session, load_session_messages, list_user_sessions, deactivate_session, expire_inactive_sessions, build_context_window (tiktoken cl100k_base), auto_title
+- [x] `backend/routers/chat.py` — POST /stream (NDJSON via LangGraph), GET /sessions, GET /sessions/{id}/messages, DELETE /sessions/{id}
+- [x] `backend/main.py` — chat router mounted at /api/v1/chat
 
----
+### KAN-15: Wire main.py + E2E (Tasks 18-19)
+- [x] `backend/main.py` — FastAPI lifespan startup: ToolRegistry (7 internal + 4 MCP adapter sets), LLMClient (Groq/Anthropic), LangGraph graphs (stock + general) on app.state, FastMCP at /mcp
+- [x] Graceful degradation: if no LLM providers → graphs=None, chat disabled
+- [x] Full lint cleanup: ruff check + ruff format across 11 files
 
-## Session 30 — CI/CD + Branching Strategy Brainstorm + Spec *(compact)*
-- [x] `conventions/jira-sdlc-workflow` Serena memory written — mandatory process for all future work
-- [x] CLAUDE.md updated: Rule 9 (JIRA workflow), session start protocol, git branching section
-- [x] 5-column board configured: To Do → In Progress → Blocked → Ready for Verification → Done
-- [x] 2 JIRA Automation rules: "PR merged → Done" + "All subtasks done → parent Done"
-- [x] GitHub for Jira app installed + connected
-- [x] All 5 transition IDs discovered: 7=Blocked, 8=Ready for Verification, 11=To Do, 21=In Progress, 31=Done
-- [x] Reusable template: `global/templates/agentic-sdlc-setup`
+### Epic KAN-1 Shipped
+- [x] PR #12: `feat/KAN-4-streaming` → `develop` (CI green, merged)
+- [x] PR #13: `develop` → `main` (8 CI checks pass, merged)
+- [x] KAN-1 Epic → Done in JIRA
 
-### CI/CD Pipeline — KAN-22 Epic (COMPLETE)
-- [x] Brainstorm → spec → review → plan → implementation (full SDLC cycle)
-- [x] Spec: `docs/superpowers/specs/2026-03-16-cicd-jira-integration-design.md`
-- [x] Plan: `docs/superpowers/plans/2026-03-16-cicd-jira-integration.md`
-- [x] 3 GitHub Actions workflows: ci-pr.yml (4 parallel jobs), ci-merge.yml (4 sequential), deploy.yml (stub)
-- [x] Testcontainers fixture split — sub-level conftests override db_url for CI
-- [x] uv.lock committed, frontend test script added, tsconfig types fix
-- [x] 5 GitHub Secrets configured, branch protection on main + develop
-- [x] PRs: #7 (CI/CD code), #8 (docs), #9 (doc catch-up KAN-29) — all merged
-- [x] ci-merge.yml validated: 4m41s, all jobs pass
-
-### Phase 4B Spec (COMPLETE)
-- [x] Brainstormed three-layer MCP architecture: consume external MCPs → enrich → expose as MCP server
-- [x] 5 data layers: fundamentals, SEC filings, news/sentiment, macro/geopolitical, analyst/alternative
-- [x] 4 Tier 1 MCPs selected: EdgarTools, Alpha Vantage, FRED, Finnhub + GDELT wrapper
-- [x] Tool Registry + MCPAdapter pattern with auto-discovery
-- [x] LLM client: Groq → Anthropic → Local fallback with exponential backoff + provider health tracking
-- [x] Spec: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md` (780+ lines)
-- [x] Spec reviewed (15+1 issues fixed), retry strategy added (§4.4)
-- [x] PRD, FSD, TDD updated for new architecture
-- [x] PR #10 open with spec + memories + doc updates
-
-### JIRA Board Created
-- KAN-1 Epic: Phase 4B AI Chatbot — 5 Stories (KAN-2–5, KAN-16) + 15 Subtasks
-- KAN-22 Epic: CI/CD Pipeline — DONE
-- KAN-16 Refinement: brainstorm ✅, spec ✅, review ✅ — plan next (KAN-20)
-
-**Key decisions:** Phase 4B = backend only (4C = frontend). MCP server pulled from Phase 6. Agent-driven JIRA (not CI-driven). Branch per Story. Few-shot prompting. No new infrastructure (TimescaleDB + Redis + Celery).
-
-**Next session:** Merge PR #10 → KAN-20 (write implementation plan) → KAN-21 (review plan) → revise JIRA Stories → implement
+**New tests this session:** 40 (8 adapter + 4 MCP server + 6 warm data + 14 session mgmt + 8 chat API)
+**Total test count:** 369 backend (237 unit + 132 API) + 20 frontend = 389
+**Alembic head:** `664e54e974c5` (migration 008 — unchanged)
+**8 commits:** adapters, MCP server, warm data, session mgmt, chat router, lifespan wiring, lint fixes
 
 ---
 
-## Session 30 — CI/CD + Branching Strategy Brainstorm + Spec *(compact)*
+## Session 37 — Phase 4C Frontend Chat UI: Full Implementation
 
-**Date:** 2026-03-15 | **Branch:** `feat/phase-4b-ai-chatbot` | **Tests:** 267 backend + 20 frontend (unchanged)
+**Date:** 2026-03-19 | **Branch:** `feat/KAN-32-chat-ui` (16 commits, pushed) | **Tests:** 240 unit + 132 API + 57 frontend = 429
 
-Brainstormed CI/CD and branching strategy for the project. Designed two-track branching model (`main` production + `develop` staging), 3 GitHub Actions workflow files, and fixture architecture for CI. Spec written, reviewed twice (2 rounds, 12 issues total resolved), committed. Implementation plan **deferred to post-Phase-4B sprint** — spec is ready, plan to be written at that time.
+### All 19 Plan Tasks Executed (KAN-32 + KAN-33 + KAN-34 + KAN-35)
 
-Key decisions: `ci-pr.yml` fast gate on PRs to develop/main; `ci-merge.yml` full sequential gate on push to develop; `deploy.yml` no-op stub for Phase 6; 5 GitHub Actions Secrets (CI-only throwaway values); sub-level `conftest.py` overrides in `tests/unit/` + `tests/api/` with `TEST_ENV` guard to prevent testcontainers in CI; `uv.lock` must be committed. Doc catch-up for Phase 4A UI (FSD/TDD/CLAUDE.md) bundled into this sprint.
+**KAN-32: Backend Prerequisites (Tasks 1-3)**
+- [x] `"error"` StreamEvent type + try/except in stream_graph_events
+- [x] `save_message()` async helper for chat message persistence
+- [x] User + assistant message persistence wired into chat_stream router
 
-Spec: `docs/superpowers/specs/2026-03-15-cicd-branching-design.md` | Plan: to be written at sprint start (post-4B)
-CI/CD placeholder added to `project-plan.md` as Phase 4.5.
+**KAN-33: Frontend Foundation (Tasks 4-8b)**
+- [x] Installed react-markdown, rehype-highlight, remark-gfm
+- [x] ChatSession, ChatMessage, StreamEvent types in api.ts + CHAT_ACTIVE_SESSION storage key
+- [x] NDJSON parser with buffer carry-over (5 tests)
+- [x] CSV export utility — buildCSV + downloadCSV (3 tests)
+- [x] TanStack Query hooks: useChatSessions, useChatMessages, useDeleteSession
+- [x] chatReducer pure state machine — 11 action types (8 tests)
+- [x] useStreamChat hook — streaming fetch, RAF token batching, abort, 401 auth retry
 
-**Next session — Phase 4B AI Chatbot Backend:**
-1. `ChatSession` + `ChatMessage` DB models + migration 008
-2. `backend/agents/` — `BaseAgent`, `StockAgent`, `GeneralAgent`, agentic loop, NDJSON streaming
-3. `backend/routers/chat.py` — `POST /api/v1/chat/stream`
-4. Wire `ChatPanel` stub to real streaming backend
+**KAN-34: Chat UI Components (Tasks 9-14)**
+- [x] ThinkingIndicator (pulsing dots), ErrorBubble (retry button), MessageActions (copy + CSV)
+- [x] MarkdownContent (react-markdown wrapper with navy styling + streaming cursor)
+- [x] ToolCard — running/completed/error/expanded states with per-tool summaries (4 tests)
+- [x] MessageBubble — user (right-aligned) + assistant (markdown + tools + actions) (3 tests)
+- [x] AgentSelector (stock/general toggle) + SessionList (active/expired/delete) (4 tests)
+- [x] ChatInput — auto-growing textarea, Enter to send, Shift+Enter newline, stop button (3 tests)
+- [x] Jest mocks for ESM-only react-markdown/rehype-highlight/remark-gfm
+
+**KAN-35: Integration (Tasks 15-19)**
+- [x] ArtifactBar — shouldPin rules (7 pinnable tools), dismiss, CSV export (6 tests)
+- [x] ChatPanel major rewrite — replaced stub with live streaming chat (3 updated tests)
+- [x] Layout wiring — artifact state, ArtifactBar between Topbar and main, onArtifact prop
+- [x] Full verification: 240 backend + 57 frontend tests green, lint clean, pushed
+
+### Security Review
+- [x] 3 findings documented in Phase 4E of project-plan.md:
+  - HIGH: Chat session IDOR (missing ownership check on resume + message load)
+  - HIGH: MCP auth bypass (from prior audit, already tracked)
+  - MEDIUM: Exception info leak in stream bridge (str(exc) sent to client)
+
+### JIRA
+- KAN-30 Epic: In Progress (all 4 Stories → Ready for Verification)
+- 19 subtasks created (KAN-36 through KAN-54), all → Ready for Verification
+- KAN-32/33/34/35 Stories: all → Ready for Verification
+
+**New files:** 23 frontend (10 components, 3 hooks, 3 libs, 7 test files) + 3 Jest mocks
+**Modified files:** 3 backend + 5 frontend + 1 jest.config
+**New tests this session:** +3 backend, +37 frontend = +40 total
+
+### Post-Implementation (same session)
+- [x] PRs #15 + #16 merged to develop
+- [x] Security review: 3 HIGH/MEDIUM findings → Phase 4E
+- [x] Code analysis: 10 quality + 6 performance + 4 architecture findings → Phase 4C.1
+- [x] Spec audit: 13 gaps → Phase 4C.1 (4 functional + 7 UI polish + code analysis)
+- [x] CI actions bumped v4→v6/v7 (Node.js 24 deprecation fix)
+- [x] TypeScript strict mode fix: `unknown` in JSX → `!= null` guard
+- [x] "Branch from develop" rule enforced in CLAUDE.md + 3 Serena memories
+- [x] E2E Playwright testing: all pages verified (dashboard, screener, stock detail, portfolio, chat)
+- [x] Found 4 critical tool wrapper bugs (KAN-55): `user_id` injection + wrong function signatures
+- [x] Found index seeding broken (KAN-56): Wikipedia 403
+- [x] Created onboarding story (KAN-57): new user empty state
+- [x] Lovable design brief written for full UI/UX redesign
+
+**JIRA tickets created:**
+- KAN-55 (Bug, Highest): Tools fail — user_id not injected + 3 argument bugs
+- KAN-56 (Bug, High): Index seeding script broken — Wikipedia 403
+- KAN-57 (Story, Medium): New user onboarding — empty state
+
+**Next session:**
+1. KAN-55 (Highest): Fix 4 tool wrapper bugs (~1 hour)
+2. KAN-56 (High): Fix Wikipedia 403 in seed script (~5 min)
+3. Phase 4E security fixes (~15 min)
+4. Phase 4C.1 functional + quality + performance fixes
+5. UI/UX redesign via Lovable (parallel, user-driven)
+
+---
+
+## Session 38 — Bug Sprint + Search Autocomplete + Agent Tools
+
+**Date:** 2026-03-20 | **Branch:** multiple fix/feat branches → `develop` | **Tests:** 255 unit + 132 API + 57 frontend = 444
+
+### 4 Tickets Shipped
+
+**KAN-60 (Bug, Highest): Pydantic args_schema — PR #18 merged**
+- Added `args_schema: ClassVar[type[BaseModel] | None]` to BaseTool
+- 7 Pydantic input models co-located on each tool class
+- Registry passes `args_schema` to `StructuredTool.from_function()` — eliminated kwargs double-wrapping hack
+- `_build_schema_from_params()` fallback for ProxiedTools via `create_model()`
+- Fixed PortfolioExposureTool: removed `user_id` from LLM-facing schema (comes from ContextVar)
+- 9 new unit tests
+
+**KAN-58 (Bug, High): Test DB isolation — PR #19 merged**
+- `tests/api/conftest.py` and `tests/unit/conftest.py` were loading `.env` → pointing at dev DB
+- Root conftest's `drop_all` teardown destroyed all dev tables
+- Fix: removed `load_dotenv()`, only override `db_url` when `CI=true` (reads `DATABASE_URL` env var set by GitHub Actions workflow)
+- Locally: testcontainers (ephemeral DB). CI: service container. Dev DB: never touched.
+
+**KAN-56 (Bug, High): Wikipedia 403 — PR #20 merged**
+- `httpx` blocked by Wikipedia's TLS fingerprinting — switched to `requests`
+- Added proper `User-Agent` header
+- Wrapped `pd.read_html()` in `StringIO` (pandas FutureWarning fix)
+- Verified: S&P 500 (503), NASDAQ-100 (101), Dow 30 (30)
+
+**KAN-59 (Story, High): Search autocomplete + agent tools — PR #21 merged**
+- Backend: `_yahoo_search()` helper merges DB + Yahoo Finance results (US equities + ETFs)
+- `StockSearchResponse` gains `in_db: bool` field
+- New `SearchStocksTool` — agent resolves company name → ticker via DB + Yahoo
+- New `IngestStockTool` — agent fetches prices/signals/fundamentals for any ticker
+- 9 internal tools registered (was 7)
+- Frontend: TickerSearch shows "In watchlist universe" vs "Add from market" groups
+- 6 new Yahoo search unit tests
+
+### Agent Architecture Analysis
+Documented current LangGraph architecture (ReAct loop) and identified 4 gaps:
+1. Agent routing is manual (frontend sends `agent_type`) — needs ReAct-based auto-router
+2. IngestStockTool lacks recommendation generation (no user context)
+3. System prompts don't demonstrate search→ingest→analyze chain
+4. MemorySaver is in-memory only — checkpoints lost on restart
+5. No cross-session memory
+
+Gaps filed into Phase 4D (agent routing + Goal-Plan-Action) in `project-plan.md`. User wants to refine with ReAct loop principle + goal-plan-action pattern.
+
+### JIRA
+- KAN-60: Done, KAN-58: Done, KAN-56: Done, KAN-59: Done
+- JIRA cloud ID changed: `vipulbhatia29.atlassian.net` (was `sigmoid.atlassian.net`)
+
+**Key gotchas:**
+- `httpx` fails on Wikipedia (TLS fingerprint), `requests` works
+- CI sets `DATABASE_URL` env var (mapped from `CI_DATABASE_URL` secret) — conftest must read `DATABASE_URL`, not `CI_DATABASE_URL`
+- All PRs target `develop`, never `main` — user confirmed no direct work on main
+
+---
+
+## Sessions 30+34 — JIRA SDLC + CI/CD + Phase 4B Spec *(compact)*
+
+**Dates:** 2026-03-15 to 2026-03-17 | **Tests:** unchanged
+JIRA: 5-column board, 2 automation rules, transition IDs, `conventions/jira-sdlc-workflow` memory. CI/CD: 3 workflows (ci-pr, ci-merge, deploy stub), branch protection, fixture split. PRs #7-9 merged. Phase 4B spec: three-layer MCP, 780+ lines, PR #10 open. KAN-1 Epic created with 5 Stories + 15 Subtasks.
 
 ---
 
@@ -514,5 +587,322 @@ CI/CD placeholder added to `project-plan.md` as Phase 4.5.
 1. Design: brainstorm ChatSession/ChatMessage models, LangGraph agent loop, streaming SSE/NDJSON
 2. Backend: DB models + migration 008, agents/ module wiring, `/api/v1/chat` streaming router
 3. Frontend: chat UI panel (floating or dedicated `/chat` page)
+
+---
+
+## Session 39 — Phase 4D Chunk 1: Enriched Data Layer (KAN-62)
+
+**Date:** 2026-03-20
+**Branch:** `feat/KAN-62-enriched-data-layer` (from `develop`)
+**JIRA:** KAN-62 → In Progress → Done
+
+**What was done:**
+
+### DB Layer
+- [x] Extended `Stock` model with 15 new columns: profile (business_summary, employees, website), market data (market_cap), growth/margins (revenue_growth, gross_margins, operating_margins, profit_margins, return_on_equity), analyst targets (analyst_target_mean/high/low, analyst_buy/hold/sell)
+- [x] Created `EarningsSnapshot` model — quarterly EPS estimates, actuals, surprise % (ticker+quarter composite PK)
+- [x] Alembic migration 009 — manually written (autogenerate falsely detects all tables as new due to TimescaleDB)
+- [x] Fixed stale DB state (alembic_version pointed to 008 but tables were missing) — cleared version, ran all migrations from scratch
+
+### Extended Fundamentals
+- [x] Added 7 fields to `FundamentalResult` dataclass: revenue_growth, gross_margins, operating_margins, profit_margins, return_on_equity, market_cap, enterprise_value
+- [x] Extended `fetch_fundamentals()` to populate new fields from yfinance
+- [x] Created `fetch_analyst_data()` — fetches analyst targets, recommendations breakdown, profile data
+- [x] Created `fetch_earnings_history()` — fetches quarterly EPS from yfinance
+- [x] Created `persist_enriched_fundamentals()` — writes growth/margins/analyst data to Stock model
+- [x] Created `persist_earnings_snapshots()` — upserts earnings data to EarningsSnapshot table
+
+### Ingest Pipeline Extension
+- [x] `ingest_ticker` endpoint (stocks router) now calls enrichment + earnings persistence during ingestion
+- [x] `IngestStockTool` (agent tool) likewise enriches and persists all data during ingestion
+
+### 4 New Registered Tools (all read from DB, not yfinance at runtime)
+- [x] `FundamentalsTool` (get_fundamentals) — returns growth, margins, ROE, market cap from Stock model
+- [x] `AnalystTargetsTool` (get_analyst_targets) — returns target prices + buy/hold/sell counts
+- [x] `EarningsHistoryTool` (get_earnings_history) — returns quarterly EPS + beat/miss summary
+- [x] `CompanyProfileTool` (get_company_profile) — returns business summary, sector, employees, website
+- [x] All 4 tools registered in `main.py` — total internal tools: 13 (was 9)
+
+### API + Schema Updates
+- [x] Extended `FundamentalsResponse` Pydantic schema with 12 new fields (growth, margins, analyst targets)
+- [x] Updated `GET /stocks/{ticker}/fundamentals` endpoint to return enriched data from Stock model
+- [x] Updated frontend `FundamentalsResponse` TypeScript interface to match
+
+### Tests
+- [x] 21 new unit tests across 4 files: `test_fundamentals_tool.py` (8), `test_analyst_targets.py` (4), `test_earnings_history.py` (5), `test_company_profile.py` (4)
+- [x] Full regression: 276 unit tests passing (was 255)
+- [x] Lint clean (ruff), TypeScript type check clean
+
+**Key decisions:**
+- "Ingest-time enrichment" pattern: all yfinance data fetched once during ingestion, agent tools read from DB at query time (fast, reliable, offline-capable)
+- EarningsSnapshot is a separate table (not Stock columns) because earnings are per-quarter time-series data (many rows per ticker)
+- `fetch_analyst_data()` is a separate function from `fetch_fundamentals()` because it needs `t.recommendations` DataFrame (not just `t.info` dict)
+- CompanyProfileTool truncates business_summary to 500 chars to keep agent context concise
+- AsyncMock pattern for testing DB tools: create `mock_cm` with `__aenter__`/`__aexit__`, not just `AsyncMock()` as session
+
+### KAN-63–68 (also Session 39)
+- [x] **KAN-63:** Alembic migration 010 — feedback on ChatMessage, tier+query_id on LLMCallLog, query_id on ToolExecutionLog. PR #27 merged.
+- [x] **KAN-64:** Agent V2 core — AGENT_V2 feature flag, user_context.py, result_validator.py, simple_formatter.py, planner.py + planner.md (13 few-shots), executor.py ($PREV_RESULT, retries, circuit breaker). 42 new tests. PR #28 merged.
+- [x] **KAN-65:** Synthesizer + Graph V2 — synthesizer.py + synthesizer.md (confidence, scenarios, evidence), LLMClient tier_config support, graph_v2.py (LangGraph StateGraph plan→execute→synthesize). 17 new tests. PR #29 merged.
+- [x] **KAN-66:** Stream events + router wiring — 4 new NDJSON types (plan, tool_error, evidence, decline), stream_graph_v2_events(), chat router feature flag, user context injection, query_id tracking, feedback PATCH endpoint. 9 new tests. PR #30 merged.
+- [x] **KAN-67:** Frontend — PlanDisplay, EvidenceSection, FeedbackButtons, DeclineMessage components, TS types + chat-reducer + useStreamChat extended, MessageBubble + ChatPanel wired. 7 new tests. PR #31 merged.
+- [x] **KAN-68:** Full regression (340 unit + 4 integration + 64 frontend = 408 tests). Lint clean, TS clean. Docs updated.
+
+**Test count:** 340 unit + 132 API + 4 integration + 64 frontend = 540 total
+**Alembic head:** `ac5d765112d6` (migration 010 — agent v2 fields)
+**Current branch:** `feat/KAN-68-regression-docs`
+
+**Phase 4D COMPLETE.** All 7 stories (KAN-62–68) shipped in one session. 7 PRs merged to develop.
+
+### KAN-57 — New User Onboarding (also Session 39)
+- [x] **WelcomeBanner** — localStorage-based first-visit detection, dismissible, 5 one-click ticker buttons (AAPL, MSFT, GOOGL, TSLA, NVDA) that ingest + add to watchlist
+- [x] **TrendingStocks** — top 5 by composite score from existing bulk signals endpoint, with sparklines. Visible even with empty watchlist.
+- [x] **Empty state** — quick-add buttons for popular tickers replace generic "Search above" text
+- [x] **useTrendingStocks hook** — wraps `GET /stocks/signals/bulk?sort_by=composite_score&limit=5`
+- [x] 6 new frontend tests. PR #33 merged.
+
+### Phase 4E — Security Hardening (also Session 39)
+Fresh security audit found 11 issues (3 Critical, 5 High, 3 Medium). All fixed in PR #35:
+- [x] **C1+C2: Chat IDOR** — ownership checks on session resume + messages endpoint
+- [x] **C3: MCP auth** — MCPAuthMiddleware applied to `/mcp` mount
+- [x] **H4+H5: Error leaks** — all stream + tool error messages sanitized (no `str(exc)` to client)
+- [x] **M9: Enum validation** — Literal types on action/confidence query params
+- [x] **M10: ContextVar** — reset token stored for defense-in-depth
+- [x] **M11: UUID leak** — generic messages in delete_session 403/404
+- Documented (low-risk): H6 COOKIE_SECURE, H7 task status, H8 refresh token body
+
+**Session 39 FINAL test count:** 340 unit + 132 API + 4 integration + 70 frontend = 546 total
+**Alembic head:** `ac5d765112d6` (migration 010)
+
+**Phase 4D + KAN-57 + Phase 4E ALL COMPLETE.** 11 stories, 10 PRs merged (#26–35) in one session.
+
+**Next (Session 40):** Manual E2E testing (all backend components via CLI) → Phase 4C.1 polish → Phase 4F UI migration
+
+---
+
+## Session 40 — Phase 4G Backend Hardening Spec + Plan *(compact)*
+
+**Date:** 2026-03-21 | **Tests:** unchanged (design session)
+Spec (865 lines) + plan (16 tasks, 8 chunks) for backend hardening. 11 stories (KAN-74-84) under Epic KAN-73. Key decisions: domain-organized test dirs, LLM-as-Judge eval pyramid (8 dimensions), agent-aware pre-commit hooks, 6 Phase 5 backlog items identified.
+
+---
+
+## Session 41 — Phase 4G: Backend Hardening Implementation
+
+**Date:** 2026-03-22
+**Branch:** `feat/backend-hardening-spec` (continuing from Session 40)
+**JIRA:** Epic KAN-73, Stories KAN-74–84
+
+**What was done:**
+
+### Chunk 1 — Directory Restructure (KAN-74)
+- [x] Created 10 domain subdirectories: signals/, recommendations/, tools/, agents/, auth/, chat/, portfolio/, pipeline/, infra/, adversarial/
+- [x] Created tests/e2e/ with eval/ subfolder and results/.gitkeep
+- [x] Moved 36 test files into domain subdirectories
+- [x] Added pytest markers (pre_commit, ci_only, agent_gated) to pyproject.toml
+- [x] Created tests/markers.py and tests/e2e/conftest.py (LLM key gating)
+- [x] Fixed parents[] path in test_agents.py for new depth (1 fix)
+
+### Chunk 2 — Auth & Security Hardening (KAN-75)
+- [x] 15 API tests: token expiry (access + refresh), malformed JWT (missing sub, wrong type), IDOR (portfolio, chat, watchlist, preferences), cookie flags, password strength (3 cases), inactive user lockout, SQL injection, XSS sanitization
+- [x] Key fix: MagicMock.name requires configure_mock(), Transaction uses transaction_type not action, ChatSession requires agent_type
+
+### Chunk 3 — Pipeline + Signals (KAN-76, KAN-77)
+- [x] 10 ingest pipeline API tests: delta refresh, new ticker, empty data, rows_fetched, signal snapshot store/skip, error handling, idempotency, case normalization, last_fetched_at
+- [x] 15 signal engine unit tests: composite range, Piotroski blending (4 tests), insufficient data (3 tests), bullish/bearish extremes, direct composite_score function tests
+- [x] 14 recommendation unit tests: score thresholds (BUY/WATCH/AVOID), portfolio-aware (HOLD/SELL/concentration), confidence levels, edge cases
+- [x] Key fix: portfolio_state is a dict not a dataclass
+
+### Chunk 4 — Agent V2 Regression + Adversarial (KAN-78)
+- [x] 32 regression tests: intent classification (5 intents + validation), executor edge cases ($PREV_RESULT, circuit breaker, tool limit, replan, retry, callback, timeout), synthesizer (confidence labeling, defaults, scenarios, evidence, gaps), context window (truncation, recency)
+- [x] 10 adversarial tests: prompt injection, goal hijacking, scope enforcement, excessive steps, invalid LLM output, synthesis guardrails
+
+### Chunk 5 — Search, Celery, Tools, API Contracts (KAN-80, 81, 82, 83)
+- [x] 10 search flow API tests: DB hit, prefix/name match, Yahoo fallback, empty/XSS, auth, limit, schema fields
+- [x] 13 Celery unit tests: beat schedule (5 jobs), refresh_ticker, fan-out, snapshots, warm data
+- [x] 18 tool unit tests: ToolResult format, registry execution, tool metadata, internal tools
+- [x] 10 API contract tests: schema validation, HTTP status codes, headers
+
+### Chunk 6 — Eval Infrastructure (KAN-79)
+- [x] Rubric: 8 eval dimensions (factual grounding, hallucination, actionability, risk disclosure, evidence quality, scope compliance, personalization, context relevance)
+- [x] Judge: Haiku-based async LLM evaluator with graceful degradation
+- [x] Golden set: 13 prompts covering all intents and edge cases
+
+### Chunk 7 — Pre-commit Hooks + CI (KAN-84)
+- [x] `.pre-commit-config.yaml`: 6-stage pipeline (ruff check, ruff format, frontend lint, unit tests, agent gate, no-secrets)
+- [x] `scripts/pre-commit-agent-gate.sh`: conditional agent test execution
+- [x] `.github/workflows/ci-eval.yml`: path-filtered PRs + weekly cron + manual dispatch
+
+**Test count:** 411 unit + 157 API + 7 e2e + 4 integration + 70 frontend = 649 total
+**New tests this session:** 154 (15 auth + 39 pipeline/signals + 42 agent + 51 search/celery/tools/contracts + 7 live LLM)
+**Commits:** 17 on feat/backend-hardening-spec (PR #38)
+**Bugs found:** 0 application bugs, 0 regressions
+
+**Phase 4G COMPLETE.** All 11 stories (KAN-74–84) implemented. PR #38 merged to develop.
+
+**Next (Session 42):** Manual E2E smoke test → Phase 4C.1 polish → Phase 4F UI migration
+
+---
+
+## Manual E2E Smoke Test (KAN-86) — Session 41 continued
+
+**Date:** 2026-03-22
+**Branch:** `feat/KAN-85-e2e-smoke-test`
+**JIRA:** KAN-86
+
+### Results — ALL PASS
+1. **alembic upgrade head** — 10 migrations ran successfully, 20 tables created
+2. **Health endpoint** — `GET /health` → 200 `{"status": "ok"}`
+3. **Register** — `POST /auth/register` → 201, user created in `users` table
+4. **Login** — `POST /auth/login` → 200, JWT token returned with cookies
+5. **Ingest AAPL** — `POST /stocks/AAPL/ingest` → 200, 2515 price rows fetched, composite_score=3.11
+   - `stocks` table: AAPL (Apple Inc., NMS, Technology)
+   - `stock_prices` table: 2515 rows
+   - `signal_snapshots` table: RSI=NEUTRAL, MACD=BEARISH, composite=3.11
+6. **Watchlist** — `POST /stocks/watchlist` → 201, `GET /stocks/watchlist` → 1 item with score
+7. **Portfolio** — `POST /portfolio/transactions` → 201 (10 shares AAPL @ $195.50), `GET /portfolio/positions` → 1 position
+8. **Preferences** — `GET /preferences` → 200 with default thresholds
+9. **Search** — `GET /stocks/search?q=App` → 200 with results
+
+**Bugs found:** 0
+**DB writes verified:** users, stocks, stock_prices, signal_snapshots, watchlist, transactions, portfolios, user_preferences
+
+**Next:** Phase 4C.1 polish → Phase 4F UI migration
+
+---
+
+## Session 42 — Phase 4C.1: Chat UI Polish (KAN-87)
+
+**Date:** 2026-03-21
+**Branch:** `feat/KAN-87-chat-ui-polish` (from `develop`)
+**JIRA:** KAN-87 (Story, In Progress)
+
+**What was done:**
+
+### JIRA Cleanup
+- [x] Transitioned KAN-37–53 (17 Phase 4C subtasks) from Ready for Verification → Done
+- [x] Transitioned KAN-69 (Phase 4E Epic) from To Do → Done
+
+### Functional Fixes (4)
+- [x] **CSV wired to tool cards** — `extractCsvData()` in message-bubble.tsx extracts tabular data from completed tool results (screen_stocks, recommendations, array results) and passes as `csvData` prop to `MessageActions`
+- [x] **Session expiry prompt** — session-list.tsx now shows warning with "Start New Chat" / "View Anyway" buttons when clicking an expired session (was silently loading)
+- [x] **localStorage session restore** — useStreamChat reads `CHAT_ACTIVE_SESSION` on mount, restores active session across page reloads
+- [x] **`tool_calls` type hint** — fixed `save_message()` param from `dict | None` to `list[dict] | None`; matching fix in `ChatMessageResponse` schema
+
+### Code Quality Fixes (8)
+- [x] **Mutable `nextId`** → `crypto.randomUUID()` with jsdom fallback (`Date.now()-random`)
+- [x] **Type annotations** — `user: User = Depends(...)` on all 5 chat endpoints
+- [x] **OpenAPI metadata** — `summary`, `description`, `responses` on all chat endpoint decorators
+- [x] **Graph guard** — `getattr()` + 503 fallback for missing V1/V2 graphs on startup failure
+- [x] **`data: Any` on StreamEvent** → `dict[str, Any] | list | str | None`
+- [x] **`CLEAR_ERROR`** — new action type in chat-reducer (was abusing `STREAM_ERROR("")`)
+- [x] **Lazy imports** → all 7 inline imports moved to top-of-file in chat router
+- [x] **`_get_session()` helper** — extracted from 3 duplicated inline ownership lookups
+
+### Performance Fixes (5)
+- [x] **ReactMarkdown plugin arrays** — hoisted `[remarkGfm]`/`[rehypeHighlight]` to module constants
+- [x] **Artifact dispatch** — gated on `!isStreaming` (was firing on every token flush)
+- [x] **Stale `activeSessionId`** — uses `activeSessionIdRef` for cache invalidation in closures
+- [x] **`React.memo()`** — applied to MessageBubble (prevents re-render of all bubbles on each token)
+- [x] **`dispatch` removed** — exposed `setAgentType` named callback instead of raw dispatch
+
+### Bonus Fix
+- [x] **Pre-existing test failure** — `test_analyze_stock_tool_error_handling` was environment-dependent (relied on no DB running). Fixed: patched `async_session_factory` at source module to deterministically test error path.
+
+### Docs
+- [x] PROJECT_INDEX.md — full refresh (file counts, test counts, phase roadmap, new components)
+- [x] PROGRESS.md — Session 42 entry, Session 40 compacted
+- [x] project-plan.md — 4C.1 items checked off
+- [x] Serena `project/state` — updated
+- [x] MEMORY.md — updated project state + new feedback memory
+
+**Files modified:** 9 (6 frontend, 3 backend) + 1 test file
+**Test count:** 440 unit + 157 API + 7 e2e + 4 integration + 70 frontend = 678 total
+**Alembic head:** `ac5d765112d6` (migration 010 — unchanged)
+
+**Next (Session 43):** Phase 4F UI Migration (UI-1: Shell + Design Tokens)
+
+---
+
+## Session 45 — KAN-94 Sectors Page + Phase 5 Design *(compact)*
+
+**Date:** 2026-03-22 | **PR:** #52 merged | **Tests:** 759 total
+
+Phase 4F complete (9/9): KAN-94 Sectors Page — 3 backend endpoints, 6 schemas, 5 frontend components, 63 new tests. Phase 5 design: spec + plan + JIRA Epic KAN-106 (11 Stories). Key decisions: biweekly Prophet retrain, correlation-based confidence bands, in-app alerts only.
+
+---
+
+## Session 43 — Phase 4F UI Migration: 7/9 Stories *(compact)*
+
+**Date:** 2026-03-22 | **PRs:** #41-#47 merged | **Tests:** 696 total
+
+7 UI migration stories: Shell+Tokens, Shared Components, Dashboard Redesign, Screener+Detail, Portfolio, Auth Redesign, Chat Polish. New: ScoreBar, RecommendationRow, ChatContext. KAN-98 hydration bug logged. 18 new frontend tests.
+
+---
+
+## Session 46 — Phase 5 Implementation: 7 of 11 Stories Complete
+
+**Date:** 2026-03-22
+**Epic:** KAN-106 (Phase 5 — Forecasting, Evaluation and Background Automation)
+**PRs:** #54-#60 (all merged to develop)
+
+### Stories Completed (7/11)
+
+| Story | PR | Summary |
+|---|---|---|
+| KAN-107 [S1] DB Models + Migration | #54 | 6 new models, Stock.is_etf, migration 011, ETF seed script. 25 tests |
+| KAN-108 [S2] Pipeline Infrastructure | #55 | PipelineRunner, watermark, gap detection, stale run cleanup, retry. 18 tests |
+| KAN-109 [S3] Nightly Pipeline Chain | #56 | 3-step Celery chain, recommendation generation task, beat schedule US/Eastern. 10 tests |
+| KAN-110 [S4] Prophet Forecasting Engine | #57 | Prophet JSON serialization, model versioning, 3 horizons, Sharpe direction, correlation matrix. 14 tests |
+| KAN-111 [S5] Evaluation + Drift Detection | #58 | Forecast eval (MAPE), drift detection, recommendation eval vs SPY, scorecard. 12 tests |
+| KAN-113 [S7] Forecast + Scorecard API | #59 | 4 endpoints, 6 Pydantic schemas, sector-to-ETF mapping. 11 tests |
+| KAN-112 [S6] In-App Alerts Backend | #60 | Alert generation task, 3 endpoints, 5 schemas. 9 tests |
+
+### New Files (16)
+- Models: `forecast.py`, `pipeline.py`, `alert.py` + migration 011
+- Tasks: `pipeline.py`, `recommendations.py`, `forecasting.py`, `evaluation.py`, `alerts.py`
+- Tools: `forecasting.py`, `scorecard.py`
+- Schemas: `forecasts.py`, `alerts.py`
+- Routers: `forecasts.py`, `alerts.py`
+- Scripts: `seed_etfs.py`
+
+**Test count:** 566 unit + 174 API + 7 e2e + 4 integration + 107 frontend = 858 total (+99)
+**Alembic head:** `d68e82e90c96` (migration 011)
+
+**Resume point (Session 47):** KAN-114 [S8], KAN-115 [S9], KAN-116 [S10], KAN-117 [S11]
+
+---
+
+## Session 47 — Phase 5 Complete: Stories S8-S11 + Epic Promotion
+
+**Date:** 2026-03-22
+**Epic:** KAN-106 (Phase 5 — Forecasting, Evaluation and Background Automation) — **COMPLETE**
+**PRs:** #62-#65 (S8-S11 to develop), Epic promotion to main
+
+### Stories Completed (4/4 remaining → 11/11 total)
+
+| Story | PR | Summary |
+|---|---|---|
+| KAN-114 [S8] Agent Tools — Forecast + Comparison | #62 | 4 new tools (GetForecast, GetSectorForecast, GetPortfolioForecast, CompareStocks), EntityRegistry for pronoun resolution, 7 planner few-shots. 30 tests |
+| KAN-115 [S9] Agent Tools — Scorecard + Sustainability | #63 | 3 new tools (GetRecommendationScorecard, DividendSustainability, RiskNarrative), 3 planner few-shots. 15 tests |
+| KAN-116 [S10] Frontend — Forecast Card + Dashboard | #64 | TS types (forecast/alert/scorecard), 6 TanStack hooks, ForecastCard component (3 horizons + confidence + Sharpe), Portfolio Outlook + Accuracy StatTiles |
+| KAN-117 [S11] Frontend — Scorecard Modal + Alert Bell | #65 | AlertBell (Popover + unread badge + mark-all-read), ScorecardModal (Dialog + hit rate + horizon breakdown), dashboard wiring |
+
+### New Files (11)
+- Backend tools: `forecast_tools.py`, `scorecard_tool.py`, `dividend_sustainability.py`, `risk_narrative.py`
+- Backend agents: `entity_registry.py`
+- Frontend components: `forecast-card.tsx`, `alert-bell.tsx`, `scorecard-modal.tsx`
+- Frontend hooks: `use-forecasts.ts`, `use-alerts.ts`
+- Modified: `graph_v2.py`, `planner.py`, `planner.md`, `main.py`, `topbar.tsx`, `dashboard/page.tsx`, `stock-detail-client.tsx`, `api.ts`
+
+### Key Architecture Decisions
+- EntityRegistry uses ordered dict for recency-based pronoun resolution, serialized into LangGraph state as plain dicts (no DB persistence)
+- DividendSustainabilityTool is the only runtime yfinance call (on-demand) — all other tools read from DB
+- RiskNarrativeTool combines 4 data sources: signals, fundamentals, forecast confidence, sector ETF context
+- ForecastCard renders with `undefined` currentPrice (signal schema doesn't expose it — deferred)
+
+**Test count:** 596 unit + 174 API + 7 e2e + 4 integration + 107 frontend = 888 total (+45 backend)
+**Internal tools:** 20 total (was 13) + 4 MCP adapters
+**Alembic head:** `d68e82e90c96` (migration 011 — unchanged)
 
 ---

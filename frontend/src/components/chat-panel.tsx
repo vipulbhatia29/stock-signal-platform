@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { SendIcon, XIcon } from "lucide-react";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { XIcon, Sparkles } from "lucide-react";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { useStreamChat } from "@/hooks/use-stream-chat";
+import { useChatSessions, useDeleteSession } from "@/hooks/use-chat";
+import { shouldPin } from "@/components/chat/artifact-bar";
+import { MessageBubble } from "@/components/chat/message-bubble";
+import { ThinkingIndicator } from "@/components/chat/thinking-indicator";
+import { ErrorBubble } from "@/components/chat/error-bubble";
+import { AgentSelector } from "@/components/chat/agent-selector";
+import { SessionList } from "@/components/chat/session-list";
+import { ChatInput, type ChatInputHandle } from "@/components/chat/chat-input";
 
 interface ChatPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  onArtifact: (artifact: { tool: string; params: Record<string, unknown>; data: unknown } | null) => void;
 }
 
 const SUGGESTIONS = [
@@ -16,14 +26,66 @@ const SUGGESTIONS = [
   "Top sector momentum",
 ];
 
-const STUB_MESSAGE =
-  "Hi! I'm your AI analyst. Ask me anything about your portfolio or watchlist. (Full AI integration coming soon)";
-
-export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
+export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
   const asideRef = useRef<HTMLElement>(null);
+  const chatInputRef = useRef<ChatInputHandle>(null);
   const handleRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isUserScrolledUp = useRef(false);
+  const [showSessions, setShowSessions] = useState(false);
 
-  // Restore saved width and set up drag-resize
+  const {
+    messages,
+    isStreaming,
+    error,
+    activeSessionId,
+    agentType,
+    sendMessage,
+    stopGeneration,
+    retry,
+    switchSession,
+    startNewSession,
+    setAgentType,
+  } = useStreamChat();
+
+  const { data: sessions } = useChatSessions();
+  const deleteSession = useDeleteSession();
+
+  // Track manual scroll
+  const handleScroll = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    isUserScrolledUp.current = !atBottom;
+  }, []);
+
+  // Auto-scroll on new content
+  useEffect(() => {
+    if (!isUserScrolledUp.current) {
+      messagesEndRef.current?.scrollIntoView?.({ behavior: "smooth" });
+    }
+  }, [messages]);
+
+  // Artifact dispatch: only after streaming completes (not on every token flush)
+  useEffect(() => {
+    if (isStreaming) return;
+    if (messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role !== "assistant") return;
+    const completedPinnable = lastMsg.toolCalls.find(
+      (tc) => tc.status === "completed" && shouldPin(tc.tool) && tc.result
+    );
+    if (completedPinnable) {
+      onArtifact({
+        tool: completedPinnable.tool,
+        params: completedPinnable.params,
+        data: completedPinnable.result,
+      });
+    }
+  }, [isStreaming, messages, onArtifact]);
+
+  // Drag-resize logic (preserved from stub)
   useEffect(() => {
     const savedWidth = localStorage.getItem(STORAGE_KEYS.CHAT_PANEL_WIDTH);
     if (savedWidth) {
@@ -41,7 +103,7 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
       document.body.classList.add("resizing");
 
       const onMove = (e: MouseEvent) => {
-        const delta = startX - e.clientX; // left drag = wider
+        const delta = startX - e.clientX;
         const newWidth = Math.min(520, Math.max(240, startWidth + delta));
         document.documentElement.style.setProperty("--cp", `${newWidth}px`);
       };
@@ -64,6 +126,19 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
     return () => handle.removeEventListener("mousedown", onMouseDown);
   }, []);
 
+  const handleSessionSwitch = useCallback(
+    (sessionId: string) => {
+      switchSession(sessionId);
+      onArtifact(null);
+    },
+    [switchSession, onArtifact]
+  );
+
+  const handleNewSession = useCallback(() => {
+    startNewSession(agentType);
+    onArtifact(null);
+  }, [startNewSession, agentType, onArtifact]);
+
   return (
     <aside
       ref={asideRef}
@@ -83,66 +158,125 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
 
       {/* Header */}
       <header className="flex items-center justify-between px-4 py-3.5 border-b border-border flex-shrink-0">
-        <div>
-          <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
-            <span
-              className="w-[7px] h-[7px] rounded-full bg-gain"
-              style={{ boxShadow: "0 0 5px var(--gain)" }}
-            />
-            AI Analyst
+        <div className="flex items-center gap-2">
+          <div>
+            <div className="flex items-center gap-2 text-[13px] font-semibold text-foreground">
+              <span
+                className="w-[7px] h-[7px] rounded-full bg-gain"
+                style={{ boxShadow: "0 0 5px var(--gain)" }}
+              />
+              AI Analyst
+            </div>
+            <p className="text-[10px] text-subtle mt-0.5">Powered by Claude</p>
           </div>
-          <p className="text-[10px] text-subtle mt-0.5">Powered by Claude</p>
         </div>
-        <button
-          onClick={onClose}
-          className="w-6 h-6 rounded-[5px] bg-hov border border-border text-muted-foreground hover:text-foreground flex items-center justify-center text-xs"
-          aria-label="Close AI panel"
-        >
-          <XIcon size={12} />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowSessions(!showSessions)}
+            className="w-6 h-6 rounded-[5px] bg-hov border border-border text-muted-foreground hover:text-foreground flex items-center justify-center text-xs"
+            aria-label="Toggle sessions"
+            title="Chat history"
+          >
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 12a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H8.25m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0H12m4.125 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 0 1-2.555-.337A5.972 5.972 0 0 1 5.41 20.97a5.969 5.969 0 0 1-.474-.065 4.48 4.48 0 0 0 .978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25Z" />
+            </svg>
+          </button>
+          <button
+            onClick={onClose}
+            className="w-6 h-6 rounded-[5px] bg-hov border border-border text-muted-foreground hover:text-foreground flex items-center justify-center text-xs"
+            aria-label="Close AI panel"
+          >
+            <XIcon size={12} />
+          </button>
+        </div>
       </header>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-3.5 py-3.5 flex flex-col gap-2.5">
-        {/* Bot greeting */}
-        <div className="flex flex-col gap-0.5">
-          <div className="max-w-[85%] px-[11px] py-2 rounded-[10px] rounded-bl-[3px] bg-card2 border border-border text-foreground text-[12px] leading-relaxed">
-            {STUB_MESSAGE}
-          </div>
-          <span className="text-[9.5px] text-subtle px-1">AI Analyst</span>
+      {/* Session list (collapsible) */}
+      {showSessions && sessions && (
+        <div className="border-b border-border py-2">
+          <SessionList
+            sessions={sessions}
+            activeId={activeSessionId}
+            onSwitch={handleSessionSwitch}
+            onDelete={(id) => deleteSession.mutate(id)}
+            onNew={handleNewSession}
+          />
         </div>
+      )}
+
+      {/* Agent selector (shown when no active session) */}
+      {!activeSessionId && messages.length === 0 && (
+        <AgentSelector
+          value={agentType}
+          onChange={(agent) => setAgentType(agent)}
+          disabled={isStreaming}
+        />
+      )}
+
+      {/* Messages */}
+      <div
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto flex flex-col"
+      >
+        {messages.length === 0 && !isStreaming && (
+          <div className="flex-1 flex flex-col items-center justify-center px-4 text-center">
+            <div className="text-muted-foreground text-sm mb-4">
+              Ask me anything about your portfolio or the markets.
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg) => (
+          <MessageBubble
+            key={msg.id}
+            role={msg.role}
+            content={msg.content}
+            toolCalls={msg.toolCalls}
+            isStreaming={msg.isStreaming}
+            plan={msg.plan}
+            evidence={msg.evidence}
+            isDecline={msg.isDecline}
+          />
+        ))}
+
+        {isStreaming && messages.length > 0 && messages[messages.length - 1].content === "" && messages[messages.length - 1].toolCalls.length === 0 && (
+          <ThinkingIndicator />
+        )}
+
+        {error && <ErrorBubble error={error} onRetry={retry} />}
+
+        <div ref={messagesEndRef} />
       </div>
 
-      {/* Suggested prompts */}
-      <div className="flex flex-wrap gap-1.5 px-3.5 py-2 border-t border-border flex-shrink-0">
-        {SUGGESTIONS.map((s) => (
-          <button
-            key={s}
-            className="bg-card2 border border-border text-muted-foreground hover:border-[var(--bhi)] hover:text-cyan px-2.5 py-1 rounded-full text-[10.5px] transition-colors whitespace-nowrap"
-            disabled
-            title="Coming soon — Phase 4"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
+      {/* Suggestion chips (shown when no messages) — fill input, don't auto-send */}
+      {messages.length === 0 && !isStreaming && (
+        <div className="px-3.5 py-2 border-t border-border flex-shrink-0 space-y-2">
+          <div className="flex items-center gap-1.5 text-muted-foreground">
+            <Sparkles size={12} className="text-cyan" />
+            <span className="text-[10px]">Suggestions</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => chatInputRef.current?.fillText(s)}
+                className="bg-card2 border border-border text-muted-foreground hover:border-[var(--bhi)] hover:text-cyan px-2.5 py-1 rounded-full text-[10.5px] transition-colors whitespace-nowrap"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Input */}
-      <div className="flex items-center gap-2 px-3.5 py-2.5 border-t border-border flex-shrink-0">
-        <textarea
-          className="flex-1 bg-card2 border border-border rounded-lg px-3 py-1.5 text-foreground text-[12px] resize-none outline-none focus:border-[var(--bhi)] placeholder:text-subtle"
-          placeholder="Ask about your portfolio... (coming soon)"
-          rows={1}
-          disabled
-        />
-        <button
-          className="w-8 h-8 rounded-lg bg-cyan flex items-center justify-center flex-shrink-0 opacity-40 cursor-not-allowed"
-          disabled
-          aria-label="Send message"
-        >
-          <SendIcon size={14} className="text-[var(--background)]" />
-        </button>
-      </div>
+      <ChatInput
+        ref={chatInputRef}
+        onSend={sendMessage}
+        onStop={stopGeneration}
+        isStreaming={isStreaming}
+      />
     </aside>
   );
 }

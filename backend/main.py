@@ -13,7 +13,17 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.config import settings
 from backend.rate_limit import limiter
-from backend.routers import auth, chat, indexes, portfolio, preferences, stocks
+from backend.routers import (
+    alerts,
+    auth,
+    chat,
+    forecasts,
+    indexes,
+    portfolio,
+    preferences,
+    sectors,
+    stocks,
+)
 from backend.routers.tasks import router as tasks_router
 
 logger = logging.getLogger(__name__)
@@ -37,16 +47,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from backend.tools.adapters.edgar import EdgarAdapter
     from backend.tools.adapters.finnhub import FinnhubAdapter
     from backend.tools.adapters.fred import FredAdapter
+    from backend.tools.analyst_targets_tool import AnalystTargetsTool
     from backend.tools.analyze_stock import AnalyzeStockTool
+    from backend.tools.company_profile_tool import CompanyProfileTool
     from backend.tools.compute_signals_tool import ComputeSignalsTool
+    from backend.tools.dividend_sustainability import DividendSustainabilityTool
+    from backend.tools.earnings_history_tool import EarningsHistoryTool
+    from backend.tools.forecast_tools import (
+        CompareStocksTool,
+        GetForecastTool,
+        GetPortfolioForecastTool,
+        GetSectorForecastTool,
+    )
+    from backend.tools.fundamentals_tool import FundamentalsTool
     from backend.tools.geopolitical import GeopoliticalEventsTool
+    from backend.tools.ingest_stock_tool import IngestStockTool
     from backend.tools.portfolio_exposure import PortfolioExposureTool
     from backend.tools.recommendations_tool import RecommendationsTool
     from backend.tools.registry import ToolRegistry
+    from backend.tools.risk_narrative import RiskNarrativeTool
+    from backend.tools.scorecard_tool import GetRecommendationScorecardTool
     from backend.tools.screen_stocks import ScreenStocksTool
+    from backend.tools.search_stocks_tool import SearchStocksTool
     from backend.tools.web_search import WebSearchTool
 
-    # 1. Tool Registry — register 7 internal tools
+    # 1. Tool Registry — register internal tools
     registry = ToolRegistry()
     for tool_cls in [
         AnalyzeStockTool,
@@ -56,6 +81,19 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         RecommendationsTool,
         WebSearchTool,
         GeopoliticalEventsTool,
+        SearchStocksTool,
+        IngestStockTool,
+        FundamentalsTool,
+        AnalystTargetsTool,
+        EarningsHistoryTool,
+        CompanyProfileTool,
+        GetForecastTool,
+        GetSectorForecastTool,
+        GetPortfolioForecastTool,
+        CompareStocksTool,
+        GetRecommendationScorecardTool,
+        DividendSustainabilityTool,
+        RiskNarrativeTool,
     ]:
         registry.register(tool_cls())
 
@@ -89,10 +127,58 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.general_graph = None
         logger.warning("No LLM providers configured — chat disabled")
 
-    # 5. MCP server (Layer 3 — Expose)
+    # 4b. Build Agent V2 graph when feature flag is enabled
+    if settings.AGENT_V2 and providers:
+        from backend.agents.executor import execute_plan
+        from backend.agents.graph_v2 import build_agent_graph_v2
+        from backend.agents.planner import plan_query
+        from backend.agents.simple_formatter import format_simple_result
+        from backend.agents.synthesizer import synthesize_results
+
+        # Build tools description for planner prompt
+        tool_infos = registry.discover()
+        tools_desc = "\n".join(f"- **{t.name}**: {t.description}" for t in tool_infos)
+
+        # Tool executor: calls registry by name
+        async def _tool_executor(tool_name: str, params: dict):  # noqa: ANN202
+            return await registry.execute(tool_name, params)
+
+        # Bind LLM to plan/synthesize functions
+        async def _plan_fn(query: str, tools_description: str, user_context: dict) -> dict:
+            return await plan_query(
+                query=query,
+                tools_description=tools_description,
+                user_context=user_context,
+                llm_chat=lambda **kw: llm_client.chat(**kw, tier="planner"),
+            )
+
+        async def _synthesize_fn(tool_results: list, user_context: dict) -> dict:
+            return await synthesize_results(
+                tool_results=tool_results,
+                user_context=user_context,
+                llm_chat=lambda **kw: llm_client.chat(**kw, tier="synthesizer"),
+            )
+
+        app.state.agent_v2_graph = build_agent_graph_v2(
+            plan_fn=_plan_fn,
+            execute_fn=execute_plan,
+            synthesize_fn=_synthesize_fn,
+            format_simple_fn=format_simple_result,
+            tool_executor=_tool_executor,
+            tools_description=tools_desc,
+        )
+        logger.info("Agent V2 graph compiled (Plan→Execute→Synthesize)")
+    elif settings.AGENT_V2:
+        logger.warning("AGENT_V2=true but no LLM providers — V2 graph not built")
+
+    # 5. MCP server (Layer 3 — Expose) with JWT auth middleware
+    from backend.mcp_server.auth import MCPAuthMiddleware
+
     mcp_server = create_mcp_app(registry)
-    app.mount("/mcp", mcp_server.http_app())
-    logger.info("FastMCP server mounted at /mcp")
+    mcp_app = mcp_server.http_app()
+    mcp_app.add_middleware(MCPAuthMiddleware)
+    app.mount("/mcp", mcp_app)
+    logger.info("FastMCP server mounted at /mcp (JWT auth enforced)")
 
     # Store on app.state (not module globals — rule #7)
     app.state.registry = registry
@@ -138,7 +224,10 @@ async def health_check() -> dict[str, str]:
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(indexes.router, prefix="/api/v1/indexes", tags=["indexes"])
 app.include_router(stocks.router, prefix="/api/v1/stocks", tags=["stocks"])
+app.include_router(sectors.router, prefix="/api/v1/sectors", tags=["sectors"])
 app.include_router(portfolio.router, prefix="/api/v1")
 app.include_router(tasks_router, prefix="/api/v1")
 app.include_router(preferences.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
+app.include_router(forecasts.router, prefix="/api/v1")
+app.include_router(alerts.router, prefix="/api/v1")

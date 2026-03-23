@@ -14,6 +14,7 @@ import { PaginationControls } from "@/components/pagination-controls";
 import { EmptyState } from "@/components/empty-state";
 import { Button } from "@/components/ui/button";
 import { DensityProvider, useDensity } from "@/lib/density-context";
+import { PageTransition } from "@/components/motion-primitives";
 
 const PAGE_SIZE = 50;
 
@@ -150,7 +151,7 @@ function ScreenerContent() {
   });
 
   return (
-    <div className="space-y-4">
+    <PageTransition className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">Screener</h1>
         <div className="flex items-center gap-1">
@@ -192,6 +193,6 @@ function ScreenerContent() {
           onPageChange={handlePageChange}
         />
       )}
-    </div>
+    </PageTransition>
   );
 }

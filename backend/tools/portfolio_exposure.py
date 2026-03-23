@@ -5,9 +5,18 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from pydantic import BaseModel
+
 from backend.tools.base import BaseTool, ToolResult
 
 logger = logging.getLogger(__name__)
+
+
+class PortfolioExposureInput(BaseModel):
+    """Input schema for get_portfolio_exposure tool.
+
+    No LLM-facing parameters — user_id is injected via ContextVar.
+    """
 
 
 class PortfolioExposureTool(BaseTool):
@@ -21,23 +30,26 @@ class PortfolioExposureTool(BaseTool):
     category = "portfolio"
     parameters = {
         "type": "object",
-        "properties": {
-            "user_id": {"type": "string", "description": "User UUID (injected by agent)"},
-        },
-        "required": ["user_id"],
+        "properties": {},
     }
+    args_schema = PortfolioExposureInput
     timeout_seconds = 10.0
 
     async def execute(self, params: dict[str, Any]) -> ToolResult:
         """Fetch portfolio summary with sector breakdown."""
         try:
             from backend.database import async_session_factory
-            from backend.tools.portfolio import get_portfolio_summary
+            from backend.request_context import current_user_id
+            from backend.tools.portfolio import get_or_create_portfolio, get_portfolio_summary
 
-            user_id = params["user_id"]
+            user_id = current_user_id.get()
+            if user_id is None:
+                return ToolResult(status="error", error="No user context available")
+
             async with async_session_factory() as session:
-                summary = await get_portfolio_summary(session, user_id)
-                return ToolResult(status="ok", data=summary)
+                portfolio = await get_or_create_portfolio(user_id, session)
+                summary = await get_portfolio_summary(portfolio.id, session)
+                return ToolResult(status="ok", data=summary.model_dump())
         except Exception as e:
             logger.error("portfolio_exposure_failed", extra={"error": str(e)})
             return ToolResult(status="error", error=str(e))

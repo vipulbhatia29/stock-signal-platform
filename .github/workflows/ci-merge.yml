@@ -3,6 +3,8 @@ name: ci-merge
 on:
   push:
     branches: [develop, main]
+  pull_request:
+    branches: [main]
 
 concurrency:
   group: ci-merge-${{ github.ref }}
@@ -12,15 +14,15 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen
       - run: uv run ruff check backend/ tests/ scripts/ --no-fix
       - run: uv run ruff format backend/ tests/ scripts/ --check
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -56,8 +58,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
@@ -74,7 +76,7 @@ jobs:
           JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
           CI: "true"
         run: uv run pytest tests/unit/ tests/api/ -v --tb=short
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -110,8 +112,8 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v4
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
@@ -137,8 +139,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm

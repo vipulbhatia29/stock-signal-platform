@@ -21,9 +21,33 @@ category: debugging
 ## Alembic
 - `uv run alembic upgrade head` (not bare `alembic`).
 - Autogenerate falsely drops TimescaleDB indexes — always review output before running.
+- Autogenerate also falsely detects ALL tables as new (rewrites entire schema) — MUST manually write incremental migrations for add_column/create_table only.
+- If DB has stale alembic_version (points to migration N but tables are missing), clear it: `DELETE FROM alembic_version;` then `uv run alembic upgrade head`.
 - After pulling: `uv sync` to keep local venv in sync with `uv.lock`.
 
 ## yfinance
+
+## LangChain StructuredTool + LangGraph ToolNode
+- `StructuredTool.from_function(coroutine=fn)` with `**kwargs` signature creates a schema with a single `kwargs` parameter. LangChain inconsistently wraps/unwraps params.
+- Fix: define explicit Pydantic `args_schema` per tool (KAN-60).
+- Tool `execute(params: dict)` must be wrapped to accept `**kwargs` since StructuredTool passes keyword args, not a dict.
+- Tool return value must be a JSON string (not ToolResult dataclass) — LangChain ToolMessage expects string content.
+- `on_tool_end` event's `output` is a `ToolMessage` object, not a plain dict. Access `.content` (string) and `json.loads()` it.
+
+## API Tests — DB Isolation (KAN-58 FIXED)
+- Both `tests/api/conftest.py` and `tests/unit/conftest.py` only override `db_url` when `CI=true`.
+- Locally, all tests fall through to root conftest's testcontainers (ephemeral DB).
+- Dev DB is never touched by tests. Safe to run `pytest tests/api/` locally.
+
+## SignalResult Attribute Names
+- `SignalResult` uses flat attributes: `rsi_value`, `rsi_signal`, `macd_value`, `macd_signal_label`, `sma_signal`, `bb_position`
+- NOT nested: `signals.rsi.value` or `signals.macd.signal` — those don't exist
+- Always check the actual dataclass definition before accessing attributes
+
+## ContextVar for Request-Scoped Tool Data
+- Tools called via LangGraph ToolNode don't receive the FastAPI request or user object.
+- Use `contextvars.ContextVar` — set in the router before streaming, read in tool `execute()`.
+- Module: `backend/request_context.py` — `current_user_id: ContextVar[UUID | None]`
 - Returns empty DataFrame for invalid/delisted tickers.
 - Rate limiting: 0.5s delay between batch fetches.
 - Mock at tool boundary (`fetch_prices`) not at `yf.download`.
@@ -39,3 +63,10 @@ category: debugging
 
 ## fetch_fundamentals()
 - Synchronous function. In async context: `await loop.run_in_executor(None, fetch_fundamentals, ticker)`.
+- `fetch_analyst_data()` and `fetch_earnings_history()` also synchronous — same executor pattern.
+- FundamentalResult dataclass: fields with `= None` defaults MUST come after required fields or Python raises `TypeError: non-default argument follows default`.
+
+## AsyncMock for DB tool tests
+- Testing tools that use `async with async_session_factory() as session:` requires a properly structured mock.
+- Pattern: `mock_cm = AsyncMock(); mock_cm.__aenter__.return_value = mock_session; mock_cm.__aexit__.return_value = None; patch("backend.database.async_session_factory", return_value=mock_cm)`
+- Do NOT use `AsyncMock()` directly as the session factory return value — its `__aenter__` returns another coroutine, causing "object has no attribute" errors.

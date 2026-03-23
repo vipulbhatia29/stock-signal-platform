@@ -1,67 +1,57 @@
 ---
 scope: project
 category: project
-updated_by: session-34
+updated_by: session-47-eod
 ---
 
 # Project State
 
-- **Current Phase:** Phase 4B — AI Chatbot (plan approved, implementation starting)
-- **Current Branch:** feat/KAN-3-tool-orchestration (KAN-5 branch also pushed)
-- **Alembic Head:** 664e54e974c5 (migration 008 — chat + logs)
-- **Test Count:** 329 (205 unit + 124 API backend) + 20 frontend component tests
-- **CI/CD:** Fully operational — 3 workflows, branch protection on main + develop
-- **JIRA:** KAN-6/8/14/7/11 → Ready for Verification. KAN-12/13/15 → To Do (KAN-4 story)
-- **What's next:** Create `feat/KAN-4-streaming` branch → KAN-12 (MCP adapters + server + warm pipeline) → KAN-13 (chat router) → KAN-15 (wiring + E2E smoke test)
+- **Current Phase:** Phase 5 — COMPLETE (11/11 stories Done)
+- **Current Branch:** `develop` (all Phase 5 PRs merged)
+- **Alembic Head:** d68e82e90c96 (migration 011)
+- **Test Count:** 596 unit + 174 API + 7 e2e + 4 integration + 107 frontend = 888 total
+- **CI/CD:** Fully operational. Pre-commit hooks configured.
+- **Internal Tools:** 20 + 4 MCP adapters = 24 total
+- **JIRA:** KAN-106 Epic (Phase 5) — COMPLETE. All 11 stories Done.
 
-## Implementation Order (by dependency)
-1. KAN-6: DB models + migration + schemas (Plan Tasks 1-4) → branch: feat/KAN-5-conversation-history
-2. KAN-8: Tool base classes + ToolRegistry + internal tools (Plan Tasks 5-8) → branch: feat/KAN-3-tool-orchestration
-3. KAN-14: LLM client + LangChain providers (Plan Task 10)
-4. KAN-7: Agent types + prompt templates (Plan Task 11)
-5. KAN-11: LangGraph StateGraph + stream bridge (Plan Tasks 9, 12)
-6. KAN-12: MCP adapters + MCP server + warm pipeline (Plan Tasks 13-15) → branch: feat/KAN-4-streaming
-7. KAN-13: Chat router + session management (Plan Tasks 16-17)
-8. KAN-15: Wire main.py + E2E smoke test (Plan Tasks 18-19)
+## What's Next (Session 48)
+1. Phase 5.5: Security Hardening (refresh token revocation via Redis blocklist)
+2. Phase 6: Deployment + LLMOps
+3. Deferred items from Phase 5.1: forecast blending into composite score, Telegram alerts
 
-## Key Architecture Decision (Session 35)
-- **LangGraph adopted** for agent orchestration (not custom loop)
-- LangChain chat models (ChatGroq, ChatAnthropic, ChatOpenAI) instead of raw SDKs
-- MemorySaver checkpointer (→ PostgresSaver in Phase 6)
-- Dependencies: langgraph, langchain-core, langchain-groq, langchain-anthropic, langchain-openai
+## Session 47 Summary (4 PRs merged — #62-#65)
+- KAN-114 [S8] Agent Tools — Forecast + Comparison + Entity Registry (PR #62)
+- KAN-115 [S9] Agent Tools — Scorecard + Sustainability + Risk (PR #63)
+- KAN-116 [S10] Frontend — Forecast Card + Dashboard Tiles (PR #64)
+- KAN-117 [S11] Frontend — Scorecard Modal + Alert Bell (PR #65)
+- Epic KAN-106 promoted: develop → main
+- 11 new files, +45 backend tests, 20 internal tools
 
-## Git Branch Structure
-```
-main        ← production-ready, protected
-develop     ← integration branch, protected
-feat/KAN-*  ← Story branches, PR to develop
-```
+## New Backend Modules (Session 47)
+- `backend/tools/forecast_tools.py` — GetForecastTool, GetSectorForecastTool, GetPortfolioForecastTool, CompareStocksTool
+- `backend/tools/scorecard_tool.py` — GetRecommendationScorecardTool
+- `backend/tools/dividend_sustainability.py` — DividendSustainabilityTool (on-demand yfinance)
+- `backend/tools/risk_narrative.py` — RiskNarrativeTool (signals + fundamentals + forecast + sector)
+- `backend/agents/entity_registry.py` — EntityRegistry (pronoun resolution, tool result extraction)
 
-## Active JIRA Epics
-- **KAN-1** Phase 4B — AI Chatbot Backend
-  - KAN-16 Refinement Story: ALL DONE (KAN-17–21 complete)
-  - KAN-5 Story: Conversation History — subtask KAN-6
-  - KAN-3 Story: Tool Orchestration — subtasks KAN-7, KAN-8, KAN-11, KAN-14
-  - KAN-4 Story: Streaming Responses — subtasks KAN-12, KAN-13, KAN-15
-- **KAN-22** CI/CD Pipeline: ✅ DONE
-
-## Session 35 Summary
-Plan approved + LangGraph adopted + JIRA backlog created + implementation started (Tasks 1-12).
-- Wrote 19-task plan, reviewed, PM approved (KAN-20/21 Done)
-- LangGraph adopted: spec §5/§8/§12/§14 rewritten
-- 8 implementation subtasks created under KAN-3/4/5
-- PR #11 (plan) merged. Implementation: 12 commits across 2 branches
-- KAN-6 (DB+schemas), KAN-8 (tools), KAN-14 (LLM), KAN-7 (agents), KAN-11 (graph) all Ready for Verification
-- 62 new tests added (329 total). Migration 008 applied.
+## New Frontend Components (Session 47)
+- `frontend/src/components/forecast-card.tsx` — 3 horizon pills, confidence badge, Sharpe direction
+- `frontend/src/components/alert-bell.tsx` — Popover dropdown, unread badge, mark-all-read
+- `frontend/src/components/scorecard-modal.tsx` — Dialog with hit rate, alpha, horizon breakdown
+- `frontend/src/hooks/use-forecasts.ts` — useForecast, usePortfolioForecast, useScorecard
+- `frontend/src/hooks/use-alerts.ts` — useAlerts, useUnreadAlertCount, useMarkAlertsRead
 
 ## Phase Completion
-- Phase 1 (Sessions 1-3): COMPLETE
-- Phase 2 (Sessions 4-7): COMPLETE
-- Phase 2.5 (Sessions 8-13): COMPLETE
-- Phase 3 (Sessions 14-20): COMPLETE
-- Phase 3.5 (Sessions 21-25): COMPLETE
-- Phase 4A UI Redesign (Session 29): COMPLETE
-- Memory Architecture (Session 31): COMPLETE
-- CI/CD Epic KAN-22 (Session 34): COMPLETE
-- Phase 4B Spec (Session 34): COMPLETE
-- Phase 4B Plan (Session 35): COMPLETE — implementation next
+Phase 1-4E + 4.5 + Bug Sprint + KAN-57: ALL COMPLETE
+Phase 4G Backend Hardening: COMPLETE
+Phase 4C.1: COMPLETE
+Phase 4F UI Migration: 9/9 COMPLETE
+Phase 5: 11/11 COMPLETE (Epic KAN-106 Done, promoted to main)
+Phase 5.5, 6: NOT STARTED
+
+## Deferred Work
+- Candlestick chart toggle (OHLC format param on prices endpoint)
+- Benchmark comparison chart (index price endpoint)
+- Forecast blending into composite score (Phase 5.1)
+- Telegram alerts (Phase 5.1)
+- ForecastCard currentPrice display (signal schema doesn't expose current_price)

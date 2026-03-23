@@ -14,8 +14,10 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+from io import StringIO
 
 import pandas as pd
+import requests
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -67,7 +69,16 @@ def fetch_index_tickers(slug: str) -> list[str]:
     source = INDEX_SOURCES[slug]
     logger.info("Fetching %s constituents from Wikipedia...", source["name"])
 
-    tables = pd.read_html(source["url"])
+    resp = requests.get(
+        source["url"],
+        headers={"User-Agent": "Mozilla/5.0 (compatible; StockSignalPlatform/1.0)"},
+        timeout=15,
+    )
+    resp.raise_for_status()
+    # html.parser has no XXE risk; input is from known Wikipedia pages
+    tables = pd.read_html(  # nosemgrep: trailofbits.python.lxml-in-pandas.lxml-in-pandas
+        StringIO(resp.text), flavor="html.parser"
+    )
     df = tables[source["table_index"]]
 
     tickers = df[source["ticker_column"]].str.replace(".", "-", regex=False).str.strip().tolist()

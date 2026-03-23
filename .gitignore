@@ -67,3 +67,9 @@ redis_data/
 !.serena/memories/session/.gitkeep
 .serena/project.local.yml
 .playwright-mcp/
+
+# LLM eval results (generated per run)
+tests/e2e/eval/results/*.json
+
+# Serialized model artifacts (Prophet .pkl files)
+data/models/prophet/*.pkl

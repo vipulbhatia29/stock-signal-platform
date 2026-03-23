@@ -9,7 +9,9 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
+
+from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,7 @@ class BaseTool(ABC):
     description: str
     category: str
     parameters: dict[str, Any]
+    args_schema: ClassVar[type[BaseModel] | None] = None
     cache_policy: CachePolicy | None = None
     timeout_seconds: float = 10.0
 

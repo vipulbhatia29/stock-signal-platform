@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { StarIcon, RefreshCw } from "lucide-react";
+import { useChat } from "@/contexts/chat-context";
 import {
   useQuery,
   useMutation,
@@ -10,9 +12,11 @@ import {
 import {
   useIndexes,
   useWatchlist,
+  useAddToWatchlist,
   useRemoveFromWatchlist,
   usePortfolioSummary,
   usePositions,
+  useRecommendations,
 } from "@/hooks/use-stocks";
 import { IndexCard, IndexCardSkeleton } from "@/components/index-card";
 import { StockCard, StockCardSkeleton } from "@/components/stock-card";
@@ -23,21 +27,33 @@ import { StatTile } from "@/components/stat-tile";
 import { AllocationDonut, DONUT_COLORS } from "@/components/allocation-donut";
 import { PortfolioDrawer } from "@/components/portfolio-drawer";
 import { ChangeIndicator } from "@/components/change-indicator";
+import { RecommendationRow } from "@/components/recommendation-row";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import * as api from "@/lib/api";
 import type { TaskStatus, RefreshTask } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { usePortfolioForecast, useScorecard } from "@/hooks/use-forecasts";
+import { ScorecardModal } from "@/components/scorecard-modal";
+import { WelcomeBanner } from "@/components/welcome-banner";
+import { TrendingStocks } from "@/components/trending-stocks";
+import { PageTransition, StaggerGroup, StaggerItem } from "@/components/motion-primitives";
 
 export default function DashboardPage() {
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
   const [refreshTasks, setRefreshTasks] = useState<Record<string, string>>({});
 
   const queryClient = useQueryClient();
+  const { chatOpen: chatIsOpen } = useChat();
 
+  const [addingTickers, setAddingTickers] = useState<Set<string>>(new Set());
   const { data: indexes, isLoading: indexesLoading } = useIndexes();
   const { data: watchlist, isLoading: watchlistLoading } = useWatchlist();
+  const { data: recommendations } = useRecommendations();
+  const { data: portfolioForecast } = usePortfolioForecast();
+  const { data: scorecard } = useScorecard();
+  const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
 
   // ── Refresh All mutation ────────────────────────────────────────────────────
@@ -107,11 +123,16 @@ export default function DashboardPage() {
 
   // ── Portfolio overview ──────────────────────────────────────────────────────
 
+  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const chatIsOpen = false; // TODO: wire from layout context
 
   const { data: summary } = usePortfolioSummary();
   const { data: positions } = usePositions();
+
+  const heldTickers = useMemo(() => {
+    if (!positions) return new Set<string>();
+    return new Set(positions.map((p) => p.ticker));
+  }, [positions]);
 
   const allocations = useMemo(() => {
     if (!positions) return [];
@@ -166,73 +187,83 @@ export default function DashboardPage() {
     return watchlist.filter((w) => w.sector === sectorFilter);
   }, [watchlist, sectorFilter]);
 
-  return (
-    <div className="space-y-8">
-      {/* Index Cards */}
-      <section>
-        <SectionHeading>Market Indexes</SectionHeading>
-        {indexesLoading ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <IndexCardSkeleton key={i} />
-            ))}
-          </div>
-        ) : !indexes?.length ? (
-          <p className="text-sm text-muted-foreground">
-            No indexes seeded yet. Run{" "}
-            <code className="font-mono text-xs">
-              uv run python scripts/sync_indexes.py
-            </code>{" "}
-            to populate.
-          </p>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {indexes.map((idx, i) => (
-              <IndexCard
-                key={idx.slug}
-                name={idx.name}
-                slug={idx.slug}
-                stockCount={idx.stock_count}
-                description={idx.description}
-                animationDelay={i * 80}
-              />
-            ))}
-          </div>
-        )}
-      </section>
+  const handleQuickAdd = async (ticker: string) => {
+    setAddingTickers((prev) => new Set(prev).add(ticker));
+    try {
+      await api.post(`/stocks/${ticker}/ingest`);
+      addToWatchlist.mutate(ticker);
+    } catch {
+      toast.error(`Failed to add ${ticker}`);
+    } finally {
+      setAddingTickers((prev) => {
+        const next = new Set(prev);
+        next.delete(ticker);
+        return next;
+      });
+    }
+  };
 
-      {/* Overview tiles */}
+  // Helper to generate reasoning text from recommendation data
+  const getReasoningText = (rec: { action: string; confidence: string; composite_score: number; reasoning?: Record<string, unknown> | null }): string => {
+    if (rec.reasoning && typeof rec.reasoning === "object" && "summary" in rec.reasoning) {
+      return String(rec.reasoning.summary);
+    }
+    // Template-based fallback
+    const score = (rec.composite_score * 10).toFixed(1);
+    if (rec.action === "BUY") return `Strong signals with composite score ${score}. Consider adding to portfolio.`;
+    if (rec.action === "WATCH") return `Mixed signals — composite score ${score}. Monitor for entry point.`;
+    if (rec.action === "AVOID") return `Weak signals with composite score ${score}. High risk indicators.`;
+    if (rec.action === "SELL") return `Bearish across indicators. Score ${score}. Consider reducing exposure.`;
+    return `Composite score ${score}. Hold current position.`;
+  };
+
+  return (
+    <PageTransition className="space-y-6">
+      {/* Welcome Banner (new users) */}
+      <WelcomeBanner onAddTicker={handleQuickAdd} addingTickers={addingTickers} />
+
+      {/* Trending Stocks (visible even with empty watchlist) */}
+      <TrendingStocks />
+
+      {/* KPI Stat Tiles — 5-col grid, 3-col when chat open */}
       <section>
-        <SectionHeading>Overview</SectionHeading>
-        <div className="grid grid-cols-5 gap-[9px]">
+        <StaggerGroup className={cn(
+          "grid grid-cols-2 gap-3 transition-all duration-300",
+          chatIsOpen ? "lg:grid-cols-3 xl:grid-cols-5" : "lg:grid-cols-5"
+        )}>
           {/* Portfolio Value */}
-          <StatTile
-            label="Portfolio Value"
-            value={summary ? formatCurrency(summary.total_value) : "—"}
-            sub={
-              summary?.unrealized_pnl != null ? (
-                <ChangeIndicator value={summary.unrealized_pnl} format="currency" />
-              ) : undefined
-            }
-            accentColor="cyan"
-            onClick={() => setDrawerOpen(true)}
-          />
+          <StaggerItem>
+            <StatTile
+              label="Portfolio Value"
+              value={summary ? formatCurrency(summary.total_value) : "—"}
+              sub={
+                summary?.unrealized_pnl != null ? (
+                  <ChangeIndicator value={summary.unrealized_pnl} format="currency" size="sm" showIcon={false} prefix="$" />
+                ) : undefined
+              }
+              accentColor="cyan"
+              onClick={() => setDrawerOpen(true)}
+            />
+          </StaggerItem>
 
           {/* Unrealized P&L */}
-          <StatTile
-            label="Unrealized P&L"
-            value={summary ? formatCurrency(summary.unrealized_pnl) : "—"}
-            sub={
-              summary?.unrealized_pnl_pct != null ? (
-                <ChangeIndicator value={summary.unrealized_pnl_pct} format="percent" />
-              ) : undefined
-            }
-            accentColor={
-              (summary?.unrealized_pnl ?? 0) >= 0 ? "gain" : "loss"
-            }
-          />
+          <StaggerItem>
+            <StatTile
+              label="Unrealized P&L"
+              value={summary ? formatCurrency(summary.unrealized_pnl) : "—"}
+              sub={
+                summary?.unrealized_pnl_pct != null ? (
+                  <ChangeIndicator value={summary.unrealized_pnl_pct} format="percent" size="sm" showIcon={false} />
+                ) : undefined
+              }
+              accentColor={
+                (summary?.unrealized_pnl ?? 0) >= 0 ? "gain" : "loss"
+              }
+            />
+          </StaggerItem>
 
           {/* Signals */}
+          <StaggerItem>
           <StatTile label="Signals" accentColor="warn">
             <div className="grid grid-cols-3 gap-[5px] mt-[7px]">
               <div className="text-center rounded-[6px] py-[7px] bg-[var(--gdim)]">
@@ -249,8 +280,10 @@ export default function DashboardPage() {
               </div>
             </div>
           </StatTile>
+          </StaggerItem>
 
           {/* Top Signal */}
+          <StaggerItem>
           <StatTile label="Top Signal" accentColor="gain">
             {topSignal ? (
               <div className="mt-1">
@@ -264,25 +297,135 @@ export default function DashboardPage() {
               <div className="text-[10px] text-subtle mt-2">No strong signals</div>
             )}
           </StatTile>
+          </StaggerItem>
 
           {/* Allocation */}
-          <StatTile label="Allocation" accentColor="cyan">
-            <AllocationDonut
-              allocations={allocations}
-              stockCount={positions?.length}
+          <StaggerItem>
+            <StatTile label="Allocation" accentColor="cyan" onClick={() => router.push("/sectors")}>
+              <AllocationDonut
+                allocations={allocations}
+                stockCount={positions?.length}
+                showSectorLink
+              />
+            </StatTile>
+          </StaggerItem>
+
+          {/* Portfolio Outlook */}
+          <StaggerItem>
+            <StatTile
+              label="Portfolio Outlook"
+              accentColor="cyan"
+              value={
+                portfolioForecast?.horizons?.[0]
+                  ? `${portfolioForecast.horizons[0].expected_return_pct >= 0 ? "+" : ""}${portfolioForecast.horizons[0].expected_return_pct.toFixed(1)}%`
+                  : "—"
+              }
+              sub={
+                portfolioForecast?.horizons?.[0] ? (
+                  <span className="text-[9px] text-subtle">
+                    90d · {portfolioForecast.ticker_count} stocks
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-subtle">No forecast data</span>
+                )
+              }
             />
-          </StatTile>
-        </div>
+          </StaggerItem>
+
+          {/* Accuracy — click opens scorecard modal */}
+          <StaggerItem>
+            <ScorecardModal>
+              <StatTile
+                label="Accuracy"
+                accentColor={
+                  (scorecard?.overall_hit_rate ?? 0) >= 0.7 ? "gain" : "warn"
+                }
+                value={
+                  scorecard?.total_outcomes
+                    ? `${(scorecard.overall_hit_rate * 100).toFixed(0)}%`
+                    : "—"
+                }
+                sub={
+                  scorecard?.total_outcomes ? (
+                    <span className="text-[9px] text-subtle">
+                      {scorecard.total_outcomes} recs · {(scorecard.avg_alpha * 100).toFixed(1)}% alpha
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-subtle">No outcomes yet</span>
+                  )
+                }
+              />
+            </ScorecardModal>
+          </StaggerItem>
+        </StaggerGroup>
       </section>
+
+      {/* Market Indexes — 3-col, adapts with chat */}
+      <section>
+        <SectionHeading>Market Indexes</SectionHeading>
+        {indexesLoading ? (
+          <div className={cn(
+            "grid grid-cols-1 gap-3 transition-all duration-300",
+            chatIsOpen ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-3"
+          )}>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <IndexCardSkeleton key={i} />
+            ))}
+          </div>
+        ) : !indexes?.length ? (
+          <p className="text-sm text-muted-foreground">
+            No indexes seeded yet. Run{" "}
+            <code className="font-mono text-xs">
+              uv run python scripts/sync_indexes.py
+            </code>{" "}
+            to populate.
+          </p>
+        ) : (
+          <div className={cn(
+            "grid grid-cols-1 gap-3 transition-all duration-300",
+            chatIsOpen ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-3"
+          )}>
+            {indexes.map((idx, i) => (
+              <IndexCard
+                key={idx.slug}
+                name={idx.name}
+                slug={idx.slug}
+                stockCount={idx.stock_count}
+                description={idx.description}
+                animationDelay={i * 80}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Action Required — full width */}
+      {(recommendations?.length ?? 0) > 0 && (
+        <section>
+          <SectionHeading>Action Required</SectionHeading>
+          <div className="space-y-2">
+            {recommendations?.slice(0, 5).map((rec) => (
+              <RecommendationRow
+                key={rec.ticker}
+                ticker={rec.ticker}
+                action={rec.action}
+                confidence={rec.confidence}
+                compositeScore={rec.composite_score * 10}
+                reasoning={getReasoningText(rec)}
+                isHeld={heldTickers.has(rec.ticker)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Portfolio Drawer */}
       <PortfolioDrawer
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        chatIsOpen={chatIsOpen}
       />
 
-      {/* Watchlist */}
+      {/* Watchlist — 4-col, 3-col when chat open */}
       <section>
         <SectionHeading
           action={
@@ -320,7 +463,10 @@ export default function DashboardPage() {
         </SectionHeading>
 
         {watchlistLoading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className={cn(
+            "grid grid-cols-1 gap-3 transition-all duration-300",
+            chatIsOpen ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          )}>
             {Array.from({ length: 4 }).map((_, i) => (
               <StockCardSkeleton key={i} />
             ))}
@@ -329,10 +475,28 @@ export default function DashboardPage() {
           <EmptyState
             icon={StarIcon}
             title="No stocks in your watchlist"
-            description="Search for a ticker above to start tracking stocks"
+            description="Search for a ticker above, or add a popular stock to get started"
+            action={
+              <div className="flex flex-wrap justify-center gap-2">
+                {["AAPL", "MSFT", "GOOGL", "NVDA", "TSLA"].map((ticker) => (
+                  <Button
+                    key={ticker}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleQuickAdd(ticker)}
+                    disabled={addingTickers.has(ticker)}
+                  >
+                    + {ticker}
+                  </Button>
+                ))}
+              </div>
+            }
           />
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className={cn(
+            "grid grid-cols-1 gap-3 transition-all duration-300",
+            chatIsOpen ? "sm:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+          )}>
             {filteredWatchlist.map((item, i) => (
               <StockCard
                 key={item.ticker}
@@ -356,6 +520,6 @@ export default function DashboardPage() {
           </div>
         )}
       </section>
-    </div>
+    </PageTransition>
   );
 }

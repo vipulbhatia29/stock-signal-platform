@@ -108,7 +108,7 @@ class TestStockSearch:
 
     @pytest.mark.asyncio
     async def test_search_by_ticker(self, authenticated_client: AsyncClient, db_url: str) -> None:
-        """Should find stocks by ticker prefix match."""
+        """Should find stocks by ticker prefix match. DB results come first."""
         await _insert_stock(db_url, ticker="AAPL", name="Apple Inc")
         await _insert_stock(db_url, ticker="AMZN", name="Amazon.com Inc")
 
@@ -116,8 +116,10 @@ class TestStockSearch:
         assert response.status_code == 200
 
         data = response.json()
-        assert len(data) == 1
+        assert len(data) >= 1
+        # DB result should be first, marked as in_db=True
         assert data[0]["ticker"] == "AAPL"
+        assert data[0]["in_db"] is True
 
     @pytest.mark.asyncio
     async def test_search_by_name(self, authenticated_client: AsyncClient, db_url: str) -> None:

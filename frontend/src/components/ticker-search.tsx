@@ -14,9 +14,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { SearchIcon, PlusCircleIcon } from "lucide-react";
 
-// Tickers are 1-5 uppercase alphanumeric chars (covers US equities + ETFs like BRK.B)
-const TICKER_RE = /^[A-Za-z0-9.]{1,6}$/;
-
 interface TickerSearchProps {
   onSelect: (ticker: string) => void;
 }
@@ -35,6 +32,9 @@ export function TickerSearch({ onSelect }: TickerSearchProps) {
   }, [query]);
 
   const { data: results, isLoading } = useStockSearch(debouncedQuery);
+
+  const dbResults = results?.filter((s) => s.in_db) ?? [];
+  const externalResults = results?.filter((s) => !s.in_db) ?? [];
 
   function handleSelect(ticker: string) {
     onSelect(ticker);
@@ -70,9 +70,10 @@ export function TickerSearch({ onSelect }: TickerSearchProps) {
             {!isLoading && debouncedQuery && (!results || results.length === 0) && (
               <CommandEmpty>No stocks found</CommandEmpty>
             )}
-            {results && results.length > 0 && (
-              <CommandGroup>
-                {results.map((stock) => (
+            {/* Stocks already in our database */}
+            {dbResults.length > 0 && (
+              <CommandGroup heading="In watchlist universe">
+                {dbResults.map((stock) => (
                   <CommandItem
                     key={stock.ticker}
                     value={stock.ticker}
@@ -98,29 +99,36 @@ export function TickerSearch({ onSelect }: TickerSearchProps) {
                 ))}
               </CommandGroup>
             )}
-            {/* Open-world: allow adding any valid ticker not yet in DB */}
-            {!isLoading &&
-              debouncedQuery &&
-              TICKER_RE.test(debouncedQuery) &&
-              !results?.some(
-                (s) => s.ticker === debouncedQuery.toUpperCase()
-              ) && (
-                <CommandGroup heading="Add new ticker">
+            {/* External results from Yahoo Finance — not yet in DB */}
+            {externalResults.length > 0 && (
+              <CommandGroup heading="Add from market">
+                {externalResults.map((stock) => (
                   <CommandItem
-                    value={`add-${debouncedQuery}`}
-                    onSelect={() => handleSelect(debouncedQuery.toUpperCase())}
+                    key={stock.ticker}
+                    value={`add-${stock.ticker}`}
+                    onSelect={() => handleSelect(stock.ticker)}
                     className="hover:bg-hov text-foreground"
                   >
-                    <PlusCircleIcon className="mr-2 size-4 text-muted-foreground" />
-                    <span>
-                      Add{" "}
-                      <span className="font-mono font-semibold">
-                        {debouncedQuery.toUpperCase()}
-                      </span>
-                    </span>
+                    <PlusCircleIcon className="mr-2 size-4 text-muted-foreground flex-shrink-0" />
+                    <div className="flex flex-1 items-center justify-between min-w-0">
+                      <div className="truncate">
+                        <span className="font-mono font-semibold">
+                          {stock.ticker}
+                        </span>
+                        <span className="ml-2 text-muted-foreground">
+                          {stock.name}
+                        </span>
+                      </div>
+                      {stock.exchange && (
+                        <span className="text-xs text-muted-foreground flex-shrink-0 ml-2">
+                          {stock.exchange}
+                        </span>
+                      )}
+                    </div>
                   </CommandItem>
-                </CommandGroup>
-              )}
+                ))}
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>
