@@ -217,6 +217,43 @@ For out-of-scope queries:
 }
 ```
 
+**User:** "How are my recommendations doing?"
+```json
+{
+  "intent": "portfolio",
+  "reasoning": "Scorecard: hit rate, alpha, and per-horizon accuracy of past recommendations.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "get_recommendation_scorecard", "params": {"user_id": "$USER_ID"}}
+  ]
+}
+```
+
+**User:** "Is AAPL's dividend safe?"
+```json
+{
+  "intent": "stock_analysis",
+  "reasoning": "Dividend sustainability check: payout ratio, FCF coverage, yield assessment.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "dividend_sustainability", "params": {"ticker": "AAPL"}}
+  ]
+}
+```
+
+**User:** "What are the risks with PLTR?"
+```json
+{
+  "intent": "stock_analysis",
+  "reasoning": "Risk narrative: signal strength, fundamentals, forecast confidence, sector context.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "ingest_stock", "params": {"ticker": "PLTR"}},
+    {"tool": "risk_narrative", "params": {"ticker": "PLTR"}}
+  ]
+}
+```
+
 Now plan the user's query:
 
 **User:** "{{query}}"
