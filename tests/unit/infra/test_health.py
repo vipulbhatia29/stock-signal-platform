@@ -15,13 +15,16 @@ async def simple_client() -> AsyncClient:
 
 
 async def test_health_check_returns_ok(simple_client: AsyncClient) -> None:
-    """GET /health should return {"status": "ok"}."""
-    response = await simple_client.get("/health")
+    """GET /api/v1/health should return status and version."""
+    response = await simple_client.get("/api/v1/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    data = response.json()
+    assert data["status"] in ("ok", "degraded")
+    assert "version" in data
+    assert "mcp_tools" in data
 
 
 async def test_health_check_is_unauthenticated(simple_client: AsyncClient) -> None:
     """Health check should not require authentication."""
-    response = await simple_client.get("/health")
+    response = await simple_client.get("/api/v1/health")
     assert response.status_code == 200

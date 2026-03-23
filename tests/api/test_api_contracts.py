@@ -224,7 +224,7 @@ class TestHeaders:
     @pytest.mark.asyncio
     async def test_no_server_version_leak(self, client: AsyncClient) -> None:
         """Response headers do not leak server version."""
-        resp = await client.get("/health")
+        resp = await client.get("/api/v1/health")
         server_header = resp.headers.get("server", "").lower()
         # Should not expose detailed version info
         assert "uvicorn" not in server_header or "version" not in server_header
@@ -232,5 +232,5 @@ class TestHeaders:
     @pytest.mark.asyncio
     async def test_health_endpoint_no_auth(self, client: AsyncClient) -> None:
         """Health endpoint does not require authentication."""
-        resp = await client.get("/health")
+        resp = await client.get("/api/v1/health")
         assert resp.status_code == 200
