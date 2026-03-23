@@ -950,3 +950,34 @@ Full database bootstrap (503 stocks, 1.24M prices, 514 models). 3 new seed scrip
 **stdio now, Streamable HTTP later.** The MCP protocol is transport-agnostic by design. stdio gives us the abstraction (any new app can consume tools via MCP) with zero latency overhead. When we deploy to cloud (Phase 6), we swap the transport config — tool definitions, schemas, and client code stay identical.
 
 ---
+
+## Session 50 — Phase 5.5 Complete + Phase 5.6 Refinement Complete
+
+**Date:** 2026-03-23
+**Branch:** `feat/KAN-120-refresh-token-blocklist` (merged), `feat/KAN-121-mcp-stdio-refinement`
+
+### Phase 5.5 — Security Hardening COMPLETE
+- **PR #79** squash-merged to develop, all CI green
+- Redis refresh token blocklist: JTI claim on refresh tokens, `backend/services/token_blocklist.py`
+- `decode_token()` returns `TokenPayload(user_id, jti)` dataclass (breaking interface change, all callers updated)
+- `/refresh` checks blocklist before issuing, blocklists old token after rotation
+- `/logout` blocklists refresh token from cookie
+- 12 new tests (6 unit blocklist + 5 API revocation + 1 JTI uniqueness)
+- KAN-118 Epic → Done, KAN-120 Story → Done, KAN-122-125 Subtasks → Done
+
+### Phase 5.6 — MCP stdio Refinement COMPLETE
+- Brainstorm: 11 architectural decisions approved (KAN-126)
+  - FastMCP server + `mcp` Python SDK client (both official Anthropic)
+  - `MCP_TOOLS=True` by default (CI always tests MCP path, flag = emergency kill switch)
+  - 3-restart fallback to direct calls + health endpoint + logging
+  - Pass `user_id` as explicit param (no ContextVar across process boundary)
+  - Real stdio integration tests (not just mocked)
+- Spec written: `docs/superpowers/specs/2026-03-23-phase-5.6-mcp-stdio-design.md` (16 sections)
+- Plan written: `docs/superpowers/plans/2026-03-23-phase-5.6-mcp-stdio-implementation.md` (6 stories, ~12h, ~34 tests)
+- JIRA: KAN-121 Refinement Story → Done, 5 implementation stories created (KAN-132-136), validation story KAN-131
+- Implementation deferred to next session
+
+### Resume Point
+Phase 5.6 implementation: start with S1 (KAN-132) + S2 (KAN-133) in parallel → S3 (KAN-134) → S4 (KAN-135) → S5 (KAN-136) → S6/KAN-131 (validation)
+
+---
