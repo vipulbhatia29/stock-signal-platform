@@ -18,6 +18,7 @@ from backend.routers import (
     auth,
     chat,
     forecasts,
+    health,
     indexes,
     portfolio,
     preferences,
@@ -177,14 +178,8 @@ app.add_middleware(
 )
 
 
-# --- Health Check ---
-@app.get("/health", tags=["system"])
-async def health_check() -> dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "ok"}
-
-
 # --- Routers ---
+app.include_router(health.router, prefix="/api/v1", tags=["system"])
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(indexes.router, prefix="/api/v1/indexes", tags=["indexes"])
 app.include_router(stocks.router, prefix="/api/v1/stocks", tags=["stocks"])
