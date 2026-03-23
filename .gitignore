@@ -73,3 +73,6 @@ tests/e2e/eval/results/*.json
 
 # Serialized model artifacts (Prophet .pkl files)
 data/models/prophet/*.pkl
+
+# Confidential documents
+*.pdf
