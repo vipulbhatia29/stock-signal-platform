@@ -187,6 +187,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # --- Shutdown ---
+    from backend.services.token_blocklist import close as close_blocklist
+
+    await close_blocklist()
     logger.info("Application shutting down")
 
 

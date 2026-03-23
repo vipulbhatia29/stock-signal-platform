@@ -1,8 +1,10 @@
 """Authentication endpoints: register, login, refresh, logout."""
 
+import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,10 +30,27 @@ from backend.schemas.auth import (
     UserRegisterRequest,
     UserRegisterResponse,
 )
+from backend.services.token_blocklist import add_to_blocklist, is_blocklisted
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 PASSWORD_PATTERN = re.compile(r"^(?=.*[A-Z])(?=.*\d).{8,}$")
+
+
+def _get_token_remaining_ttl(token: str) -> int:
+    """Get remaining TTL in seconds for a JWT token.
+
+    Decodes without verification (already validated by decode_token).
+    Returns 0 if the token is already expired.
+    """
+    import time
+
+    payload = jwt.get_unverified_claims(token)
+    exp = payload.get("exp", 0)
+    remaining = int(exp - time.time())
+    return max(remaining, 0)
 
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
@@ -165,12 +184,20 @@ async def refresh_token(
 ) -> TokenResponse:
     """Exchange a refresh token for a new token pair.
 
-    Sets updated httpOnly cookies alongside the JSON body response.
+    Validates the old token, checks the blocklist, issues new tokens,
+    and blocklists the old refresh token to prevent replay attacks.
     """
-    user_id = decode_token(body.refresh_token, expected_type="refresh")
+    token_payload = decode_token(body.refresh_token, expected_type="refresh")
+
+    # Check if the refresh token has been revoked
+    if token_payload.jti and await is_blocklisted(token_payload.jti):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has been revoked",
+        )
 
     # Verify user still exists and is active
-    result = await db.execute(select(User).where(User.id == user_id))
+    result = await db.execute(select(User).where(User.id == token_payload.user_id))
     user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:
@@ -182,6 +209,11 @@ async def refresh_token(
     access_token = create_access_token(user.id)
     new_refresh_token = create_refresh_token(user.id)
 
+    # Blocklist the old refresh token to prevent reuse
+    if token_payload.jti:
+        remaining_ttl = _get_token_remaining_ttl(body.refresh_token)
+        await add_to_blocklist(token_payload.jti, expires_in_seconds=remaining_ttl)
+
     _set_auth_cookies(response, access_token, new_refresh_token)
 
     return TokenResponse(
@@ -192,10 +224,22 @@ async def refresh_token(
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(response: Response) -> None:
-    """Log out by clearing httpOnly auth cookies.
+async def logout(request: Request, response: Response) -> None:
+    """Log out by clearing auth cookies and revoking the refresh token.
 
     This endpoint does not require authentication — clearing cookies
     is safe even if the user is already logged out.
     """
+    # Try to blocklist the refresh token if present
+    refresh_token_value = request.cookies.get(COOKIE_REFRESH_TOKEN)
+    if refresh_token_value:
+        try:
+            token_payload = decode_token(refresh_token_value, expected_type="refresh")
+            if token_payload.jti:
+                remaining_ttl = _get_token_remaining_ttl(refresh_token_value)
+                await add_to_blocklist(token_payload.jti, expires_in_seconds=remaining_ttl)
+        except HTTPException:
+            # Token already expired or invalid — nothing to blocklist
+            pass
+
     _clear_auth_cookies(response)

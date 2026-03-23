@@ -1,6 +1,30 @@
 """Tests for authentication endpoints."""
 
+from unittest.mock import AsyncMock, patch
+
+import pytest
 from httpx import AsyncClient
+
+
+@pytest.fixture(autouse=True)
+def _mock_blocklist():
+    """Mock Redis blocklist for all auth API tests to avoid real Redis calls."""
+    with (
+        patch(
+            "backend.routers.auth.is_blocklisted",
+            new_callable=AsyncMock,
+            return_value=False,
+        ) as mock_check,
+        patch(
+            "backend.routers.auth.add_to_blocklist",
+            new_callable=AsyncMock,
+        ) as mock_add,
+        patch(
+            "backend.services.token_blocklist._get_redis",
+            return_value=AsyncMock(),
+        ),
+    ):
+        yield {"is_blocklisted": mock_check, "add_to_blocklist": mock_add}
 
 
 class TestRegister:
@@ -250,3 +274,106 @@ class TestLogout:
         """Logout works even without being logged in (idempotent)."""
         response = await client.post("/api/v1/auth/logout")
         assert response.status_code == 204
+
+
+class TestTokenRevocation:
+    """Tests for refresh token revocation via Redis blocklist."""
+
+    async def _register_and_login(self, client: AsyncClient, email: str) -> dict:
+        """Helper: register + login and return tokens."""
+        password = "ValidPass1"
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": email, "password": password},
+        )
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"email": email, "password": password},
+        )
+        return response.json()
+
+    async def test_refresh_blocklists_old_token(
+        self, client: AsyncClient, _mock_blocklist: dict
+    ) -> None:
+        """Refreshing should blocklist the old refresh token JTI."""
+        tokens = await self._register_and_login(client, "revoke1@test.com")
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": tokens["refresh_token"]},
+        )
+        assert response.status_code == 200
+        # Old token should have been blocklisted
+        _mock_blocklist["add_to_blocklist"].assert_called()
+
+    async def test_refresh_with_revoked_token_returns_401(
+        self, client: AsyncClient, _mock_blocklist: dict
+    ) -> None:
+        """Using a blocklisted refresh token should return 401."""
+        tokens = await self._register_and_login(client, "revoke2@test.com")
+
+        # Simulate: token is blocklisted
+        _mock_blocklist["is_blocklisted"].return_value = True
+
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": tokens["refresh_token"]},
+        )
+        assert response.status_code == 401
+        assert "revoked" in response.json()["detail"].lower()
+
+    async def test_refresh_token_rotation_invalidates_old(
+        self, client: AsyncClient, _mock_blocklist: dict
+    ) -> None:
+        """After refresh, old token should be blocked and new token valid."""
+        tokens = await self._register_and_login(client, "rotate@test.com")
+        old_refresh = tokens["refresh_token"]
+
+        # First refresh succeeds
+        resp1 = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": old_refresh},
+        )
+        assert resp1.status_code == 200
+        new_tokens = resp1.json()
+
+        # Simulate blocklist: old token now blocked
+        _mock_blocklist["is_blocklisted"].return_value = True
+
+        # Old token should fail
+        resp2 = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": old_refresh},
+        )
+        assert resp2.status_code == 401
+
+        # New token should work
+        _mock_blocklist["is_blocklisted"].return_value = False
+        resp3 = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": new_tokens["refresh_token"]},
+        )
+        assert resp3.status_code == 200
+
+    async def test_logout_blocklists_refresh_token(
+        self, client: AsyncClient, _mock_blocklist: dict
+    ) -> None:
+        """Logout with a valid refresh token cookie should blocklist it."""
+        tokens = await self._register_and_login(client, "logout_bl@test.com")
+
+        response = await client.post(
+            "/api/v1/auth/logout",
+            cookies={"refresh_token": tokens["refresh_token"]},
+        )
+        assert response.status_code == 204
+        _mock_blocklist["add_to_blocklist"].assert_called()
+
+    async def test_logout_without_refresh_token_still_clears_cookies(
+        self, client: AsyncClient
+    ) -> None:
+        """Logout without a refresh token cookie still clears cookies gracefully."""
+        response = await client.post("/api/v1/auth/logout")
+        assert response.status_code == 204
+        set_cookie_headers = response.headers.get_list("set-cookie")
+        cookie_names = [h.split("=")[0] for h in set_cookie_headers]
+        assert "access_token" in cookie_names
+        assert "refresh_token" in cookie_names
