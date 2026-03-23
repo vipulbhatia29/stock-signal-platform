@@ -53,6 +53,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from backend.tools.compute_signals_tool import ComputeSignalsTool
     from backend.tools.dividend_sustainability import DividendSustainabilityTool
     from backend.tools.earnings_history_tool import EarningsHistoryTool
+    from backend.tools.forecast_tools import (
+        CompareStocksTool,
+        GetForecastTool,
+        GetPortfolioForecastTool,
+        GetSectorForecastTool,
+    )
     from backend.tools.fundamentals_tool import FundamentalsTool
     from backend.tools.geopolitical import GeopoliticalEventsTool
     from backend.tools.ingest_stock_tool import IngestStockTool
@@ -81,6 +87,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         AnalystTargetsTool,
         EarningsHistoryTool,
         CompanyProfileTool,
+        GetForecastTool,
+        GetSectorForecastTool,
+        GetPortfolioForecastTool,
+        CompareStocksTool,
         GetRecommendationScorecardTool,
         DividendSustainabilityTool,
         RiskNarrativeTool,
