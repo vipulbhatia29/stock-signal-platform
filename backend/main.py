@@ -43,69 +43,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from backend.agents.providers.groq import GroqProvider
     from backend.agents.stock_agent import StockAgent
     from backend.mcp_server.server import create_mcp_app
-    from backend.tools.adapters.alpha_vantage import AlphaVantageAdapter
-    from backend.tools.adapters.edgar import EdgarAdapter
-    from backend.tools.adapters.finnhub import FinnhubAdapter
-    from backend.tools.adapters.fred import FredAdapter
-    from backend.tools.analyst_targets_tool import AnalystTargetsTool
-    from backend.tools.analyze_stock import AnalyzeStockTool
-    from backend.tools.company_profile_tool import CompanyProfileTool
-    from backend.tools.compute_signals_tool import ComputeSignalsTool
-    from backend.tools.dividend_sustainability import DividendSustainabilityTool
-    from backend.tools.earnings_history_tool import EarningsHistoryTool
-    from backend.tools.forecast_tools import (
-        CompareStocksTool,
-        GetForecastTool,
-        GetPortfolioForecastTool,
-        GetSectorForecastTool,
-    )
-    from backend.tools.fundamentals_tool import FundamentalsTool
-    from backend.tools.geopolitical import GeopoliticalEventsTool
-    from backend.tools.ingest_stock_tool import IngestStockTool
-    from backend.tools.portfolio_exposure import PortfolioExposureTool
-    from backend.tools.recommendations_tool import RecommendationsTool
-    from backend.tools.registry import ToolRegistry
-    from backend.tools.risk_narrative import RiskNarrativeTool
-    from backend.tools.scorecard_tool import GetRecommendationScorecardTool
-    from backend.tools.screen_stocks import ScreenStocksTool
-    from backend.tools.search_stocks_tool import SearchStocksTool
-    from backend.tools.web_search import WebSearchTool
+    from backend.tools.build_registry import build_registry
 
-    # 1. Tool Registry — register internal tools
-    registry = ToolRegistry()
-    for tool_cls in [
-        AnalyzeStockTool,
-        PortfolioExposureTool,
-        ScreenStocksTool,
-        ComputeSignalsTool,
-        RecommendationsTool,
-        WebSearchTool,
-        GeopoliticalEventsTool,
-        SearchStocksTool,
-        IngestStockTool,
-        FundamentalsTool,
-        AnalystTargetsTool,
-        EarningsHistoryTool,
-        CompanyProfileTool,
-        GetForecastTool,
-        GetSectorForecastTool,
-        GetPortfolioForecastTool,
-        CompareStocksTool,
-        GetRecommendationScorecardTool,
-        DividendSustainabilityTool,
-        RiskNarrativeTool,
-    ]:
-        registry.register(tool_cls())
-
-    # 2. MCP adapter tools — 4 external data sources
-    for adapter in [
-        EdgarAdapter(),
-        AlphaVantageAdapter(api_key=settings.ALPHA_VANTAGE_API_KEY or ""),
-        FredAdapter(api_key=settings.FRED_API_KEY or ""),
-        FinnhubAdapter(api_key=settings.FINNHUB_API_KEY or ""),
-    ]:
-        registry.register_mcp(adapter)
-
+    # 1. Tool Registry — build with all internal tools + MCP adapters
+    registry = build_registry()
     logger.info("ToolRegistry ready: %d tools registered", len(registry.discover()))
 
     # 3. LLM client with provider fallback chain

@@ -5,10 +5,12 @@ All internal tools inherit from BaseTool. External MCP tools are wrapped as Prox
 
 from __future__ import annotations
 
+import json
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import date, datetime, timedelta
+from decimal import Decimal
 from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel
@@ -25,6 +27,31 @@ class CachePolicy:
     backend: Literal["redis"] = "redis"
 
 
+def _json_serializer(obj: Any) -> Any:
+    """Custom JSON serializer for types not handled by default encoder.
+
+    Handles datetime, date, Decimal, and set objects.
+
+    Args:
+        obj: The object to serialize.
+
+    Returns:
+        A JSON-serializable representation.
+
+    Raises:
+        TypeError: If the object type is not supported.
+    """
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, date):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    if isinstance(obj, set):
+        return sorted(obj)
+    raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
+
+
 @dataclass
 class ToolResult:
     """Result of a tool execution."""
@@ -32,6 +59,39 @@ class ToolResult:
     status: Literal["ok", "degraded", "timeout", "error"]
     data: Any = None
     error: str | None = None
+
+    def to_json(self) -> str:
+        """Serialize this ToolResult to a JSON string.
+
+        Handles non-serializable types: datetime/date to ISO string,
+        Decimal to float, set to sorted list.
+
+        Returns:
+            A JSON string representation of this ToolResult.
+        """
+        payload = {
+            "status": self.status,
+            "data": self.data,
+            "error": self.error,
+        }
+        return json.dumps(payload, default=_json_serializer)
+
+    @classmethod
+    def from_json(cls, text: str) -> ToolResult:
+        """Deserialize a ToolResult from a JSON string.
+
+        Args:
+            text: JSON string previously produced by ``to_json()``.
+
+        Returns:
+            A new ToolResult instance.
+        """
+        payload = json.loads(text)
+        return cls(
+            status=payload["status"],
+            data=payload.get("data"),
+            error=payload.get("error"),
+        )
 
 
 @dataclass(frozen=True)
