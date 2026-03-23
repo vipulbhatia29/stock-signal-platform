@@ -7,9 +7,14 @@ category: architecture
 
 ## Entry Points
 
-- `backend/tasks/__init__.py` — Celery app factory, imports all task modules
-- `backend/tasks/signals.py` — nightly signal computation tasks
+- `backend/tasks/__init__.py` — Celery app factory, imports all task modules, beat schedule
+- `backend/tasks/market_data.py` — nightly signal + price computation tasks
 - `backend/tasks/portfolio.py` — daily portfolio snapshot task
+- `backend/tasks/pipeline.py` — PipelineRunner, watermark, gap detection, retry (Phase 5)
+- `backend/tasks/forecasting.py` — Prophet retrain/refresh tasks (Phase 5)
+- `backend/tasks/evaluation.py` — forecast eval, drift detection, recommendation eval (Phase 5)
+- `backend/tasks/alerts.py` — alert generation from pipeline events (Phase 5)
+- `backend/tasks/recommendations.py` — nightly recommendation generation (Phase 5)
 
 ## Running Celery
 

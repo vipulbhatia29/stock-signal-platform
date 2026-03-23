@@ -493,10 +493,10 @@ Self-healing nightly pipeline, Prophet forecasting (stocks + sector ETFs + portf
 - [x] **S5 (KAN-111):** Forecast + Recommendation Evaluation + Drift Detection (~3h) ✓ Session 46, PR #58
 - [x] **S6 (KAN-112):** In-App Alerts Backend + API (~3h) ✓ Session 46, PR #60
 - [x] **S7 (KAN-113):** Forecast + Scorecard API Endpoints (~2h) ✓ Session 46, PR #59
-- [ ] **S8 (KAN-114):** Agent Tools — Forecast + Comparison + Entity Registry (~4h)
-- [ ] **S9 (KAN-115):** Agent Tools — Scorecard + Sustainability + Risk (~3h)
-- [ ] **S10 (KAN-116):** Frontend — Forecast Card + Dashboard Tiles (~3h)
-- [ ] **S11 (KAN-117):** Frontend — Scorecard Modal + Alert Bell + Sectors ETF (~2h)
+- [x] **S8 (KAN-114):** Agent Tools — Forecast + Comparison + Entity Registry (~4h) ✓ Session 47, PR #62
+- [x] **S9 (KAN-115):** Agent Tools — Scorecard + Sustainability + Risk (~3h) ✓ Session 47, PR #63
+- [x] **S10 (KAN-116):** Frontend — Forecast Card + Dashboard Tiles (~3h) ✓ Session 47, PR #64
+- [x] **S11 (KAN-117):** Frontend — Scorecard Modal + Alert Bell + Sectors ETF (~2h) ✓ Session 47, PR #65
 
 ### Key Architecture Decisions (from Session 45 brainstorm)
 - Stock-level Prophet forecasts + 11 SPDR sector ETFs; portfolio forecast derived by weighted aggregation with correlation-based confidence bands
