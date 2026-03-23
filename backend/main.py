@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from backend.tools.analyze_stock import AnalyzeStockTool
     from backend.tools.company_profile_tool import CompanyProfileTool
     from backend.tools.compute_signals_tool import ComputeSignalsTool
+    from backend.tools.dividend_sustainability import DividendSustainabilityTool
     from backend.tools.earnings_history_tool import EarningsHistoryTool
     from backend.tools.fundamentals_tool import FundamentalsTool
     from backend.tools.geopolitical import GeopoliticalEventsTool
@@ -58,6 +59,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from backend.tools.portfolio_exposure import PortfolioExposureTool
     from backend.tools.recommendations_tool import RecommendationsTool
     from backend.tools.registry import ToolRegistry
+    from backend.tools.risk_narrative import RiskNarrativeTool
+    from backend.tools.scorecard_tool import GetRecommendationScorecardTool
     from backend.tools.screen_stocks import ScreenStocksTool
     from backend.tools.search_stocks_tool import SearchStocksTool
     from backend.tools.web_search import WebSearchTool
@@ -78,6 +81,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         AnalystTargetsTool,
         EarningsHistoryTool,
         CompanyProfileTool,
+        GetRecommendationScorecardTool,
+        DividendSustainabilityTool,
+        RiskNarrativeTool,
     ]:
         registry.register(tool_cls())
 
