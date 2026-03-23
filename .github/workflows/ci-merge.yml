@@ -3,6 +3,8 @@ name: ci-merge
 on:
   push:
     branches: [develop, main]
+  pull_request:
+    branches: [main]
 
 concurrency:
   group: ci-merge-${{ github.ref }}
