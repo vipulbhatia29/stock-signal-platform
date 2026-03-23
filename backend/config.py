@@ -53,6 +53,7 @@ class Settings(BaseSettings):
 
     # --- Agent ---
     AGENT_V2: bool = False  # Feature flag: Plan→Execute→Synthesize agent
+    MCP_TOOLS: bool = True  # MCP stdio transport for agent tool calls (kill switch: set False)
 
     # --- Logging ---
     LOG_LEVEL: str = "INFO"
