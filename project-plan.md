@@ -534,34 +534,95 @@ Fixed, tests added, security re-audit clean. Dependencies: Phase 4E complete.
 
 ---
 
+## Phase 5.6: MCP-First Tool Architecture (stdio)
+
+### Goal
+Refactor the agent to consume tools via MCP protocol (stdio transport) instead of direct in-process Python calls. This establishes the MCP abstraction now so that any future app (mobile, Telegram bot, Slack integration) can consume the same tools without reimplementing discovery/calling logic. The transport swaps to Streamable HTTP in Phase 6 with zero tool/schema changes.
+
+### Architecture Decision (Session 49)
+
+**Current (monolith):**
+```
+Chat Agent → ToolRegistry → tool.execute()  [in-process, direct Python calls]
+MCP Server (/mcp) → ToolRegistry → tool.execute()  [parallel, unused by agent]
+```
+
+**Phase 5.6 (stdio MCP):**
+```
+Chat Agent → MCP Client → stdio → MCP Tool Server (subprocess, same machine)
+Celery tasks → direct calls (no MCP, keep simple)
+Claude Code → /mcp endpoint (already works, Streamable HTTP)
+```
+
+**Phase 6 (Streamable HTTP MCP):**
+```
+Chat Agent → MCP Client → HTTP → MCP Tool Server (separate container, :8282)
+Celery tasks → MCP Client → HTTP → MCP Tool Server (same endpoint)
+Claude Code / Telegram / Mobile → MCP Client → HTTP → MCP Tool Server
+```
+
+**Key insight:** stdio and Streamable HTTP are independent transport decisions. The tool definitions, schemas, client calls, and auth stay identical across both. Only the transport config changes.
+
+### Deliverables
+
+1. **MCP Tool Server (stdio mode)** — standalone script that registers all 20 tools from ToolRegistry and serves via stdio transport. Own DB connection pool.
+2. **MCP Client in agent** — agent executor calls tools via MCP client instead of `tool.execute()`. Planner/Synthesizer unchanged.
+3. **Lifespan management** — FastAPI lifespan spawns stdio subprocess, manages lifecycle.
+4. **Celery stays direct** — background tasks (nightly pipeline) continue calling tools in-process. No MCP overhead for batch jobs.
+5. **New tools built MCP-first** — any Phase 4D.1 or future tools register in the MCP Tool Server from day one.
+6. **Tests** — verify agent works identically via MCP stdio as via direct calls. Integration test for tool server lifecycle.
+
+### Trade-offs
+
+| Aspect | Direct (current) | stdio MCP (Phase 5.6) | HTTP MCP (Phase 6) |
+|--------|------------------|----------------------|---------------------|
+| Latency | ~0 (in-process) | ~0 (local pipes) | ~1-5ms (network) |
+| Process model | Single process | Subprocess | Separate container |
+| DB access | Shared session factory | Own connection pool | Own connection pool |
+| New client apps | Reimplement tool calls | Connect via MCP | Connect via MCP |
+| Scaling | Monolith | Monolith | Independent scaling |
+
+### Success Criteria
+- Agent produces identical responses via stdio MCP as via direct calls
+- Tool server subprocess starts/stops cleanly with FastAPI lifespan
+- All existing tests pass (no regression)
+- New tools can be added to Tool Server only and agent discovers them automatically
+
+### Dependencies
+Phase 5.5 (security) should be done first. No cloud infrastructure needed.
+
+---
+
 ## Phase 6: Deployment + LLMOps (Weeks 11-12)
 
 ### Goal
-Deploy to cloud and add LLM observability/gateway.
+Deploy to cloud, swap MCP transport from stdio to Streamable HTTP, add LLM observability/gateway.
 
 ### Deliverables
-1. **Docker Compose** updated with all services containerized
-2. **Terraform** for cloud deployment:
-   - Container Apps (API, workers, frontend)
+1. **Docker Compose** updated with all services containerized (including MCP Tool Server as separate container)
+2. **MCP transport swap** — change agent's MCP client from stdio to Streamable HTTP. Tool Server runs as its own container on :8282. Single config change, no tool/schema changes.
+3. **Terraform** for cloud deployment:
+   - Container Apps (API, workers, frontend, **MCP Tool Server**)
    - Managed PostgreSQL + TimescaleDB
    - Managed Redis
    - Container Registry
-3. **`deploy.yml`** — wire actual deployment (currently a stub)
-4. **LLMOps / Gateway:**
+4. **`deploy.yml`** — wire actual deployment (currently a stub)
+5. **LLMOps / Gateway:**
    - LiteLLM or custom gateway for centralized LLM routing
    - Observability dashboard (token usage, cost, latency per provider)
    - Prompt versioning
    - A/B testing between providers
    - Auto-routing based on query complexity
-5. **Observability:**
+6. **Observability:**
    - structlog JSON logging throughout
    - OpenTelemetry instrumentation on FastAPI + Celery
    - Cloud monitoring integration
-6. **Tier 2 MCP integrations:**
+7. **Tier 2 MCP integrations** (external MCP servers, always Streamable HTTP):
    - Unusual Whales MCP (options flow, dark pool, congressional trading)
    - Polygon.io MCP (broader market data)
+8. **Celery → MCP** — background tasks also call tools via Streamable HTTP MCP (optional, enables independent scaling)
 
 ### Success Criteria
-App running in cloud, LLM gateway with cost tracking, Tier 2 data integrations live.
+App running in cloud, MCP Tool Server as separate container, LLM gateway with cost tracking, Tier 2 data integrations live. Any new client app (Telegram, mobile) can connect to MCP Tool Server and use all 20+ tools.
 
-**Note:** MCP server (`/mcp`) and CI/CD pipeline already implemented in Phase 4B/4.5.
+**Note:** MCP server (`/mcp`) and CI/CD pipeline already implemented in Phase 4B/4.5. Phase 5.6 establishes the MCP abstraction; this phase changes the transport.

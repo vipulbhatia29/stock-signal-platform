@@ -604,9 +604,9 @@ async def get_signal_service(
 
 ### 5.1 Three-Layer Architecture
 
-Layer 1: Consume external MCPs (EdgarTools, Alpha Vantage, FRED, Finnhub, GDELT)
+Layer 1: Consume external data sources (EdgarTools, Alpha Vantage, FRED, Finnhub — via API wrapper adapters, not MCP protocol)
 Layer 2: Enrich in backend (Tool Registry + caching + cross-source analysis)
-Layer 3: Expose as MCP server at `/mcp` (Streamable HTTP, JWT auth)
+Layer 3: Expose as MCP server at `/mcp` (Streamable HTTP, JWT auth) — currently for external clients only; agent uses direct calls until Phase 5.6 (stdio MCP refactor)
 
 ### 5.2 Tool Registry
 
@@ -1323,38 +1323,70 @@ def stock_factory(db_session):
 
 ---
 
-## 12. MCP Server Design (Phase 4B — pulled forward from Phase 6)
+## 12. MCP Architecture — Transport Evolution (Phase 4B → 5.6 → 6)
 
-> **Phase change:** Originally Phase 6. Pulled forward to Phase 4B because the Tool Registry is the same abstraction the MCP server exposes — minimal incremental effort. Full design: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md` §10.
+> **History:** MCP server pulled forward from Phase 6 to Phase 4B (same Tool Registry abstraction). Phase 5.6 refactors the agent to consume tools via MCP protocol (stdio). Phase 6 swaps transport to Streamable HTTP for cloud deployment.
 
-### 12.1 Single MCP Server
+### 12.1 Single MCP Tool Server
 
-One MCP server exposes ALL Tool Registry tools (not one server per tool group):
+One server exposes ALL Tool Registry tools (not one server per tool group):
 
 ```python
 # backend/mcp_server/server.py
 from fastmcp import FastMCP
 
-mcp = FastMCP("stock-signal-platform")
+mcp = FastMCP("StockSignal Intelligence Platform")
 
 # Tools auto-registered from ToolRegistry — not hardcoded here
-for tool in registry.discover():
-    mcp.register_tool(tool.name, tool.description, tool.parameters, tool.execute)
+for tool_info in registry.discover():
+    tool = registry.get(tool_info.name)
+    _register_tool(mcp, tool_info.name, tool_info.description, tool)
 ```
 
-### 12.2 Transport
+### 12.2 Transport Strategy
 
-**Streamable HTTP** — mounted on FastAPI at `/mcp`:
-- Single endpoint supports request-response AND SSE streaming
-- Authenticated via JWT (same as REST API)
-- Clients: Claude Code, Cursor, future mobile/Slack bots
+**Phase 5.6 — stdio (local, zero latency):**
+- MCP Tool Server runs as subprocess, spawned by FastAPI lifespan
+- Agent executor calls tools via MCP client over stdio pipes
+- Celery tasks stay direct (no MCP overhead for batch jobs)
+- `/mcp` endpoint remains for external clients (Claude Code, Cursor)
 
 ```
 FastAPI (port 8181)
   ├── /api/v1/...          ← REST API
   ├── /api/v1/chat/stream  ← chatbot (NDJSON)
-  └── /mcp                 ← MCP server (Streamable HTTP)
+  ├── /mcp                 ← MCP server (Streamable HTTP, external clients)
+  └── spawns: MCP Tool Server (stdio subprocess, internal agent use)
 ```
+
+**Phase 6 — Streamable HTTP (cloud, multi-client):**
+- MCP Tool Server runs as separate container on :8282
+- Agent, Celery, and all clients connect via Streamable HTTP
+- Single config change (transport URL), no tool/schema changes
+
+```
+MCP Tool Server (:8282)         ← separate container
+  └── 20+ tools, own DB pool, JWT auth
+
+FastAPI (:8181)                  ← API + agent container
+  ├── /api/v1/...
+  ├── /api/v1/chat/stream
+  └── Agent → MCP Client → HTTP → :8282
+
+External clients (Claude Code, Telegram, mobile)
+  └── MCP Client → HTTP → :8282
+```
+
+### 12.3 Current State (Phase 4B/4D)
+
+The agent currently calls tools via **direct in-process Python calls** (`tool.execute(params)`). The `/mcp` Streamable HTTP endpoint exists and works but is only used by external MCP clients — the agent does not go through it. The "MCPAdapter" classes (EdgarAdapter, AlphaVantageAdapter, etc.) are plain API wrappers, not actual MCP clients.
+
+### 12.4 Authentication
+
+- JWT-based (same tokens as REST API)
+- `MCPAuthMiddleware` in `backend/mcp_server/auth.py` validates Bearer token
+- stdio transport (Phase 5.6): no auth needed (same-machine subprocess)
+- Streamable HTTP (Phase 6): JWT required for all clients
 
 ---
 

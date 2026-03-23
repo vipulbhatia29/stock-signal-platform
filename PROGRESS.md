@@ -907,46 +907,46 @@ Phase 4F complete (9/9): KAN-94 Sectors Page — 3 backend endpoints, 6 schemas,
 
 ---
 
-## Session 48 — Data Bootstrap + Pipeline Wiring + Documentation
+## Session 48 — Data Bootstrap + Pipeline Wiring + Documentation *(compact)*
+
+**Date:** 2026-03-23 | **Branch:** `fix/pandas-html-flavor`
+Full database bootstrap (503 stocks, 1.24M prices, 514 models). 3 new seed scripts. Nightly pipeline 3→8 steps. README + Mermaid docs for TDD/FSD. `pd.read_html` flavor fix.
+
+---
+
+## Session 49 — README Overhaul + Branch Cleanup + MCP Architecture Decision
 
 **Date:** 2026-03-23
-**Branch:** `fix/pandas-html-flavor`
+**Branch:** `docs/readme-overhaul`, `docs/mcp-architecture-decision`
 
 ### What was done
 
-1. **Full database bootstrap** — ran all seed scripts in dependency order:
-   - 503 S&P 500 stocks, 12 ETFs, 1.24M price rows, 514 signal snapshots
-   - 620 index memberships (S&P 500 + NASDAQ-100 + Dow 30)
-   - 515 fundamentals enriched, 50,212 dividend records, 514 Prophet models, 1,542 forecasts
+1. **README.md comprehensive overhaul** (PR #72 → develop, PR #74 → main):
+   - Rewrote from dev-focused setup guide to full product overview
+   - Added: target audience, features breakdown (signal engine, AI agent, forecasting, portfolio tracker, screener, nightly pipeline, alerts), data sources table, tech stack, system requirements, API keys reference, architecture Mermaid diagram, 16 API endpoints, configuration reference
+   - Screenshots table (dashboard, screener, stock detail)
 
-2. **3 new seed scripts** written and executed:
-   - `scripts/seed_fundamentals.py` — P/E, Piotroski, analyst data, earnings (idempotent upsert)
-   - `scripts/seed_dividends.py` — dividend payment history (ON CONFLICT DO NOTHING)
-   - `scripts/seed_forecasts.py` — Prophet training + 90/180/270d predictions
+2. **Branch cleanup** — deleted 30 stale remote branches from past PRs. Only `main` and `develop` remain (locally + remotely).
 
-3. **Nightly pipeline chain expanded** from 3 → 8 steps:
-   - Added: forecast refresh, forecast evaluation, recommendation evaluation, drift detection, alert generation
-   - All tasks handle empty data gracefully (no-op until 30-90 days pass)
+3. **develop ↔ main sync** (PR #75) — back-merged 4 squash-merge commits from main into develop. Resolved README divergence.
 
-4. **Bug fix:** `pd.read_html(flavor="html.parser")` → `flavor="lxml"` (pandas deprecated `html.parser` as a flavor)
+4. **Removed accidental PDF** (PR #76 → develop, PR #77 → main) — `Sigmoid - Pfizer - Architecture Best Practices & Production Audit.pdf` removed, `*.pdf` added to `.gitignore`.
 
-5. **README.md created** with bootstrap guide, nightly pipeline docs, manual trigger commands, 3 Mermaid diagrams
-
-6. **TDD.md updated** with 7 Mermaid diagrams: system architecture, ERD, agent V2 state machine, Celery architecture, JWT auth flow, frontend component tree, CI/CD pipeline
-
-7. **FSD.md updated** with 2 Mermaid diagrams: signal computation pipeline, Prophet forecasting pipeline
+5. **MCP architecture decision** — deliberated stdio vs Streamable HTTP transport for tool consumption:
+   - **Current state:** Agent calls tools via direct in-process Python calls. `/mcp` endpoint exists but only for external clients. "MCPAdapter" classes are plain API wrappers, not real MCP.
+   - **Decision:** Phase 5.6 introduces stdio MCP (agent → subprocess tool server, zero latency). Phase 6 swaps to Streamable HTTP (separate container, multi-client). Celery stays direct until Phase 6.
+   - Updated `project-plan.md` with Phase 5.6 (full deliverables, trade-off table, success criteria)
+   - Updated `docs/TDD.md` Section 12 (transport evolution: Phase 4B → 5.6 → 6, current state clarification, auth strategy)
+   - Updated `docs/TDD.md` Section 5.1 (corrected Layer 1 description — adapters are API wrappers, not MCP clients)
 
 ### Files Changed
-- `scripts/seed_fundamentals.py` — NEW
-- `scripts/seed_dividends.py` — NEW
-- `scripts/seed_forecasts.py` — NEW
-- `README.md` — NEW
-- `backend/tasks/market_data.py` — nightly chain 3→8 steps
-- `scripts/sync_sp500.py` — html.parser → lxml fix
-- `scripts/sync_indexes.py` — html.parser → lxml fix
-- `docs/TDD.md` — 7 Mermaid diagrams, status update
-- `docs/FSD.md` — 2 Mermaid diagrams, status update
-- `project-plan.md` — session 48 entry
-- `PROGRESS.md` — session 48 entry
+- `README.md` — comprehensive overhaul
+- `.gitignore` — added `*.pdf`
+- `project-plan.md` — Phase 5.6 (MCP stdio) added, Phase 6 updated with MCP transport swap
+- `docs/TDD.md` — Section 5.1 corrected, Section 12 rewritten for transport evolution
+- `PROGRESS.md` — session 49 entry, session 48 compacted
+
+### Key Architecture Decision
+**stdio now, Streamable HTTP later.** The MCP protocol is transport-agnostic by design. stdio gives us the abstraction (any new app can consume tools via MCP) with zero latency overhead. When we deploy to cloud (Phase 6), we swap the transport config — tool definitions, schemas, and client code stay identical.
 
 ---
