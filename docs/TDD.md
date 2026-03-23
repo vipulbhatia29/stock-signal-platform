@@ -2,9 +2,9 @@
 
 ## Stock Signal Platform
 
-**Version:** 1.0
+**Version:** 1.1
 **Date:** March 2026
-**Status:** Living Document (Phase 1-4G complete, 4C.1 done, 4F/5/6 planned)
+**Status:** Living Document — Phase 1-5 complete, Phase 5.5/6 planned
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -22,71 +22,179 @@ does it.
 
 ### 2.1 High-Level Overview
 
+```mermaid
+graph TB
+    subgraph Clients
+        NextJS["Next.js SPA<br/>:3000"]
+        MCP_Client["MCP Clients<br/>(Claude Code, Cursor)"]
+    end
+
+    subgraph FastAPI["FastAPI Application :8181"]
+        direction TB
+        MW["Middleware<br/>CORS | JWT Auth | Rate Limit | Request ID"]
+
+        subgraph Routers
+            R_Auth["/auth"]
+            R_Stocks["/stocks"]
+            R_Portfolio["/portfolio"]
+            R_Chat["/chat/stream"]
+            R_Forecast["/forecasts"]
+            R_Alerts["/alerts"]
+            R_MCP["/mcp"]
+        end
+
+        subgraph Tools["Tool Layer (20 internal tools)"]
+            T_Market["market_data"]
+            T_Signals["signals"]
+            T_Fund["fundamentals"]
+            T_Forecast["forecasting"]
+            T_Portfolio["portfolio"]
+            T_Recs["recommendations"]
+            T_Divs["dividends"]
+            T_Risk["risk_narrative"]
+        end
+
+        subgraph Agents["Agent Layer"]
+            TR["ToolRegistry"]
+            AG_V2["Agent V2<br/>Plan→Execute→Synthesize"]
+            ER["EntityRegistry"]
+            LLM["LLMClient<br/>Groq→Claude→Local"]
+        end
+    end
+
+    subgraph Storage
+        PG[("PostgreSQL<br/>+ TimescaleDB<br/>:5433")]
+        Redis[("Redis 7<br/>:6380")]
+    end
+
+    subgraph Background["Celery Worker + Beat"]
+        CW["Worker"]
+        CB["Beat Scheduler"]
+    end
+
+    subgraph External["External APIs"]
+        YF["yfinance"]
+        FRED["FRED API"]
+        Groq["Groq / Claude API"]
+    end
+
+    NextJS -->|HTTP/SSE| MW
+    MCP_Client -->|Streamable HTTP| R_MCP
+    MW --> Routers
+    Routers --> Tools
+    Routers --> Agents
+    Agents --> TR --> Tools
+    Agents --> LLM --> Groq
+    Tools --> PG
+    Tools --> YF
+    Tools --> FRED
+    CB -->|schedule| CW
+    CW --> Tools
+    CW --> Redis
+    Redis -.->|broker + cache| CW
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                        CLIENTS                                │
-│  ┌─────────────┐  ┌──────────────┐  ┌────────────────────┐  │
-│  │ Next.js SPA │  │ Telegram Bot │  │ MCP Clients (Ph 6) │  │
-│  │ (port 3000) │  │              │  │                    │  │
-│  └──────┬──────┘  └──────┬───────┘  └────────┬───────────┘  │
-└─────────┼────────────────┼────────────────────┼──────────────┘
-          │ HTTP/SSE       │ Webhook            │ MCP/stdio
-          ▼                ▼                    ▼
-┌──────────────────────────────────────────────────────────────┐
-│                     FASTAPI APPLICATION                       │
-│                     (port 8181)                               │
-│  ┌─────────────────────────────────────────────────────────┐ │
-│  │                    Middleware Layer                      │ │
-│  │  CORS │ Rate Limit (slowapi) │ JWT Auth │ Request ID   │ │
-│  └─────────────────────────────────────────────────────────┘ │
-│  ┌──────────┐ ┌──────────┐ ┌───────────┐ ┌──────────────┐  │
-│  │ /auth    │ │ /stocks  │ │ /portfolio│ │ /chat        │  │
-│  │ router   │ │ router   │ │ router    │ │ router (SSE) │  │
-│  └────┬─────┘ └────┬─────┘ └─────┬─────┘ └──────┬───────┘  │
-│       │            │              │               │          │
-│  ┌────▼────────────▼──────────────▼───────────────▼────────┐ │
-│  │                   SERVICE LAYER                          │ │
-│  │  auth_service │ signal_service │ portfolio_service │ ... │ │
-│  └────┬────────────┬──────────────┬───────────────┬────────┘ │
-│       │            │              │               │          │
-│  ┌────▼────────────▼──────────────▼───────────────▼────────┐ │
-│  │                   TOOL LAYER                             │ │
-│  │  market_data │ signals │ recommendations │ fundamentals  │ │
-│  │  portfolio │ forecasting │ screener │ search             │ │
-│  └────┬────────────┬──────────────┬───────────────┬────────┘ │
-│       │            │              │               │          │
-│  ┌────▼────────────▼──────────────▼───────────────▼────────┐ │
-│  │                   AGENT LAYER                            │ │
-│  │  AgentRegistry │ ToolRegistry │ Agentic Loop │ Stream   │ │
-│  │  GeneralAgent │ StockAgent                              │ │
-│  └─────────────────────────────────────────────────────────┘ │
-└──────────────────────────┬───────────────────────────────────┘
-                           │
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│ PostgreSQL   │  │ Redis 7      │  │ External     │
-│ + TimescaleDB│  │              │  │ APIs         │
-│ (port 5433)  │  │ (port 6380)  │  │              │
-│              │  │ - Cache      │  │ - yfinance   │
-│ - OLTP data  │  │ - Celery     │  │ - FRED       │
-│ - Time-series│  │   broker     │  │ - Groq       │
-│ - Hypertables│  │ - Rate limit │  │ - Anthropic  │
-│              │  │   counters   │  │ - SerpAPI    │
-└──────────────┘  └──────────────┘  └──────────────┘
-                           │
-                  ┌────────▼────────┐
-                  │ Celery Worker   │
-                  │ + Beat          │
-                  │                 │
-                  │ - Nightly data  │
-                  │ - Signal compute│
-                  │ - Recommendations│
-                  │ - Forecast train│
-                  │ - Alert checks  │
-                  │ - Portfolio snap │
-                  └─────────────────┘
+
+### 2.1.1 Database Entity Relationships
+
+```mermaid
+erDiagram
+    users ||--o{ portfolios : owns
+    users ||--o{ user_preferences : has
+    users ||--o{ watchlist : has
+    users ||--o{ chat_session : creates
+    users ||--o{ recommendation_snapshots : receives
+    users ||--o{ in_app_alerts : receives
+    users ||--o{ recommendation_outcomes : evaluated
+
+    portfolios ||--o{ positions : contains
+    portfolios ||--o{ transactions : records
+    portfolios ||--o{ portfolio_snapshots : tracked
+
+    stocks ||--o{ stock_prices : has
+    stocks ||--o{ signal_snapshots : computed
+    stocks ||--o{ dividend_payments : pays
+    stocks ||--o{ earnings_snapshots : reports
+    stocks ||--o{ positions : held_in
+    stocks ||--o{ forecast_results : predicted
+    stocks ||--o{ model_versions : trained
+
+    stock_indexes ||--o{ stock_index_memberships : contains
+    stocks ||--o{ stock_index_memberships : belongs_to
+
+    model_versions ||--o{ forecast_results : generates
+
+    chat_session ||--o{ chat_message : contains
+
+    users {
+        uuid id PK
+        string email UK
+        string hashed_password
+        string role
+    }
+
+    stocks {
+        string ticker PK
+        string name
+        string sector
+        boolean is_etf
+        float market_cap
+        float revenue_growth
+    }
+
+    stock_prices {
+        string ticker FK
+        timestamp time
+        float open
+        float close
+        float adj_close
+        bigint volume
+    }
+
+    signal_snapshots {
+        string ticker FK
+        timestamp computed_at
+        float composite_score
+        float rsi_value
+        float sharpe_ratio
+    }
+
+    model_versions {
+        uuid id PK
+        string ticker FK
+        string model_type
+        int version
+        boolean is_active
+        string artifact_path
+    }
+
+    forecast_results {
+        date forecast_date
+        string ticker FK
+        int horizon_days
+        float predicted_price
+        float actual_price
+        float error_pct
+    }
+
+    recommendation_snapshots {
+        uuid user_id FK
+        string ticker
+        string action
+        float composite_score
+    }
+
+    recommendation_outcomes {
+        uuid id PK
+        uuid user_id FK
+        string action
+        int horizon_days
+        float return_pct
+        float alpha_pct
+        boolean action_was_correct
+    }
 ```
+
+> 25 tables total. Hypertables: `stock_prices`, `signal_snapshots`, `portfolio_snapshots`. Full schema in `docs/data-architecture.md`.
 
 ### 2.2 Layer Responsibilities
 
@@ -551,11 +659,37 @@ Retry policy: exponential backoff (1s, 2s, 4s) for transient errors. Immediate s
 
 **Three-phase LangGraph StateGraph:**
 
-```
-START → plan → [execute | done(decline)]
-execute → [synthesize | plan(replan) | format_simple(skip)]
-synthesize → END
-format_simple → END
+```mermaid
+stateDiagram-v2
+    [*] --> plan: User message + context
+
+    plan --> execute: Tool plan generated
+    plan --> decline: Out of scope
+
+    execute --> synthesize: All tools complete
+    execute --> plan: Empty search (replan max 1)
+    execute --> format_simple: simple_lookup intent
+
+    synthesize --> [*]: Streamed response + evidence
+    format_simple --> [*]: Template output
+    decline --> [*]: Decline message
+
+    state plan {
+        [*] --> classify_intent
+        classify_intent --> generate_tool_plan
+        generate_tool_plan --> resolve_pronouns
+    }
+
+    state execute {
+        [*] --> run_tools
+        run_tools --> validate_results
+        validate_results --> check_circuit
+    }
+
+    state synthesize {
+        [*] --> build_evidence
+        build_evidence --> stream_analysis
+    }
 ```
 
 **Phase 1 — Plan (`planner.py`):**
@@ -613,60 +747,64 @@ start_time, user_context, query_id, skip_synthesis, response_text, decline_messa
 
 ## 6. Background Job Design
 
-> **Implementation status:** Background jobs are planned for Phase 5. Celery configuration, beat schedule, and task error handling are NOT yet implemented.
+> **Implementation status:** ✅ Fully implemented. Celery worker, beat schedule, and 8-step nightly pipeline chain all operational.
 
-### 6.1 Celery Configuration
+### 6.1 Celery Architecture
 
-```python
-# tasks/__init__.py
-app = Celery("stock_signal_platform")
-app.config_from_object({
-    "broker_url": settings.REDIS_URL,
-    "result_backend": settings.REDIS_URL,
-    "task_serializer": "json",
-    "result_serializer": "json",
-    "accept_content": ["json"],
-    "timezone": "America/New_York",  # Market timezone
-    "beat_schedule": {
-        "nightly-refresh": {
-            "task": "tasks.refresh_data.refresh_all",
-            "schedule": crontab(hour=18, minute=0),  # 6 PM ET (after market close)
-        },
-        "nightly-signals": {
-            "task": "tasks.compute_signals.compute_all",
-            "schedule": crontab(hour=18, minute=30),
-        },
-        "nightly-recommendations": {
-            "task": "tasks.generate_recommendations.generate_all",
-            "schedule": crontab(hour=19, minute=0),
-        },
-        "nightly-portfolio-snapshot": {
-            "task": "tasks.snapshot_portfolio.snapshot_all",
-            "schedule": crontab(hour=19, minute=15),
-        },
-        "nightly-alerts": {
-            "task": "tasks.check_alerts.check_all",
-            "schedule": crontab(hour=19, minute=30),
-        },
-        "nightly-evaluate-forecasts": {
-            "task": "tasks.evaluate_forecasts.evaluate",
-            "schedule": crontab(hour=20, minute=0),
-        },
-        "nightly-evaluate-recommendations": {
-            "task": "tasks.evaluate_recommendations.evaluate",
-            "schedule": crontab(hour=20, minute=15),
-        },
-        "weekly-forecasts": {
-            "task": "tasks.run_forecasts.train_and_forecast",
-            "schedule": crontab(hour=21, minute=0, day_of_week=6),  # Saturday
-        },
-        "morning-briefing": {
-            "task": "tasks.notifications.morning_briefing",
-            "schedule": crontab(hour=7, minute=0),  # 7 AM ET
-        },
-    },
-})
+```mermaid
+flowchart TB
+    subgraph Beat["Celery Beat Scheduler"]
+        B1["Every 30 min: Watchlist Refresh"]
+        B2["6-7 AM: Warm Data Sync"]
+        B3["4:30 PM: Portfolio Snapshots"]
+        B4["9:30 PM: Nightly Pipeline Chain"]
+        B5["Sunday 2 AM: Model Retrain"]
+    end
+
+    subgraph Worker["Celery Worker"]
+        W["Task Executor"]
+    end
+
+    subgraph Chain["Nightly Pipeline (8 steps)"]
+        direction TB
+        S1["1. Price Refresh"] --> S2["2. Forecast Refresh"]
+        S2 --> S3["3. Recommendations"]
+        S3 --> S4["4. Forecast Eval"]
+        S4 --> S5["5. Rec Eval"]
+        S5 --> S6["6. Drift Detection"]
+        S6 --> S7["7. Alerts"]
+        S7 --> S8["8. Portfolio Snapshots"]
+    end
+
+    subgraph Infra["Infrastructure"]
+        Redis[("Redis: Broker + Results")]
+        PG[("PostgreSQL + TimescaleDB")]
+        FS["Filesystem: Model Artifacts"]
+    end
+
+    Beat -->|enqueue| Redis
+    Redis -->|dequeue| Worker
+    Worker --> Chain
+    Worker --> PG
+    Worker --> FS
+    S6 -.->|"drift detected"| RT["retrain_single_ticker_task"]
+    RT --> Worker
 ```
+
+### 6.2 Beat Schedule (US/Eastern)
+
+| Time | Task | Frequency |
+|------|------|-----------|
+| 2:00 AM Sun | `model_retrain_all_task` | Biweekly |
+| 2:00 AM Sun | `sync_institutional_holders_task` | Weekly |
+| 6:00 AM | `sync_analyst_consensus_task` | Daily |
+| 7:00 AM | `sync_fred_indicators_task` | Daily |
+| Every 30 min | `refresh_all_watchlist_tickers_task` | Intraday |
+| 4:30 PM | `snapshot_all_portfolios_task` | Daily |
+| 9:30 PM | `nightly_pipeline_chain_task` (8 steps) | Daily |
+
+All tasks are in `backend/tasks/`. Celery is configured in `backend/tasks/__init__.py`.
+Timezone: `US/Eastern`. Tasks use `asyncio.run()` bridge for async code.
 
 ### 6.2 Task Error Handling
 
@@ -769,7 +907,63 @@ frontend/
 └── middleware.ts               # Auth guard (checks access_token cookie)
 ```
 
-### 7.1.1 Shell Architecture (Phase 4A)
+### 7.1.1 Component Hierarchy
+
+```mermaid
+graph TD
+    subgraph Shell["App Shell"]
+        SN["SidebarNav 54px"]
+        TB["Topbar"]
+        CP["ChatPanel"]
+    end
+
+    subgraph Pages["Pages"]
+        DASH["Dashboard"]
+        SCRN["Screener"]
+        DETAIL["Stock Detail"]
+        PORT["Portfolio"]
+        SECT["Sectors"]
+    end
+
+    subgraph DashComp["Dashboard Components"]
+        ST["StatTile"]
+        AD["AllocationDonut"]
+        PD["PortfolioDrawer"]
+        SC["StockCard"]
+        FC["ForecastCard"]
+        AB["AlertBell"]
+    end
+
+    subgraph ChatComp["Chat Components"]
+        CI["ChatInput"]
+        MB["MessageBubble"]
+        TC["ToolCard"]
+        TI["ThinkingIndicator"]
+        ART["ArtifactBar"]
+    end
+
+    subgraph Shared["Shared"]
+        SB["ScoreBadge"]
+        SP["Sparkline SVG"]
+        SM["SignalMeter"]
+        MC["MetricCard"]
+        CHI["ChangeIndicator"]
+    end
+
+    subgraph Data["Data Layer"]
+        TQ["TanStack Query"]
+        SC_HOOK["useStreamChat"]
+        CTX["AuthContext + DensityContext"]
+    end
+
+    Shell --> Pages
+    DASH --> DashComp
+    CP --> ChatComp
+    Pages --> Shared
+    Pages --> Data
+```
+
+### 7.1.2 Shell Architecture (Phase 4A)
 
 The authenticated layout is a client component that composes three side-by-side panels:
 
@@ -914,18 +1108,36 @@ async def send_telegram(user_id: uuid, message: str):
 
 ### 9.1 JWT Token Flow (httpOnly Cookies)
 
-```
-1. Client sends POST /auth/login with credentials
-2. Server validates and sets httpOnly cookies in response:
-   Set-Cookie: access_token=<jwt>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=3600
-   Set-Cookie: refresh_token=<jwt>; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/auth; Max-Age=604800
-3. Browser automatically includes cookies on all same-origin requests
-4. Server reads token from cookie (or Authorization header — dual-mode)
-5. When access_token expires → 401 response
-6. Frontend middleware automatically calls POST /auth/refresh
-7. Server reads refresh_token from cookie, validates, sets new cookie pair
-8. POST /auth/logout clears cookies (Set-Cookie with Max-Age=0)
-9. If refresh_token expired → redirect to /login
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant F as Next.js Middleware
+    participant API as FastAPI
+    participant DB as PostgreSQL
+
+    Note over B,DB: Login
+    B->>API: POST /auth/login
+    API->>DB: Verify credentials (bcrypt)
+    DB-->>API: User record
+    API-->>B: Set-Cookie access_token + refresh_token (httpOnly)
+
+    Note over B,DB: Authenticated Request
+    B->>API: GET /api/v1/stocks/AAPL/signals (with cookie)
+    API->>API: Decode JWT from cookie or header
+    API->>DB: Query signals
+    DB-->>API: SignalSnapshot
+    API-->>B: 200 OK + signal data
+
+    Note over B,DB: Token Refresh (auto)
+    B->>API: Request with expired access_token
+    API-->>B: 401 Unauthorized
+    F->>API: POST /auth/refresh (refresh_token cookie)
+    API-->>F: New cookie pair
+    F->>API: Retry original request
+
+    Note over B,DB: Logout
+    B->>API: POST /auth/logout
+    API-->>B: Clear cookies (Max-Age=0)
 ```
 
 **Dual-mode auth dependency**: `get_current_user` checks `Authorization: Bearer`
@@ -954,6 +1166,37 @@ async def chat_stream(request: Request): ...
 ---
 
 ## 10. Deployment Architecture (Phase 6)
+
+### 10.0 CI/CD Pipeline
+
+```mermaid
+flowchart LR
+    subgraph PR["Pull Request to develop"]
+        PR_LINT["Ruff lint + format"]
+        PR_UNIT["pytest unit/"]
+        PR_API["pytest api/"]
+        PR_JEST["Jest frontend"]
+        PR_TSC["tsc --noEmit"]
+    end
+
+    subgraph Merge["Merge to main"]
+        M_LINT["Ruff lint"]
+        M_TEST["Full test suite"]
+        M_BUILD["Next.js build"]
+    end
+
+    DEV["feat/KAN-* branch"] -->|"git push"| PR
+    PR_LINT --> PR_UNIT
+    PR_LINT --> PR_JEST
+    PR_UNIT --> GATE1{"All pass?"}
+    PR_API --> GATE1
+    PR_JEST --> GATE1
+    PR_TSC --> GATE1
+    GATE1 -->|yes| MERGE_DEV["Merge to develop"]
+
+    MERGE_DEV -->|"explicit promotion"| Merge
+    M_LINT --> M_TEST --> M_BUILD --> MAIN["main branch"]
+```
 
 ### 10.1 Local Development
 

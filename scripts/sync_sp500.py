@@ -53,9 +53,9 @@ def fetch_sp500_tickers() -> pd.DataFrame:
         timeout=15,
     )
     resp.raise_for_status()
-    # html.parser has no XXE risk; input is from known Wikipedia pages
+    # lxml HTML parser is safe here — pd.read_html uses lxml.html (no XXE risk)
     tables = pd.read_html(  # nosemgrep: trailofbits.python.lxml-in-pandas.lxml-in-pandas
-        StringIO(resp.text), flavor="html.parser"
+        StringIO(resp.text), flavor="lxml"
     )
     # The first table on the page is the current constituents
     df = tables[0]

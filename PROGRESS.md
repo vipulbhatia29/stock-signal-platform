@@ -906,3 +906,47 @@ Phase 4F complete (9/9): KAN-94 Sectors Page — 3 backend endpoints, 6 schemas,
 **Alembic head:** `d68e82e90c96` (migration 011 — unchanged)
 
 ---
+
+## Session 48 — Data Bootstrap + Pipeline Wiring + Documentation
+
+**Date:** 2026-03-23
+**Branch:** `fix/pandas-html-flavor`
+
+### What was done
+
+1. **Full database bootstrap** — ran all seed scripts in dependency order:
+   - 503 S&P 500 stocks, 12 ETFs, 1.24M price rows, 514 signal snapshots
+   - 620 index memberships (S&P 500 + NASDAQ-100 + Dow 30)
+   - 515 fundamentals enriched, 50,212 dividend records, 514 Prophet models, 1,542 forecasts
+
+2. **3 new seed scripts** written and executed:
+   - `scripts/seed_fundamentals.py` — P/E, Piotroski, analyst data, earnings (idempotent upsert)
+   - `scripts/seed_dividends.py` — dividend payment history (ON CONFLICT DO NOTHING)
+   - `scripts/seed_forecasts.py` — Prophet training + 90/180/270d predictions
+
+3. **Nightly pipeline chain expanded** from 3 → 8 steps:
+   - Added: forecast refresh, forecast evaluation, recommendation evaluation, drift detection, alert generation
+   - All tasks handle empty data gracefully (no-op until 30-90 days pass)
+
+4. **Bug fix:** `pd.read_html(flavor="html.parser")` → `flavor="lxml"` (pandas deprecated `html.parser` as a flavor)
+
+5. **README.md created** with bootstrap guide, nightly pipeline docs, manual trigger commands, 3 Mermaid diagrams
+
+6. **TDD.md updated** with 7 Mermaid diagrams: system architecture, ERD, agent V2 state machine, Celery architecture, JWT auth flow, frontend component tree, CI/CD pipeline
+
+7. **FSD.md updated** with 2 Mermaid diagrams: signal computation pipeline, Prophet forecasting pipeline
+
+### Files Changed
+- `scripts/seed_fundamentals.py` — NEW
+- `scripts/seed_dividends.py` — NEW
+- `scripts/seed_forecasts.py` — NEW
+- `README.md` — NEW
+- `backend/tasks/market_data.py` — nightly chain 3→8 steps
+- `scripts/sync_sp500.py` — html.parser → lxml fix
+- `scripts/sync_indexes.py` — html.parser → lxml fix
+- `docs/TDD.md` — 7 Mermaid diagrams, status update
+- `docs/FSD.md` — 2 Mermaid diagrams, status update
+- `project-plan.md` — session 48 entry
+- `PROGRESS.md` — session 48 entry
+
+---

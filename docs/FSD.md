@@ -2,9 +2,9 @@
 
 ## Stock Signal Platform
 
-**Version:** 1.0
+**Version:** 1.1
 **Date:** March 2026
-**Status:** Living Document (Phase 1-4G complete, 4C.1 done, 4F/5/6 planned)
+**Status:** Living Document — Phase 1-5 complete, Phase 5.5/6 planned
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -103,6 +103,42 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 - Rate-limited aggressively (5 requests/minute) — yfinance calls are expensive
 
 ### FR-3: Signal Engine
+
+```mermaid
+flowchart LR
+    subgraph Input
+        P["Stock Prices<br/>(252 trading days)"]
+    end
+
+    subgraph Technical["Technical Signals (50%)"]
+        RSI["RSI(14)<br/>0-2.5 pts"]
+        MACD["MACD(12,26,9)<br/>0-2.5 pts"]
+        SMA["SMA 50/200<br/>0-2.5 pts"]
+        SHARPE["Sharpe Ratio<br/>0-2.5 pts"]
+    end
+
+    subgraph Fundamental["Fundamental Score (50%)"]
+        PIOTROSKI["Piotroski F-Score<br/>(0-9) scaled to 0-5 pts"]
+    end
+
+    subgraph Output
+        CS["Composite Score<br/>(0-10)"]
+        REC["Recommendation<br/>BUY ≥8 | WATCH 5-7 | AVOID &lt;5"]
+    end
+
+    P --> RSI
+    P --> MACD
+    P --> SMA
+    P --> SHARPE
+    P -.->|"yfinance .info"| PIOTROSKI
+
+    RSI --> CS
+    MACD --> CS
+    SMA --> CS
+    SHARPE --> CS
+    PIOTROSKI --> CS
+    CS --> REC
+```
 
 **FR-3.1: Technical Signal Computation**
 
@@ -572,6 +608,40 @@ After 3+ months of data accumulation, the following metrics become available:
 - Outcome evaluation uses closing prices only (no intraday)
 
 ### FR-11: Forecasting & Scorecard UI (Phase 5) ✅ IMPLEMENTED
+
+```mermaid
+flowchart TD
+    subgraph Training["Training (biweekly)"]
+        A["Stock Prices<br/>(2 years, min 200 points)"] --> B["Prophet Model<br/>changepoint_prior=0.05"]
+        B --> C["Serialize to JSON"]
+        C --> D["ModelVersion row<br/>version auto-increment"]
+    end
+
+    subgraph Prediction["Prediction (nightly)"]
+        D --> E["Load active model"]
+        E --> F["predict at 3 horizons"]
+        F --> H90["+90 days"]
+        F --> H180["+180 days"]
+        F --> H270["+270 days"]
+        H90 --> I["ForecastResult rows"]
+        H180 --> I
+        H270 --> I
+    end
+
+    subgraph Evaluation["Evaluation (after 90+ days)"]
+        I --> J{"target_date passed?"}
+        J -->|yes| K["Fill actual_price"]
+        K --> L["Compute error_pct"]
+        L --> M["Rolling MAPE"]
+        J -->|no| N["Not yet matured"]
+    end
+
+    subgraph Drift["Drift Detection"]
+        M --> O{"MAPE > 20%?"}
+        O -->|yes| P["Mark DEGRADED + queue retrain"]
+        O -->|no| Q["Model healthy"]
+    end
+```
 
 **FR-11.1: Forecast Card (Stock Detail Page)**
 - 3 horizon pills (90d/180d/270d) showing predicted price, % change from current, confidence range
