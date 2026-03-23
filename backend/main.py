@@ -13,7 +13,17 @@ from slowapi.errors import RateLimitExceeded
 
 from backend.config import settings
 from backend.rate_limit import limiter
-from backend.routers import auth, chat, forecasts, indexes, portfolio, preferences, sectors, stocks
+from backend.routers import (
+    alerts,
+    auth,
+    chat,
+    forecasts,
+    indexes,
+    portfolio,
+    preferences,
+    sectors,
+    stocks,
+)
 from backend.routers.tasks import router as tasks_router
 
 logger = logging.getLogger(__name__)
@@ -204,3 +214,4 @@ app.include_router(tasks_router, prefix="/api/v1")
 app.include_router(preferences.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(forecasts.router, prefix="/api/v1")
+app.include_router(alerts.router, prefix="/api/v1")
