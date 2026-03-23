@@ -34,6 +34,7 @@ import * as api from "@/lib/api";
 import type { TaskStatus, RefreshTask } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import { usePortfolioForecast, useScorecard } from "@/hooks/use-forecasts";
 import { WelcomeBanner } from "@/components/welcome-banner";
 import { TrendingStocks } from "@/components/trending-stocks";
 import { PageTransition, StaggerGroup, StaggerItem } from "@/components/motion-primitives";
@@ -49,6 +50,8 @@ export default function DashboardPage() {
   const { data: indexes, isLoading: indexesLoading } = useIndexes();
   const { data: watchlist, isLoading: watchlistLoading } = useWatchlist();
   const { data: recommendations } = useRecommendations();
+  const { data: portfolioForecast } = usePortfolioForecast();
+  const { data: scorecard } = useScorecard();
   const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
 
@@ -304,6 +307,52 @@ export default function DashboardPage() {
                 showSectorLink
               />
             </StatTile>
+          </StaggerItem>
+
+          {/* Portfolio Outlook */}
+          <StaggerItem>
+            <StatTile
+              label="Portfolio Outlook"
+              accentColor="cyan"
+              value={
+                portfolioForecast?.horizons?.[0]
+                  ? `${portfolioForecast.horizons[0].expected_return_pct >= 0 ? "+" : ""}${portfolioForecast.horizons[0].expected_return_pct.toFixed(1)}%`
+                  : "—"
+              }
+              sub={
+                portfolioForecast?.horizons?.[0] ? (
+                  <span className="text-[9px] text-subtle">
+                    90d · {portfolioForecast.ticker_count} stocks
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-subtle">No forecast data</span>
+                )
+              }
+            />
+          </StaggerItem>
+
+          {/* Accuracy */}
+          <StaggerItem>
+            <StatTile
+              label="Accuracy"
+              accentColor={
+                (scorecard?.overall_hit_rate ?? 0) >= 0.7 ? "gain" : "warn"
+              }
+              value={
+                scorecard?.total_outcomes
+                  ? `${(scorecard.overall_hit_rate * 100).toFixed(0)}%`
+                  : "—"
+              }
+              sub={
+                scorecard?.total_outcomes ? (
+                  <span className="text-[9px] text-subtle">
+                    {scorecard.total_outcomes} recs · {(scorecard.avg_alpha * 100).toFixed(1)}% alpha
+                  </span>
+                ) : (
+                  <span className="text-[9px] text-subtle">No outcomes yet</span>
+                )
+              }
+            />
           </StaggerItem>
         </StaggerGroup>
       </section>

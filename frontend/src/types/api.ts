@@ -495,3 +495,74 @@ export interface CorrelationData {
   period_days: number;
   excluded_tickers: ExcludedTicker[];
 }
+
+// ── Forecast Types ────────────────────────────────────────────
+
+export interface ForecastHorizon {
+  horizon_days: number;
+  predicted_price: number;
+  predicted_lower: number;
+  predicted_upper: number;
+  target_date: string;
+  confidence_level: string;
+  sharpe_direction: string;
+}
+
+export interface ForecastResponse {
+  ticker: string;
+  horizons: ForecastHorizon[];
+  model_mape: number | null;
+  model_status: string;
+}
+
+export interface PortfolioForecastHorizon {
+  horizon_days: number;
+  expected_return_pct: number;
+  lower_pct: number;
+  upper_pct: number;
+  diversification_ratio: number;
+  confidence_level: string;
+}
+
+export interface PortfolioForecastResponse {
+  horizons: PortfolioForecastHorizon[];
+  ticker_count: number;
+  vix_regime: string;
+}
+
+export interface ScorecardHorizonBreakdown {
+  horizon_days: number;
+  total: number;
+  correct: number;
+  hit_rate: number;
+  avg_alpha: number;
+}
+
+export interface ScorecardResponse {
+  total_outcomes: number;
+  overall_hit_rate: number;
+  avg_alpha: number;
+  buy_hit_rate: number;
+  sell_hit_rate: number;
+  worst_miss_pct: number;
+  worst_miss_ticker: string;
+  by_horizon: ScorecardHorizonBreakdown[];
+}
+
+// ── Alert Types ───────────────────────────────────────────────
+
+export interface AlertResponse {
+  id: string;
+  alert_type: string;
+  severity: string;
+  title: string;
+  message: string;
+  ticker: string | null;
+  is_read: boolean;
+  created_at: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface UnreadAlertCount {
+  unread_count: number;
+}
