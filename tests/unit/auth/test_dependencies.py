@@ -42,15 +42,25 @@ class TestJWTTokens:
         """Access token round-trips correctly."""
         user_id = uuid.uuid4()
         token = create_access_token(user_id)
-        decoded_id = decode_token(token, expected_type="access")
-        assert decoded_id == user_id
+        payload = decode_token(token, expected_type="access")
+        assert payload.user_id == user_id
 
     def test_create_and_decode_refresh_token(self) -> None:
-        """Refresh token round-trips correctly."""
+        """Refresh token round-trips correctly and includes JTI."""
         user_id = uuid.uuid4()
         token = create_refresh_token(user_id)
-        decoded_id = decode_token(token, expected_type="refresh")
-        assert decoded_id == user_id
+        payload = decode_token(token, expected_type="refresh")
+        assert payload.user_id == user_id
+        assert payload.jti is not None
+
+    def test_refresh_token_jti_is_unique(self) -> None:
+        """Each refresh token should have a unique JTI."""
+        user_id = uuid.uuid4()
+        token1 = create_refresh_token(user_id)
+        token2 = create_refresh_token(user_id)
+        payload1 = decode_token(token1, expected_type="refresh")
+        payload2 = decode_token(token2, expected_type="refresh")
+        assert payload1.jti != payload2.jti
 
     def test_access_token_rejected_as_refresh(self) -> None:
         """Access token should not decode as refresh type."""

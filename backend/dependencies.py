@@ -1,6 +1,7 @@
 """Shared FastAPI dependencies: auth, database, redis."""
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from fastapi import Depends, HTTPException, Request, status
@@ -13,6 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.config import settings
 from backend.database import get_async_session
 from backend.models.user import User
+
+
+@dataclass(frozen=True)
+class TokenPayload:
+    """Decoded JWT token payload."""
+
+    user_id: uuid.UUID
+    jti: str | None = None
+
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
@@ -46,25 +56,26 @@ def create_access_token(user_id: uuid.UUID) -> str:
 
 
 def create_refresh_token(user_id: uuid.UUID) -> str:
-    """Create a longer-lived JWT refresh token."""
+    """Create a longer-lived JWT refresh token with a unique JTI claim."""
     expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     payload = {
         "sub": str(user_id),
         "exp": expire,
         "type": "refresh",
+        "jti": str(uuid.uuid4()),
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def decode_token(token: str, expected_type: str = "access") -> uuid.UUID:
-    """Decode and validate a JWT token, returning the user ID.
+def decode_token(token: str, expected_type: str = "access") -> TokenPayload:
+    """Decode and validate a JWT token, returning the token payload.
 
     Args:
         token: The JWT token string.
         expected_type: Expected token type ("access" or "refresh").
 
     Returns:
-        The user's UUID.
+        TokenPayload with user_id and optional jti.
 
     Raises:
         HTTPException: If the token is invalid, expired, or wrong type.
@@ -80,7 +91,10 @@ def decode_token(token: str, expected_type: str = "access") -> uuid.UUID:
         token_type: str | None = payload.get("type")
         if user_id_str is None or token_type != expected_type:
             raise credentials_exception
-        return uuid.UUID(user_id_str)
+        return TokenPayload(
+            user_id=uuid.UUID(user_id_str),
+            jti=payload.get("jti"),
+        )
     except (JWTError, ValueError):
         raise credentials_exception
 
@@ -121,8 +135,8 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user_id = decode_token(token, expected_type="access")
-    result = await db.execute(select(User).where(User.id == user_id))
+    token_payload = decode_token(token, expected_type="access")
+    result = await db.execute(select(User).where(User.id == token_payload.user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise HTTPException(

@@ -40,8 +40,8 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
 
         token = auth_header.removeprefix("Bearer ").strip()
         try:
-            user_id = decode_token(token, expected_type="access")
-            request.state.user_id = str(user_id)
+            token_payload = decode_token(token, expected_type="access")
+            request.state.user_id = str(token_payload.user_id)
         except Exception:
             logger.exception("MCP auth failed")
             return JSONResponse(
