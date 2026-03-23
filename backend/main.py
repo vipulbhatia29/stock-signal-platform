@@ -68,7 +68,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.general_graph = None
         logger.warning("No LLM providers configured — chat disabled")
 
-    # 4b. Build Agent V2 graph when feature flag is enabled
+    # 4b. MCP subprocess (when MCP_TOOLS enabled)
+    mcp_manager = None
+    if settings.MCP_TOOLS:
+        from backend.mcp_server.lifecycle import MCPSubprocessManager
+
+        mcp_manager = MCPSubprocessManager()
+        try:
+            await mcp_manager.start()
+            app.state.mcp_manager = mcp_manager
+        except RuntimeError:
+            logger.warning("MCP Tool Server failed to start — falling back to direct calls")
+            mcp_manager = None
+
+    # 4c. Build Agent V2 graph when feature flag is enabled
     if settings.AGENT_V2 and providers:
         from backend.agents.executor import execute_plan
         from backend.agents.graph_v2 import build_agent_graph_v2
@@ -80,8 +93,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         tool_infos = registry.discover()
         tools_desc = "\n".join(f"- **{t.name}**: {t.description}" for t in tool_infos)
 
-        # Tool executor: calls registry by name
+        # Tool executor: MCP when available, direct fallback
         async def _tool_executor(tool_name: str, params: dict):  # noqa: ANN202
+            if mcp_manager and mcp_manager.healthy:
+                try:
+                    return await mcp_manager.call_tool(tool_name, params)
+                except ConnectionError:
+                    logger.warning("MCP fallback to direct for tool: %s", tool_name)
             return await registry.execute(tool_name, params)
 
         # Bind LLM to plan/synthesize functions
@@ -130,6 +148,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # --- Shutdown ---
     from backend.services.token_blocklist import close as close_blocklist
 
+    if mcp_manager:
+        await mcp_manager.stop()
     await close_blocklist()
     logger.info("Application shutting down")
 
