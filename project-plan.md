@@ -518,19 +518,20 @@ Self-healing nightly pipeline, Prophet forecasting (stocks + sector ETFs + portf
 
 ---
 
-## Phase 5.5: Security Hardening (Pre-Launch Gate)
+## Phase 5.5: Security Hardening (Pre-Launch Gate) ✅ COMPLETE (Session 50)
 
-### Goal
-Fix remaining security findings not covered in Phase 4E.
+**JIRA Epic:** KAN-118 (DONE) | **PR:** #79 (squash-merged to develop)
 
 ### Deliverables
 
-1. **Refresh token never invalidated** (`backend/routers/auth.py`)
-   Old refresh tokens valid for 7 days after refresh/logout. No server-side revocation.
-   Fix: Redis blocklist for revoked token JTI claims. (Was backlog item B1, deferred from Phase 3.)
+- [x] **Redis refresh token blocklist** — JTI claim on refresh tokens, `backend/services/token_blocklist.py`
+- [x] `decode_token()` returns `TokenPayload(user_id, jti)` dataclass
+- [x] `/refresh` checks blocklist before issuing, blocklists old token after rotation
+- [x] `/logout` blocklists refresh token from cookie
+- [x] 12 new tests (6 unit + 5 API + 1 JTI uniqueness)
 
 ### Success Criteria
-Fixed, tests added, security re-audit clean. Dependencies: Phase 4E complete.
+✅ Fixed, tests added, all CI green.
 
 ---
 
@@ -582,14 +583,37 @@ Claude Code / Telegram / Mobile → MCP Client → HTTP → MCP Tool Server
 | New client apps | Reimplement tool calls | Connect via MCP | Connect via MCP |
 | Scaling | Monolith | Monolith | Independent scaling |
 
+### Design Docs
+- **Spec:** `docs/superpowers/specs/2026-03-23-phase-5.6-mcp-stdio-design.md` ✅
+- **Plan:** `docs/superpowers/plans/2026-03-23-phase-5.6-mcp-stdio-implementation.md` ✅
+- **JIRA Epic:** KAN-119 | **Refinement:** KAN-121 (DONE)
+
+### Implementation Stories (6 + validation)
+- [ ] **S1 (KAN-132):** MCP Tool Server — entry point, registry builder extract, ToolResult serialization (~2.5h)
+- [ ] **S2 (KAN-133):** MCP Tool Client — MCPToolClient class, user context injection (~2h)
+- [ ] **S3 (KAN-134):** Lifespan Wiring + Feature Flag — subprocess manager, MCP_TOOLS=True, fallback (~2h)
+- [ ] **S4 (KAN-135):** Health Endpoint + Observability (~1.5h)
+- [ ] **S5 (KAN-136):** Integration Tests — real stdio round-trip, lifecycle, regression MCP vs direct (~2.5h)
+- [ ] **S6 (KAN-131):** Validation — verify against spec+plan, full test suite, docs (~1.5h)
+
+### Key Architectural Decisions (Session 50 brainstorm)
+- FastMCP server + `mcp` Python SDK client (both official Anthropic)
+- `MCP_TOOLS=True` by default — CI always tests MCP path, flag = emergency kill switch
+- 3-restart fallback to direct calls + health endpoint reporting degraded state
+- Pass `user_id` as explicit param for portfolio tools (no ContextVar across process boundary)
+- Real stdio integration tests (not just mocked)
+- No new dependencies needed (`mcp` package already installed)
+
 ### Success Criteria
 - Agent produces identical responses via stdio MCP as via direct calls
 - Tool server subprocess starts/stops cleanly with FastAPI lifespan
-- All existing tests pass (no regression)
-- New tools can be added to Tool Server only and agent discovers them automatically
+- Health endpoint reports MCP status (ok/degraded/disabled)
+- Feature flag kill switch works (MCP_TOOLS=false falls back)
+- All existing tests pass (no regression) + ~34 new tests
+- Integration tests with real stdio subprocess
 
 ### Dependencies
-Phase 5.5 (security) should be done first. No cloud infrastructure needed.
+Phase 5.5 (security) ✅ DONE. No cloud infrastructure needed.
 
 ---
 
