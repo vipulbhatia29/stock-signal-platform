@@ -965,19 +965,25 @@ Full database bootstrap (503 stocks, 1.24M prices, 514 models). 3 new seed scrip
 - 12 new tests (6 unit blocklist + 5 API revocation + 1 JTI uniqueness)
 - KAN-118 Epic → Done, KAN-120 Story → Done, KAN-122-125 Subtasks → Done
 
-### Phase 5.6 — MCP stdio Refinement COMPLETE
-- Brainstorm: 11 architectural decisions approved (KAN-126)
-  - FastMCP server + `mcp` Python SDK client (both official Anthropic)
-  - `MCP_TOOLS=True` by default (CI always tests MCP path, flag = emergency kill switch)
-  - 3-restart fallback to direct calls + health endpoint + logging
-  - Pass `user_id` as explicit param (no ContextVar across process boundary)
-  - Real stdio integration tests (not just mocked)
-- Spec written: `docs/superpowers/specs/2026-03-23-phase-5.6-mcp-stdio-design.md` (16 sections)
-- Plan written: `docs/superpowers/plans/2026-03-23-phase-5.6-mcp-stdio-implementation.md` (6 stories, ~12h, ~34 tests)
-- JIRA: KAN-121 Refinement Story → Done, 5 implementation stories created (KAN-132-136), validation story KAN-131
-- Implementation deferred to next session
+### Phase 5.6 — MCP stdio Refinement + Implementation (S1-S4)
+- Refinement: brainstorm (11 decisions), spec (16 sections), plan (6 stories)
+- **S1 (KAN-132) PR #81:** MCP Tool Server — `build_registry.py` extracted from main.py, `ToolResult.to_json()/from_json()`, `tool_server.py` stdio entry point. 10 tests.
+- **S2 (KAN-133) PR #82:** MCP Tool Client — `MCPToolClient` (connect/call_tool/list_tools/close), `inject_user_context()` for portfolio tools. 14 tests.
+- **S3 (KAN-134) PR #83:** Lifespan Wiring — `MCP_TOOLS=True` config flag, `MCPSubprocessManager` (start/restart/fallback), `main.py` wiring. 9 tests.
+- **S4 (KAN-135) PR #84:** Health Endpoint — `GET /api/v1/health` with MCP subprocess status (ok/degraded/disabled). Pydantic schemas. Replaced inline `/health`. 5 tests. Fixed 3 old test refs.
+- **Learning:** Parallel subagents with shared deps → merge dependency PR first, then rebase dependent branch.
+
+### Files Created This Session
+- `backend/services/token_blocklist.py` — Redis blocklist for refresh tokens
+- `backend/tools/build_registry.py` — extracted registry builder
+- `backend/mcp_server/tool_server.py` — FastMCP stdio entry point
+- `backend/mcp_server/tool_client.py` — MCP client + user context injection
+- `backend/mcp_server/lifecycle.py` — subprocess manager
+- `backend/routers/health.py` — health endpoint router
+- `backend/schemas/health.py` — health response schemas
+- 5 test files: blocklist, tool_server, tool_client, lifecycle, health
 
 ### Resume Point
-Phase 5.6 implementation: start with S1 (KAN-132) + S2 (KAN-133) in parallel → S3 (KAN-134) → S4 (KAN-135) → S5 (KAN-136) → S6/KAN-131 (validation)
+Phase 5.6: S5 (KAN-136 — integration tests with real stdio subprocess) → S6 (KAN-131 — validation)
 
 ---

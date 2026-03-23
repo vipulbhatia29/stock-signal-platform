@@ -589,10 +589,10 @@ Claude Code / Telegram / Mobile → MCP Client → HTTP → MCP Tool Server
 - **JIRA Epic:** KAN-119 | **Refinement:** KAN-121 (DONE)
 
 ### Implementation Stories (6 + validation)
-- [ ] **S1 (KAN-132):** MCP Tool Server — entry point, registry builder extract, ToolResult serialization (~2.5h)
-- [ ] **S2 (KAN-133):** MCP Tool Client — MCPToolClient class, user context injection (~2h)
-- [ ] **S3 (KAN-134):** Lifespan Wiring + Feature Flag — subprocess manager, MCP_TOOLS=True, fallback (~2h)
-- [ ] **S4 (KAN-135):** Health Endpoint + Observability (~1.5h)
+- [x] **S1 (KAN-132):** MCP Tool Server — entry point, registry builder extract, ToolResult serialization (~2.5h) ✓ PR #81
+- [x] **S2 (KAN-133):** MCP Tool Client — MCPToolClient class, user context injection (~2h) ✓ PR #82
+- [x] **S3 (KAN-134):** Lifespan Wiring + Feature Flag — subprocess manager, MCP_TOOLS=True, fallback (~2h) ✓ PR #83
+- [x] **S4 (KAN-135):** Health Endpoint + Observability (~1.5h) ✓ PR #84
 - [ ] **S5 (KAN-136):** Integration Tests — real stdio round-trip, lifecycle, regression MCP vs direct (~2.5h)
 - [ ] **S6 (KAN-131):** Validation — verify against spec+plan, full test suite, docs (~1.5h)
 
