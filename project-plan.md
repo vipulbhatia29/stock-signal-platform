@@ -509,11 +509,12 @@ Self-healing nightly pipeline, Prophet forecasting (stocks + sector ETFs + portf
 - Sharpe direction enrichment on every forecast
 
 ### Success Criteria
-- Nightly pipeline runs end-to-end (price → signal → recommendation → forecast → evaluation → alerts)
-- Self-healing: gap recovery, rate limit retry, partial success
-- ~80 new tests passing
-- Agent can answer "forecast for AAPL", "compare AAPL and MSFT", "how accurate are your calls"
-- Scorecard modal + alert bell + forecast card visible in UI
+- ✅ Nightly pipeline runs end-to-end (price → signal → recommendation → forecast → evaluation → alerts)
+- ✅ Self-healing: gap recovery, rate limit retry, partial success
+- ✅ ~99 new tests passing (888 total)
+- ✅ Agent can answer "forecast for AAPL", "compare AAPL and MSFT", "how accurate are your calls"
+- ✅ Scorecard modal + alert bell + forecast card visible in UI
+- ✅ (Session 48) Full data bootstrap scripts, nightly chain expanded 3→8 steps, README + diagram documentation
 
 ---
 

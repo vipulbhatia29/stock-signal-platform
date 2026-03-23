@@ -150,36 +150,65 @@ def nightly_price_refresh_task() -> dict:
 def nightly_pipeline_chain_task() -> dict:
     """Orchestrate the full nightly pipeline chain.
 
-    Runs sequentially: price refresh → recommendation generation → portfolio snapshot.
-    Future stories will add: forecast refresh, forecast evaluation,
-    recommendation evaluation, and alert generation.
+    Runs 8 steps sequentially:
+        1. Price refresh + signal computation
+        2. Forecast refresh (predict using existing models)
+        3. Recommendation generation
+        4. Forecast evaluation (fill actuals for matured forecasts)
+        5. Recommendation evaluation (compare past BUY/SELL vs actuals)
+        6. Drift detection (trigger retrain if model accuracy degrades)
+        7. Alert generation (signal flips, new buys, drift warnings)
+        8. Portfolio snapshots
+
+    Steps 4-6 will no-op until enough time has passed for forecasts
+    and recommendations to mature (30-90 days).
 
     Returns:
         Dict with results from each step.
     """
-    results: dict = {}
-
-    # Step 1: Price refresh + signal computation (with PipelineRunner tracking)
-    logger.info("Nightly chain step 1/3: price refresh")
-    results["price_refresh"] = nightly_price_refresh_task()
-
-    # Step 2: Recommendation generation
-    logger.info("Nightly chain step 2/3: recommendation generation")
+    from backend.tasks.alerts import generate_alerts_task
+    from backend.tasks.evaluation import (
+        check_drift_task,
+        evaluate_forecasts_task,
+        evaluate_recommendations_task,
+    )
+    from backend.tasks.forecasting import forecast_refresh_task
+    from backend.tasks.portfolio import snapshot_all_portfolios_task
     from backend.tasks.recommendations import generate_recommendations_task
 
+    results: dict = {}
+
+    # Step 1: Price refresh + signal computation
+    logger.info("Nightly chain step 1/8: price refresh")
+    results["price_refresh"] = nightly_price_refresh_task()
+
+    # Step 2: Forecast refresh (predict using existing active models)
+    logger.info("Nightly chain step 2/8: forecast refresh")
+    results["forecast_refresh"] = forecast_refresh_task()
+
+    # Step 3: Recommendation generation
+    logger.info("Nightly chain step 3/8: recommendation generation")
     results["recommendations"] = generate_recommendations_task()
 
-    # Step 3: Portfolio snapshots
-    logger.info("Nightly chain step 3/3: portfolio snapshots")
-    from backend.tasks.portfolio import snapshot_all_portfolios_task
+    # Step 4: Forecast evaluation (fill actuals for matured predictions)
+    logger.info("Nightly chain step 4/8: forecast evaluation")
+    results["forecast_evaluation"] = evaluate_forecasts_task()
 
+    # Step 5: Recommendation evaluation (compare past recs vs SPY)
+    logger.info("Nightly chain step 5/8: recommendation evaluation")
+    results["recommendation_evaluation"] = evaluate_recommendations_task()
+
+    # Step 6: Drift detection (check MAPE + volatility + VIX)
+    logger.info("Nightly chain step 6/8: drift detection")
+    results["drift"] = check_drift_task()
+
+    # Step 7: Alert generation (signal flips, new buys, drift)
+    logger.info("Nightly chain step 7/8: alert generation")
+    results["alerts"] = generate_alerts_task(pipeline_context=results.get("drift"))
+
+    # Step 8: Portfolio snapshots
+    logger.info("Nightly chain step 8/8: portfolio snapshots")
     results["portfolio_snapshots"] = snapshot_all_portfolios_task()
-
-    # Future steps (S4/S5/S6 will add):
-    # - forecast_refresh (retrain/predict)
-    # - forecast_evaluation (fill actuals)
-    # - recommendation_evaluation (compare vs SPY)
-    # - alert_generation (signal changes, drift, etc.)
 
     logger.info("Nightly pipeline chain complete: %s", results)
     return results
