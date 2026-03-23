@@ -824,36 +824,11 @@ Spec (865 lines) + plan (16 tasks, 8 chunks) for backend hardening. 11 stories (
 
 ---
 
-## Session 45 — KAN-94 Sectors Page + Phase 5 Design
+## Session 45 — KAN-94 Sectors Page + Phase 5 Design *(compact)*
 
-**Date:** 2026-03-22
-**Branch:** `feat/KAN-94-sectors-page` → merged as PR #52
-**Epic:** KAN-88 (Phase 4F complete), KAN-106 (Phase 5 design)
+**Date:** 2026-03-22 | **PR:** #52 merged | **Tests:** 759 total
 
-### Phase 4F Completion — KAN-94 Sectors Page (PR #52)
-All 7 subtasks (KAN-99–105) shipped in one session:
-
-| Subtask | Summary |
-|---------|---------|
-| KAN-99 (C1) | Backend: 3 endpoints (GET /sectors, GET /sectors/{sector}/stocks, GET /sectors/{sector}/correlation) + 6 Pydantic schemas |
-| KAN-100 (C2) | 27 unit + 17 API tests. Fixed pandas pct_change deprecation, date normalization for correlation |
-| KAN-101 (C3) | TypeScript types + 3 TanStack Query hooks (useSectors, useSectorStocks, useSectorCorrelation) |
-| KAN-102 (C4) | 5 new components: SectorAccordion, SectorStocksTable, CorrelationHeatmap, CorrelationTable, CorrelationTickerChips |
-| KAN-103 (C5) | Sectors page assembly — scope toggle, AllocationDonut, accordion drill-down, click-to-correlate |
-| KAN-104 (C6) | Dashboard cleanup — removed duplicate sector allocation card, Action Required full width |
-| KAN-105 (C7) | 19 frontend tests + TSC/ESLint verification |
-
-**Phase 4F: 9/9 stories COMPLETE.** KAN-88 Epic Done.
-
-### Phase 5 Design — Forecasting & Automation
-- Brainstormed with PM: user persona (active analyst), forecast granularity (stock + 11 SPDR ETFs + portfolio derived), drift detection, pipeline self-healing, gap recovery
-- Key decisions: biweekly Prophet retrain, correlation-based confidence bands, BUY/SELL evaluation at 30/90/180d vs SPY, in-app alerts (no Telegram), Sharpe direction enrichment
-- Spec written: `docs/superpowers/specs/2026-03-22-phase5-forecasting-design.md`
-- Plan written: `docs/superpowers/plans/2026-03-22-phase5-forecasting-implementation.md`
-- JIRA: Epic KAN-106 + 11 Stories (KAN-107–117), ~33h estimated over 6-7 sessions
-
-**Test count:** 467 unit + 174 API + 7 e2e + 4 integration + 107 frontend = 759 total
-**Resume point (Session 46):** Start Phase 5 implementation — KAN-107 (DB Models + Migration + ETF Seeding)
+Phase 4F complete (9/9): KAN-94 Sectors Page — 3 backend endpoints, 6 schemas, 5 frontend components, 63 new tests. Phase 5 design: spec + plan + JIRA Epic KAN-106 (11 Stories). Key decisions: biweekly Prophet retrain, correlation-based confidence bands, in-app alerts only.
 
 ---
 
@@ -895,5 +870,39 @@ All 7 subtasks (KAN-99–105) shipped in one session:
 **Alembic head:** `d68e82e90c96` (migration 011)
 
 **Resume point (Session 47):** KAN-114 [S8], KAN-115 [S9], KAN-116 [S10], KAN-117 [S11]
+
+---
+
+## Session 47 — Phase 5 Complete: Stories S8-S11 + Epic Promotion
+
+**Date:** 2026-03-22
+**Epic:** KAN-106 (Phase 5 — Forecasting, Evaluation and Background Automation) — **COMPLETE**
+**PRs:** #62-#65 (S8-S11 to develop), Epic promotion to main
+
+### Stories Completed (4/4 remaining → 11/11 total)
+
+| Story | PR | Summary |
+|---|---|---|
+| KAN-114 [S8] Agent Tools — Forecast + Comparison | #62 | 4 new tools (GetForecast, GetSectorForecast, GetPortfolioForecast, CompareStocks), EntityRegistry for pronoun resolution, 7 planner few-shots. 30 tests |
+| KAN-115 [S9] Agent Tools — Scorecard + Sustainability | #63 | 3 new tools (GetRecommendationScorecard, DividendSustainability, RiskNarrative), 3 planner few-shots. 15 tests |
+| KAN-116 [S10] Frontend — Forecast Card + Dashboard | #64 | TS types (forecast/alert/scorecard), 6 TanStack hooks, ForecastCard component (3 horizons + confidence + Sharpe), Portfolio Outlook + Accuracy StatTiles |
+| KAN-117 [S11] Frontend — Scorecard Modal + Alert Bell | #65 | AlertBell (Popover + unread badge + mark-all-read), ScorecardModal (Dialog + hit rate + horizon breakdown), dashboard wiring |
+
+### New Files (11)
+- Backend tools: `forecast_tools.py`, `scorecard_tool.py`, `dividend_sustainability.py`, `risk_narrative.py`
+- Backend agents: `entity_registry.py`
+- Frontend components: `forecast-card.tsx`, `alert-bell.tsx`, `scorecard-modal.tsx`
+- Frontend hooks: `use-forecasts.ts`, `use-alerts.ts`
+- Modified: `graph_v2.py`, `planner.py`, `planner.md`, `main.py`, `topbar.tsx`, `dashboard/page.tsx`, `stock-detail-client.tsx`, `api.ts`
+
+### Key Architecture Decisions
+- EntityRegistry uses ordered dict for recency-based pronoun resolution, serialized into LangGraph state as plain dicts (no DB persistence)
+- DividendSustainabilityTool is the only runtime yfinance call (on-demand) — all other tools read from DB
+- RiskNarrativeTool combines 4 data sources: signals, fundamentals, forecast confidence, sector ETF context
+- ForecastCard renders with `undefined` currentPrice (signal schema doesn't expose it — deferred)
+
+**Test count:** 596 unit + 174 API + 7 e2e + 4 integration + 107 frontend = 888 total (+45 backend)
+**Internal tools:** 20 total (was 13) + 4 MCP adapters
+**Alembic head:** `d68e82e90c96` (migration 011 — unchanged)
 
 ---

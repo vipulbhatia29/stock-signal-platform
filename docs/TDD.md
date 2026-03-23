@@ -373,6 +373,43 @@ GET /api/v1/stocks/{ticker}/signals/history?days={90}&limit={100}
   Default:  90 days, max 365 days
 ```
 
+### 3.11 Forecast Endpoints (Phase 5) ✅ IMPLEMENTED
+
+```
+GET /api/v1/forecasts/{ticker}
+  Response: ForecastResponse { ticker, horizons: ForecastHorizon[], model_mape, model_status }
+  Auth:     Required
+
+GET /api/v1/forecasts/portfolio
+  Response: PortfolioForecastResponse { horizons: PortfolioForecastHorizon[], ticker_count, vix_regime }
+  Auth:     Required
+
+GET /api/v1/forecasts/sector/{sector}
+  Response: SectorForecastResponse { sector, etf_ticker, horizons[], user_exposure_pct, user_tickers_in_sector }
+  Auth:     Required
+
+GET /api/v1/recommendations/scorecard
+  Response: ScorecardResponse { total_outcomes, overall_hit_rate, avg_alpha, buy_hit_rate, sell_hit_rate, worst_miss_pct, worst_miss_ticker, by_horizon[] }
+  Auth:     Required
+```
+
+### 3.12 Alert Endpoints (Phase 5) ✅ IMPLEMENTED
+
+```
+GET /api/v1/alerts
+  Response: AlertResponse[] { id, alert_type, severity, title, message, ticker, is_read, created_at, metadata }
+  Auth:     Required
+
+GET /api/v1/alerts/unread-count
+  Response: { unread_count: int }
+  Auth:     Required
+
+PATCH /api/v1/alerts/read
+  Body:     { alert_ids: string[] }
+  Response: { updated: int }
+  Auth:     Required
+```
+
 ---
 
 ## 4. Service Layer Design
@@ -478,9 +515,14 @@ class ToolRegistry:
     def health() -> dict[str, bool]
 ```
 
-Internal tools (13): `analyze_stock`, `get_portfolio_exposure`, `screen_stocks`, `get_recommendations`, `compute_signals`, `get_geopolitical_events`, `web_search`, `search_stocks`, `ingest_stock`, `get_fundamentals`, `get_analyst_targets`, `get_earnings_history`, `get_company_profile`
+Internal tools (20):
+- **Original (9):** `analyze_stock`, `get_portfolio_exposure`, `screen_stocks`, `get_recommendations`, `compute_signals`, `get_geopolitical_events`, `web_search`, `search_stocks`, `ingest_stock`
+- **Phase 4D (4):** `get_fundamentals`, `get_analyst_targets`, `get_earnings_history`, `get_company_profile` — read from DB, data materialized during `ingest_stock`
+- **Phase 5 (7):** `get_forecast`, `get_sector_forecast`, `get_portfolio_forecast`, `compare_stocks`, `get_recommendation_scorecard`, `dividend_sustainability`, `risk_narrative`
 
-Phase 4D tools (last 4): read from DB, never yfinance at runtime. Data materialized during `ingest_stock`.
+Phase 5 tools: forecast tools read pre-computed Prophet data from DB. `dividend_sustainability` is the only runtime yfinance call (payout ratio not persisted). `risk_narrative` combines signals + fundamentals + forecast + sector ETF context.
+
+**Entity Registry** (`backend/agents/entity_registry.py`): session-scoped ticker tracking for pronoun resolution ("compare them", "what about it?"). Wired into AgentStateV2 — execute_node extracts entities from tool results, plan_node resolves pronouns.
 
 MCPAdapter proxied tools (4 adapters): EdgarAdapter (SEC filings), AlphaVantageAdapter (news), FredAdapter (macro), FinnhubAdapter (analyst/ESG)
 

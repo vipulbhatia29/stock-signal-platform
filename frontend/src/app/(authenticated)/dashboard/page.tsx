@@ -35,6 +35,7 @@ import type { TaskStatus, RefreshTask } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { usePortfolioForecast, useScorecard } from "@/hooks/use-forecasts";
+import { ScorecardModal } from "@/components/scorecard-modal";
 import { WelcomeBanner } from "@/components/welcome-banner";
 import { TrendingStocks } from "@/components/trending-stocks";
 import { PageTransition, StaggerGroup, StaggerItem } from "@/components/motion-primitives";
@@ -331,28 +332,30 @@ export default function DashboardPage() {
             />
           </StaggerItem>
 
-          {/* Accuracy */}
+          {/* Accuracy — click opens scorecard modal */}
           <StaggerItem>
-            <StatTile
-              label="Accuracy"
-              accentColor={
-                (scorecard?.overall_hit_rate ?? 0) >= 0.7 ? "gain" : "warn"
-              }
-              value={
-                scorecard?.total_outcomes
-                  ? `${(scorecard.overall_hit_rate * 100).toFixed(0)}%`
-                  : "—"
-              }
-              sub={
-                scorecard?.total_outcomes ? (
-                  <span className="text-[9px] text-subtle">
-                    {scorecard.total_outcomes} recs · {(scorecard.avg_alpha * 100).toFixed(1)}% alpha
-                  </span>
-                ) : (
-                  <span className="text-[9px] text-subtle">No outcomes yet</span>
-                )
-              }
-            />
+            <ScorecardModal>
+              <StatTile
+                label="Accuracy"
+                accentColor={
+                  (scorecard?.overall_hit_rate ?? 0) >= 0.7 ? "gain" : "warn"
+                }
+                value={
+                  scorecard?.total_outcomes
+                    ? `${(scorecard.overall_hit_rate * 100).toFixed(0)}%`
+                    : "—"
+                }
+                sub={
+                  scorecard?.total_outcomes ? (
+                    <span className="text-[9px] text-subtle">
+                      {scorecard.total_outcomes} recs · {(scorecard.avg_alpha * 100).toFixed(1)}% alpha
+                    </span>
+                  ) : (
+                    <span className="text-[9px] text-subtle">No outcomes yet</span>
+                  )
+                }
+              />
+            </ScorecardModal>
           </StaggerItem>
         </StaggerGroup>
       </section>

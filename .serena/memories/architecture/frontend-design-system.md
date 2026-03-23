@@ -20,6 +20,9 @@ category: architecture
 - `Sparkline` (SVG, no Recharts — for inline sparklines in tables)
 - `SignalMeter`, `MetricCard`, `PortfolioValueChart`
 - `DensityProvider` — screener compact/comfortable toggle
+- `ForecastCard` — 3 horizon pills (90/180/270d), confidence badge, Sharpe direction
+- `AlertBell` — Popover dropdown, unread badge count, mark-all-read
+- `ScorecardModal` — Dialog with hit rate, alpha, per-horizon breakdown, worst miss
 
 ## shadcn/base-ui v4 Gotchas
 - `SheetTrigger`, `PopoverTrigger` use `render={<Button />}` prop, NOT `asChild`.

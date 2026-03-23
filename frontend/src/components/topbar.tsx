@@ -2,16 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
-import { Activity, Bell, Bot } from "lucide-react";
+import { Activity, Bot } from "lucide-react";
 import { TickerSearch } from "@/components/ticker-search";
 import { isNYSEOpen } from "@/lib/market-hours";
 import { useWatchlist } from "@/hooks/use-stocks";
 import { useChat } from "@/contexts/chat-context";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+import { AlertBell } from "@/components/alert-bell";
 import { cn } from "@/lib/utils";
 
 interface TopbarProps {
@@ -92,19 +88,8 @@ export function Topbar({ onAddTicker }: TopbarProps) {
           </button>
         )}
 
-        {/* Notification bell — stub */}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-hov hover:text-foreground transition-colors">
-                <Bell size={16} />
-              </button>
-            }
-          />
-          <TooltipContent side="bottom" className="text-xs">
-            Notifications (Coming Soon)
-          </TooltipContent>
-        </Tooltip>
+        {/* Alert bell */}
+        <AlertBell />
 
         {/* AI Analyst toggle */}
         <button

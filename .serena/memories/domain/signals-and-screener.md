@@ -12,7 +12,7 @@ category: domain
 - Depends on `backend/tools/fundamentals.py` for Piotroski F-Score calculation.
 
 ## Screener
-- `backend/tools/screener.py` — filter + rank by composite criteria.
+- `backend/tools/screen_stocks.py` — filter + rank by composite criteria.
 - Supports DensityProvider (compact/comfortable) on frontend.
 - Screener results are pre-computed nightly by Celery tasks.
 

@@ -33,7 +33,7 @@ category: architecture
 
 - **No module-level mutable state** — all mutable state in class instances or request scope. Only constants (UPPER_CASE) and `settings` at module level.
 - **Async by default** — all FastAPI endpoints and DB operations use `async`/`await`. Celery tasks are the exception (sync, bridge via `asyncio.run()`).
-- **Tool boundary for external APIs** — yfinance, FRED, web search calls go through `backend/tools/`, never directly from routers. Routers call services or tools only.
+- **Tool boundary for external APIs** — yfinance, FRED, web search calls go through `backend/tools/`, never directly from routers. Routers call services or tools only. Exception: DividendSustainabilityTool calls yfinance on-demand.
 - **Pre-computed signals** — Celery Beat runs nightly signal computation; dashboard reads pre-computed data. Agents call tools on-demand.
 - **Three-layer MCP architecture** — Layer 1: consume external MCPs (EdgarTools, Alpha Vantage, FRED, Finnhub). Layer 2: enrich in backend (Tool Registry + caching). Layer 3: expose as MCP server at `/mcp` (Streamable HTTP). See `domain/agent-tools` memory for full details.
 
@@ -56,7 +56,7 @@ Three-phase LangGraph StateGraph behind `AGENT_V2=true`:
 
 Conditional edges: out_of_scope→done (decline), simple_lookup→format_simple (no LLM), empty search→replan (max 1)
 
-13 internal tools (4 new in Phase 4D): get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile — all read from DB (materialized during ingestion)
+20 internal tools (7 added in Phase 5: forecast, sector forecast, portfolio forecast, compare stocks, scorecard, dividend sustainability, risk narrative): get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile — all read from DB (materialized during ingestion)
 
 ## Filesystem Layout
 

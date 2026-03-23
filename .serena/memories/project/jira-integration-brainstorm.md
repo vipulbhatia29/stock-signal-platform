@@ -39,18 +39,14 @@ Installed and connected to `stock-signal-platform` repo. Enables:
 - PR references visible in JIRA dev panel
 - Automation triggers for PR events
 
-## JIRA Board — Current Tickets
-
-### Epic: KAN-1 Phase 4B — AI Chatbot Backend
-- KAN-16 Story: Refinement (To Do) — subtasks KAN-17 to KAN-21
-- KAN-2 Story: Agent Selection (To Do) — subtasks KAN-9, KAN-10
-- KAN-3 Story: Tool Orchestration (To Do) — subtasks KAN-7, KAN-8, KAN-11, KAN-14
-- KAN-4 Story: Streaming Responses (To Do) — subtasks KAN-12, KAN-13, KAN-15
-- KAN-5 Story: Conversation History (To Do) — subtask KAN-6
-
-### Epic: KAN-22 CI/CD Pipeline + Branching Strategy
-- KAN-23 Story: Refinement (Done)
-- KAN-29 Story: Doc catch-up (To Do)
+## Completed Epics (as of Session 47)
+- KAN-1: Phase 4B — AI Chatbot Backend (Done)
+- KAN-22: CI/CD Pipeline + Branching Strategy (Done)
+- KAN-30: Phase 4C — Frontend Chat UI (Done)
+- KAN-61: Phase 4D — Agent Intelligence (Done)
+- KAN-88: Phase 4F — UI Migration (Done)
+- KAN-106: Phase 5 — Forecasting & Automation (Done)
 
 ## Key Convention
 Read `conventions/jira-sdlc-workflow` for the mandatory process. Never skip refinement.
+Query `project = KAN AND status != Done ORDER BY rank ASC` to find next work.

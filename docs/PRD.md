@@ -243,13 +243,13 @@ Search by company name or ticker. Local DB results first, supplemented by Yahoo 
 
 FastMCP at `/mcp` (Streamable HTTP), JWT auth, exposes all Tool Registry tools. Callable by Claude Code, Cursor, or any MCP client.
 
-### 5.9 Price Forecasting (P2 — Future)
+### 5.9 Price Forecasting (P1 — Phase 5 ✅ IMPLEMENTED)
 
-Facebook Prophet or similar. Deferred — no implementation yet.
+Prophet-based forecasting at 90/180/270 day horizons for stocks + 11 SPDR sector ETFs. Portfolio forecast via weighted aggregation. Biweekly retrain, daily predict-only refresh, drift-triggered retrain on MAPE >20%. ForecastCard on stock detail page, Portfolio Outlook StatTile on dashboard. 7 agent tools for conversational access.
 
-### 5.10 Background Processing & Alerts (P2 — Partially Built)
+### 5.10 Background Processing & Alerts (P1 — Phase 5 ✅ IMPLEMENTED)
 
-Celery Beat: 30-min watchlist auto-refresh, daily analyst/FRED sync, weekly 13F sync. Telegram/email notifications not yet implemented.
+Self-healing nightly pipeline: price fetch → signal computation → recommendation generation → Prophet forecast → evaluation → drift detection → alerts. PipelineWatermark for gap recovery, PipelineRun for observability. In-app alerts with AlertBell dropdown (Popover + unread badge). Telegram deferred to Phase 5.1.
 
 ### 5.11 Macro Overlay (P2 — Partially Built)
 
