@@ -485,7 +485,7 @@ Users can override weights via UserPreference.composite_weights.
 - `GET /stocks/{ticker}/fundamentals` returns all enriched fields
 - Agent tools read from DB at query time (fast, reliable, no external API calls)
 
-### FR-9: Alerts & Notifications (Phase 5)
+### FR-9: Alerts & Notifications (Phase 5) ✅ IMPLEMENTED (in-app only, Telegram deferred)
 
 **FR-9.1: Alert Rules**
 - Trailing stop-loss: price drops X% from recent high (X from UserPreference)
@@ -506,7 +506,7 @@ Users can override weights via UserPreference.composite_weights.
 - Quiet hours: no notifications between quiet_hours_start and quiet_hours_end
   (from UserPreference)
 
-### FR-10: Recommendation Evaluation (Phase 5)
+### FR-10: Recommendation Evaluation (Phase 5) ✅ IMPLEMENTED
 
 This is the feedback loop that answers: "Is this platform giving good advice?"
 Without it, the recommendation engine runs on assumptions that are never
@@ -570,6 +570,34 @@ After 3+ months of data accumulation, the following metrics become available:
 - price_at_recommendation must be captured at recommendation time
   (not reconstructed later — avoids look-ahead bias)
 - Outcome evaluation uses closing prices only (no intraday)
+
+### FR-11: Forecasting & Scorecard UI (Phase 5) ✅ IMPLEMENTED
+
+**FR-11.1: Forecast Card (Stock Detail Page)**
+- 3 horizon pills (90d/180d/270d) showing predicted price, % change from current, confidence range
+- Confidence badge (High/Moderate/Low) with color coding
+- Sharpe direction indicator (improving/flat/declining)
+- Loading skeleton while data fetches; empty state when no forecast available
+- Data refreshed nightly — 30-min stale time on TanStack Query
+
+**FR-11.2: Dashboard StatTiles**
+- "Portfolio Outlook" tile: 90d weighted expected return % across held positions with forecast coverage
+- "Accuracy" tile: overall hit rate + alpha, click opens ScorecardModal
+
+**FR-11.3: Scorecard Modal**
+- Dialog showing: overall hit rate, average alpha, buy/sell breakdown, worst miss (ticker + return %), per-horizon breakdown grid
+- Opens from Accuracy StatTile click
+
+**FR-11.4: Alert Bell (Topbar)**
+- Popover dropdown replacing notification stub
+- Unread badge count (red, updates every 30s)
+- Alert list: severity colors, title, message, ticker tag, time-ago
+- "Mark all read" button with batch PATCH
+- Max 20 alerts displayed in dropdown
+
+**FR-11.5: Agent Tools for Conversational Access**
+- 7 new agent tools allow chat queries: "forecast for AAPL", "compare AAPL and MSFT", "is AAPL's dividend safe?", "what are the risks?", "how accurate are your calls?"
+- Entity Registry enables pronoun resolution: "compare them", "what about it?"
 
 ---
 
