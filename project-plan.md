@@ -486,13 +486,13 @@ Self-healing nightly pipeline, Prophet forecasting (stocks + sector ETFs + portf
 - **JIRA Epic:** KAN-106 (11 Stories: KAN-107–117)
 
 ### Stories (11)
-- [ ] **S1 (KAN-107):** DB Models + Migration + ETF Seeding (~3h)
-- [ ] **S2 (KAN-108):** Pipeline Infrastructure — watermark, run logging, gap recovery (~3h)
-- [ ] **S3 (KAN-109):** Nightly Pipeline Chain + Beat Schedule (~3h)
-- [ ] **S4 (KAN-110):** Prophet Forecasting Engine — training, prediction, model versioning (~4h)
-- [ ] **S5 (KAN-111):** Forecast + Recommendation Evaluation + Drift Detection (~3h)
-- [ ] **S6 (KAN-112):** In-App Alerts Backend + API (~3h)
-- [ ] **S7 (KAN-113):** Forecast + Scorecard API Endpoints (~2h)
+- [x] **S1 (KAN-107):** DB Models + Migration + ETF Seeding (~3h) ✓ Session 46, PR #54
+- [x] **S2 (KAN-108):** Pipeline Infrastructure — watermark, run logging, gap recovery (~3h) ✓ Session 46, PR #55
+- [x] **S3 (KAN-109):** Nightly Pipeline Chain + Beat Schedule (~3h) ✓ Session 46, PR #56
+- [x] **S4 (KAN-110):** Prophet Forecasting Engine — training, prediction, model versioning (~4h) ✓ Session 46, PR #57
+- [x] **S5 (KAN-111):** Forecast + Recommendation Evaluation + Drift Detection (~3h) ✓ Session 46, PR #58
+- [x] **S6 (KAN-112):** In-App Alerts Backend + API (~3h) ✓ Session 46, PR #60
+- [x] **S7 (KAN-113):** Forecast + Scorecard API Endpoints (~2h) ✓ Session 46, PR #59
 - [ ] **S8 (KAN-114):** Agent Tools — Forecast + Comparison + Entity Registry (~4h)
 - [ ] **S9 (KAN-115):** Agent Tools — Scorecard + Sustainability + Risk (~3h)
 - [ ] **S10 (KAN-116):** Frontend — Forecast Card + Dashboard Tiles (~3h)

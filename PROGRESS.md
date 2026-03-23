@@ -857,45 +857,43 @@ All 7 subtasks (KAN-99–105) shipped in one session:
 
 ---
 
-## Session 43 — Phase 4F UI Migration: 7 of 9 Stories Complete
+## Session 43 — Phase 4F UI Migration: 7/9 Stories *(compact)*
+
+**Date:** 2026-03-22 | **PRs:** #41-#47 merged | **Tests:** 696 total
+
+7 UI migration stories: Shell+Tokens, Shared Components, Dashboard Redesign, Screener+Detail, Portfolio, Auth Redesign, Chat Polish. New: ScoreBar, RecommendationRow, ChatContext. KAN-98 hydration bug logged. 18 new frontend tests.
+
+---
+
+## Session 46 — Phase 5 Implementation: 7 of 11 Stories Complete
 
 **Date:** 2026-03-22
-**Epic:** KAN-88 (Phase 4F — UI Migration, Lovable → Production)
-**PRs:** #41–#47 (all merged to develop)
+**Epic:** KAN-106 (Phase 5 — Forecasting, Evaluation and Background Automation)
+**PRs:** #54-#60 (all merged to develop)
 
-### Setup
-- Created JIRA Epic KAN-88 + 9 Stories (KAN-89 through KAN-97)
-- Captured Lovable prototype screenshots (7 pages) for visual reference
-- Confirmed fonts (Sora + JetBrains Mono) already installed
-
-### Stories Completed (7/9)
+### Stories Completed (7/11)
 
 | Story | PR | Summary |
 |---|---|---|
-| KAN-89 [UI-1] Shell + Tokens | #41 | Design tokens (pulse-subtle, blink, scrollbar-thin, cyan-muted), framer-motion, Sidebar (Sectors nav, shadcn Tooltips, LogOut), Topbar (Activity, Bell stub, pulsing dot, AI glow), ChatContext |
-| KAN-90 [UI-2] Shared Components | #42 | ScoreBadge xs, SignalBadge WATCH/AVOID/SMA labels, ChangeIndicator prefix/showIcon, AllocationDonut sectorLink, IndexCard value/change/sparkline, ScoreBar (NEW). 17 new tests |
-| KAN-91 [UI-3] Dashboard Redesign | #43 | KPI 5→3 col grid adapt, Market Indexes adapt, Action Required + RecommendationRow (NEW), Sector Allocation card, Watchlist 4→3 col, useRecommendations hook |
-| KAN-92 [UI-4] Screener + Detail | #44 | ScoreBar inline, Held badge, signal descriptions (RSI/MACD/SMA/Bollinger), StockHeader redesign (Close, breadcrumb, Bookmark toggle, price display) |
-| KAN-93 [UI-5] Portfolio | #45 | Alert icons (AlertOctagon/AlertTriangle), KPI StatTiles with accents, sector concentration warning banner |
-| KAN-95 [UI-7] Auth Redesign | #46 | Split-panel login/register, brand showcase (logo glow, feature bullets, sparkline SVG, glowing orbs), Google OAuth stub, styled AuthInput with focus glow |
-| KAN-96 [UI-8] Chat Polish | #47 | Agent selector cards (BarChart3/Globe icons, "Choose an Agent"), suggestion chips fill-not-send, pulsing cyan dots thinking indicator, ChatInput forwardRef |
+| KAN-107 [S1] DB Models + Migration | #54 | 6 new models, Stock.is_etf, migration 011, ETF seed script. 25 tests |
+| KAN-108 [S2] Pipeline Infrastructure | #55 | PipelineRunner, watermark, gap detection, stale run cleanup, retry. 18 tests |
+| KAN-109 [S3] Nightly Pipeline Chain | #56 | 3-step Celery chain, recommendation generation task, beat schedule US/Eastern. 10 tests |
+| KAN-110 [S4] Prophet Forecasting Engine | #57 | Prophet JSON serialization, model versioning, 3 horizons, Sharpe direction, correlation matrix. 14 tests |
+| KAN-111 [S5] Evaluation + Drift Detection | #58 | Forecast eval (MAPE), drift detection, recommendation eval vs SPY, scorecard. 12 tests |
+| KAN-113 [S7] Forecast + Scorecard API | #59 | 4 endpoints, 6 Pydantic schemas, sector-to-ETF mapping. 11 tests |
+| KAN-112 [S6] In-App Alerts Backend | #60 | Alert generation task, 3 endpoints, 5 schemas. 9 tests |
 
-### New Components
-- `ScoreBar` — 10-segment color-coded bar
-- `RecommendationRow` — action icon, confidence badge, reasoning, composite score, Held badge
-- `ChatContext` (`contexts/chat-context.tsx`) — replaces prop drilling for chat state
+### New Files (16)
+- Models: `forecast.py`, `pipeline.py`, `alert.py` + migration 011
+- Tasks: `pipeline.py`, `recommendations.py`, `forecasting.py`, `evaluation.py`, `alerts.py`
+- Tools: `forecasting.py`, `scorecard.py`
+- Schemas: `forecasts.py`, `alerts.py`
+- Routers: `forecasts.py`, `alerts.py`
+- Scripts: `seed_etfs.py`
 
-### Bug Logged
-- **KAN-98**: Hydration mismatch from `isNYSEOpen()` in Topbar — server/client time mismatch. Console-only. Fix in UI-9.
+**Test count:** 566 unit + 174 API + 7 e2e + 4 integration + 107 frontend = 858 total (+99)
+**Alembic head:** `d68e82e90c96` (migration 011)
 
-### Deferred (logged in project-plan backlog)
-- Candlestick chart toggle (backend: OHLC format param)
-- Benchmark comparison chart (backend: index price endpoint)
-- framer-motion animations on settings sheet + transaction modal (UI-9)
-
-**Test count:** 440 unit + 157 API + 7 e2e + 4 integration + 88 frontend = 696 total (was 678)
-**Alembic head:** `ac5d765112d6` (migration 010 — unchanged)
-
-**Resume point (Session 44):** KAN-94 [UI-6] Sectors Page (new page + 3 backend endpoints) → KAN-97 [UI-9] Animations + Final Polish
+**Resume point (Session 47):** KAN-114 [S8], KAN-115 [S9], KAN-116 [S10], KAN-117 [S11]
 
 ---
