@@ -58,6 +58,13 @@ def build_planner_prompt(
             f"Preferences: max position {prefs.get('max_position_pct', 5)}%, "
             f"max sector {prefs.get('max_sector_pct', 25)}%"
         )
+    # Entity registry context (recently discussed tickers)
+    if user_context.get("entity_context"):
+        ctx_lines.append(user_context["entity_context"])
+    if user_context.get("resolved_pronouns"):
+        tickers = ", ".join(user_context["resolved_pronouns"])
+        ctx_lines.append(f"Pronoun resolution: user likely refers to {tickers}")
+
     ctx_str = "\n".join(ctx_lines) if ctx_lines else "No portfolio data available."
 
     return (

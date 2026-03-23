@@ -139,6 +139,121 @@ For out-of-scope queries:
 }
 ```
 
+**User:** "What's the forecast for NVDA?"
+```json
+{
+  "intent": "stock_analysis",
+  "reasoning": "Single stock forecast lookup — check if ingested, then get forecast.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "ingest_stock", "params": {"ticker": "NVDA"}},
+    {"tool": "get_forecast", "params": {"ticker": "NVDA"}}
+  ]
+}
+```
+
+**User:** "How does the Technology sector look?"
+```json
+{
+  "intent": "market_overview",
+  "reasoning": "Sector forecast via ETF proxy — get Technology sector ETF forecast.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "get_sector_forecast", "params": {"sector": "Technology"}}
+  ]
+}
+```
+
+**User:** "What's the outlook for my portfolio?"
+```json
+{
+  "intent": "portfolio",
+  "reasoning": "Portfolio-level forecast: aggregate weighted returns across holdings.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "get_portfolio_forecast", "params": {"user_id": "$USER_ID"}},
+    {"tool": "get_recommendations", "params": {}}
+  ]
+}
+```
+
+**User:** "Compare AAPL and MSFT"
+```json
+{
+  "intent": "stock_analysis",
+  "reasoning": "Side-by-side comparison of two stocks: signals, fundamentals, forecasts.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "ingest_stock", "params": {"ticker": "AAPL"}},
+    {"tool": "ingest_stock", "params": {"ticker": "MSFT"}},
+    {"tool": "compare_stocks", "params": {"tickers": ["AAPL", "MSFT"]}}
+  ]
+}
+```
+
+**User:** "Compare them" (after discussing AAPL and NVDA)
+```json
+{
+  "intent": "stock_analysis",
+  "reasoning": "Pronoun 'them' resolved to recently discussed tickers AAPL, NVDA.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "compare_stocks", "params": {"tickers": ["AAPL", "NVDA"]}}
+  ]
+}
+```
+
+**User:** "What about it?" (after discussing TSLA)
+```json
+{
+  "intent": "stock_analysis",
+  "reasoning": "Pronoun 'it' resolved to most recently discussed ticker TSLA. Full analysis.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "get_fundamentals", "params": {"ticker": "TSLA"}},
+    {"tool": "get_forecast", "params": {"ticker": "TSLA"}},
+    {"tool": "get_analyst_targets", "params": {"ticker": "TSLA"}}
+  ]
+}
+```
+
+**User:** "How are my recommendations doing?"
+```json
+{
+  "intent": "portfolio",
+  "reasoning": "Scorecard: hit rate, alpha, and per-horizon accuracy of past recommendations.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "get_recommendation_scorecard", "params": {"user_id": "$USER_ID"}}
+  ]
+}
+```
+
+**User:** "Is AAPL's dividend safe?"
+```json
+{
+  "intent": "stock_analysis",
+  "reasoning": "Dividend sustainability check: payout ratio, FCF coverage, yield assessment.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "dividend_sustainability", "params": {"ticker": "AAPL"}}
+  ]
+}
+```
+
+**User:** "What are the risks with PLTR?"
+```json
+{
+  "intent": "stock_analysis",
+  "reasoning": "Risk narrative: signal strength, fundamentals, forecast confidence, sector context.",
+  "skip_synthesis": false,
+  "steps": [
+    {"tool": "ingest_stock", "params": {"ticker": "PLTR"}},
+    {"tool": "risk_narrative", "params": {"ticker": "PLTR"}}
+  ]
+}
+```
+
 Now plan the user's query:
 
 **User:** "{{query}}"
