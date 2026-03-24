@@ -85,8 +85,8 @@
 
   /* Text */
   --muted: #0b1525;
-  --muted-foreground: #6a80a8;
-  --subtle: #2d3e5a;
+  --muted-foreground: #8a9dc0;
+  --subtle: #5a7099;
 
   /* Cyan accent */
   --cyan: #38bdf8;
@@ -153,9 +153,10 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
   }
-  html {
-    @apply font-sans;
+  code, [class*="font-mono"] {
+    font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
   }
 }
 
