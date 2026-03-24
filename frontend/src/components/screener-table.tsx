@@ -113,7 +113,7 @@ const COL: Record<string, Column> = {
     sortable: true,
     render: (item) => (
       <div className="flex items-center gap-2">
-        <ScoreBar score={(item.composite_score ?? 0) * 10} className="w-20" />
+        <ScoreBar score={item.composite_score ?? 0} className="w-20" />
         <ScoreBadge score={item.composite_score} size="xs" />
       </div>
     ),

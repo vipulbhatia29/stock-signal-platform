@@ -1010,3 +1010,50 @@ FastMCP param dispatch mismatch — **the most valuable finding of this story**.
 Phase 5.6: S6 (KAN-131 — validation: spec cross-reference, full test suite, manual verification)
 
 ---
+
+## Session 51 (continued) — Dashboard UX Bug Sprint + DB Fix
+
+**Date:** 2026-03-24
+**Branch:** `fix/dashboard-ux-bugs`
+
+### DB Bootstrap Fix (PR #87)
+- Startup schema validation in `main.py` lifespan — checks critical tables exist before app starts
+- Catches stale `alembic_version` with clear error message
+- Root cause: Docker port conflict (`idp-postgres` + `ssp-postgres` both on 5433)
+- Full DB re-seed: 515 stocks, 1.2M prices, 50K dividends, 1.5K forecasts
+
+### Dashboard UX Fixes (PR #91)
+14 files changed, 2 new files:
+
+1. **Sora font not loading** (PR #90) — Tailwind v4 `@theme` can't resolve Next.js runtime CSS vars. Fixed with direct `font-family` in `@layer base`.
+2. **Label contrast** — `--subtle` from #2d3e5a (1.8:1) to #5a7099 (4.5:1), `--muted-foreground` bumped.
+3. **Hydration error** — WelcomeBanner `localStorage` read during SSR. Fixed with `useMounted()` hook using `useSyncExternalStore`.
+4. **Score scale bug** — Frontend treated `composite_score` as 0-1 (multiplied by 10). It's 0-10 from API. Fixed in 7 places: dashboard, stock-card, topbar, screener-table, trending-stocks.
+5. **Signal thresholds misaligned** — Frontend used `>= 0.6` for BUY. Backend uses `>= 8` BUY, `>= 5` WATCH, `< 5` AVOID. All frontend thresholds aligned.
+6. **DialogTrigger crash** (KAN-137) — `<span>` in render prop → `<button>`.
+7. **Welcome banner** — redesigned: gradient, icon, "Build your watchlist" copy.
+8. **Sidebar logo** — "S" letter → chart trend SVG icon.
+9. **Sidebar N overlap** — added `mb-8` padding above Next.js dev badge.
+10. **Chat panel whitespace** — `translateX` → `width: 0px` when closed. Content expands.
+11. **"1 signal" badge** — shows BUY + AVOID counts with color coding, navigates to screener.
+12. **Top Signal tile** — dynamic accent color (gain/warn/loss), correct signal label.
+13. **Action Required** — now only shows portfolio-held stocks, not watchlist.
+14. **Trending cards** — removed useless sparkline, always shows RSI/MACD/SMA/Sharpe with color coding.
+15. **StockMetrics component** — new shared component for consistent metric display.
+16. **MetricGuide** — hover footer explaining RSI/Sharpe ranges.
+17. **Watchlist card** — score display fixed (3.1 not 311), max-width constraint, score bar overflow fix.
+18. **Refresh All** — replaced Celery-dependent approach with direct sequential ingest + toast notifications.
+19. **Individual refresh** — loading spinner, green checkmark on success, debounced.
+
+### Deferred to UI Polish Phase
+- Watchlist/Top Signal cards need backend API enrichment (add RSI/MACD to watchlist endpoint)
+- Styled Radix tooltips instead of `title` attributes
+- Full Lovable comparison page-by-page
+- Other pages (Screener, Portfolio, Stock Detail, Sectors, Auth)
+
+### Resume Point
+- Phase 5.6: S6 (KAN-131 — validation)
+- UI Polish Phase: systematic Lovable comparison (memory: `project/ui-polish-phase`)
+- Bug: KAN-137 DialogTrigger (fixed in this PR)
+
+---

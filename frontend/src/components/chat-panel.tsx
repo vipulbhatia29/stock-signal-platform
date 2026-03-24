@@ -144,10 +144,10 @@ export function ChatPanel({ isOpen, onClose, onArtifact }: ChatPanelProps) {
       ref={asideRef}
       className="flex flex-col border-l border-border bg-card flex-shrink-0 relative overflow-hidden"
       style={{
-        width: "var(--cp)",
-        minWidth: "var(--cp)",
-        transform: isOpen ? "translateX(0)" : "translateX(100%)",
-        transition: "transform 0.25s cubic-bezier(.22,.68,0,1.1)",
+        width: isOpen ? "var(--cp)" : "0px",
+        minWidth: isOpen ? "var(--cp)" : "0px",
+        opacity: isOpen ? 1 : 0,
+        transition: "width 0.25s cubic-bezier(.22,.68,0,1.1), min-width 0.25s cubic-bezier(.22,.68,0,1.1), opacity 0.2s ease",
       }}
     >
       {/* Drag resize handle */}

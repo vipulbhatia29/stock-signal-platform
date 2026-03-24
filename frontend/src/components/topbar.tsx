@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { Activity, Bot } from "lucide-react";
 import { TickerSearch } from "@/components/ticker-search";
 import { isNYSEOpen } from "@/lib/market-hours";
@@ -23,6 +23,7 @@ const PAGE_LABELS: Record<string, string> = {
 
 export function Topbar({ onAddTicker }: TopbarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { chatOpen, toggleChat } = useChat();
 
   // Defer market-status to client to avoid SSR hydration mismatch (KAN-98).
@@ -46,8 +47,10 @@ export function Topbar({ onAddTicker }: TopbarProps) {
   }, []);
 
   const { data: watchlist } = useWatchlist();
-  const signalCount =
-    watchlist?.filter((w) => (w.composite_score ?? 0) >= 0.6).length ?? 0;
+  // Matches backend: BUY >= 8, AVOID < 5
+  const buyCount = watchlist?.filter((w) => (w.composite_score ?? 0) >= 8).length ?? 0;
+  const sellCount = watchlist?.filter((w) => (w.composite_score ?? 0) < 5).length ?? 0;
+  const totalSignals = buyCount + sellCount;
 
   // Derive page label — stock detail shows ticker, otherwise route label
   const pageLabel = pathname.startsWith("/stocks/")
@@ -78,13 +81,20 @@ export function Topbar({ onAddTicker }: TopbarProps) {
           </span>
         </div>
 
-        {/* Signal count */}
-        {signalCount > 0 && (
-          <button className="flex items-center gap-1.5 rounded-md bg-card2 border border-border px-2 py-1 hover:bg-hov transition-colors">
+        {/* Signal count — shows BUY and SELL counts */}
+        {totalSignals > 0 && (
+          <button
+            onClick={() => router.push("/screener")}
+            className="flex items-center gap-1.5 rounded-md bg-card2 border border-border px-2 py-1 hover:bg-hov transition-colors"
+            title="View signals in screener"
+          >
             <Activity size={12} className="text-cyan" />
-            <span className="font-mono text-[10px] text-foreground">
-              {signalCount} signal{signalCount !== 1 ? "s" : ""}
-            </span>
+            {buyCount > 0 && (
+              <span className="font-mono text-[10px] text-gain font-semibold">{buyCount} BUY</span>
+            )}
+            {sellCount > 0 && (
+              <span className="font-mono text-[10px] text-loss font-semibold">{sellCount} AVOID</span>
+            )}
           </button>
         )}
 

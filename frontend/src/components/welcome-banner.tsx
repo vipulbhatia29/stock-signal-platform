@@ -4,6 +4,7 @@ import { useState } from "react";
 import { XIcon, PlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
+import { useMounted } from "@/hooks/use-mounted";
 
 const SUGGESTED_TICKERS = [
   { ticker: "AAPL", name: "Apple" },
@@ -19,12 +20,14 @@ interface WelcomeBannerProps {
 }
 
 export function WelcomeBanner({ onAddTicker, addingTickers }: WelcomeBannerProps) {
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === "undefined") return true;
-    return localStorage.getItem(STORAGE_KEYS.ONBOARDING_DISMISSED) === "true";
-  });
+  const mounted = useMounted();
+  const [dismissed, setDismissed] = useState(false);
 
+  // Don't render on server or before mount (avoids hydration mismatch).
+  // After mount, check localStorage to decide visibility.
+  if (!mounted) return null;
   if (dismissed) return null;
+  if (localStorage.getItem(STORAGE_KEYS.ONBOARDING_DISMISSED) === "true") return null;
 
   const handleDismiss = () => {
     setDismissed(true);
@@ -32,38 +35,44 @@ export function WelcomeBanner({ onAddTicker, addingTickers }: WelcomeBannerProps
   };
 
   return (
-    <div className="relative rounded-lg border border-[var(--color-accent)]/30 bg-[var(--color-accent)]/5 p-4 mb-6">
+    <div className="relative rounded-lg border border-[var(--bhi)] bg-gradient-to-r from-[var(--cdim)] to-transparent p-5 mb-2">
       <button
         onClick={handleDismiss}
-        className="absolute right-3 top-3 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
+        className="absolute right-3 top-3 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-[var(--hov)] transition-colors"
         aria-label="Dismiss"
       >
         <XIcon className="size-4" />
       </button>
-      <h3 className="text-sm font-semibold text-[var(--color-foreground)] mb-1">
-        Welcome to Stock Signal Platform
-      </h3>
-      <p className="text-sm text-[var(--color-muted-foreground)] mb-3">
-        Get started by adding stocks to your watchlist. We&apos;ll fetch prices,
-        compute signals, and generate recommendations.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {SUGGESTED_TICKERS.map(({ ticker, name }) => (
-          <Button
-            key={ticker}
-            variant="outline"
-            size="sm"
-            onClick={() => onAddTicker(ticker)}
-            disabled={addingTickers.has(ticker)}
-            className="gap-1.5"
-          >
-            <PlusIcon className="size-3" />
-            {ticker}
-            <span className="text-[var(--color-muted-foreground)] font-normal">
-              {name}
-            </span>
-          </Button>
-        ))}
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 h-8 w-8 rounded-lg bg-[var(--cdim)] flex items-center justify-center flex-shrink-0">
+          <PlusIcon className="size-4 text-cyan" />
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-foreground">
+            Build your watchlist
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5 mb-3">
+            Add stocks to track signals, compute scores, and get AI-powered recommendations.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {SUGGESTED_TICKERS.map(({ ticker, name }) => (
+              <Button
+                key={ticker}
+                variant="outline"
+                size="sm"
+                onClick={() => onAddTicker(ticker)}
+                disabled={addingTickers.has(ticker)}
+                className="gap-1.5 h-7 text-xs"
+              >
+                <PlusIcon className="size-3" />
+                <span className="font-mono font-semibold">{ticker}</span>
+                <span className="text-muted-foreground font-normal">
+                  {name}
+                </span>
+              </Button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
