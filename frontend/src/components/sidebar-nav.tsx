@@ -41,15 +41,18 @@ export function SidebarNav() {
       className="flex flex-col items-center py-3.5 border-r border-border bg-card flex-shrink-0"
       style={{ width: "var(--sw)" }}
     >
-      {/* Logo */}
-      <div
-        className="w-8 h-8 rounded-[8px] bg-cyan flex items-center justify-center mb-5 flex-shrink-0"
-        style={{ boxShadow: "0 0 18px var(--cg)" }}
-      >
-        <span className="text-[var(--background)] font-bold text-sm leading-none flex items-center justify-center w-full h-full">
-          S
-        </span>
-      </div>
+      {/* Logo — matches login page branding */}
+      <Link href="/dashboard" className="mb-5 flex-shrink-0">
+        <div
+          className="w-8 h-8 rounded-[8px] bg-cyan flex items-center justify-center"
+          style={{ boxShadow: "0 0 18px var(--cg)" }}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--background)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="22 7 13.5 15.5 8.5 10.5 2 17" />
+            <polyline points="16 7 22 7 22 13" />
+          </svg>
+        </div>
+      </Link>
 
       {/* Nav items */}
       <StaggerGroup className="flex flex-col items-center gap-1 flex-1 w-full" stagger={0.05}>
@@ -99,8 +102,8 @@ export function SidebarNav() {
         })}
       </StaggerGroup>
 
-      {/* Bottom: settings + logout */}
-      <div className="flex flex-col items-center gap-1 w-full">
+      {/* Bottom: settings + logout — padded above Next.js dev badge */}
+      <div className="flex flex-col items-center gap-1 w-full mb-8">
         {/* Settings — disabled */}
         <Tooltip>
           <TooltipTrigger

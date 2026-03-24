@@ -2,6 +2,11 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { WelcomeBanner } from "@/components/welcome-banner";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 
+// Mock useMounted to return true in test environment (jsdom)
+jest.mock("@/hooks/use-mounted", () => ({
+  useMounted: () => true,
+}));
+
 // Mock localStorage
 const mockLocalStorage: Record<string, string> = {};
 beforeEach(() => {
@@ -21,7 +26,7 @@ describe("WelcomeBanner", () => {
   it("renders welcome message and suggested tickers", () => {
     const onAdd = jest.fn();
     render(<WelcomeBanner onAddTicker={onAdd} addingTickers={new Set()} />);
-    expect(screen.getByText("Welcome to Stock Signal Platform")).toBeInTheDocument();
+    expect(screen.getByText("Build your watchlist")).toBeInTheDocument();
     expect(screen.getByText("AAPL")).toBeInTheDocument();
     expect(screen.getByText("NVDA")).toBeInTheDocument();
   });
@@ -37,7 +42,7 @@ describe("WelcomeBanner", () => {
     const onAdd = jest.fn();
     render(<WelcomeBanner onAddTicker={onAdd} addingTickers={new Set()} />);
     fireEvent.click(screen.getByLabelText("Dismiss"));
-    expect(screen.queryByText("Welcome to Stock Signal Platform")).not.toBeInTheDocument();
+    expect(screen.queryByText("Build your watchlist")).not.toBeInTheDocument();
     expect(mockLocalStorage[STORAGE_KEYS.ONBOARDING_DISMISSED]).toBe("true");
   });
 
@@ -45,6 +50,6 @@ describe("WelcomeBanner", () => {
     mockLocalStorage[STORAGE_KEYS.ONBOARDING_DISMISSED] = "true";
     const onAdd = jest.fn();
     render(<WelcomeBanner onAddTicker={onAdd} addingTickers={new Set()} />);
-    expect(screen.queryByText("Welcome to Stock Signal Platform")).not.toBeInTheDocument();
+    expect(screen.queryByText("Build your watchlist")).not.toBeInTheDocument();
   });
 });

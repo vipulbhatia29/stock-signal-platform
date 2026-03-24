@@ -37,20 +37,21 @@ jest.mock("@/hooks/use-chat", () => ({
   useDeleteSession: () => ({ mutate: jest.fn() }),
 }));
 
-test("has translateX(100%) when closed", () => {
+test("has zero width when closed", () => {
   const { container } = render(
     <ChatPanel isOpen={false} onClose={jest.fn()} onArtifact={jest.fn()} />
   );
   const aside = container.querySelector("aside");
-  expect(aside?.style.transform).toBe("translateX(100%)");
+  expect(aside?.style.width).toBe("0px");
 });
 
-test("has translateX(0) when open", () => {
+test("has non-zero width when open", () => {
   const { container } = render(
     <ChatPanel isOpen={true} onClose={jest.fn()} onArtifact={jest.fn()} />
   );
   const aside = container.querySelector("aside");
-  expect(aside?.style.transform).toBe("translateX(0)");
+  // When open, width is set to CSS var; when closed, it's "0px"
+  expect(aside?.style.width).not.toBe("0px");
 });
 
 test("shows agent selector when no active session", () => {

@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StarIcon, RefreshCw } from "lucide-react";
 import { useChat } from "@/contexts/chat-context";
 import {
-  useQuery,
   useMutation,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -31,7 +30,6 @@ import { RecommendationRow } from "@/components/recommendation-row";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import * as api from "@/lib/api";
-import type { TaskStatus, RefreshTask } from "@/types/api";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { usePortfolioForecast, useScorecard } from "@/hooks/use-forecasts";
@@ -42,7 +40,6 @@ import { PageTransition, StaggerGroup, StaggerItem } from "@/components/motion-p
 
 export default function DashboardPage() {
   const [sectorFilter, setSectorFilter] = useState<string | null>(null);
-  const [refreshTasks, setRefreshTasks] = useState<Record<string, string>>({});
 
   const queryClient = useQueryClient();
   const { chatOpen: chatIsOpen } = useChat();
@@ -56,11 +53,33 @@ export default function DashboardPage() {
   const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
 
-  // ── Refresh All mutation ────────────────────────────────────────────────────
+  // ── Refresh All — direct ingest (no Celery dependency) ─────────────────────
+
+  const [refreshingAll, setRefreshingAll] = useState(false);
 
   const refreshAllMutation = useMutation({
-    mutationFn: () =>
-      api.post<RefreshTask[]>("/stocks/watchlist/refresh-all"),
+    mutationFn: async () => {
+      if (!watchlist?.length) return;
+      setRefreshingAll(true);
+      let succeeded = 0;
+      let failed = 0;
+      for (const item of watchlist) {
+        try {
+          await api.post(`/stocks/${item.ticker}/ingest`);
+          succeeded++;
+        } catch {
+          failed++;
+        }
+      }
+      queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+      queryClient.invalidateQueries({ queryKey: ["trending-stocks"] });
+      if (failed === 0) {
+        toast.success(`Refreshed ${succeeded} stock${succeeded !== 1 ? "s" : ""}`);
+      } else {
+        toast.warning(`Refreshed ${succeeded}, failed ${failed}`);
+      }
+      setRefreshingAll(false);
+    },
   });
 
   // ── Acknowledge stale price mutation ────────────────────────────────────────
@@ -70,56 +89,6 @@ export default function DashboardPage() {
       api.post(`/stocks/watchlist/${ticker}/acknowledge`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["watchlist"] }),
   });
-
-  // When refresh-all succeeds, populate the task map
-  useEffect(() => {
-    if (refreshAllMutation.data) {
-      const taskMap: Record<string, string> = {};
-      refreshAllMutation.data.forEach((t) => {
-        taskMap[t.ticker] = t.task_id;
-      });
-      setTimeout(() => setRefreshTasks(taskMap), 0);
-    }
-  }, [refreshAllMutation.data]);
-
-  // ── Per-task polling ────────────────────────────────────────────────────────
-
-  const hasInFlightTasks = Object.keys(refreshTasks).length > 0;
-
-  const taskPollQuery = useQuery({
-    queryKey: ["task-poll", refreshTasks],
-    queryFn: async () => {
-      const results = await Promise.all(
-        Object.entries(refreshTasks).map(async ([ticker, taskId]) => {
-          const res = await api.get<TaskStatus>(
-            `/tasks/${taskId}/status`
-          );
-          return { ticker, taskId, state: res.state };
-        })
-      );
-      return results;
-    },
-    enabled: hasInFlightTasks,
-    refetchInterval: hasInFlightTasks ? 2000 : false,
-  });
-
-  // Process completed tasks
-  useEffect(() => {
-    if (!taskPollQuery.data) return;
-    const stillPending: Record<string, string> = {};
-    taskPollQuery.data.forEach(({ ticker, taskId, state }) => {
-      if (state === "SUCCESS") {
-        queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-      } else if (state === "FAILURE") {
-        toast.error(
-          `Couldn't refresh ${ticker} — Yahoo Finance may be rate limited. Try again in a few minutes.`
-        );
-      } else {
-        stillPending[ticker] = taskId;
-      }
-    });
-    setTimeout(() => setRefreshTasks(stillPending), 0);
-  }, [taskPollQuery.data, queryClient]);
 
   // ── Portfolio overview ──────────────────────────────────────────────────────
 
@@ -154,9 +123,10 @@ export default function DashboardPage() {
     if (!watchlist) return { buy: 0, hold: 0, sell: 0 };
     return watchlist.reduce(
       (acc, w) => {
+        // Matches backend: BUY >= 8, WATCH >= 5, AVOID < 5
         const score = w.composite_score ?? 0;
-        if (score >= 0.6) acc.buy++;
-        else if (score >= 0.4) acc.hold++;
+        if (score >= 8) acc.buy++;
+        else if (score >= 5) acc.hold++;
         else acc.sell++;
         return acc;
       },
@@ -165,10 +135,10 @@ export default function DashboardPage() {
   }, [watchlist]);
 
   const topSignal = useMemo(() => {
-    if (!watchlist) return null;
+    if (!watchlist || watchlist.length === 0) return null;
+    // Pick the highest-scoring watchlist stock (regardless of threshold)
     return (
-      watchlist
-        .filter((w) => (w.composite_score ?? 0) >= 0.6)
+      [...watchlist]
         .sort((a, b) => (b.composite_score ?? 0) - (a.composite_score ?? 0))[0] ?? null
     );
   }, [watchlist]);
@@ -209,7 +179,8 @@ export default function DashboardPage() {
       return String(rec.reasoning.summary);
     }
     // Template-based fallback
-    const score = (rec.composite_score * 10).toFixed(1);
+    // composite_score is already 0-10 from API
+    const score = rec.composite_score.toFixed(1);
     if (rec.action === "BUY") return `Strong signals with composite score ${score}. Consider adding to portfolio.`;
     if (rec.action === "WATCH") return `Mixed signals — composite score ${score}. Monitor for entry point.`;
     if (rec.action === "AVOID") return `Weak signals with composite score ${score}. High risk indicators.`;
@@ -225,8 +196,9 @@ export default function DashboardPage() {
       {/* Trending Stocks (visible even with empty watchlist) */}
       <TrendingStocks />
 
-      {/* KPI Stat Tiles — 5-col grid, 3-col when chat open */}
+      {/* KPI Stat Tiles — organized into portfolio + signals groups */}
       <section>
+        <SectionHeading>Overview</SectionHeading>
         <StaggerGroup className={cn(
           "grid grid-cols-2 gap-3 transition-all duration-300",
           chatIsOpen ? "lg:grid-cols-3 xl:grid-cols-5" : "lg:grid-cols-5"
@@ -272,11 +244,11 @@ export default function DashboardPage() {
               </div>
               <div className="text-center rounded-[6px] py-[7px] bg-[var(--wdim)]">
                 <div className="font-mono text-[20px] font-bold leading-none text-warning">{signalCounts.hold}</div>
-                <div className="text-[9px] font-semibold tracking-[0.07em] uppercase mt-0.5 text-warning">Hold</div>
+                <div className="text-[9px] font-semibold tracking-[0.07em] uppercase mt-0.5 text-warning">Watch</div>
               </div>
               <div className="text-center rounded-[6px] py-[7px] bg-[var(--ldim)]">
                 <div className="font-mono text-[20px] font-bold leading-none text-loss">{signalCounts.sell}</div>
-                <div className="text-[9px] font-semibold tracking-[0.07em] uppercase mt-0.5 text-loss">Sell</div>
+                <div className="text-[9px] font-semibold tracking-[0.07em] uppercase mt-0.5 text-loss">Avoid</div>
               </div>
             </div>
           </StatTile>
@@ -284,17 +256,27 @@ export default function DashboardPage() {
 
           {/* Top Signal */}
           <StaggerItem>
-          <StatTile label="Top Signal" accentColor="gain">
+          <StatTile label="Top Signal" accentColor={
+            (topSignal?.composite_score ?? 0) >= 8 ? "gain" : (topSignal?.composite_score ?? 0) >= 5 ? "warn" : "loss"
+          }>
             {topSignal ? (
               <div className="mt-1">
                 <div className="font-mono text-[18px] font-bold text-foreground">{topSignal.ticker}</div>
-                <div className="text-[10px] text-subtle truncate">{topSignal.name}</div>
-                <div className="font-mono text-[11px] text-gain mt-1">
-                  Score: {Math.round((topSignal.composite_score ?? 0) * 100)}
+                <div className="text-[10px] text-muted-foreground truncate">{topSignal.name}</div>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  {(() => {
+                    const s = topSignal.composite_score ?? 0;
+                    const label = s >= 8 ? "BUY" : s >= 5 ? "WATCH" : "AVOID";
+                    const cls = s >= 8 ? "bg-gain/10 text-gain" : s >= 5 ? "bg-warning/10 text-warning" : "bg-loss/10 text-loss";
+                    return <span className={`inline-flex items-center rounded px-1 py-0.5 text-[9px] font-semibold ${cls}`}>{label}</span>;
+                  })()}
+                  <span className="font-mono text-[11px] text-muted-foreground">
+                    {(topSignal.composite_score ?? 0).toFixed(1)}/10
+                  </span>
                 </div>
               </div>
             ) : (
-              <div className="text-[10px] text-subtle mt-2">No strong signals</div>
+              <div className="text-[10px] text-muted-foreground mt-2">No strong signals</div>
             )}
           </StatTile>
           </StaggerItem>
@@ -399,25 +381,28 @@ export default function DashboardPage() {
         )}
       </section>
 
-      {/* Action Required — full width */}
-      {(recommendations?.length ?? 0) > 0 && (
+      {/* Action Required — only for portfolio-held stocks */}
+      {(() => {
+        const portfolioRecs = recommendations?.filter((rec) => heldTickers.has(rec.ticker)) ?? [];
+        return portfolioRecs.length > 0 ? (
         <section>
           <SectionHeading>Action Required</SectionHeading>
           <div className="space-y-2">
-            {recommendations?.slice(0, 5).map((rec) => (
+            {portfolioRecs.slice(0, 5).map((rec) => (
               <RecommendationRow
                 key={rec.ticker}
                 ticker={rec.ticker}
                 action={rec.action}
                 confidence={rec.confidence}
-                compositeScore={rec.composite_score * 10}
+                compositeScore={rec.composite_score}
                 reasoning={getReasoningText(rec)}
                 isHeld={heldTickers.has(rec.ticker)}
               />
             ))}
           </div>
         </section>
-      )}
+        ) : null;
+      })()}
 
       {/* Portfolio Drawer */}
       <PortfolioDrawer
@@ -441,15 +426,15 @@ export default function DashboardPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => refreshAllMutation.mutate()}
-                disabled={refreshAllMutation.isPending || hasInFlightTasks}
+                disabled={refreshAllMutation.isPending || refreshingAll}
               >
                 <RefreshCw
                   className={cn(
                     "h-4 w-4 mr-1.5",
-                    hasInFlightTasks && "animate-spin"
+                    refreshingAll && "animate-spin"
                   )}
                 />
-                Refresh All
+                {refreshingAll ? "Refreshing…" : "Refresh All"}
               </Button>
             </div>
           }
@@ -509,7 +494,7 @@ export default function DashboardPage() {
                 currentPrice={item.current_price}
                 priceUpdatedAt={item.price_updated_at}
                 priceAcknowledgedAt={item.price_acknowledged_at}
-                isRefreshing={item.ticker in refreshTasks}
+                isRefreshing={refreshingAll}
                 onRefresh={async (ticker) => {
                   await api.post(`/stocks/${ticker}/ingest`);
                   queryClient.invalidateQueries({ queryKey: ["watchlist"] });

@@ -1,7 +1,8 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import Link from "next/link";
-import { XIcon, RefreshCw } from "lucide-react";
+import { XIcon, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { RelativeTime } from "./relative-time";
 import { cn } from "@/lib/utils";
@@ -18,11 +19,12 @@ function isStale(
   return priceDate > new Date(acknowledgedAt).getTime();
 }
 
-function scoreToSignal(score: number | null | undefined): "BUY" | "HOLD" | "SELL" {
-  if (score == null) return "HOLD";
-  if (score >= 0.6) return "BUY";
-  if (score >= 0.4) return "HOLD";
-  return "SELL";
+function scoreToSignal(score: number | null | undefined): "BUY" | "WATCH" | "AVOID" {
+  if (score == null) return "WATCH";
+  // Matches backend: BUY >= 8, WATCH >= 5, AVOID < 5
+  if (score >= 8) return "BUY";
+  if (score >= 5) return "WATCH";
+  return "AVOID";
 }
 
 interface StockCardProps {
@@ -50,16 +52,34 @@ export function StockCard({
   currentPrice,
   priceUpdatedAt,
   onRefresh,
-  isRefreshing = false,
+  isRefreshing: isRefreshingProp = false,
   priceAcknowledgedAt,
   onAcknowledge,
 }: StockCardProps) {
+  const [localRefreshing, setLocalRefreshing] = useState(false);
+  const [refreshDone, setRefreshDone] = useState(false);
+  const isRefreshing = isRefreshingProp || localRefreshing;
+
+  const handleRefresh = useCallback(async () => {
+    if (isRefreshing || !onRefresh) return;
+    setLocalRefreshing(true);
+    setRefreshDone(false);
+    try {
+      await onRefresh(ticker);
+      setRefreshDone(true);
+      setTimeout(() => setRefreshDone(false), 2000);
+    } finally {
+      setLocalRefreshing(false);
+    }
+  }, [ticker, onRefresh, isRefreshing]);
+
   const signal = scoreToSignal(score);
-  const scoreBarPct = score != null ? Math.round(score * 100) : 0;
+  // composite_score is 0-10 from API, convert to 0-100% for bar width
+  const scoreBarPct = score != null ? Math.round(score * 10) : 0;
   const scoreBarColor =
     signal === "BUY"
       ? "var(--gain)"
-      : signal === "SELL"
+      : signal === "AVOID"
         ? "var(--loss)"
         : "var(--cyan)";
   const stale =
@@ -68,13 +88,13 @@ export function StockCard({
   const signalClasses =
     signal === "BUY"
       ? "text-[var(--gain)] bg-[var(--gain)]/10"
-      : signal === "SELL"
+      : signal === "AVOID"
         ? "text-[var(--loss)] bg-[var(--loss)]/10"
         : "text-[var(--cyan)] bg-[var(--cdim)]";
 
   return (
     <div
-      className="group relative rounded-[var(--radius)] border border-border bg-card p-[12px_13px] flex flex-col gap-2.5 cursor-pointer transition-colors hover:border-[var(--bhi)] hover:bg-[var(--hov)] animate-fade-slide-up"
+      className="group relative rounded-[var(--radius)] border border-border bg-card p-[12px_13px] flex flex-col gap-2.5 cursor-pointer transition-colors hover:border-[var(--bhi)] hover:bg-[var(--hov)] animate-fade-slide-up max-w-sm"
       style={{ "--stagger-delay": `${animationDelay}ms` } as React.CSSProperties}
     >
       {/* Remove button */}
@@ -111,26 +131,27 @@ export function StockCard({
           </div>
         </div>
 
-        {/* Bottom row: signal badge + score bar + refresh */}
+        {/* Bottom row: signal badge + score + score bar + refresh */}
         <div className="flex items-center justify-between">
           <span
             className={cn(
               "inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide",
               signalClasses
             )}
+            title={`Signal: ${signal} — based on composite technical + fundamental analysis`}
           >
             {signal}
           </span>
 
-          <div className="flex items-center gap-2 flex-1 mx-3">
-            <div className="flex-1 h-[3px] rounded-full bg-[var(--cdim)]">
+          <div className="flex items-center gap-2 flex-1 mx-3 min-w-0 overflow-hidden">
+            <div className="flex-1 h-[3px] rounded-full bg-[var(--cdim)] min-w-0" title={`Composite score: ${(score != null ? score.toFixed(1) : "N/A")}/10`}>
               <div
                 className="h-full rounded-full transition-all"
                 style={{ width: `${scoreBarPct}%`, background: scoreBarColor }}
               />
             </div>
-            <span className="font-mono text-[9.5px] text-muted-foreground">
-              {scoreBarPct}
+            <span className="font-mono text-[9.5px] text-muted-foreground shrink-0" title="Score out of 10">
+              {score != null ? score.toFixed(1) : "—"}
             </span>
           </div>
 
@@ -145,18 +166,21 @@ export function StockCard({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                onRefresh?.(ticker);
+                handleRefresh();
               }}
+              disabled={isRefreshing}
               aria-label={`Refresh ${ticker}`}
               className={cn(
                 "p-0.5 rounded-full transition-colors",
                 isRefreshing && "animate-spin pointer-events-none",
-                stale
-                  ? "text-[var(--warning)]"
-                  : "text-muted-foreground hover:text-foreground"
+                refreshDone
+                  ? "text-gain"
+                  : stale
+                    ? "text-[var(--warning)]"
+                    : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <RefreshCw size={10} />
+              {refreshDone ? <CheckCircle2 size={10} /> : <RefreshCw size={10} />}
             </button>
             {stale && onAcknowledge && (
               <button

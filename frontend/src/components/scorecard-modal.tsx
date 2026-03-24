@@ -133,7 +133,7 @@ export function ScorecardModal({ children }: ScorecardModalProps) {
 
   return (
     <Dialog>
-      <DialogTrigger render={<span className="cursor-pointer">{children}</span>} />
+      <DialogTrigger render={<button className="cursor-pointer text-left w-full">{children}</button>} />
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Recommendation Scorecard</DialogTitle>
