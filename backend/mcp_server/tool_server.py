@@ -66,7 +66,12 @@ def _register_tool(
 
     @mcp.tool(name=name, description=description)
     async def _handler(params: dict = {}, _tool: Any = tool) -> str:  # noqa: B006
-        """MCP tool handler — delegates to internal tool, returns JSON."""
+        """MCP tool handler — delegates to internal tool, returns JSON.
+
+        FastMCP dispatches tool call arguments as keyword args mapped to
+        function parameters. The client wraps the original tool params
+        inside ``{"params": {...}}`` so they arrive as a single dict here.
+        """
         result: ToolResult = await _tool.execute(params)
         return result.to_json()
 

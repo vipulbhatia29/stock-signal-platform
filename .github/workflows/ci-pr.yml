@@ -85,8 +85,18 @@ jobs:
           REDIS_URL: ${{ secrets.CI_REDIS_URL }}
           JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
           JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+          MCP_TOOLS: "true"
           CI: "true"
         run: uv run pytest tests/unit/ tests/api/ -v --tb=short
+      - name: Run integration tests
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.CI_REDIS_URL }}
+          JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
+          JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+          MCP_TOOLS: "true"
+          CI: "true"
+        run: uv run pytest tests/integration/ -v --tb=short -m integration
 
   frontend-test:
     runs-on: ubuntu-latest

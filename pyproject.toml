@@ -61,6 +61,7 @@ markers = [
     "pre_commit: fast tests for pre-commit hook",
     "ci_only: tests that only run in CI pipeline",
     "agent_gated: tests gated by agent/tool code changes",
+    "integration: integration tests requiring real subprocess or external services",
 ]
 
 [tool.ruff]

@@ -52,6 +52,16 @@ category: debugging
 - Rate limiting: 0.5s delay between batch fetches.
 - Mock at tool boundary (`fetch_prices`) not at `yf.download`.
 
+## FastMCP Parameter Dispatch
+- FastMCP dispatches tool call arguments as **keyword arguments** to handler functions.
+- If handler has `_handler(params: dict)` and client sends `{"query": "AAPL"}`, FastMCP calls `_handler(query="AAPL")` → ValidationError.
+- Fix: MCPToolClient wraps params as `{"params": {...}}` before sending. Handler receives the full dict.
+- This applies to ALL tools — discovered by integration tests in Session 51 (was silently broken before).
+
+## anyio / pytest-asyncio Teardown
+- MCP `stdio_client` uses anyio TaskGroup. If you `connect()` in a fixture and `close()` in teardown, you get `RuntimeError: Attempted to exit cancel scope in a different task`.
+- Fix: wrap `close()` in `try/except RuntimeError` in fixture teardown. Harmless — subprocess is dead anyway.
+
 ## passlib / bcrypt
 - bcrypt >= 5.0 broke passlib API. Pin `bcrypt==4.2.1` in pyproject.toml.
 

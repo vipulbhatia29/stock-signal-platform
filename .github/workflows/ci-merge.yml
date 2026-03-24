@@ -74,6 +74,7 @@ jobs:
           REDIS_URL: ${{ secrets.CI_REDIS_URL }}
           JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
           JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+          MCP_TOOLS: "true"
           CI: "true"
         run: uv run pytest tests/unit/ tests/api/ -v --tb=short
       - uses: actions/setup-node@v6
@@ -128,9 +129,9 @@ jobs:
           REDIS_URL: ${{ secrets.CI_REDIS_URL }}
           JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
           JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+          MCP_TOOLS: "true"
           CI: "true"
-        # Exit code 5 = no tests collected (tests/integration/ is empty stub)
-        run: uv run pytest tests/integration/ -v --tb=short || [ $? -eq 5 ]
+        run: uv run pytest tests/integration/ -v --tb=short -m integration
 
   build:
     needs: integration

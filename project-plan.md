@@ -593,7 +593,7 @@ Claude Code / Telegram / Mobile → MCP Client → HTTP → MCP Tool Server
 - [x] **S2 (KAN-133):** MCP Tool Client — MCPToolClient class, user context injection (~2h) ✓ PR #82
 - [x] **S3 (KAN-134):** Lifespan Wiring + Feature Flag — subprocess manager, MCP_TOOLS=True, fallback (~2h) ✓ PR #83
 - [x] **S4 (KAN-135):** Health Endpoint + Observability (~1.5h) ✓ PR #84
-- [ ] **S5 (KAN-136):** Integration Tests — real stdio round-trip, lifecycle, regression MCP vs direct (~2.5h)
+- [x] **S5 (KAN-136):** Integration Tests — real stdio round-trip, lifecycle, regression MCP vs direct (~2.5h) ✓ PR #86, Session 51
 - [ ] **S6 (KAN-131):** Validation — verify against spec+plan, full test suite, docs (~1.5h)
 
 ### Key Architectural Decisions (Session 50 brainstorm)
