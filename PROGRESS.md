@@ -912,42 +912,10 @@ Phase 4F complete (9/9): KAN-94 Sectors Page — 3 backend endpoints, 6 schemas,
 **Date:** 2026-03-23 | **Branch:** `fix/pandas-html-flavor`
 Full database bootstrap (503 stocks, 1.24M prices, 514 models). 3 new seed scripts. Nightly pipeline 3→8 steps. README + Mermaid docs for TDD/FSD. `pd.read_html` flavor fix.
 
----
+## Session 49 — README Overhaul + Branch Cleanup + MCP Architecture Decision *(compact)*
 
-## Session 49 — README Overhaul + Branch Cleanup + MCP Architecture Decision
-
-**Date:** 2026-03-23
-**Branch:** `docs/readme-overhaul`, `docs/mcp-architecture-decision`
-
-### What was done
-
-1. **README.md comprehensive overhaul** (PR #72 → develop, PR #74 → main):
-   - Rewrote from dev-focused setup guide to full product overview
-   - Added: target audience, features breakdown (signal engine, AI agent, forecasting, portfolio tracker, screener, nightly pipeline, alerts), data sources table, tech stack, system requirements, API keys reference, architecture Mermaid diagram, 16 API endpoints, configuration reference
-   - Screenshots table (dashboard, screener, stock detail)
-
-2. **Branch cleanup** — deleted 30 stale remote branches from past PRs. Only `main` and `develop` remain (locally + remotely).
-
-3. **develop ↔ main sync** (PR #75) — back-merged 4 squash-merge commits from main into develop. Resolved README divergence.
-
-4. **Removed accidental PDF** (PR #76 → develop, PR #77 → main) — `Sigmoid - Pfizer - Architecture Best Practices & Production Audit.pdf` removed, `*.pdf` added to `.gitignore`.
-
-5. **MCP architecture decision** — deliberated stdio vs Streamable HTTP transport for tool consumption:
-   - **Current state:** Agent calls tools via direct in-process Python calls. `/mcp` endpoint exists but only for external clients. "MCPAdapter" classes are plain API wrappers, not real MCP.
-   - **Decision:** Phase 5.6 introduces stdio MCP (agent → subprocess tool server, zero latency). Phase 6 swaps to Streamable HTTP (separate container, multi-client). Celery stays direct until Phase 6.
-   - Updated `project-plan.md` with Phase 5.6 (full deliverables, trade-off table, success criteria)
-   - Updated `docs/TDD.md` Section 12 (transport evolution: Phase 4B → 5.6 → 6, current state clarification, auth strategy)
-   - Updated `docs/TDD.md` Section 5.1 (corrected Layer 1 description — adapters are API wrappers, not MCP clients)
-
-### Files Changed
-- `README.md` — comprehensive overhaul
-- `.gitignore` — added `*.pdf`
-- `project-plan.md` — Phase 5.6 (MCP stdio) added, Phase 6 updated with MCP transport swap
-- `docs/TDD.md` — Section 5.1 corrected, Section 12 rewritten for transport evolution
-- `PROGRESS.md` — session 49 entry, session 48 compacted
-
-### Key Architecture Decision
-**stdio now, Streamable HTTP later.** The MCP protocol is transport-agnostic by design. stdio gives us the abstraction (any new app can consume tools via MCP) with zero latency overhead. When we deploy to cloud (Phase 6), we swap the transport config — tool definitions, schemas, and client code stay identical.
+**Date:** 2026-03-23 | **Branch:** `docs/readme-overhaul`, `docs/mcp-architecture-decision`
+README overhaul (product overview, architecture diagram, 16 endpoints). 30 stale branches deleted. develop↔main synced. Accidental PDF removed. MCP architecture decision: stdio now (Phase 5.6), Streamable HTTP later (Phase 6). TDD §12 + project-plan updated.
 
 ---
 
@@ -985,5 +953,60 @@ Full database bootstrap (503 stocks, 1.24M prices, 514 models). 3 new seed scrip
 
 ### Resume Point
 Phase 5.6: S5 (KAN-136 — integration tests with real stdio subprocess) → S6 (KAN-131 — validation)
+
+---
+
+## Session 51 — Phase 5.6 S5 Integration Tests + Bug Fix
+
+**Date:** 2026-03-23
+**Branch:** `feat/KAN-136-mcp-integration-tests`
+
+### What was done
+
+1. **KAN-136 (S5) — MCP Integration Tests COMPLETE:**
+   - **20 new integration tests** across 2 files, all passing
+   - `tests/integration/test_mcp_stdio.py` (14 tests):
+     - T5.1 Round-trip (7): subprocess starts, lists 20+ tools, known tool names, search_stocks round-trip, invalid tool name error, empty params, connect/disconnect
+     - T5.2 Lifecycle (7): manager starts in stdio mode, stop→disabled, restart after crash, ensure_healthy auto-restart, fallback after MAX_RESTARTS, call_tool in fallback raises, full manager round-trip
+   - `tests/integration/test_mcp_regression.py` (6 tests):
+     - Tool list matches (MCP = direct), search_stocks identical status, structured data preserved through stdio, invalid tool both paths error, ToolResult serialization round-trip, tool count matches
+
+2. **Bug Fix — MCP param passing (discovered by integration tests):**
+   - **Problem:** FastMCP dispatches tool call arguments as keyword args to handler functions. `call_tool("search_stocks", {"query": "AAPL"})` sent `query="AAPL"` to handler, but handler expected `params: dict`. Tools never actually executed via MCP — all calls hit FastMCP validation errors.
+   - **Fix:** MCPToolClient wraps params as `{"params": {...}}` before sending, so FastMCP maps them to the handler's `params: dict` argument. Convention documented in TDD §12.1.1.
+   - **Impact:** All 20 tools now work correctly through MCP stdio. Without this fix, MCP was silently broken.
+
+3. **CI Configuration updated:**
+   - `MCP_TOOLS=true` added to `ci-pr.yml` and `ci-merge.yml` backend-test env
+   - Integration test step added to `ci-pr.yml` PR gate
+   - `ci-merge.yml` integration step: removed empty-stub workaround, added `-m integration` marker
+   - `pyproject.toml`: added `integration` pytest marker
+
+4. **Docs updated:**
+   - `project-plan.md` — S5 marked complete with PR ref
+   - `docs/TDD.md` — §12.1.1 added (parameter passing convention)
+   - `PROGRESS.md` — session 51, session 49 compacted
+
+### Bug Found by Integration Tests
+FastMCP param dispatch mismatch — **the most valuable finding of this story**. Unit tests (which mocked `_session`) never caught this because they didn't exercise real FastMCP parameter validation. Integration tests with a real subprocess proved the tools were silently failing.
+
+### Files Changed
+- `backend/mcp_server/tool_client.py` — param wrapping fix (`{"params": params}`)
+- `tests/integration/test_mcp_stdio.py` — 14 new integration tests
+- `tests/integration/test_mcp_regression.py` — 6 new regression tests
+- `.github/workflows/ci-pr.yml` — MCP_TOOLS=true + integration test step
+- `.github/workflows/ci-merge.yml` — MCP_TOOLS=true + updated integration step
+- `pyproject.toml` — integration marker
+- `project-plan.md` — S5 marked complete
+- `docs/TDD.md` — §12.1.1 param passing convention
+- `PROGRESS.md` — session 51
+
+### Test Summary
+- 20 new integration tests (14 stdio + 6 regression)
+- 745 unit tests + 33 MCP unit tests still passing (no regressions)
+- ~970 total tests
+
+### Resume Point
+Phase 5.6: S6 (KAN-131 — validation: spec cross-reference, full test suite, manual verification)
 
 ---

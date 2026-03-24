@@ -1343,6 +1343,24 @@ for tool_info in registry.discover():
     _register_tool(mcp, tool_info.name, tool_info.description, tool)
 ```
 
+### 12.1.1 Parameter Passing Convention
+
+FastMCP dispatches tool call arguments as keyword arguments to handler functions. Since our tools use a single `params: dict` interface, the MCP client wraps parameters before sending:
+
+```python
+# MCPToolClient.call_tool() wraps params for FastMCP dispatch:
+wrapped = {"params": params} if params else {}
+await session.call_tool(name, wrapped)
+
+# Tool server handler receives the wrapped dict:
+@mcp.tool(name=name, description=description)
+async def _handler(params: dict = {}, _tool=tool) -> str:
+    result = await _tool.execute(params)
+    return result.to_json()
+```
+
+This convention ensures tools receive identical `dict` arguments whether called via MCP stdio, MCP HTTP (Phase 6), or direct `registry.execute()`.
+
 ### 12.2 Transport Strategy
 
 **Phase 5.6 — stdio (local, zero latency):**

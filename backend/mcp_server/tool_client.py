@@ -76,8 +76,12 @@ class MCPToolClient:
             raise ConnectionError("MCP tool client is not connected")
 
         try:
+            # Wrap params inside {"params": ...} so FastMCP maps them to the
+            # server handler's `params: dict` argument rather than attempting
+            # to unpack each key as a separate keyword argument.
+            wrapped = {"params": params} if params else {}
             result = await asyncio.wait_for(
-                self._session.call_tool(name, params),
+                self._session.call_tool(name, wrapped),
                 timeout=_TOOL_CALL_TIMEOUT,
             )
             # MCP response content is a list of content blocks.
