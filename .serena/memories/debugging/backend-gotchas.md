@@ -24,6 +24,12 @@ category: debugging
 - Autogenerate also falsely detects ALL tables as new (rewrites entire schema) — MUST manually write incremental migrations for add_column/create_table only.
 - If DB has stale alembic_version (points to migration N but tables are missing), clear it: `DELETE FROM alembic_version;` then `uv run alembic upgrade head`.
 - After pulling: `uv sync` to keep local venv in sync with `uv.lock`.
+- **Startup validation (Session 51):** `main.py` lifespan now checks critical tables exist in `information_schema`. If missing, app refuses to start with a clear error. This catches stale alembic_version before 500 errors happen.
+
+## Docker Port Conflicts
+- `idp-postgres` (port 5433) conflicts with `ssp-postgres` (port 5433). Stop `idp-postgres` when working on this project: `docker stop idp-postgres`.
+- Two containers on the same port can cause unpredictable connection routing and potential data loss.
+- After any DB issue: check `docker ps | grep 5433` for conflicting containers.
 
 ## yfinance
 
