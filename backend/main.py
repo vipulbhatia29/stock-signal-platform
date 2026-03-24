@@ -37,14 +37,42 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Initialize AI subsystem on startup, clean up on shutdown."""
     # --- Startup ---
+    # 0. Database schema validation — catch stale alembic_version early
+    from sqlalchemy import text
+
     from backend.agents.general_agent import GeneralAgent
     from backend.agents.graph import build_agent_graph
     from backend.agents.llm_client import LLMClient
     from backend.agents.providers.anthropic import AnthropicProvider
     from backend.agents.providers.groq import GroqProvider
     from backend.agents.stock_agent import StockAgent
+    from backend.database import async_session_factory
     from backend.mcp_server.server import create_mcp_app
     from backend.tools.build_registry import build_registry
+
+    _CRITICAL_TABLES = ["users", "stocks", "stock_prices", "signal_snapshots"]
+    async with async_session_factory() as session:
+        for table in _CRITICAL_TABLES:
+            result = await session.execute(
+                text(
+                    "SELECT EXISTS ("
+                    "  SELECT 1 FROM information_schema.tables"
+                    "  WHERE table_schema = 'public' AND table_name = :t"
+                    ")"
+                ),
+                {"t": table},
+            )
+            if not result.scalar():
+                logger.critical(
+                    "TABLE '%s' MISSING — alembic_version may be stale. "
+                    "Fix: DELETE FROM alembic_version; then: uv run alembic upgrade head",
+                    table,
+                )
+                raise SystemExit(
+                    f"Database schema incomplete: table '{table}' not found. "
+                    "Run: uv run alembic upgrade head"
+                )
+    logger.info("Database schema validated: all critical tables present")
 
     # 1. Tool Registry — build with all internal tools + MCP adapters
     registry = build_registry()
