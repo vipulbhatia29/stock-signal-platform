@@ -19,9 +19,13 @@
 - KAN-146: S7 Integration Testing + Docs
 
 ## Session 54 Summary
-Phase 6A LLM Factory & Cascade — ALL 7 stories (KAN-140–146) shipped in one session.
+Phase 6A LLM Factory & Cascade — ALL 7 stories (KAN-140–146) shipped.
 V1 deprecated, multi-model cascade, TokenBudget, admin API, tool truncation, tier wiring.
-766 unit tests. Alembic head: c965b4058c70 (migration 012). 7 commits on feat/KAN-140-v1-deprecation.
+766 unit tests + 10 admin API tests. Alembic head: c965b4058c70 (migration 012).
+Bug fix: LLMModelConfig datetime columns — tz-naive for asyncpg compatibility.
+
+## Resume Point
+Phase 6A COMPLETE. Next: Phase 6B (Agent Observability) or Phase 6C (Testing Infrastructure).
 
 ## Stats
 - ~980 total tests (766 unit + ~180 API + 7 e2e + 24 integration + 107 frontend)

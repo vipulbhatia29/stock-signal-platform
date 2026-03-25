@@ -1,6 +1,6 @@
 """LLM model cascade configuration."""
 
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import Boolean, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -26,11 +26,9 @@ class LLMModelConfig(Base):
     cost_per_1k_input: Mapped[float] = mapped_column(Numeric(10, 6), default=0)
     cost_per_1k_output: Mapped[float] = mapped_column(Numeric(10, 6), default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc),
-        onupdate=lambda: datetime.now(timezone.utc),
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
         nullable=False,
     )
