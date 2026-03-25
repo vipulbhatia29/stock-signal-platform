@@ -252,6 +252,7 @@ async def get_prices(
 @router.get("/{ticker}/signals", response_model=SignalResponse)
 async def get_signals(
     ticker: str,
+    request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> SignalResponse:
@@ -268,6 +269,13 @@ async def get_signals(
     Signals are flagged as "stale" if they're older than 24 hours,
     meaning they should be recomputed for accurate recommendations.
     """
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:signals:{ticker.upper()}"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return SignalResponse.model_validate_json(cached)
+
     await _require_stock(ticker, db)
 
     # ── Fetch the latest signal snapshot for this ticker ──────────────
@@ -299,7 +307,7 @@ async def get_signals(
     # ── Build the nested response object ─────────────────────────────
     # We transform the flat database row into a nicely structured JSON
     # response with nested objects for each indicator group.
-    return SignalResponse(
+    response = SignalResponse(
         ticker=snapshot.ticker,
         computed_at=snapshot.computed_at,
         rsi=RSIResponse(value=snapshot.rsi_value, signal=snapshot.rsi_signal),
@@ -326,6 +334,11 @@ async def get_signals(
         composite_score=snapshot.composite_score,
         is_stale=is_stale,
     )
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), CacheTier.STANDARD)
+    return response
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -645,6 +658,7 @@ async def get_recommendations(
 @router.post("/{ticker}/ingest", response_model=IngestResponse)
 async def ingest_ticker(
     ticker: str,
+    request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> IngestResponse:
@@ -778,6 +792,10 @@ async def ingest_ticker(
                 max_position_pct=max_position_pct,
             )
             await store_recommendation(rec, str(current_user.id), db)
+
+    cache = getattr(request.app.state, "cache", None)
+    if cache:
+        await cache.invalidate_ticker(ticker)
 
     return IngestResponse(
         ticker=ticker,
