@@ -94,6 +94,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     collector.set_db_writer(write_event)
     app.state.collector = collector
 
+    # Cache service — Redis cache-aside with TTL tiers
+    from backend.services.cache import CacheService
+    from backend.services.redis_pool import get_redis
+
+    cache_redis = await get_redis()
+    cache_service = CacheService(cache_redis)
+    app.state.cache = cache_service
+    logger.info("CacheService initialized")
+
     providers = []
     if settings.GROQ_API_KEY:
         # Extract Groq model names from DB config (planner tier, ordered by priority)
@@ -202,11 +211,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # --- Shutdown ---
-    from backend.services.token_blocklist import close as close_blocklist
+    from backend.services.redis_pool import close_redis
 
     if mcp_manager:
         await mcp_manager.stop()
-    await close_blocklist()
+    await close_redis()  # closes shared pool (cache + blocklist)
     logger.info("Application shutting down")
 
 
