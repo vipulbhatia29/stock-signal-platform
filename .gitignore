@@ -74,6 +74,11 @@ redis_data/
 # LLM eval results (generated per run)
 tests/e2e/eval/results/*.json
 
+# Playwright E2E — auth state, reports, artifacts
+tests/e2e/playwright/.auth/
+tests/e2e/playwright/playwright-report/
+tests/e2e/playwright/test-results/
+
 # Serialized model artifacts (Prophet .pkl files)
 data/models/prophet/*.pkl
 
