@@ -94,14 +94,16 @@ class TestFetchEarningsHistory:
         """Should parse yfinance earnings_history DataFrame."""
         import pandas as pd
 
+        # yfinance returns quarter as the DataFrame index (Timestamps), not a column
         mock_df = pd.DataFrame(
             {
-                "Quarter": ["2025-12-31", "2025-09-30"],
                 "epsEstimate": [0.10, 0.09],
                 "epsActual": [0.13, 0.10],
                 "surprisePercent": [30.0, 11.0],
-            }
+            },
+            index=pd.to_datetime(["2025-12-31", "2025-09-30"]),
         )
+        mock_df.index.name = "quarter"
 
         with patch("backend.tools.fundamentals.yf.Ticker") as mock_ticker:
             mock_ticker.return_value.earnings_history = mock_df
@@ -111,7 +113,8 @@ class TestFetchEarningsHistory:
             result = fetch_earnings_history("PLTR")
 
             assert len(result) == 2
-            assert result[0]["quarter"] == "2025-12-31"
+            assert result[0]["quarter"] == "2025Q4"
+            assert result[1]["quarter"] == "2025Q3"
             assert result[0]["eps_actual"] == 0.13
 
     def test_yfinance_failure_returns_empty(self) -> None:
