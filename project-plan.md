@@ -456,7 +456,7 @@ Comprehensive backend hardening: test directory restructure, ~211 new tests acro
 
 ### Deferred to Phase 5.1 (identified during Phase 5 design, Session 45)
 - [ ] **Red flag scanner** — Controversies, short interest, insider selling patterns. Needs new data sources (insider transactions, short interest from yfinance). Deferred due to uncertain data quality.
-- [ ] **Telegram notifications** — External notification channel. Deferred in favor of in-app alerts (bell icon). Can be added once pipeline data is flowing reliably.
+- ~~**Telegram notifications**~~ REMOVED — in-app alerts sufficient.
 - [ ] **Forecast blending into composite score** — Confidence-weighted 3-way blend (tech + fundamental + forecast). Deferred until forecast accuracy is validated. Phase 5 keeps forecasts as a parallel signal.
 - [ ] **Live LLM eval tests** — Deferred from Phase 4G. Needs CI_GROQ_API_KEY secret.
 
@@ -674,9 +674,11 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 
 ### Deliverables
 
-#### Immediate Priority
-- [ ] **Redis read cache** for API responses (TTL tiers: volatile/stable/admin)
-- [ ] **Cache warmup** on startup (shared keys + top-N portfolio tickers)
+#### Immediate Priority (KAN-148) ✅ (Session 55)
+- [x] **Redis read cache** — CacheService with 3-tier namespace (app/user/session), TTL tiers (volatile/standard/stable/session), cache-aside pattern
+- [x] **Cache warmup** on startup (indexes)
+- [x] **Agent tool session cache** — per-session tool result caching in executor (10 cacheable tools)
+- [x] **Nightly invalidation** — clear stale screener/sector/signal/forecast cache before recomputation
 - [ ] **Portfolio aggregation tool** — weighted summary for 100+ stock portfolios
 - [ ] **Earnings card** on stock detail page (EPS estimate vs actual chart)
 
@@ -692,10 +694,10 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 - [ ] **UI-9: Animations + Final Polish** — framer-motion, glow effects, scrollbar
 
 #### Deferred Backend (Phase 4G backlog)
-- [ ] Live LLM eval tests (needs CI_GROQ_API_KEY)
+- [ ] Live LLM eval tests (CI_GROQ_API_KEY available)
 - [ ] Red flag scanner (controversies, short interest)
 - [ ] Forecast blending into composite score
-- [ ] Telegram notifications
+- ~~Telegram notifications~~ REMOVED — in-app alerts sufficient
 
 ### Success Criteria
 All HIGH priority backlog items addressed. Google OAuth working. Portfolio aggregation handles 100+ stocks.

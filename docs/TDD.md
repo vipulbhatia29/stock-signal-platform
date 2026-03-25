@@ -634,15 +634,38 @@ async def get_signal_service(
     return SignalService(db, redis)
 ```
 
-### 4.3 Caching Strategy
+### 4.3 Caching Strategy ✅ IMPLEMENTED (Phase 7, KAN-148)
 
-| Data | Cache Key | TTL | Invalidation |
-|------|-----------|-----|-------------|
-| Latest signals | `signals:{ticker}` | 1 hour | On new signal computation |
-| Latest price | `price:{ticker}` | 5 minutes | On price fetch |
-| Screener results | `screener:{hash_of_filters}` | 30 minutes | On nightly batch |
-| Portfolio positions | `positions:{portfolio_id}` | 0 (no cache) | N/A (always fresh) |
-| Recommendations | `recs:{user_id}:{date}` | Until next computation | On daily batch |
+Redis cache-aside with 3-tier key namespace and `CacheService` (`backend/services/cache.py`). Shared Redis pool (`backend/services/redis_pool.py`) used by cache, token blocklist, and rate limiter.
+
+**Key Namespaces:**
+- `app:{entity}:{id}` — shared across all users (stock data, signals, sectors)
+- `user:{user_id}:{entity}:{id}` — per-user data (portfolio summary)
+- `session:{session_id}:tool:{name}:{hash}` — per-chat agent tool results
+
+**TTL Tiers** (`CacheTier` enum, ±10% jitter except session):
+
+| Tier | TTL | Data Types |
+|------|-----|------------|
+| VOLATILE | 5 min | prices, portfolio summary |
+| STANDARD | 30 min | signals, screener, sectors, fundamentals, forecasts |
+| STABLE | 24h | company profiles, index membership |
+| SESSION | 2h (fixed) | agent tool results |
+
+**Cached Endpoints:**
+
+| Endpoint | Cache Key | Tier | Invalidation |
+|----------|-----------|------|-------------|
+| `GET /stocks/{ticker}/signals` | `app:signals:{ticker}` | STANDARD | On ingest |
+| `GET /sectors/summary` | `app:sectors:summary` | STANDARD | Nightly batch |
+| `GET /sectors/{sector}/stocks` | `app:sectors:{sector}:stocks` | STANDARD | Nightly batch |
+| `GET /forecasts/{ticker}` | `app:forecast:{ticker}` | STANDARD | Nightly batch |
+| `GET /portfolio/summary` | `user:{uid}:portfolio:summary` | VOLATILE | On transaction |
+| Agent tool calls | `session:{sid}:tool:{name}:{hash}` | SESSION | Session close |
+
+**Invalidation:** `invalidate_ticker()` on ingest, `invalidate_user()` on portfolio writes, `delete_pattern()` in nightly pipeline.
+**Warmup:** Index data pre-loaded on startup.
+**Agent tool cache:** 10 cacheable tools (data tools). Dynamic tools (search, ingest, web_search) skip cache.
 
 ---
 

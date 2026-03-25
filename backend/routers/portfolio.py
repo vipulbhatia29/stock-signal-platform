@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,6 +53,7 @@ router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 )
 async def create_transaction(
     body: TransactionCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> TransactionResponse:
@@ -113,6 +114,9 @@ async def create_transaction(
         body.ticker,
         current_user.id,
     )
+    cache = getattr(request.app.state, "cache", None)
+    if cache:
+        await cache.invalidate_user(str(current_user.id))
     return TransactionResponse.model_validate(txn)
 
 
@@ -152,6 +156,7 @@ async def list_transactions(
 )
 async def delete_transaction(
     transaction_id: uuid.UUID,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> None:
@@ -193,6 +198,9 @@ async def delete_transaction(
     await recompute_position(portfolio.id, ticker, db)
     await db.commit()
     logger.info("Deleted transaction %s for user %s", transaction_id, current_user.id)
+    cache = getattr(request.app.state, "cache", None)
+    if cache:
+        await cache.invalidate_user(str(current_user.id))
 
 
 @router.get(
@@ -279,6 +287,7 @@ async def list_positions(
     summary="Get portfolio KPI totals and sector allocation",
 )
 async def get_summary(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> PortfolioSummaryResponse:
@@ -286,9 +295,23 @@ async def get_summary(
 
     Uses the user's max_sector_pct preference for the over_limit flag.
     """
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"user:{current_user.id}:portfolio:summary"
+    if cache:
+        from backend.services.cache import CacheTier
+
+        cached = await cache.get(cache_key)
+        if cached:
+            return PortfolioSummaryResponse.model_validate_json(cached)
+
     portfolio = await get_or_create_portfolio(current_user.id, db)
     prefs = await _get_or_create_preference(current_user.id, db)
-    return await get_portfolio_summary(portfolio.id, db, max_sector_pct=prefs.max_sector_pct)
+    result = await get_portfolio_summary(portfolio.id, db, max_sector_pct=prefs.max_sector_pct)
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, result.model_dump_json(), tier=CacheTier.VOLATILE)
+    return result
 
 
 @router.get(

@@ -16,9 +16,26 @@ from typing import Any
 
 from backend.agents.observability import ObservabilityCollector
 from backend.agents.result_validator import validate_tool_result
+from backend.services.cache import CacheService, CacheTier
 from backend.tools.base import ToolResult
 
 logger = logging.getLogger(__name__)
+
+# Tools whose results are safe to cache within a session
+CACHEABLE_TOOLS = frozenset(
+    {
+        "analyze_stock",
+        "get_fundamentals",
+        "get_forecast",
+        "get_analyst_targets",
+        "get_earnings_history",
+        "get_company_profile",
+        "compare_stocks",
+        "get_recommendation_scorecard",
+        "dividend_sustainability",
+        "risk_narrative",
+    }
+)
 
 # Executor limits
 MAX_TOOL_CALLS = 10
@@ -106,6 +123,8 @@ async def execute_plan(
     tool_executor: Any,
     on_step: Any | None = None,
     collector: ObservabilityCollector | None = None,
+    cache: CacheService | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Execute a tool plan mechanically (no LLM).
 
@@ -114,6 +133,9 @@ async def execute_plan(
         tool_executor: Callable(tool_name, params) -> ToolResult.
         on_step: Optional async callback(step_index, tool_name, status)
             for streaming progress events.
+        collector: Optional observability collector for metrics.
+        cache: Optional cache service for session-level tool result caching.
+        session_id: Optional session ID for cache key scoping.
 
     Returns:
         Dict with:
@@ -123,6 +145,14 @@ async def execute_plan(
           - circuit_broken: bool
           - tool_calls: int
     """
+    # Resolve session_id from ContextVar if not provided
+    if session_id is None and cache is not None:
+        from backend.request_context import current_query_id
+
+        qid = current_query_id.get()
+        if qid:
+            session_id = str(qid)
+
     results: list[dict[str, Any]] = []
     consecutive_failures = 0
     tool_calls = 0
@@ -145,6 +175,23 @@ async def execute_plan(
         tool_name = step["tool"]
         raw_params = step.get("params", {})
         params = _resolve_params(raw_params, results)
+
+        # Session cache check (cacheable tools only)
+        cache_key = None
+        if cache and session_id and tool_name in CACHEABLE_TOOLS:
+            param_hash = hash(json.dumps(params, sort_keys=True, default=str))
+            cache_key = f"session:{session_id}:tool:{tool_name}:{param_hash}"
+            cached = await cache.get(cache_key)
+            if cached:
+                cached_data = json.loads(cached)
+                results.append(cached_data)
+                tool_calls += 1
+                if on_step:
+                    try:
+                        await on_step(i, tool_name, cached_data.get("status", "ok"))
+                    except Exception:
+                        pass
+                continue  # skip execution
 
         # Execute with retry
         tool_start = time.monotonic()
@@ -191,6 +238,10 @@ async def execute_plan(
             timestamp=datetime.now(timezone.utc),
         )
         results.append(validated)
+
+        # Store in session cache (successful cacheable tools only)
+        if cache_key and validated["status"] == "ok":
+            await cache.set(cache_key, json.dumps(validated, default=str), CacheTier.SESSION)
 
         # Emit step progress
         if on_step is not None:

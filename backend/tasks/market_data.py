@@ -178,6 +178,28 @@ def nightly_pipeline_chain_task() -> dict:
 
     results: dict = {}
 
+    # Step 0: Invalidate stale app-wide cache before recomputation
+    try:
+        import redis
+
+        from backend.config import settings
+
+        r = redis.from_url(settings.REDIS_URL, decode_responses=True)
+        deleted = 0
+        for pattern in ("app:screener:*", "app:sectors:*", "app:signals:*", "app:forecast:*"):
+            cursor = 0
+            while True:
+                cursor, keys = r.scan(cursor=cursor, match=pattern, count=100)
+                if keys:
+                    r.delete(*keys)
+                    deleted += len(keys)
+                if cursor == 0:
+                    break
+        r.close()
+        logger.info("Nightly cache invalidation: cleared %d keys", deleted)
+    except Exception:
+        logger.warning("Nightly cache invalidation failed", exc_info=True)
+
     # Step 1: Price refresh + signal computation
     logger.info("Nightly chain step 1/8: price refresh")
     results["price_refresh"] = nightly_price_refresh_task()

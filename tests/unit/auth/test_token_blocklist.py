@@ -10,11 +10,11 @@ from backend.services import token_blocklist
 
 @pytest.fixture(autouse=True)
 def _mock_redis():
-    """Mock the Redis client for all tests in this module."""
+    """Mock the shared Redis pool for all tests in this module."""
     mock_redis = AsyncMock()
     # Default: key does not exist
     mock_redis.exists.return_value = 0
-    with patch.object(token_blocklist, "_redis_client", mock_redis):
+    with patch("backend.services.token_blocklist.get_redis", return_value=mock_redis):
         yield mock_redis
 
 

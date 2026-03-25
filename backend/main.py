@@ -39,7 +39,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Initialize AI subsystem on startup, clean up on shutdown."""
     # --- Startup ---
     # 0. Database schema validation — catch stale alembic_version early
-    from sqlalchemy import text
+    from sqlalchemy import select, text
 
     from backend.agents.llm_client import LLMClient
     from backend.agents.providers.anthropic import AnthropicProvider
@@ -93,6 +93,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     collector = ObservabilityCollector()
     collector.set_db_writer(write_event)
     app.state.collector = collector
+
+    # Cache service — Redis cache-aside with TTL tiers
+    from backend.services.cache import CacheService
+    from backend.services.redis_pool import get_redis
+
+    cache_redis = await get_redis()
+    cache_service = CacheService(cache_redis)
+    app.state.cache = cache_service
+    logger.info("CacheService initialized")
+
+    # Cache warmup — pre-load indexes
+    try:
+        from backend.services.cache import CacheTier
+
+        async with async_session_factory() as warmup_db:
+            from backend.models.stock import StockIndex
+
+            idx_result = await warmup_db.execute(select(StockIndex))
+            indexes = idx_result.scalars().all()
+            if indexes:
+                import json
+
+                idx_data = json.dumps([{"ticker": i.ticker, "name": i.name} for i in indexes])
+                await cache_service.set("app:indexes", idx_data, CacheTier.STABLE)
+                logger.info("Cache warmup: %d index entries", len(indexes))
+    except Exception:
+        logger.warning("Cache warmup failed — will lazy-load", exc_info=True)
 
     providers = []
     if settings.GROQ_API_KEY:
@@ -174,7 +201,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.agent_graph = build_agent_graph(
             plan_fn=_plan_fn,
             execute_fn=lambda steps, tool_executor, on_step=None: execute_plan(
-                steps, tool_executor, on_step=on_step, collector=collector
+                steps,
+                tool_executor,
+                on_step=on_step,
+                collector=collector,
+                cache=cache_service,
             ),
             synthesize_fn=_synthesize_fn,
             format_simple_fn=format_simple_result,
@@ -202,11 +233,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # --- Shutdown ---
-    from backend.services.token_blocklist import close as close_blocklist
+    from backend.services.redis_pool import close_redis
 
     if mcp_manager:
         await mcp_manager.stop()
-    await close_blocklist()
+    await close_redis()  # closes shared pool (cache + blocklist)
     logger.info("Application shutting down")
 
 
