@@ -9,7 +9,7 @@ from enum import StrEnum
 from urllib.parse import unquote
 
 import pandas as pd
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -113,6 +113,7 @@ async def _latest_price_subquery() -> select:
     "average annual return, and portfolio allocation percentage.",
 )
 async def list_sectors(
+    request: Request,
     scope: ScopeEnum = Query(ScopeEnum.all, description="Filter scope"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
@@ -120,6 +121,7 @@ async def list_sectors(
     """Aggregate sector-level statistics.
 
     Args:
+        request: FastAPI request (used for cache access).
         scope: Filter by portfolio, watchlist, or all stocks.
         current_user: Authenticated user.
         db: Async database session.
@@ -127,6 +129,15 @@ async def list_sectors(
     Returns:
         SectorSummaryResponse with per-sector stats.
     """
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = "app:sectors:summary"
+    if cache:
+        from backend.services.cache import CacheTier
+
+        cached = await cache.get(cache_key)
+        if cached:
+            return SectorSummaryResponse.model_validate_json(cached)
+
     held_tickers, watched_tickers = await _get_user_tickers(current_user.id, db)
 
     # Latest signal per ticker (for composite_score + annual_return)
@@ -247,7 +258,12 @@ async def list_sectors(
     # Sort: by allocation_pct descending (None last)
     summaries.sort(key=lambda s: s.allocation_pct or -1, reverse=True)
 
-    return SectorSummaryResponse(sectors=summaries)
+    response = SectorSummaryResponse(sectors=summaries)
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), tier=CacheTier.STANDARD)
+    return response
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -263,6 +279,7 @@ async def list_sectors(
 )
 async def get_sector_stocks(
     sector: str,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> SectorStocksResponse:
@@ -270,6 +287,7 @@ async def get_sector_stocks(
 
     Args:
         sector: URL-encoded sector name.
+        request: FastAPI request (used for cache access).
         current_user: Authenticated user.
         db: Async database session.
 
@@ -277,6 +295,14 @@ async def get_sector_stocks(
         SectorStocksResponse with stocks sorted by relevance.
     """
     decoded_sector = unquote(sector)
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:sectors:{decoded_sector}:stocks"
+    if cache:
+        from backend.services.cache import CacheTier
+
+        cached = await cache.get(cache_key)
+        if cached:
+            return SectorStocksResponse.model_validate_json(cached)
     held_tickers, watched_tickers = await _get_user_tickers(current_user.id, db)
 
     # Check sector exists
@@ -349,7 +375,12 @@ async def get_sector_stocks(
     # Combine: user stocks + top 20 others (deduplication already handled)
     combined = user_stocks + other_stocks[:20]
 
-    return SectorStocksResponse(sector=decoded_sector, stocks=combined)
+    response = SectorStocksResponse(sector=decoded_sector, stocks=combined)
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), tier=CacheTier.STANDARD)
+    return response
 
 
 # ─────────────────────────────────────────────────────────────────────────────

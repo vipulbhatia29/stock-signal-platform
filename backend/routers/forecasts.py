@@ -2,7 +2,7 @@
 
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -174,6 +174,7 @@ async def get_portfolio_forecast(
 )
 async def get_ticker_forecast(
     ticker: str,
+    request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> ForecastResponse:
@@ -181,6 +182,7 @@ async def get_ticker_forecast(
 
     Args:
         ticker: Stock ticker symbol.
+        request: FastAPI request (used for cache access).
         db: Async database session.
         current_user: Authenticated user.
 
@@ -188,6 +190,14 @@ async def get_ticker_forecast(
         ForecastResponse with horizons, model MAPE, and status.
     """
     ticker = ticker.upper()
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:forecast:{ticker}"
+    if cache:
+        from backend.services.cache import CacheTier
+
+        cached = await cache.get(cache_key)
+        if cached:
+            return ForecastResponse.model_validate_json(cached)
 
     # Get latest forecast date for this ticker
     latest_date_result = await db.execute(
@@ -242,12 +252,17 @@ async def get_ticker_forecast(
 
     horizons.sort(key=lambda h: h.horizon_days)
 
-    return ForecastResponse(
+    response = ForecastResponse(
         ticker=ticker,
         horizons=horizons,
         model_mape=(model.metrics or {}).get("rolling_mape") if model else None,
         model_status=model.status if model else "none",
     )
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), tier=CacheTier.STANDARD)
+    return response
 
 
 @router.get(
