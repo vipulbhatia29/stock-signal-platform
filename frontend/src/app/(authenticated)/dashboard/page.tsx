@@ -48,7 +48,6 @@ export default function DashboardPage() {
   const { data: indexes, isLoading: indexesLoading } = useIndexes();
   const { data: watchlist, isLoading: watchlistLoading } = useWatchlist();
   const { data: recommendations } = useRecommendations();
-  const { data: portfolioForecast } = usePortfolioForecast();
   const { data: scorecard } = useScorecard();
   const addToWatchlist = useAddToWatchlist();
   const removeFromWatchlist = useRemoveFromWatchlist();
@@ -71,8 +70,16 @@ export default function DashboardPage() {
           failed++;
         }
       }
+      // Invalidate all dashboard queries so tiles show fresh data
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
       queryClient.invalidateQueries({ queryKey: ["trending-stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["bulk-signals"] });
+      queryClient.invalidateQueries({ queryKey: ["recommendations"] });
+      queryClient.invalidateQueries({ queryKey: ["scorecard"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-forecast"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+      queryClient.invalidateQueries({ queryKey: ["indexes"] });
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
       if (failed === 0) {
         toast.success(`Refreshed ${succeeded} stock${succeeded !== 1 ? "s" : ""}`);
       } else {
@@ -97,6 +104,8 @@ export default function DashboardPage() {
 
   const { data: summary } = usePortfolioSummary();
   const { data: positions } = usePositions();
+  const hasPositions = (positions?.length ?? 0) > 0;
+  const { data: portfolioForecast } = usePortfolioForecast(hasPositions);
 
   const heldTickers = useMemo(() => {
     if (!positions) return new Set<string>();
