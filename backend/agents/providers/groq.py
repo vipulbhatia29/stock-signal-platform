@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from backend.agents.llm_client import (
@@ -11,6 +12,7 @@ from backend.agents.llm_client import (
     LLMResponse,
     ProviderHealth,
 )
+from backend.agents.observability import ObservabilityCollector
 from backend.agents.token_budget import TokenBudget
 
 logger = logging.getLogger(__name__)
@@ -52,10 +54,12 @@ class GroqProvider(LLMProvider):
         api_key: str,
         models: list[str] | None = None,
         token_budget: TokenBudget | None = None,
+        collector: ObservabilityCollector | None = None,
     ) -> None:
         self._api_key = api_key
         self._models = models or ["llama-3.3-70b-versatile"]
         self._token_budget = token_budget
+        self._collector = collector
         self.health = ProviderHealth(provider="groq")
         self._chat_models: dict[str, Any] = {}
 
@@ -102,14 +106,32 @@ class GroqProvider(LLMProvider):
                 if not await self._token_budget.can_afford(model_name, estimated_tokens):
                     logger.info("Skipping %s — over budget", model_name)
                     errors.append((model_name, "over_budget"))
+                    if self._collector:
+                        await self._collector.record_cascade(
+                            from_model=model_name,
+                            reason="over_budget",
+                            provider=self.name,
+                            tier="",
+                        )
                     continue
 
+            start = time.monotonic()
             try:
                 result = await self._call_model(model_name, messages, tools, stream)
                 # Record usage on success
                 if self._token_budget:
                     actual = result.prompt_tokens + result.completion_tokens
                     await self._token_budget.record(model_name, actual)
+                if self._collector:
+                    latency_ms = int((time.monotonic() - start) * 1000)
+                    await self._collector.record_request(
+                        model=model_name,
+                        provider=self.name,
+                        tier="",
+                        latency_ms=latency_ms,
+                        prompt_tokens=result.prompt_tokens,
+                        completion_tokens=result.completion_tokens,
+                    )
                 return result
             except Exception as exc:
                 error_type = _classify_error(exc)
@@ -120,6 +142,13 @@ class GroqProvider(LLMProvider):
                     str(exc)[:200],
                 )
                 errors.append((model_name, error_type))
+                if self._collector:
+                    await self._collector.record_cascade(
+                        from_model=model_name,
+                        reason=error_type,
+                        provider=self.name,
+                        tier="",
+                    )
 
                 # Auth errors affect all models — don't cascade
                 if error_type == "auth":
