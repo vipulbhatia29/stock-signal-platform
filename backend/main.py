@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import settings
 from backend.rate_limit import limiter
 from backend.routers import (
+    admin,
     alerts,
     auth,
     chat,
@@ -75,13 +76,41 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     registry = build_registry()
     logger.info("ToolRegistry ready: %d tools registered", len(registry.discover()))
 
-    # 3. LLM client with provider fallback chain
+    # 3. Load model cascade config from DB + build providers
+    from backend.agents.model_config import ModelConfigLoader
+    from backend.agents.token_budget import TokenBudget
+
+    config_loader = ModelConfigLoader()
+    async with async_session_factory() as config_session:
+        tier_configs = await config_loader.load(config_session)
+
+    token_budget = TokenBudget()
+
     providers = []
     if settings.GROQ_API_KEY:
-        providers.append(GroqProvider(api_key=settings.GROQ_API_KEY))
+        # Extract Groq model names from DB config (planner tier, ordered by priority)
+        groq_models = []
+        for tier_models in tier_configs.values():
+            for mc in tier_models:
+                if mc.provider == "groq" and mc.model_name not in groq_models:
+                    groq_models.append(mc.model_name)
+        # Load budget limits from all Groq configs
+        all_groq = [mc for ms in tier_configs.values() for mc in ms if mc.provider == "groq"]
+        token_budget.load_limits(all_groq)
+
+        providers.append(
+            GroqProvider(
+                api_key=settings.GROQ_API_KEY,
+                models=groq_models or None,
+                token_budget=token_budget,
+            )
+        )
     if settings.ANTHROPIC_API_KEY:
         providers.append(AnthropicProvider(api_key=settings.ANTHROPIC_API_KEY))
     llm_client = LLMClient(providers=providers)
+
+    app.state.config_loader = config_loader
+    app.state.token_budget = token_budget
 
     # 4. MCP subprocess (when MCP_TOOLS enabled)
     mcp_manager = None
@@ -205,3 +234,4 @@ app.include_router(preferences.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(forecasts.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
