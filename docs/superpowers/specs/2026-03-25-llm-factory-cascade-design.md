@@ -89,7 +89,8 @@ CREATE TABLE llm_model_config (
 | 1 | groq | llama-3.3-70b-versatile | 12,000 | Best tool-calling, strong JSON |
 | 2 | groq | moonshotai/kimi-k2-instruct | 10,000 | Good reasoning for complex plans |
 | 3 | groq | meta-llama/llama-4-scout-17b-16e-instruct | 30,000 | Fast, generous TPM fallback |
-| 4 | anthropic | claude-sonnet-4-6 | unlimited | Paid safety net |
+| 4 | anthropic | claude-sonnet-4-6 | paid | Paid fallback |
+| 5 | openai | gpt-4o | paid | Last-resort fallback |
 
 **Synthesizer tier** (user-facing analysis, no tool calling needed):
 
@@ -97,7 +98,10 @@ CREATE TABLE llm_model_config (
 |---|---|---|---|---|
 | 1 | groq | openai/gpt-oss-120b | 8,000 | Highest quality free model |
 | 2 | groq | moonshotai/kimi-k2-instruct | 10,000 | Strong reasoning fallback |
-| 3 | anthropic | claude-sonnet-4-6 | unlimited | Quality guarantee |
+| 3 | anthropic | claude-sonnet-4-6 | paid | Quality guarantee |
+| 4 | openai | gpt-4o | paid | Last-resort fallback |
+
+**Note on OpenAI**: `OpenAIProvider` already exists at `backend/agents/providers/openai.py` but is currently dead code — never instantiated in `main.py`. The new `ModelConfigLoader` will activate it automatically when `OPENAI_API_KEY` is set in `.env` AND OpenAI rows exist in `llm_model_config`. No code changes needed to onboard OpenAI — just configuration.
 
 ### 3.3 Config Loader
 
@@ -192,6 +196,30 @@ llm_client = LLMClient(
 ```
 
 The existing `llm_client.chat(tier="planner")` and `llm_client.chat(tier="synthesizer")` calls in `main.py:140` and `main.py:147` already pass the tier — they'll now route to the correct cascade automatically.
+
+`build_providers()` creates provider instances based on what's in the DB + which API keys are available:
+
+```python
+PROVIDER_MAP = {
+    "groq": (GroqProvider, "GROQ_API_KEY"),
+    "anthropic": (AnthropicProvider, "ANTHROPIC_API_KEY"),
+    "openai": (OpenAIProvider, "OPENAI_API_KEY"),
+}
+
+def build_providers(models: list[ModelConfig]) -> list[LLMProvider]:
+    """Build provider instances for models whose API keys are set."""
+    providers = []
+    for provider_name, group in groupby(models, key=lambda m: m.provider):
+        cls, env_key = PROVIDER_MAP[provider_name]
+        api_key = getattr(settings, env_key, "")
+        if not api_key:
+            logger.warning("Skipping %s models — %s not set", provider_name, env_key)
+            continue
+        providers.append(cls(api_key=api_key, models=list(group)))
+    return providers
+```
+
+This means adding a new provider in the future requires only: (1) a new `XyzProvider` class, (2) an entry in `PROVIDER_MAP`, (3) DB rows + API key. No other code changes.
 
 ### 3.6 Admin API
 
@@ -362,6 +390,8 @@ User must enable these Groq models in their Groq console:
 2. `moonshotai/kimi-k2-instruct`
 3. `meta-llama/llama-4-scout-17b-16e-instruct`
 4. `openai/gpt-oss-120b`
+
+Optional: set `OPENAI_API_KEY` in `.env` to activate OpenAI as last-resort fallback. Without it, OpenAI rows in the DB are silently skipped and Anthropic is the final fallback.
 
 ### 7.4 Rollout Strategy
 
