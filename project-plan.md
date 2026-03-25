@@ -674,9 +674,11 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 
 ### Deliverables
 
-#### Immediate Priority
-- [ ] **Redis read cache** for API responses (TTL tiers: volatile/stable/admin)
-- [ ] **Cache warmup** on startup (shared keys + top-N portfolio tickers)
+#### Immediate Priority (KAN-148)
+- [ ] **Redis read cache** — CacheService with 3-tier namespace (app/user/session), TTL tiers (volatile/standard/stable/session), cache-aside pattern
+- [ ] **Cache warmup** on startup (indexes + top tickers)
+- [ ] **Agent tool session cache** — per-session tool result caching in executor
+- [ ] **Nightly invalidation** — clear stale screener/sector cache before recomputation
 - [ ] **Portfolio aggregation tool** — weighted summary for 100+ stock portfolios
 - [ ] **Earnings card** on stock detail page (EPS estimate vs actual chart)
 
