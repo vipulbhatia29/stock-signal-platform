@@ -198,7 +198,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <PageTransition className="space-y-6">
+    <PageTransition className="space-y-6" data-testid="dashboard-page">
       {/* Welcome Banner (new users) */}
       <WelcomeBanner onAddTicker={handleQuickAdd} addingTickers={addingTickers} />
 
@@ -434,6 +434,7 @@ export default function DashboardPage() {
               <Button
                 variant="outline"
                 size="sm"
+                data-testid="refresh-all"
                 onClick={() => refreshAllMutation.mutate()}
                 disabled={refreshAllMutation.isPending || refreshingAll}
               >

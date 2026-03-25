@@ -38,6 +38,7 @@ export function SidebarNav() {
 
   return (
     <aside
+      data-testid="sidebar-nav"
       className="flex flex-col items-center py-3.5 border-r border-border bg-card flex-shrink-0"
       style={{ width: "var(--sw)" }}
     >
