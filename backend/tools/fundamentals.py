@@ -430,8 +430,13 @@ def fetch_earnings_history(ticker: str) -> list[dict]:
         return []
 
     results = []
-    for _, row in hist.iterrows():
-        quarter = str(row.get("Quarter", ""))
+    for idx, row in hist.iterrows():
+        # quarter is the DataFrame index (Timestamp), not a column
+        if hasattr(idx, "quarter"):
+            quarter = f"{idx.year}Q{idx.quarter}"
+        else:
+            quarter = str(idx) if idx else ""
+
         eps_est = row.get("epsEstimate")
         eps_act = row.get("epsActual")
         surprise = row.get("surprisePercent")
