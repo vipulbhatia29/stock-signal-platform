@@ -20,7 +20,8 @@ def _mock_blocklist():
             new_callable=AsyncMock,
         ) as mock_add,
         patch(
-            "backend.services.token_blocklist._get_redis",
+            "backend.services.redis_pool.get_redis",
+            new_callable=AsyncMock,
             return_value=AsyncMock(),
         ),
     ):
