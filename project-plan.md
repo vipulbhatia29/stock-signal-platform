@@ -674,11 +674,11 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 
 ### Deliverables
 
-#### Immediate Priority (KAN-148)
-- [ ] **Redis read cache** — CacheService with 3-tier namespace (app/user/session), TTL tiers (volatile/standard/stable/session), cache-aside pattern
-- [ ] **Cache warmup** on startup (indexes + top tickers)
-- [ ] **Agent tool session cache** — per-session tool result caching in executor
-- [ ] **Nightly invalidation** — clear stale screener/sector cache before recomputation
+#### Immediate Priority (KAN-148) ✅ (Session 55)
+- [x] **Redis read cache** — CacheService with 3-tier namespace (app/user/session), TTL tiers (volatile/standard/stable/session), cache-aside pattern
+- [x] **Cache warmup** on startup (indexes)
+- [x] **Agent tool session cache** — per-session tool result caching in executor (10 cacheable tools)
+- [x] **Nightly invalidation** — clear stale screener/sector/signal/forecast cache before recomputation
 - [ ] **Portfolio aggregation tool** — weighted summary for 100+ stock portfolios
 - [ ] **Earnings card** on stock detail page (EPS estimate vs actual chart)
 
