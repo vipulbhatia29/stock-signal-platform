@@ -650,19 +650,20 @@ Data-driven multi-model LLM cascade, proactive rate limiting, agent observabilit
 - [x] ContextVars for request-scoped session_id/query_id
 - [x] Dashboard LLM usage API endpoint (via admin/llm-usage)
 
-### Phase 6C — Testing Infrastructure
-- [ ] ~55 new unit/integration tests for 6A/6B components
-- [ ] Test suite cleanup (delete V1 tests, deduplicate, reorganize)
-- [ ] Playwright Page Object Model setup (auth fixtures, base page, helpers)
-- [ ] ~27 new E2E tests (auth, dashboard, chat, stocks, errors)
-- [ ] CI workflow: E2E job with Playwright, artifact upload
+### Phase 6C — Testing Infrastructure (Session 55: cleanup + scaffold)
+- [x] ~55 new unit/integration tests for 6A/6B components *(done during 6A+6B)*
+- [x] Test suite cleanup: deleted 11 duplicate root files, relocated 2 orphans (Session 55)
+- [x] Playwright POM scaffolding: config, base page, login page, dashboard page, auth fixture, selectors (Session 55)
+- [ ] ~27 new E2E tests (auth, dashboard, chat, stocks, errors) *(deferred to next session)*
+- [ ] CI workflow: E2E job with Playwright, artifact upload *(deferred to next session)*
+- [ ] Add data-testid attributes to frontend components for E2E selectors *(deferred)*
 
 ### Success Criteria
-- LLM cascade silently handles all Groq errors — user never sees "internal error"
-- Model config changeable via DB + admin API without redeploy
-- Escalation rate to Anthropic tracked and queryable
-- 1,100+ total tests (from ~1,053)
-- E2E tests cover all critical user flows
+- LLM cascade silently handles all Groq errors — user never sees "internal error" ✅
+- Model config changeable via DB + admin API without redeploy ✅
+- Escalation rate to Anthropic tracked and queryable ✅
+- 716 unit + 226 API + 7 e2e + 24 integration + 107 frontend = ~1,080 total tests
+- E2E tests cover all critical user flows *(pending — Playwright POM ready, tests next session)*
 
 ---
 
