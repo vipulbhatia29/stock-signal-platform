@@ -541,6 +541,31 @@ POST /api/v1/admin/llm-models/reload
   Notes:    Force-reloads model configs from DB into running cascade. Takes effect immediately.
 ```
 
+### 3.14 Admin Observability Endpoints (Phase 6B) ✅ IMPLEMENTED
+
+```
+GET /api/v1/admin/llm-metrics
+  Response: { requests_by_model, cascade_count, cascades_by_model, rpm_by_model, cascade_log }
+  Auth:     Required (role=ADMIN)
+  Notes:    Real-time in-memory metrics from ObservabilityCollector.
+
+GET /api/v1/admin/tier-health
+  Response: { tiers: [{ model, status, failures_5m, successes_5m, cascade_count, latency: { avg_ms, p95_ms } }], summary: { total, healthy, degraded, down, disabled } }
+  Auth:     Required (role=ADMIN)
+  Notes:    Per-model health classification (healthy/degraded/down/disabled).
+
+POST /api/v1/admin/tier-toggle
+  Body:     { model: string, enabled: boolean }
+  Response: { status: "ok", model, enabled }
+  Auth:     Required (role=ADMIN)
+  Notes:    Runtime enable/disable of a model without redeploy.
+
+GET /api/v1/admin/llm-usage
+  Response: { total_requests, total_cost_usd, avg_latency_ms, models: [{ model, provider, request_count, cost_usd }], escalation_rate }
+  Auth:     Required (role=ADMIN)
+  Notes:    30-day aggregated usage from llm_call_log table. Escalation rate = Anthropic calls / total.
+```
+
 ---
 
 ## 4. Service Layer Design
@@ -1301,6 +1326,7 @@ async def get_signals(ticker: str, request: Request):
 - **Traces:** Correlation ID on every request (X-Request-ID header)
 - **Alerts:** Azure Monitor alerts on error rate > 5%, P95 latency > 5s
 - **Job health:** TaskLog table queried by dashboard widget
+- **LLM Observability (Phase 6B):** `ObservabilityCollector` singleton tracks in-memory RPM, cascade events, per-model health (healthy/degraded/down/disabled), latency percentiles. Every LLM call and tool execution writes to `llm_call_log` / `tool_execution_log` TimescaleDB hypertables (fire-and-forget async). Admin endpoints: `GET /admin/llm-metrics`, `GET /admin/tier-health`, `POST /admin/tier-toggle`, `GET /admin/llm-usage`. ContextVars (`current_session_id`, `current_query_id`) flow request context without signature changes.
 
 ---
 
