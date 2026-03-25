@@ -6,7 +6,7 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,10 @@ class AllProvidersFailedError(Exception):
 
 class MaxRetriesExceeded(Exception):
     """A single provider exceeded its retry limit."""
+
+
+class AllModelsExhaustedError(Exception):
+    """All models within a provider's cascade have been exhausted."""
 
 
 class RateLimitError(Exception):
@@ -58,7 +62,7 @@ class ProviderHealth:
         """Mark this provider as exhausted (quota exceeded)."""
         self.is_exhausted = True
         if retry_after:
-            self.exhausted_until = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+            self.exhausted_until = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
         logger.warning(
             "provider_exhausted",
             extra={"provider": self.provider, "retry_after": retry_after},

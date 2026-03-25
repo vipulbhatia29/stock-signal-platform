@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 from backend.agents.llm_client import (
+    AllModelsExhaustedError,
     AllProvidersFailedError,
     LLMClient,
     LLMProvider,
@@ -188,3 +189,40 @@ async def test_backward_compat_no_tier_config():
 
     result = await client.chat(messages=[{"role": "user", "content": "hi"}], tools=[])
     assert result.content == "ok"
+
+
+# ─── ProviderHealth bug regression ───────────────────────────────────────────
+
+
+def test_mark_exhausted_sets_future_time():
+    """mark_exhausted with retry_after should set exhausted_until in the future."""
+    health = ProviderHealth(provider="groq")
+    health.mark_exhausted(retry_after=60.0)
+    assert health.is_exhausted is True
+    assert health.exhausted_until is not None
+    assert health.exhausted_until > datetime.now(timezone.utc)
+
+
+def test_mark_exhausted_without_retry_after():
+    """mark_exhausted without retry_after leaves exhausted_until as None."""
+    health = ProviderHealth(provider="groq")
+    health.mark_exhausted()
+    assert health.is_exhausted is True
+    assert health.exhausted_until is None
+
+
+def test_is_available_after_exhaustion_expires():
+    """is_available returns True once exhausted_until has passed."""
+    health = ProviderHealth(provider="groq")
+    health.is_exhausted = True
+    health.exhausted_until = datetime(2020, 1, 1, tzinfo=timezone.utc)  # in the past
+    assert health.is_available() is True
+    assert health.is_exhausted is False  # reset by is_available
+
+
+# ─── AllModelsExhaustedError ─────────────────────────────────────────────────
+
+
+def test_all_models_exhausted_error_exists():
+    """AllModelsExhaustedError is importable and is an Exception."""
+    assert issubclass(AllModelsExhaustedError, Exception)
