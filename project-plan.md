@@ -594,7 +594,7 @@ Claude Code / Telegram / Mobile → MCP Client → HTTP → MCP Tool Server
 - [x] **S3 (KAN-134):** Lifespan Wiring + Feature Flag — subprocess manager, MCP_TOOLS=True, fallback (~2h) ✓ PR #83
 - [x] **S4 (KAN-135):** Health Endpoint + Observability (~1.5h) ✓ PR #84
 - [x] **S5 (KAN-136):** Integration Tests — real stdio round-trip, lifecycle, regression MCP vs direct (~2.5h) ✓ PR #86, Session 51
-- [ ] **S6 (KAN-131):** Validation — verify against spec+plan, full test suite, docs (~1.5h)
+- [x] **S6 (KAN-131):** Validation — verify against spec+plan, full test suite, docs ✓ Done
 
 ### Key Architectural Decisions (Session 50 brainstorm)
 - FastMCP server + `mcp` Python SDK client (both official Anthropic)
@@ -617,10 +617,116 @@ Phase 5.5 (security) ✅ DONE. No cloud infrastructure needed.
 
 ---
 
-## Phase 6: Deployment + LLMOps (Weeks 11-12)
+## Phase 6: LLM Factory, Observability & Testing Infrastructure
 
 ### Goal
-Deploy to cloud, swap MCP transport from stdio to Streamable HTTP, add LLM observability/gateway.
+Data-driven multi-model LLM cascade, proactive rate limiting, agent observability, expanded E2E testing. Addresses all architecture gaps identified in the aset-platform comparison brainstorm (Session 53).
+
+### Design Docs
+- **Spec 6A:** `docs/superpowers/specs/2026-03-25-llm-factory-cascade-design.md`
+- **Spec 6B:** `docs/superpowers/specs/2026-03-25-agent-observability-design.md`
+- **Spec 6C:** `docs/superpowers/specs/2026-03-25-testing-infrastructure-design.md`
+- **Backlog:** `docs/superpowers/specs/2026-03-25-architecture-gaps-backlog.md`
+- **Plan 6A:** `docs/superpowers/plans/2026-03-25-llm-factory-cascade-plan.md`
+
+### Phase 6A — LLM Factory & Cascade
+- [ ] V1 deprecation (remove `AGENT_V2` flag, delete V1 graph, rename graph_v2→graph)
+- [ ] `llm_model_config` table (data-driven cascade, Alembic migration 012)
+- [ ] Multi-model GroqProvider cascade (budget-aware, error-classified)
+- [ ] TokenBudget async sliding-window tracker (TPM/RPM/TPD/RPD, 80% threshold)
+- [ ] Tier config wiring (planner→cheap models, synthesizer→quality models)
+- [ ] Groq error recovery (APIError/APIStatusError/APIConnectionError → cascade)
+- [ ] Tool result truncation for synthesizer (configurable per-result cap)
+- [ ] Admin API (model CRUD, reload, health)
+- [ ] ProviderHealth.mark_exhausted() bug fix
+- [ ] Documentation updates (TDD, FSD, Swagger, Serena memories)
+
+### Phase 6B — Agent Observability
+- [ ] ObservabilityCollector (async, in-memory real-time metrics)
+- [ ] LLMCallLog writes (every LLM call: success + cascade failures)
+- [ ] ToolExecutionLog writes (every tool call from executor)
+- [ ] Tier health classification (healthy/degraded/down/disabled)
+- [ ] Admin endpoints (llm-metrics, tier-health, tier-toggle, llm-usage)
+- [ ] ContextVars for request-scoped session_id/query_id
+- [ ] Dashboard LLM usage API endpoint
+
+### Phase 6C — Testing Infrastructure
+- [ ] ~55 new unit/integration tests for 6A/6B components
+- [ ] Test suite cleanup (delete V1 tests, deduplicate, reorganize)
+- [ ] Playwright Page Object Model setup (auth fixtures, base page, helpers)
+- [ ] ~27 new E2E tests (auth, dashboard, chat, stocks, errors)
+- [ ] CI workflow: E2E job with Playwright, artifact upload
+
+### Success Criteria
+- LLM cascade silently handles all Groq errors — user never sees "internal error"
+- Model config changeable via DB + admin API without redeploy
+- Escalation rate to Anthropic tracked and queryable
+- 1,100+ total tests (from ~1,053)
+- E2E tests cover all critical user flows
+
+---
+
+## Phase 7: Bug Fixes, UX Polish & Feature Backlog
+
+### Goal
+Address remaining backlog items, UI gaps, and feature requests identified across all phases.
+
+### Deliverables
+
+#### Immediate Priority
+- [ ] **Redis read cache** for API responses (TTL tiers: volatile/stable/admin)
+- [ ] **Cache warmup** on startup (shared keys + top-N portfolio tickers)
+- [ ] **Portfolio aggregation tool** — weighted summary for 100+ stock portfolios
+- [ ] **Earnings card** on stock detail page (EPS estimate vs actual chart)
+
+#### Medium Priority
+- [ ] **Google OAuth (SSO)** — PKCE flow, CachedJWKSClient, frontend "Sign in with Google"
+- [ ] **Chat audit trail** — admin query endpoints for session transcripts
+- [ ] **Centralized input validation** module
+- [ ] **Candlestick chart toggle** on stock detail
+- [ ] **Benchmark comparison chart** (stock vs S&P 500 vs NASDAQ)
+
+#### Deferred (UI-6, UI-9 from Phase 4F)
+- [x] ~~**UI-6: Sectors Page**~~ ✅ Done (Session 45)
+- [ ] **UI-9: Animations + Final Polish** — framer-motion, glow effects, scrollbar
+
+#### Deferred Backend (Phase 4G backlog)
+- [ ] Live LLM eval tests (needs CI_GROQ_API_KEY)
+- [ ] Red flag scanner (controversies, short interest)
+- [ ] Forecast blending into composite score
+- [ ] Telegram notifications
+
+### Success Criteria
+All HIGH priority backlog items addressed. Google OAuth working. Portfolio aggregation handles 100+ stocks.
+
+---
+
+## Phase 8: Subscription & Monetization
+
+### Goal
+Tiered subscription system with Stripe payment integration.
+
+### Deliverables
+- [ ] User model: `subscription_tier`, `subscription_status`, `stripe_customer_id`
+- [ ] 3 tiers: Free / Pro / Premium with usage quotas
+- [ ] Stripe integration: checkout, webhooks, subscription lifecycle
+- [ ] `SubscriptionGuard` middleware: tier + quota enforcement on tool execution
+- [ ] `llm_model_config` user_tier filter: route free users to cheap models
+- [ ] Frontend: pricing cards, usage meter, paywall modal, billing page
+- [ ] JWT claims: `subscription_tier`, `usage_remaining`
+
+### Dependencies
+Phase 7 (Google OAuth should be done first for signup flow)
+
+### Success Criteria
+Can subscribe via Stripe, tier enforced on agent tool calls, usage tracked.
+
+---
+
+## Phase 9: Cloud Deployment + LLMOps
+
+### Goal
+Deploy to cloud, swap MCP transport from stdio to Streamable HTTP, production-grade observability.
 
 ### Deliverables
 1. **Docker Compose** updated with all services containerized (including MCP Tool Server as separate container)
@@ -631,22 +737,15 @@ Deploy to cloud, swap MCP transport from stdio to Streamable HTTP, add LLM obser
    - Managed Redis
    - Container Registry
 4. **`deploy.yml`** — wire actual deployment (currently a stub)
-5. **LLMOps / Gateway:**
-   - LiteLLM or custom gateway for centralized LLM routing
-   - Observability dashboard (token usage, cost, latency per provider)
-   - Prompt versioning
-   - A/B testing between providers
-   - Auto-routing based on query complexity
-6. **Observability:**
+5. **Production Observability:**
    - structlog JSON logging throughout
    - OpenTelemetry instrumentation on FastAPI + Celery
-   - Cloud monitoring integration
-7. **Tier 2 MCP integrations** (external MCP servers, always Streamable HTTP):
+   - Cloud monitoring integration (Grafana/Datadog)
+   - Cost dashboards from LLMCallLog data
+6. **Tier 2 MCP integrations** (external MCP servers, always Streamable HTTP):
    - Unusual Whales MCP (options flow, dark pool, congressional trading)
    - Polygon.io MCP (broader market data)
-8. **Celery → MCP** — background tasks also call tools via Streamable HTTP MCP (optional, enables independent scaling)
+7. **Celery → MCP** — background tasks also call tools via Streamable HTTP MCP (optional, enables independent scaling)
 
 ### Success Criteria
-App running in cloud, MCP Tool Server as separate container, LLM gateway with cost tracking, Tier 2 data integrations live. Any new client app (Telegram, mobile) can connect to MCP Tool Server and use all 20+ tools.
-
-**Note:** MCP server (`/mcp`) and CI/CD pipeline already implemented in Phase 4B/4.5. Phase 5.6 establishes the MCP abstraction; this phase changes the transport.
+App running in cloud, MCP Tool Server as separate container, cost tracking live. Any new client app (Telegram, mobile) can connect to MCP Tool Server and use all 20+ tools.
