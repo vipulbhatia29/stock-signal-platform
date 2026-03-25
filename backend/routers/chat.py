@@ -10,7 +10,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.config import settings
 from backend.database import async_session_factory, get_async_session
 from backend.dependencies import get_current_user
 from backend.models.chat import ChatMessage, ChatSession
@@ -82,22 +81,18 @@ async def chat_stream(
 
     Creates a new session if no session_id is provided (requires agent_type).
     Resumes an existing session if session_id is given.
-
-    When AGENT_V2=true, uses the Plan→Execute→Synthesize graph.
-    Otherwise, uses the V1 ReAct graph.
+    Uses the Plan→Execute→Synthesize graph.
     """
     # Resolve or create session
     if body.session_id:
         session_messages = await load_session_messages(db, body.session_id)
         chat_session = await _get_session(db, body.session_id, user.id)
-        agent_type = chat_session.agent_type
     else:
         if not body.agent_type:
             raise HTTPException(status_code=422, detail="agent_type required for new session")
         title = auto_title(body.message)
         chat_session = await create_session(db, user.id, body.agent_type, title=title)
         session_messages = []
-        agent_type = body.agent_type
 
     # Persist user message BEFORE streaming
     await save_message(db, chat_session.id, role="user", content=body.message)
@@ -108,81 +103,13 @@ async def chat_stream(
     # Generate query_id for tracing
     query_id = uuid.uuid4()
 
-    # Feature flag: select V1 or V2 graph
-    use_v2 = settings.AGENT_V2 and hasattr(request.app.state, "agent_v2_graph")
-
-    if use_v2:
-        return StreamingResponse(
-            _event_generator_v2(request, body, chat_session, session_messages, user, query_id),
-            media_type="application/x-ndjson",
-        )
-
-    # V1 path (existing ReAct graph)
-    stock_graph = getattr(request.app.state, "stock_graph", None)
-    general_graph = getattr(request.app.state, "general_graph", None)
-    graph = stock_graph if agent_type == "stock" else general_graph
-
-    if graph is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Chat service is starting up. Please try again in a moment.",
-        )
-
-    async def event_generator():
-        """Yield NDJSON stream events and persist assistant message after."""
-        from backend.agents.graph import AgentState
-        from backend.agents.stream import stream_graph_events
-
-        # Build context from history + new message
-        context = build_context_window(session_messages)
-        context.append({"role": "user", "content": body.message})
-
-        input_state = AgentState(
-            messages=context,
-            agent_type=agent_type,
-            iteration=0,
-            tool_results=[],
-            usage={},
-        )
-        config = {"configurable": {"thread_id": str(chat_session.id)}}
-
-        collected_tokens: list[str] = []
-        collected_tool_calls: list[dict] = []
-
-        async for event in stream_graph_events(graph, input_state, config):
-            # Collect for persistence
-            if event.type == "token" and event.content:
-                collected_tokens.append(event.content)
-            elif event.type == "tool_start":
-                collected_tool_calls.append({"tool": event.tool, "params": event.params})
-            elif event.type == "tool_result":
-                # Update the last tool call with result
-                if collected_tool_calls:
-                    collected_tool_calls[-1]["status"] = event.status
-                    collected_tool_calls[-1]["data"] = event.data
-
-            yield event.to_ndjson() + "\n"
-
-        # Persist assistant message AFTER stream completes
-        final_content = "".join(collected_tokens) if collected_tokens else None
-        tool_calls_json = collected_tool_calls if collected_tool_calls else None
-
-        async with async_session_factory() as persist_db:
-            await save_message(
-                persist_db,
-                chat_session.id,
-                role="assistant",
-                content=final_content,
-                tool_calls=tool_calls_json,
-            )
-
     return StreamingResponse(
-        event_generator(),
+        _event_generator(request, body, chat_session, session_messages, user, query_id),
         media_type="application/x-ndjson",
     )
 
 
-async def _event_generator_v2(
+async def _event_generator(
     request: Request,
     body: ChatRequest,
     chat_session: ChatSession,
@@ -190,8 +117,8 @@ async def _event_generator_v2(
     user: User,
     query_id: uuid.UUID,
 ):
-    """Yield NDJSON events from the V2 Plan→Execute→Synthesize graph."""
-    from backend.agents.graph_v2 import AgentStateV2
+    """Yield NDJSON events from the Plan→Execute→Synthesize graph."""
+    from backend.agents.graph import AgentStateV2
     from backend.agents.stream import stream_graph_v2_events
     from backend.agents.user_context import build_user_context
 
@@ -219,7 +146,7 @@ async def _event_generator_v2(
         decline_message="",
     )
 
-    graph = getattr(request.app.state, "agent_v2_graph", None)
+    graph = getattr(request.app.state, "agent_graph", None)
     if graph is None:
         from backend.agents.stream import StreamEvent
 

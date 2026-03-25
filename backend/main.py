@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.config import settings
 from backend.rate_limit import limiter
 from backend.routers import (
+    admin,
     alerts,
     auth,
     chat,
@@ -40,12 +41,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 0. Database schema validation — catch stale alembic_version early
     from sqlalchemy import text
 
-    from backend.agents.general_agent import GeneralAgent
-    from backend.agents.graph import build_agent_graph
     from backend.agents.llm_client import LLMClient
     from backend.agents.providers.anthropic import AnthropicProvider
     from backend.agents.providers.groq import GroqProvider
-    from backend.agents.stock_agent import StockAgent
     from backend.database import async_session_factory
     from backend.mcp_server.server import create_mcp_app
     from backend.tools.build_registry import build_registry
@@ -78,26 +76,43 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     registry = build_registry()
     logger.info("ToolRegistry ready: %d tools registered", len(registry.discover()))
 
-    # 3. LLM client with provider fallback chain
+    # 3. Load model cascade config from DB + build providers
+    from backend.agents.model_config import ModelConfigLoader
+    from backend.agents.token_budget import TokenBudget
+
+    config_loader = ModelConfigLoader()
+    async with async_session_factory() as config_session:
+        tier_configs = await config_loader.load(config_session)
+
+    token_budget = TokenBudget()
+
     providers = []
     if settings.GROQ_API_KEY:
-        providers.append(GroqProvider(api_key=settings.GROQ_API_KEY))
+        # Extract Groq model names from DB config (planner tier, ordered by priority)
+        groq_models = []
+        for tier_models in tier_configs.values():
+            for mc in tier_models:
+                if mc.provider == "groq" and mc.model_name not in groq_models:
+                    groq_models.append(mc.model_name)
+        # Load budget limits from all Groq configs
+        all_groq = [mc for ms in tier_configs.values() for mc in ms if mc.provider == "groq"]
+        token_budget.load_limits(all_groq)
+
+        providers.append(
+            GroqProvider(
+                api_key=settings.GROQ_API_KEY,
+                models=groq_models or None,
+                token_budget=token_budget,
+            )
+        )
     if settings.ANTHROPIC_API_KEY:
         providers.append(AnthropicProvider(api_key=settings.ANTHROPIC_API_KEY))
     llm_client = LLMClient(providers=providers)
 
-    # 4. Build LangGraph agent graphs (one per agent type)
-    if providers:
-        active_llm = llm_client.get_active_chat_model()
-        app.state.stock_graph = build_agent_graph(StockAgent(), registry, active_llm)
-        app.state.general_graph = build_agent_graph(GeneralAgent(), registry, active_llm)
-        logger.info("LangGraph agent graphs compiled (stock + general)")
-    else:
-        app.state.stock_graph = None
-        app.state.general_graph = None
-        logger.warning("No LLM providers configured — chat disabled")
+    app.state.config_loader = config_loader
+    app.state.token_budget = token_budget
 
-    # 4b. MCP subprocess (when MCP_TOOLS enabled)
+    # 4. MCP subprocess (when MCP_TOOLS enabled)
     mcp_manager = None
     if settings.MCP_TOOLS:
         from backend.mcp_server.lifecycle import MCPSubprocessManager
@@ -110,10 +125,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.warning("MCP Tool Server failed to start — falling back to direct calls")
             mcp_manager = None
 
-    # 4c. Build Agent V2 graph when feature flag is enabled
-    if settings.AGENT_V2 and providers:
+    # 5. Build Agent graph (Plan→Execute→Synthesize)
+    if providers:
         from backend.agents.executor import execute_plan
-        from backend.agents.graph_v2 import build_agent_graph_v2
+        from backend.agents.graph import build_agent_graph
         from backend.agents.planner import plan_query
         from backend.agents.simple_formatter import format_simple_result
         from backend.agents.synthesizer import synthesize_results
@@ -147,7 +162,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 llm_chat=lambda **kw: llm_client.chat(**kw, tier="synthesizer"),
             )
 
-        app.state.agent_v2_graph = build_agent_graph_v2(
+        app.state.agent_graph = build_agent_graph(
             plan_fn=_plan_fn,
             execute_fn=execute_plan,
             synthesize_fn=_synthesize_fn,
@@ -155,9 +170,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             tool_executor=_tool_executor,
             tools_description=tools_desc,
         )
-        logger.info("Agent V2 graph compiled (Plan→Execute→Synthesize)")
-    elif settings.AGENT_V2:
-        logger.warning("AGENT_V2=true but no LLM providers — V2 graph not built")
+        logger.info("Agent graph compiled (Plan→Execute→Synthesize)")
+    else:
+        app.state.agent_graph = None
+        logger.warning("No LLM providers configured — chat disabled")
 
     # 5. MCP server (Layer 3 — Expose) with JWT auth middleware
     from backend.mcp_server.auth import MCPAuthMiddleware
@@ -218,3 +234,4 @@ app.include_router(preferences.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(forecasts.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")

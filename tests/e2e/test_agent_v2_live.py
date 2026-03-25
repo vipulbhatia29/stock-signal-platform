@@ -11,7 +11,7 @@ import uuid
 import pytest
 
 from backend.agents.executor import execute_plan
-from backend.agents.graph_v2 import AgentStateV2, build_agent_graph_v2
+from backend.agents.graph import AgentStateV2, build_agent_graph
 from backend.agents.llm_client import LLMClient
 from backend.agents.planner import plan_query
 from backend.agents.simple_formatter import format_simple_result
@@ -83,7 +83,7 @@ def agent_graph():
     tool_infos = registry.discover()
     tools_desc = "\n".join(f"- **{t.name}**: {t.description}" for t in tool_infos)
 
-    return build_agent_graph_v2(
+    return build_agent_graph(
         plan_fn=_plan_fn,
         execute_fn=execute_plan,
         synthesize_fn=_synthesize_fn,

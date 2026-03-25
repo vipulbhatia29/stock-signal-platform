@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     FINNHUB_API_KEY: str = ""
 
     # --- Agent ---
-    AGENT_V2: bool = False  # Feature flag: Plan→Execute→Synthesize agent
     MCP_TOOLS: bool = True  # MCP stdio transport for agent tool calls (kill switch: set False)
+    MAX_TOOL_RESULT_CHARS: int = 3000  # Truncate tool results before synthesis
 
     # --- Logging ---
     LOG_LEVEL: str = "INFO"

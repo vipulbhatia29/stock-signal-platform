@@ -219,8 +219,6 @@ JWT_ALGORITHM=HS256
 GROQ_API_KEY=
 ANTHROPIC_API_KEY=
 
-# Feature flags
-AGENT_V2=true
 ENVEOF
       warn "Created backend/.env with defaults — edit JWT_SECRET_KEY and API keys"
     fi

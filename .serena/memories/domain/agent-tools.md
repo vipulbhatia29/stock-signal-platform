@@ -54,11 +54,11 @@ EdgarTools, Alpha Vantage, FRED, Finnhub
 ### MCP Server
 Streamable HTTP at `/mcp` (FastMCP on FastAPI)
 
-### LLM Client (unchanged)
-tier_config: planner → Sonnet, synthesizer → Sonnet. Executor is mechanical.
+### LLM Client (Phase 6A — data-driven cascade)
+tier_config loaded from `llm_model_config` DB table at startup. Groq models cascade by priority with TokenBudget (80% threshold). Fallback: Groq → Anthropic → OpenAI. Admin API: `/api/v1/admin/llm-models`.
 
 ### Key Decisions
-- Feature-flagged behind AGENT_V2=true
+- V1 ReAct graph DELETED (Session 54). AGENT_V2 flag removed. V2 is the only path.
 - Scope: financial context only, data-grounded only
 - Cross-session memory: Level 1 (portfolio + preferences at session start)
 - Feedback: thumbs up/down + trace logging via query_id

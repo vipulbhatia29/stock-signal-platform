@@ -7,6 +7,7 @@ from backend.models.dividend import DividendPayment
 from backend.models.earnings import EarningsSnapshot
 from backend.models.forecast import ForecastResult, ModelVersion, RecommendationOutcome
 from backend.models.index import StockIndex, StockIndexMembership
+from backend.models.llm_config import LLMModelConfig
 from backend.models.logs import LLMCallLog, ToolExecutionLog
 from backend.models.pipeline import PipelineRun, PipelineWatermark
 from backend.models.portfolio import (  # noqa: F401
@@ -30,6 +31,7 @@ __all__ = [
     "ForecastResult",
     "InAppAlert",
     "LLMCallLog",
+    "LLMModelConfig",
     "ModelVersion",
     "PipelineRun",
     "PipelineWatermark",

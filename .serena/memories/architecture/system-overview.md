@@ -37,19 +37,20 @@ category: architecture
 - **Pre-computed signals** — Celery Beat runs nightly signal computation; dashboard reads pre-computed data. Agents call tools on-demand.
 - **Three-layer MCP architecture** — Layer 1: consume external MCPs (EdgarTools, Alpha Vantage, FRED, Finnhub). Layer 2: enrich in backend (Tool Registry + caching). Layer 3: expose as MCP server at `/mcp` (Streamable HTTP). See `domain/agent-tools` memory for full details.
 
-## LLM Routing (Phase 4D — tier-based)
+## LLM Routing (Phase 6A — data-driven cascade)
 
 LLMClient supports `tier_config` for routing different agent phases to different providers:
-- **Planner tier** — Sonnet (intent classification + tool plan)
-- **Synthesizer tier** — Sonnet (confidence scoring + evidence tree)
+- **Planner tier** — Groq cascade (llama-3.3-70b → kimi-k2 → llama-4-scout → Sonnet → GPT-4o)
+- **Synthesizer tier** — Groq cascade (gpt-oss-120b → kimi-k2 → Sonnet → GPT-4o)
 - **Executor** — no LLM (mechanical tool execution)
-- **V1 ReAct** — Groq (fast tool-calling loops, backward compat)
 
-Provider fallback chain: Groq → Anthropic (Claude Sonnet). Feature-flagged: `AGENT_V2=true` enables Plan→Execute→Synthesize; `AGENT_V2=false` uses V1 ReAct.
+Model cascade is data-driven from `llm_model_config` DB table (migration 012). TokenBudget tracks TPM/RPM/TPD/RPD per model with 80% proactive threshold. Admin API at `/api/v1/admin/llm-models` (superuser-only).
 
-## Agent V2 Architecture (Phase 4D)
+V1 ReAct graph DELETED in Session 54. AGENT_V2 flag removed. V2 Plan→Execute→Synthesize is the only path.
 
-Three-phase LangGraph StateGraph behind `AGENT_V2=true`:
+## Agent Architecture (Plan→Execute→Synthesize)
+
+Three-phase LangGraph StateGraph (V1 ReAct deleted in Session 54):
 1. **Planner (LLM):** Classifies intent (stock_analysis/portfolio/market_overview/simple_lookup/out_of_scope), generates ordered tool plan, enforces financial-only scope
 2. **Executor (mechanical):** Runs tools via ToolRegistry, resolves `$PREV_RESULT` references, retries (max 1), circuit breaker (3 failures), 45s wall clock timeout
 3. **Synthesizer (LLM):** Produces confidence score (0-1), bull/base/bear scenarios, evidence tree with tool citations, portfolio personalization

@@ -40,6 +40,10 @@ category: debugging
 - Fix: use `{value != null && <div/>}` — the explicit null check narrows the type.
 - ESLint doesn't catch this — only `tsc --noEmit` does. Always run both locally before pushing.
 
+## TanStack Query cache invalidation
+- After mutations that update backend data (e.g., Refresh All ingest), ALL dependent query keys must be invalidated — not just the primary one. Dashboard uses ~12 query keys; invalidating only `["watchlist"]` leaves other tiles stale.
+- Use `enabled` param on `useQuery` to skip unnecessary requests (e.g., `usePortfolioForecast(hasPositions)` — don't call `/forecasts/portfolio` when there are no positions).
+
 ## ESM-only packages in Jest
 - `react-markdown` v9+, `rehype-highlight`, `remark-gfm` are ESM-only.
 - Jest runs in CJS mode and cannot import them directly.
