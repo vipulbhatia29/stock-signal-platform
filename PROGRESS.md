@@ -919,171 +919,64 @@ README overhaul (product overview, architecture diagram, 16 endpoints). 30 stale
 
 ---
 
-## Session 50 — Phase 5.5 Complete + Phase 5.6 Refinement Complete
+## Session 50 — Phase 5.5 + Phase 5.6 S1-S4 *(compact)*
 
-**Date:** 2026-03-23
-**Branch:** `feat/KAN-120-refresh-token-blocklist` (merged), `feat/KAN-121-mcp-stdio-refinement`
+Redis refresh token blocklist (PR #79). Phase 5.6 refinement + S1 tool server (PR #81) + S2 tool client (PR #82) + S3 lifespan wiring (PR #83) + S4 health endpoint (PR #84). 38 new tests. Learning: parallel subagents with shared deps must merge dependency first.
 
-### Phase 5.5 — Security Hardening COMPLETE
-- **PR #79** squash-merged to develop, all CI green
-- Redis refresh token blocklist: JTI claim on refresh tokens, `backend/services/token_blocklist.py`
-- `decode_token()` returns `TokenPayload(user_id, jti)` dataclass (breaking interface change, all callers updated)
-- `/refresh` checks blocklist before issuing, blocklists old token after rotation
-- `/logout` blocklists refresh token from cookie
-- 12 new tests (6 unit blocklist + 5 API revocation + 1 JTI uniqueness)
-- KAN-118 Epic → Done, KAN-120 Story → Done, KAN-122-125 Subtasks → Done
+## Session 51 — Phase 5.6 S5 + Dashboard Bug Sprint *(compact)*
 
-### Phase 5.6 — MCP stdio Refinement + Implementation (S1-S4)
-- Refinement: brainstorm (11 decisions), spec (16 sections), plan (6 stories)
-- **S1 (KAN-132) PR #81:** MCP Tool Server — `build_registry.py` extracted from main.py, `ToolResult.to_json()/from_json()`, `tool_server.py` stdio entry point. 10 tests.
-- **S2 (KAN-133) PR #82:** MCP Tool Client — `MCPToolClient` (connect/call_tool/list_tools/close), `inject_user_context()` for portfolio tools. 14 tests.
-- **S3 (KAN-134) PR #83:** Lifespan Wiring — `MCP_TOOLS=True` config flag, `MCPSubprocessManager` (start/restart/fallback), `main.py` wiring. 9 tests.
-- **S4 (KAN-135) PR #84:** Health Endpoint — `GET /api/v1/health` with MCP subprocess status (ok/degraded/disabled). Pydantic schemas. Replaced inline `/health`. 5 tests. Fixed 3 old test refs.
-- **Learning:** Parallel subagents with shared deps → merge dependency PR first, then rebase dependent branch.
+20 integration tests (14 stdio + 6 regression). FastMCP param dispatch bug fix. CI updated. 19 dashboard UX fixes: Sora font, score scale 0-1→0-10, signal thresholds BUY≥8/WATCH≥5/AVOID<5, hydration fix, trending cards. PRs #86-91.
 
-### Files Created This Session
-- `backend/services/token_blocklist.py` — Redis blocklist for refresh tokens
-- `backend/tools/build_registry.py` — extracted registry builder
-- `backend/mcp_server/tool_server.py` — FastMCP stdio entry point
-- `backend/mcp_server/tool_client.py` — MCP client + user context injection
-- `backend/mcp_server/lifecycle.py` — subprocess manager
-- `backend/routers/health.py` — health endpoint router
-- `backend/schemas/health.py` — health response schemas
-- 5 test files: blocklist, tool_server, tool_client, lifecycle, health
+## Session 52 — Dashboard Refresh Bug Sprint *(compact)*
 
-### Resume Point
-Phase 5.6: S5 (KAN-136 — integration tests with real stdio subprocess) → S6 (KAN-131 — validation)
+4 fixes: route shadowing, partial cache invalidation (2→9 keys), unnecessary portfolio forecast call, stale prices (`on_conflict_do_update`). PR #92.
+
+## Session 53 — Phase 6 Architecture Brainstorm *(compact)*
+
+Compared SSP vs aset-platform. 12 gaps identified. 3 specs + 1 backlog + 1 plan written. project-plan reorganized: Phase 6=LLM Factory, 7=Backlog, 8=Subscriptions, 9=Cloud. KAN-138 fixed (earnings_snapshots empty). JIRA Epic KAN-139 + 7 stories created for Phase 6A.
 
 ---
 
-## Session 51 — Phase 5.6 S5 Integration Tests + Bug Fix
+## Session 54 — Phase 6A: LLM Factory & Cascade COMPLETE
 
-**Date:** 2026-03-23
-**Branch:** `feat/KAN-136-mcp-integration-tests`
+**Date:** 2026-03-25 | **Branch:** `feat/KAN-140-v1-deprecation` | **Tests:** 735 → 766 unit (+31 net)
 
-### What was done
+### All 7 stories shipped in one session (KAN-140–146)
 
-1. **KAN-136 (S5) — MCP Integration Tests COMPLETE:**
-   - **20 new integration tests** across 2 files, all passing
-   - `tests/integration/test_mcp_stdio.py` (14 tests):
-     - T5.1 Round-trip (7): subprocess starts, lists 20+ tools, known tool names, search_stocks round-trip, invalid tool name error, empty params, connect/disconnect
-     - T5.2 Lifecycle (7): manager starts in stdio mode, stop→disabled, restart after crash, ensure_healthy auto-restart, fallback after MAX_RESTARTS, call_tool in fallback raises, full manager round-trip
-   - `tests/integration/test_mcp_regression.py` (6 tests):
-     - Tool list matches (MCP = direct), search_stocks identical status, structured data preserved through stdio, invalid tool both paths error, ToolResult serialization round-trip, tool count matches
+1. **KAN-140 — V1 Deprecation:** Deleted `AGENT_V2` flag, V1 ReAct graph, `stream_graph_events()`, V1 tests. Renamed `graph_v2.py` → `graph.py`. Rewrote `main.py` (V2 unconditional) and `chat.py` (single path). -683 lines.
 
-2. **Bug Fix — MCP param passing (discovered by integration tests):**
-   - **Problem:** FastMCP dispatches tool call arguments as keyword args to handler functions. `call_tool("search_stocks", {"query": "AAPL"})` sent `query="AAPL"` to handler, but handler expected `params: dict`. Tools never actually executed via MCP — all calls hit FastMCP validation errors.
-   - **Fix:** MCPToolClient wraps params as `{"params": {...}}` before sending, so FastMCP maps them to the handler's `params: dict` argument. Convention documented in TDD §12.1.1.
-   - **Impact:** All 20 tools now work correctly through MCP stdio. Without this fix, MCP was silently broken.
+2. **KAN-141 — Bug Fix + Token Budget:** Fixed `ProviderHealth.mark_exhausted()` (set `exhausted_until` to future, not now). Added `AllModelsExhaustedError`. Created `backend/agents/token_budget.py` — async sliding-window tracker (TPM/RPM/TPD/RPD, 80% threshold). 14 tests.
 
-3. **CI Configuration updated:**
-   - `MCP_TOOLS=true` added to `ci-pr.yml` and `ci-merge.yml` backend-test env
-   - Integration test step added to `ci-pr.yml` PR gate
-   - `ci-merge.yml` integration step: removed empty-stub workaround, added `-m integration` marker
-   - `pyproject.toml`: added `integration` pytest marker
+3. **KAN-142 — LLM Model Config:** `LLMModelConfig` SQLAlchemy model, Pydantic schemas, `ModelConfigLoader` with DB cache. Alembic migration 012 with 9 seed rows (5 planner + 4 synthesizer cascade).
 
-4. **Docs updated:**
-   - `project-plan.md` — S5 marked complete with PR ref
-   - `docs/TDD.md` — §12.1.1 added (parameter passing convention)
-   - `PROGRESS.md` — session 51, session 49 compacted
+4. **KAN-143 — GroqProvider Cascade:** Rewrote `groq.py` for multi-model cascade with budget checks. Error classification (rate_limit/context_length/auth/transient/permanent). Auth errors stop cascade. 14 tests.
 
-### Bug Found by Integration Tests
-FastMCP param dispatch mismatch — **the most valuable finding of this story**. Unit tests (which mocked `_session`) never caught this because they didn't exercise real FastMCP parameter validation. Integration tests with a real subprocess proved the tools were silently failing.
+5. **KAN-144 — Admin API + Tier Wiring:** `GET/PATCH/POST /admin/llm-models` (superuser-only). `ModelConfigLoader` + `TokenBudget` wired at startup in `main.py`. `MAX_TOOL_RESULT_CHARS` config setting.
 
-### Files Changed
-- `backend/mcp_server/tool_client.py` — param wrapping fix (`{"params": params}`)
-- `tests/integration/test_mcp_stdio.py` — 14 new integration tests
-- `tests/integration/test_mcp_regression.py` — 6 new regression tests
-- `.github/workflows/ci-pr.yml` — MCP_TOOLS=true + integration test step
-- `.github/workflows/ci-merge.yml` — MCP_TOOLS=true + updated integration step
-- `pyproject.toml` — integration marker
-- `project-plan.md` — S5 marked complete
-- `docs/TDD.md` — §12.1.1 param passing convention
-- `PROGRESS.md` — session 51
+6. **KAN-145 — Truncation + Tests:** `_truncate_tool_results()` in synthesizer (per-result cap with marker). 6 truncation tests + 7 tier routing/fallback tests.
 
-### Test Summary
-- 20 new integration tests (14 stdio + 6 regression)
-- 745 unit tests + 33 MCP unit tests still passing (no regressions)
-- ~970 total tests
+7. **KAN-146 — Documentation:** Updated PROGRESS.md, project-plan.md, Serena memories, JIRA statuses.
 
-### Resume Point
-Phase 5.6: S6 (KAN-131 — validation: spec cross-reference, full test suite, manual verification)
+### New Files (8)
+- `backend/agents/token_budget.py` — async sliding-window rate tracker
+- `backend/agents/model_config.py` — ModelConfig dataclass + DB loader
+- `backend/models/llm_config.py` — LLMModelConfig ORM model
+- `backend/schemas/llm_config.py` — admin API schemas
+- `backend/routers/admin.py` — superuser-only LLM config endpoints
+- `backend/migrations/versions/c965b4058c70_012_llm_model_config.py`
+- `tests/unit/agents/test_token_budget.py` — 10 tests
+- `tests/unit/agents/test_truncation.py` — 6 tests
+- `tests/unit/agents/test_llm_client_tiers.py` — 7 tests
+- `tests/unit/providers/test_groq_cascade.py` — 14 tests
 
----
+### Deleted Files (3)
+- `backend/agents/graph_v2.py` (renamed to `graph.py`)
+- `tests/unit/agents/test_agent_graph.py` (V1)
+- `tests/unit/test_agent_graph.py` (V1 duplicate)
 
-## Session 51 (continued) — Dashboard UX Bug Sprint + DB Fix
-
-**Date:** 2026-03-24
-**Branch:** `fix/dashboard-ux-bugs`
-
-### DB Bootstrap Fix (PR #87)
-- Startup schema validation in `main.py` lifespan — checks critical tables exist before app starts
-- Catches stale `alembic_version` with clear error message
-- Root cause: Docker port conflict (`idp-postgres` + `ssp-postgres` both on 5433)
-- Full DB re-seed: 515 stocks, 1.2M prices, 50K dividends, 1.5K forecasts
-
-### Dashboard UX Fixes (PR #91)
-14 files changed, 2 new files:
-
-1. **Sora font not loading** (PR #90) — Tailwind v4 `@theme` can't resolve Next.js runtime CSS vars. Fixed with direct `font-family` in `@layer base`.
-2. **Label contrast** — `--subtle` from #2d3e5a (1.8:1) to #5a7099 (4.5:1), `--muted-foreground` bumped.
-3. **Hydration error** — WelcomeBanner `localStorage` read during SSR. Fixed with `useMounted()` hook using `useSyncExternalStore`.
-4. **Score scale bug** — Frontend treated `composite_score` as 0-1 (multiplied by 10). It's 0-10 from API. Fixed in 7 places: dashboard, stock-card, topbar, screener-table, trending-stocks.
-5. **Signal thresholds misaligned** — Frontend used `>= 0.6` for BUY. Backend uses `>= 8` BUY, `>= 5` WATCH, `< 5` AVOID. All frontend thresholds aligned.
-6. **DialogTrigger crash** (KAN-137) — `<span>` in render prop → `<button>`.
-7. **Welcome banner** — redesigned: gradient, icon, "Build your watchlist" copy.
-8. **Sidebar logo** — "S" letter → chart trend SVG icon.
-9. **Sidebar N overlap** — added `mb-8` padding above Next.js dev badge.
-10. **Chat panel whitespace** — `translateX` → `width: 0px` when closed. Content expands.
-11. **"1 signal" badge** — shows BUY + AVOID counts with color coding, navigates to screener.
-12. **Top Signal tile** — dynamic accent color (gain/warn/loss), correct signal label.
-13. **Action Required** — now only shows portfolio-held stocks, not watchlist.
-14. **Trending cards** — removed useless sparkline, always shows RSI/MACD/SMA/Sharpe with color coding.
-15. **StockMetrics component** — new shared component for consistent metric display.
-16. **MetricGuide** — hover footer explaining RSI/Sharpe ranges.
-17. **Watchlist card** — score display fixed (3.1 not 311), max-width constraint, score bar overflow fix.
-18. **Refresh All** — replaced Celery-dependent approach with direct sequential ingest + toast notifications.
-19. **Individual refresh** — loading spinner, green checkmark on success, debounced.
-
-### Deferred to UI Polish Phase
-- Watchlist/Top Signal cards need backend API enrichment (add RSI/MACD to watchlist endpoint)
-- Styled Radix tooltips instead of `title` attributes
-- Full Lovable comparison page-by-page
-- Other pages (Screener, Portfolio, Stock Detail, Sectors, Auth)
-
-### Resume Point
-- Phase 5.6: S6 (KAN-131 — validation)
-- UI Polish Phase: systematic Lovable comparison (memory: `project/ui-polish-phase`)
-- Bug: KAN-137 DialogTrigger (fixed in this PR)
-
----
-
-## Session 52 — Dashboard Refresh Bug Sprint (4 fixes)
-
-**Date:** 2026-03-25 | **Branch:** `fix/dashboard-refresh-bugs` | **Tests:** 518 unit + 107 frontend (unchanged)
-
-### Bugs Fixed
-
-1. **Route shadowing** — `/forecasts/portfolio` was matched by `/forecasts/{ticker}` (FastAPI route ordering). Returned 404 "No forecast available for this ticker" instead of empty portfolio response. Fix: moved `/forecasts/portfolio` before `/{ticker}` in `backend/routers/forecasts.py`.
-
-2. **Partial cache invalidation** — "Refresh All" only invalidated 2/12 TanStack Query keys (`watchlist`, `trending-stocks`). Dashboard tiles showed stale cached data after ingest. Fix: added 7 more invalidations (`bulk-signals`, `recommendations`, `scorecard`, `portfolio-forecast`, `portfolio`, `indexes`, `alerts`).
-
-3. **Unnecessary `/forecasts/portfolio` call** — `usePortfolioForecast()` fired on every render regardless of positions. Caused duplicate 404s on page load. Fix: added `enabled` param, guarded with `hasPositions` in dashboard.
-
-4. **Stale prices after refresh** — `on_conflict_do_nothing` in `market_data.py` silently skipped existing rows. Intraday/pre-settlement prices never got corrected to official close. Fix: changed to `on_conflict_do_update` to overwrite price columns (`open`, `high`, `low`, `close`, `adj_close`, `volume`).
-
-### Files Changed (4)
-- `backend/routers/forecasts.py` — route ordering
-- `backend/tools/market_data.py` — upsert instead of insert-skip
-- `frontend/src/app/(authenticated)/dashboard/page.tsx` — full cache invalidation + portfolio forecast guard
-- `frontend/src/hooks/use-forecasts.ts` — `enabled` param on `usePortfolioForecast()`
-
-### Verified via Chrome DevTools
-- Page load: 11 requests, all 200, no `/forecasts/portfolio` call (no positions)
-- Refresh All: 3 POST ingests + 10 GET re-fetches, all 200
-- HOOD price corrected: $70.25 → $69.08 (matches yfinance settlement)
-
-### Pre-existing test failure
-- `test_analyze_stock_tool_error_handling` — expects DB connection to fail in unit tests, but succeeds when local DB is running. Not related to this PR.
+### Stats
+- 766 unit tests passing (was 735, +41 new, -10 deleted V1)
+- Alembic head: `c965b4058c70` (migration 012)
+- 7 commits on `feat/KAN-140-v1-deprecation`
 
 ---

@@ -629,17 +629,17 @@ Data-driven multi-model LLM cascade, proactive rate limiting, agent observabilit
 - **Backlog:** `docs/superpowers/specs/2026-03-25-architecture-gaps-backlog.md`
 - **Plan 6A:** `docs/superpowers/plans/2026-03-25-llm-factory-cascade-plan.md`
 
-### Phase 6A — LLM Factory & Cascade
-- [ ] V1 deprecation (remove `AGENT_V2` flag, delete V1 graph, rename graph_v2→graph)
-- [ ] `llm_model_config` table (data-driven cascade, Alembic migration 012)
-- [ ] Multi-model GroqProvider cascade (budget-aware, error-classified)
-- [ ] TokenBudget async sliding-window tracker (TPM/RPM/TPD/RPD, 80% threshold)
-- [ ] Tier config wiring (planner→cheap models, synthesizer→quality models)
-- [ ] Groq error recovery (APIError/APIStatusError/APIConnectionError → cascade)
-- [ ] Tool result truncation for synthesizer (configurable per-result cap)
-- [ ] Admin API (model CRUD, reload, health)
-- [ ] ProviderHealth.mark_exhausted() bug fix
-- [ ] Documentation updates (TDD, FSD, Swagger, Serena memories)
+### Phase 6A — LLM Factory & Cascade ✅ (Session 54)
+- [x] V1 deprecation (remove `AGENT_V2` flag, delete V1 graph, rename graph_v2→graph)
+- [x] `llm_model_config` table (data-driven cascade, Alembic migration 012)
+- [x] Multi-model GroqProvider cascade (budget-aware, error-classified)
+- [x] TokenBudget async sliding-window tracker (TPM/RPM/TPD/RPD, 80% threshold)
+- [x] Tier config wiring (planner→cheap models, synthesizer→quality models)
+- [x] Groq error recovery (APIError/APIStatusError/APIConnectionError → cascade)
+- [x] Tool result truncation for synthesizer (configurable per-result cap)
+- [x] Admin API (model CRUD, reload, health)
+- [x] ProviderHealth.mark_exhausted() bug fix
+- [x] Documentation updates (TDD, FSD, Swagger, Serena memories)
 
 ### Phase 6B — Agent Observability
 - [ ] ObservabilityCollector (async, in-memory real-time metrics)

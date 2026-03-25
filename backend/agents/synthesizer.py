@@ -62,9 +62,7 @@ def _summarize_data(data: Any) -> str:
     return str(data)[:500]
 
 
-def _truncate_tool_results(
-    results: list[dict[str, Any]], max_chars: int
-) -> list[dict[str, Any]]:
+def _truncate_tool_results(results: list[dict[str, Any]], max_chars: int) -> list[dict[str, Any]]:
     """Truncate each tool result's data field to max_chars.
 
     Returns a new list with data fields truncated if they exceed the limit.

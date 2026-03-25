@@ -32,6 +32,8 @@ category: debugging
 - After any DB issue: check `docker ps | grep 5433` for conflicting containers.
 
 ## yfinance
+- `on_conflict_do_nothing` was silently skipping existing price rows — intraday/pre-settlement prices never got corrected. Fixed in Session 52: changed to `on_conflict_do_update` in `market_data.py` so price columns are overwritten on re-ingest.
+- Route ordering in `forecasts.py`: `/forecasts/{ticker}` must come AFTER `/forecasts/portfolio` — FastAPI matches routes in definition order, and `{ticker}` greedily matches "portfolio".
 
 ## LangChain StructuredTool + LangGraph ToolNode
 - `StructuredTool.from_function(coroutine=fn)` with `**kwargs` signature creates a schema with a single `kwargs` parameter. LangChain inconsistently wraps/unwraps params.
