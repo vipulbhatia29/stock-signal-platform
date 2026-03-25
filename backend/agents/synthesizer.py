@@ -62,6 +62,36 @@ def _summarize_data(data: Any) -> str:
     return str(data)[:500]
 
 
+def _truncate_tool_results(
+    results: list[dict[str, Any]], max_chars: int
+) -> list[dict[str, Any]]:
+    """Truncate each tool result's data field to max_chars.
+
+    Returns a new list with data fields truncated if they exceed the limit.
+    """
+    truncated = []
+    for r in results:
+        data = r.get("data")
+        if data is None:
+            truncated.append(r)
+            continue
+
+        data_str = json.dumps(data, default=str) if not isinstance(data, str) else data
+        if len(data_str) <= max_chars:
+            truncated.append(r)
+        else:
+            new_r = dict(r)
+            new_r["data"] = data_str[:max_chars] + f"... [truncated from {len(data_str)} chars]"
+            truncated.append(new_r)
+            logger.info(
+                "Truncated tool %s result: %d → %d chars",
+                r.get("tool", "?"),
+                len(data_str),
+                max_chars,
+            )
+    return truncated
+
+
 def build_synthesizer_prompt(
     tool_results: list[dict[str, Any]],
     user_context: dict[str, Any],
@@ -155,7 +185,13 @@ async def synthesize_results(
     Returns:
         Parsed synthesis dict with confidence, scenarios, evidence, gaps.
     """
-    prompt = build_synthesizer_prompt(tool_results, user_context)
+    # Truncate oversized tool results to stay within LLM context
+    from backend.config import settings
+
+    max_chars = settings.MAX_TOOL_RESULT_CHARS
+    truncated_results = _truncate_tool_results(tool_results, max_chars)
+
+    prompt = build_synthesizer_prompt(truncated_results, user_context)
 
     messages = [
         {"role": "user", "content": prompt},
