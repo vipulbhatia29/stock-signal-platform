@@ -18,12 +18,13 @@ export function useForecast(ticker: string | null) {
   });
 }
 
-/** Fetch aggregated portfolio forecast. */
-export function usePortfolioForecast() {
+/** Fetch aggregated portfolio forecast. Skipped when no positions exist. */
+export function usePortfolioForecast(enabled = true) {
   return useQuery({
     queryKey: ["portfolio-forecast"],
     queryFn: () => get<PortfolioForecastResponse>("/forecasts/portfolio"),
     staleTime: 30 * 60 * 1000,
+    enabled,
   });
 }
 

@@ -1057,3 +1057,33 @@ Phase 5.6: S6 (KAN-131 — validation: spec cross-reference, full test suite, ma
 - Bug: KAN-137 DialogTrigger (fixed in this PR)
 
 ---
+
+## Session 52 — Dashboard Refresh Bug Sprint (4 fixes)
+
+**Date:** 2026-03-25 | **Branch:** `fix/dashboard-refresh-bugs` | **Tests:** 518 unit + 107 frontend (unchanged)
+
+### Bugs Fixed
+
+1. **Route shadowing** — `/forecasts/portfolio` was matched by `/forecasts/{ticker}` (FastAPI route ordering). Returned 404 "No forecast available for this ticker" instead of empty portfolio response. Fix: moved `/forecasts/portfolio` before `/{ticker}` in `backend/routers/forecasts.py`.
+
+2. **Partial cache invalidation** — "Refresh All" only invalidated 2/12 TanStack Query keys (`watchlist`, `trending-stocks`). Dashboard tiles showed stale cached data after ingest. Fix: added 7 more invalidations (`bulk-signals`, `recommendations`, `scorecard`, `portfolio-forecast`, `portfolio`, `indexes`, `alerts`).
+
+3. **Unnecessary `/forecasts/portfolio` call** — `usePortfolioForecast()` fired on every render regardless of positions. Caused duplicate 404s on page load. Fix: added `enabled` param, guarded with `hasPositions` in dashboard.
+
+4. **Stale prices after refresh** — `on_conflict_do_nothing` in `market_data.py` silently skipped existing rows. Intraday/pre-settlement prices never got corrected to official close. Fix: changed to `on_conflict_do_update` to overwrite price columns (`open`, `high`, `low`, `close`, `adj_close`, `volume`).
+
+### Files Changed (4)
+- `backend/routers/forecasts.py` — route ordering
+- `backend/tools/market_data.py` — upsert instead of insert-skip
+- `frontend/src/app/(authenticated)/dashboard/page.tsx` — full cache invalidation + portfolio forecast guard
+- `frontend/src/hooks/use-forecasts.ts` — `enabled` param on `usePortfolioForecast()`
+
+### Verified via Chrome DevTools
+- Page load: 11 requests, all 200, no `/forecasts/portfolio` call (no positions)
+- Refresh All: 3 POST ingests + 10 GET re-fetches, all 200
+- HOOD price corrected: $70.25 → $69.08 (matches yfinance settlement)
+
+### Pre-existing test failure
+- `test_analyze_stock_tool_error_handling` — expects DB connection to fail in unit tests, but succeeds when local DB is running. Not related to this PR.
+
+---

@@ -168,37 +168,41 @@ async def _store_prices(
 
     # ── Batch upsert using PostgreSQL's ON CONFLICT ──────────────────
     # pg_insert() is SQLAlchemy's PostgreSQL-specific INSERT that supports
-    # ON CONFLICT. We use on_conflict_do_nothing() so existing rows are
-    # silently skipped rather than causing an error.
+    # ON CONFLICT. We use on_conflict_do_update() so existing rows are
+    # updated with the latest price data (handles post-settlement corrections).
     #
     # We batch in chunks of 500 to avoid sending a massive SQL statement
     # that could time out or use too much memory.
     chunk_size = 500
-    inserted = 0
+    upserted = 0
 
     for i in range(0, len(rows), chunk_size):
         chunk = rows[i : i + chunk_size]
-        stmt = (
-            pg_insert(StockPrice)
-            .values(chunk)
-            .on_conflict_do_nothing(
-                # The conflict target is the composite primary key (time, ticker).
-                # If a row with the same date + ticker already exists, skip it.
-                index_elements=["time", "ticker"],
-            )
+        stmt = pg_insert(StockPrice).values(chunk)
+        stmt = stmt.on_conflict_do_update(
+            # The conflict target is the composite primary key (time, ticker).
+            index_elements=["time", "ticker"],
+            set_={
+                "open": stmt.excluded.open,
+                "high": stmt.excluded.high,
+                "low": stmt.excluded.low,
+                "close": stmt.excluded.close,
+                "adj_close": stmt.excluded.adj_close,
+                "volume": stmt.excluded.volume,
+            },
         )
         result = await db.execute(stmt)
-        inserted += result.rowcount  # how many rows were actually inserted
+        upserted += result.rowcount
 
     await db.commit()
     logger.info(
-        "Stored %d new price rows for %s (skipped %d duplicates)",
-        inserted,
+        "Upserted %d price rows for %s (%d total fetched)",
+        upserted,
         ticker,
-        len(rows) - inserted,
+        len(rows),
     )
 
-    return inserted
+    return upserted
 
 
 async def ensure_stock_exists(

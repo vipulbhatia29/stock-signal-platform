@@ -44,89 +44,6 @@ SECTOR_ETF_MAP: dict[str, str] = {
 
 
 @router.get(
-    "/forecasts/{ticker}",
-    response_model=ForecastResponse,
-    summary="Get forecast for a ticker",
-)
-async def get_ticker_forecast(
-    ticker: str,
-    db: AsyncSession = Depends(get_async_session),
-    current_user: User = Depends(get_current_user),
-) -> ForecastResponse:
-    """Get the latest forecast for a ticker at all horizons.
-
-    Args:
-        ticker: Stock ticker symbol.
-        db: Async database session.
-        current_user: Authenticated user.
-
-    Returns:
-        ForecastResponse with horizons, model MAPE, and status.
-    """
-    ticker = ticker.upper()
-
-    # Get latest forecast date for this ticker
-    latest_date_result = await db.execute(
-        select(ForecastResult.forecast_date)
-        .where(ForecastResult.ticker == ticker)
-        .order_by(ForecastResult.forecast_date.desc())
-        .limit(1)
-    )
-    latest_date = latest_date_result.scalar_one_or_none()
-
-    if latest_date is None:
-        raise HTTPException(status_code=404, detail="No forecast available for this ticker")
-
-    # Get all horizons for that date
-    result = await db.execute(
-        select(ForecastResult).where(
-            ForecastResult.ticker == ticker,
-            ForecastResult.forecast_date == latest_date,
-        )
-    )
-    forecasts = result.scalars().all()
-
-    # Get model info
-    model_result = await db.execute(
-        select(ModelVersion).where(
-            ModelVersion.ticker == ticker,
-            ModelVersion.is_active.is_(True),
-        )
-    )
-    model = model_result.scalar_one_or_none()
-
-    # Get Sharpe direction
-    from backend.tools.forecasting import compute_sharpe_direction
-
-    sharpe_dir = await compute_sharpe_direction(ticker, db)
-
-    horizons = []
-    for fc in forecasts:
-        mape = (model.metrics or {}).get("rolling_mape") if model else None
-        confidence = _mape_to_confidence(mape)
-        horizons.append(
-            ForecastHorizon(
-                horizon_days=fc.horizon_days,
-                predicted_price=fc.predicted_price,
-                predicted_lower=fc.predicted_lower,
-                predicted_upper=fc.predicted_upper,
-                target_date=fc.target_date,
-                confidence_level=confidence,
-                sharpe_direction=sharpe_dir,
-            )
-        )
-
-    horizons.sort(key=lambda h: h.horizon_days)
-
-    return ForecastResponse(
-        ticker=ticker,
-        horizons=horizons,
-        model_mape=(model.metrics or {}).get("rolling_mape") if model else None,
-        model_status=model.status if model else "none",
-    )
-
-
-@router.get(
     "/forecasts/portfolio",
     response_model=PortfolioForecastResponse,
     summary="Get aggregated portfolio forecast",
@@ -247,6 +164,89 @@ async def get_portfolio_forecast(
     return PortfolioForecastResponse(
         horizons=horizons,
         ticker_count=len(position_values),
+    )
+
+
+@router.get(
+    "/forecasts/{ticker}",
+    response_model=ForecastResponse,
+    summary="Get forecast for a ticker",
+)
+async def get_ticker_forecast(
+    ticker: str,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> ForecastResponse:
+    """Get the latest forecast for a ticker at all horizons.
+
+    Args:
+        ticker: Stock ticker symbol.
+        db: Async database session.
+        current_user: Authenticated user.
+
+    Returns:
+        ForecastResponse with horizons, model MAPE, and status.
+    """
+    ticker = ticker.upper()
+
+    # Get latest forecast date for this ticker
+    latest_date_result = await db.execute(
+        select(ForecastResult.forecast_date)
+        .where(ForecastResult.ticker == ticker)
+        .order_by(ForecastResult.forecast_date.desc())
+        .limit(1)
+    )
+    latest_date = latest_date_result.scalar_one_or_none()
+
+    if latest_date is None:
+        raise HTTPException(status_code=404, detail="No forecast available for this ticker")
+
+    # Get all horizons for that date
+    result = await db.execute(
+        select(ForecastResult).where(
+            ForecastResult.ticker == ticker,
+            ForecastResult.forecast_date == latest_date,
+        )
+    )
+    forecasts = result.scalars().all()
+
+    # Get model info
+    model_result = await db.execute(
+        select(ModelVersion).where(
+            ModelVersion.ticker == ticker,
+            ModelVersion.is_active.is_(True),
+        )
+    )
+    model = model_result.scalar_one_or_none()
+
+    # Get Sharpe direction
+    from backend.tools.forecasting import compute_sharpe_direction
+
+    sharpe_dir = await compute_sharpe_direction(ticker, db)
+
+    horizons = []
+    for fc in forecasts:
+        mape = (model.metrics or {}).get("rolling_mape") if model else None
+        confidence = _mape_to_confidence(mape)
+        horizons.append(
+            ForecastHorizon(
+                horizon_days=fc.horizon_days,
+                predicted_price=fc.predicted_price,
+                predicted_lower=fc.predicted_lower,
+                predicted_upper=fc.predicted_upper,
+                target_date=fc.target_date,
+                confidence_level=confidence,
+                sharpe_direction=sharpe_dir,
+            )
+        )
+
+    horizons.sort(key=lambda h: h.horizon_days)
+
+    return ForecastResponse(
+        ticker=ticker,
+        horizons=horizons,
+        model_mape=(model.metrics or {}).get("rolling_mape") if model else None,
+        model_status=model.status if model else "none",
     )
 
 
