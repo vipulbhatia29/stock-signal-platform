@@ -60,7 +60,7 @@ export function Topbar({ onAddTicker }: TopbarProps) {
       "Dashboard";
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-card px-4">
+    <header data-testid="topbar" className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-card px-4">
       {/* Left: breadcrumb */}
       <div className="flex items-center gap-1.5 text-xs">
         <span className="text-muted-foreground">StockSignal</span>

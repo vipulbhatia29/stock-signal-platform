@@ -78,9 +78,11 @@ export function StaggerItem({
 export function PageTransition({
   children,
   className,
+  "data-testid": dataTestId,
 }: {
   children: ReactNode;
   className?: string;
+  "data-testid"?: string;
 }) {
   return (
     <motion.div
@@ -88,6 +90,7 @@ export function PageTransition({
       animate={{ opacity: 1 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
       className={className}
+      data-testid={dataTestId}
     >
       {children}
     </motion.div>

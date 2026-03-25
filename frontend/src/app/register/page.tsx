@@ -107,7 +107,7 @@ export default function RegisterPage() {
             <p className="mt-1 text-sm text-muted-foreground">Start your trading edge today</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" data-testid="register-form">
             <button
               type="button"
               onClick={() => toast.info("Google OAuth coming soon")}
@@ -159,6 +159,7 @@ export default function RegisterPage() {
                 <Mail className="h-4 w-4 text-muted-foreground" />
                 <input
                   type="email"
+                  data-testid="register-email"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -176,6 +177,7 @@ export default function RegisterPage() {
                 <Lock className="h-4 w-4 text-muted-foreground" />
                 <input
                   type="password"
+                  data-testid="register-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -188,6 +190,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
+              data-testid="register-submit"
               disabled={isLoading}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-cyan py-2.5 text-sm font-semibold text-[var(--background)] hover:brightness-110 transition-all shadow-[0_0_20px_var(--cyan-muted)] disabled:opacity-50"
             >

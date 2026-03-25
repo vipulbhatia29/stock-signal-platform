@@ -28,6 +28,7 @@ export function StatTile({
 }: StatTileProps) {
   return (
     <div
+      data-testid="stat-tile"
       onClick={onClick}
       className={cn(
         "relative overflow-hidden rounded-[var(--radius)] border border-border bg-card p-[13px_14px]",

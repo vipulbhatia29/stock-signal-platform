@@ -137,12 +137,13 @@ export default function LoginPage() {
             <p className="mt-1 text-sm text-muted-foreground">Sign in to your account</p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4" data-testid="login-form">
             <GoogleButton />
             <OrDivider />
 
             {error && (
               <div
+                data-testid="login-error"
                 className="rounded-md bg-destructive/10 p-3 text-sm text-destructive cursor-pointer"
                 onClick={clearError}
               >
@@ -157,6 +158,7 @@ export default function LoginPage() {
                 <Mail className="h-4 w-4 text-muted-foreground" />
                 <input
                   type="email"
+                  data-testid="login-email"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -174,6 +176,7 @@ export default function LoginPage() {
                 <Lock className="h-4 w-4 text-muted-foreground" />
                 <input
                   type="password"
+                  data-testid="login-password"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -195,6 +198,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
+              data-testid="login-submit"
               disabled={isLoading}
               className="flex w-full items-center justify-center gap-2 rounded-lg bg-cyan py-2.5 text-sm font-semibold text-[var(--background)] hover:brightness-110 transition-all shadow-[0_0_20px_var(--cyan-muted)] disabled:opacity-50"
             >

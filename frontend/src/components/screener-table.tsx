@@ -220,7 +220,7 @@ export function ScreenerTable({
   const textSize = density === "compact" ? "text-xs" : "text-sm";
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-testid="screener-table">
       <Tabs value={activeTab} onValueChange={(v) => onTabChange(v as TabKey)}>
         <TabsList className="h-8">
           {TABS.map((t) => (
