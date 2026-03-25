@@ -35,3 +35,10 @@ class LLMModelConfigUpdate(BaseModel):
     cost_per_1k_input: float | None = None
     cost_per_1k_output: float | None = None
     notes: str | None = None
+
+
+class TierToggleRequest(BaseModel):
+    """Request body for POST /admin/tier-toggle."""
+
+    model: str
+    enabled: bool

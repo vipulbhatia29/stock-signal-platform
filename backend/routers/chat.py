@@ -14,7 +14,7 @@ from backend.database import async_session_factory, get_async_session
 from backend.dependencies import get_current_user
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.user import User
-from backend.request_context import current_user_id
+from backend.request_context import current_query_id, current_session_id, current_user_id
 from backend.schemas.chat import (
     ChatMessageResponse,
     ChatRequest,
@@ -100,8 +100,10 @@ async def chat_stream(
     # Set request-scoped user context for tools (portfolio_exposure etc.)
     _ctx_token = current_user_id.set(user.id)  # noqa: F841
 
-    # Generate query_id for tracing
+    # Generate query_id for tracing and propagate session/query context
     query_id = uuid.uuid4()
+    _ctx_token_session = current_session_id.set(chat_session.id)  # noqa: F841
+    _ctx_token_query = current_query_id.set(query_id)  # noqa: F841
 
     return StreamingResponse(
         _event_generator(request, body, chat_session, session_messages, user, query_id),

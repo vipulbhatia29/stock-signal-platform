@@ -86,6 +86,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     token_budget = TokenBudget()
 
+    # Observability collector — in-memory metrics + fire-and-forget DB writes
+    from backend.agents.observability import ObservabilityCollector
+    from backend.agents.observability_writer import write_event
+
+    collector = ObservabilityCollector()
+    collector.set_db_writer(write_event)
+    app.state.collector = collector
+
     providers = []
     if settings.GROQ_API_KEY:
         # Extract Groq model names from DB config (planner tier, ordered by priority)
@@ -103,6 +111,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 api_key=settings.GROQ_API_KEY,
                 models=groq_models or None,
                 token_budget=token_budget,
+                collector=collector,
             )
         )
     if settings.ANTHROPIC_API_KEY:
@@ -164,7 +173,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
         app.state.agent_graph = build_agent_graph(
             plan_fn=_plan_fn,
-            execute_fn=execute_plan,
+            execute_fn=lambda steps, tool_executor, on_step=None: execute_plan(
+                steps, tool_executor, on_step=on_step, collector=collector
+            ),
             synthesize_fn=_synthesize_fn,
             format_simple_fn=format_simple_result,
             tool_executor=_tool_executor,

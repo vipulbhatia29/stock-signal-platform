@@ -641,14 +641,14 @@ Data-driven multi-model LLM cascade, proactive rate limiting, agent observabilit
 - [x] ProviderHealth.mark_exhausted() bug fix
 - [x] Documentation updates (TDD, FSD, Swagger, Serena memories)
 
-### Phase 6B — Agent Observability
-- [ ] ObservabilityCollector (async, in-memory real-time metrics)
-- [ ] LLMCallLog writes (every LLM call: success + cascade failures)
-- [ ] ToolExecutionLog writes (every tool call from executor)
-- [ ] Tier health classification (healthy/degraded/down/disabled)
-- [ ] Admin endpoints (llm-metrics, tier-health, tier-toggle, llm-usage)
-- [ ] ContextVars for request-scoped session_id/query_id
-- [ ] Dashboard LLM usage API endpoint
+### Phase 6B — Agent Observability ✅ (Session 55)
+- [x] ObservabilityCollector (async, in-memory real-time metrics)
+- [x] LLMCallLog writes (every LLM call: success + cascade failures)
+- [x] ToolExecutionLog writes (every tool call from executor)
+- [x] Tier health classification (healthy/degraded/down/disabled)
+- [x] Admin endpoints (llm-metrics, tier-health, tier-toggle, llm-usage)
+- [x] ContextVars for request-scoped session_id/query_id
+- [x] Dashboard LLM usage API endpoint (via admin/llm-usage)
 
 ### Phase 6C — Testing Infrastructure
 - [ ] ~55 new unit/integration tests for 6A/6B components

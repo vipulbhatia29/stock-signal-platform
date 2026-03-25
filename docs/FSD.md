@@ -729,12 +729,17 @@ flowchart TD
 - Stock splits adjust positions atomically (single transaction)
 - FIFO cost basis is deterministic and reproducible
 
-### NFR-6: Observability
+### NFR-6: Observability ✅ ENHANCED (Phase 6B)
 
 - Structured logging: `logging.getLogger(__name__)` (stdlib; structlog for production later)
-- Request tracing: correlation ID on every API request
+- Request tracing: correlation ID + ContextVars (`current_session_id`, `current_query_id`) on every chat request
 - Background job monitoring: TaskLog table + dashboard widget
 - LLM usage tracking: tokens_used and model_used on every ChatMessage
+- LLM call logging: every call (success + cascade) writes to `llm_call_log` hypertable (fire-and-forget)
+- Tool execution logging: every tool call writes to `tool_execution_log` hypertable
+- In-memory metrics: ObservabilityCollector (RPM, cascade events, per-model health, latency p50/p95)
+- Admin observability: `GET /admin/llm-metrics`, `GET /admin/tier-health`, `POST /admin/tier-toggle`, `GET /admin/llm-usage`
+- Escalation rate: Anthropic calls / total (30-day, queryable via admin API)
 - Error alerting: log ERROR level → future integration with monitoring
 
 ### NFR-7: Developer Experience (Phase 4.5)
