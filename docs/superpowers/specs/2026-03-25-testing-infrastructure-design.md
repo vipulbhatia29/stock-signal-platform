@@ -171,9 +171,8 @@ tests/unit/
 │   ├── test_observability.py     # NEW
 │   └── ... (existing)
 ├── providers/        # NEW directory — LLM provider tests
-│   ├── test_groq_provider.py     # NEW
-│   ├── test_anthropic_provider.py # NEW
-│   └── test_llm_client.py       # MOVED from agents/
+│   ├── test_groq_provider.py     # NEW (cascade, error handling)
+│   └── test_llm_client.py       # MOVED from agents/ (+ new tier routing tests)
 ├── tools/            # Existing — no changes
 ├── models/           # Existing — no changes
 ├── schemas/          # Existing — no changes
@@ -249,9 +248,11 @@ export default defineConfig({
       dependencies: ["setup"],
     },
   ],
+  // webServer starts services for local dev only.
+  // CI starts services in a separate step and sets reuseExistingServer: true via env.
   webServer: [
-    { command: "uv run uvicorn backend.main:app --port 8181", url: "http://localhost:8181/api/v1/health", timeout: 60_000 },
-    { command: "cd frontend && npm run dev", url: "http://localhost:3000", timeout: 60_000 },
+    { command: "uv run uvicorn backend.main:app --port 8181", url: "http://localhost:8181/api/v1/health", timeout: 60_000, reuseExistingServer: !process.env.CI },
+    { command: "cd frontend && npm run dev", url: "http://localhost:3000", timeout: 60_000, reuseExistingServer: !process.env.CI },
   ],
 });
 ```

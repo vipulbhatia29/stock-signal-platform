@@ -37,8 +37,8 @@ Informed by analysis of [aset-platform/ai-agent-ui](https://github.com/aset-plat
 | `backend/main.py:114-160` | Remove `if settings.AGENT_V2` conditional — V2 wiring becomes unconditional |
 | `backend/routers/chat.py:112` | Remove `use_v2 = settings.AGENT_V2 and ...` branch. Delete V1 `event_generator()`. Keep `_event_generator_v2()` only. |
 | `backend/agents/graph.py` | **Delete entirely** (V1 ReAct graph: `AgentState`, `build_agent_graph`, `execute_tool_safely`) |
-| `backend/agents/stream.py` | Remove `stream_graph_events` if only used by V1 path. Verify with grep. |
-| `backend/agents/graph_v2.py` | Rename to `backend/agents/graph.py` (optional — reduces confusion) |
+| `backend/agents/stream.py` | Delete `stream_graph_events()` function (V1-only). **Preserve `StreamEvent` dataclass and `to_ndjson()` method** — used by V2's `_event_generator_v2()`. |
+| `backend/agents/graph_v2.py` | Rename to `backend/agents/graph.py`. Update docstring (line 3: remove "Feature-flagged behind AGENT_V2=true. Coexists with V1 ReAct graph"). |
 | `tests/unit/agents/test_agent_graph.py` | Delete (tests V1's `build_agent_graph`) |
 | `tests/unit/test_agent_graph.py` | Delete (duplicate, also tests V1) |
 | `backend/.env.example` | Remove `AGENT_V2=` line |
@@ -78,6 +78,8 @@ CREATE TABLE llm_model_config (
 );
 ```
 
+**Note**: `updated_at` requires a SQLAlchemy `@event.listens_for(LLMModelConfig, "before_update")` hook or Postgres trigger to auto-update on modification. Without it, `updated_at` will always equal `created_at`.
+
 ### 3.2 Seed Data
 
 **Planner tier** (structured JSON output, tool plan generation):
@@ -100,6 +102,24 @@ CREATE TABLE llm_model_config (
 ### 3.3 Config Loader
 
 New module: `backend/agents/model_config.py`
+
+```python
+@dataclass(frozen=True)
+class ModelConfig:
+    """Single model configuration from llm_model_config table."""
+    id: int
+    provider: str           # "groq" | "anthropic"
+    model_name: str         # "llama-3.3-70b-versatile"
+    tier: str               # "planner" | "synthesizer"
+    priority: int           # 1 = tried first
+    is_enabled: bool
+    tpm_limit: int | None
+    rpm_limit: int | None
+    tpd_limit: int | None
+    rpd_limit: int | None
+    cost_per_1k_input: float
+    cost_per_1k_output: float
+```
 
 ```python
 class ModelConfigLoader:
@@ -131,7 +151,27 @@ The provider internally:
 4. On API error → cascades to next model
 5. Records cascade event via `ObservabilityCollector` (wired in Spec 2)
 
-### 3.5 LLMClient Tier Wiring
+### 3.5 Two-Level Cascade Architecture
+
+The cascade operates at two levels. This boundary must be explicit:
+
+**Level 1: GroqProvider (intra-provider model cascade)**
+- Iterates its `models` list in priority order
+- Checks `token_budget.can_afford()` for each model
+- Catches Groq-specific errors (`APIError`, `APIStatusError`, etc.) and tries next model
+- When **all internal models are exhausted**, raises `AllModelsExhaustedError` to LLMClient
+
+**Level 2: LLMClient (inter-provider fallback)**
+- Iterates providers: `[GroqProvider, AnthropicProvider]`
+- Catches `AllModelsExhaustedError` from GroqProvider → marks provider unhealthy → falls to AnthropicProvider
+- If all providers fail → raises `AllProvidersFailedError`
+
+**ProviderHealth changes:**
+- `ProviderHealth` stays per-provider (not per-model) — it tracks whether the provider as a whole is available
+- Per-model health (failures, latency) is tracked by `ObservabilityCollector` (Spec 6B), not by `ProviderHealth`
+- `ProviderHealth.mark_exhausted()` BUG FIX: currently sets `exhausted_until = now()` instead of `now() + timedelta(seconds=retry_after)`. Fix in this spec.
+
+### 3.6 LLMClient Tier Wiring
 
 `main.py` lifespan populates `tier_config`:
 
@@ -205,7 +245,7 @@ Per-model tracking using `collections.deque` with `asyncio.Lock`:
 
 - **80% pre-emptive threshold** — `can_afford()` returns False at 80% of limit
 - **Limits from DB** — read from `llm_model_config`, refreshed on reload
-- **Token estimation before send** — `len(content) // 4 * 1.2` (accurate within ~15% for English)
+- **Token estimation before send** — `len(content) // 4 * 1.2` (accurate within ~15% for English). `estimate_tokens()` is intentionally **sync** (not async) — it does no I/O, just arithmetic. Deliberate exception to the "async by default" rule.
 - **Actual tokens recorded after response** — uses API response's `usage.prompt_tokens + completion_tokens`
 - **In-memory only** — sliding windows don't persist. On restart, budgets reset (conservative, avoids stale data)
 - **Async-safe** — uses `asyncio.Lock` (not `threading.Lock` like aset) since our stack is fully async
@@ -296,6 +336,8 @@ With 5 tools at 3000 chars each → ~15K chars → ~3,750 tokens for the synthes
 New migration (012):
 - Create `llm_model_config` table
 - Seed with planner and synthesizer tier data (Section 3.2)
+- **Must verify `alembic heads` before creating** — current head is `d68e82e90c96` (migration 011). Avoid split-head.
+- Include `downgrade()` that drops the table (reversible migration)
 
 ### 7.2 Config Changes
 

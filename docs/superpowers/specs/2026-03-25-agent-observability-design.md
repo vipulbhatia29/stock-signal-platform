@@ -73,6 +73,23 @@ Written by the executor after each tool call in `graph_v2.py` → `execute_node(
 
 ---
 
+## 2.4 Request Context Flow
+
+`session_id`, `message_id`, and `query_id` must flow from the chat router down to the provider and collector. We use **ContextVars** (already established: `current_user_id` ContextVar exists in `chat.py`).
+
+New ContextVars in `backend/agents/context.py`:
+```python
+from contextvars import ContextVar
+import uuid
+
+current_query_id: ContextVar[uuid.UUID | None] = ContextVar("current_query_id", default=None)
+current_session_id: ContextVar[uuid.UUID | None] = ContextVar("current_session_id", default=None)
+```
+
+Set by `chat_stream()` in `chat.py` before streaming begins. Read by `ObservabilityCollector.record_request()` and `record_cascade()`. No changes to `LLMProvider.chat()` or `LLMClient.chat()` signatures.
+
+---
+
 ## 3. In-Memory Real-Time Metrics
 
 New module: `backend/agents/observability.py`
@@ -150,7 +167,7 @@ On app shutdown (FastAPI lifespan `yield`), flush any buffered events synchronou
 
 ## 5. Admin API Endpoints
 
-New router: `backend/routers/admin.py` (shared with LLM model config from Spec 1)
+Router: `backend/routers/admin.py` (created in Phase 6A with LLM model config endpoints — add observability endpoints to the existing router)
 
 | Endpoint | Method | Auth | Response |
 |---|---|---|---|
