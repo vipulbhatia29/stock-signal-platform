@@ -336,8 +336,16 @@ With 5 tools at 3000 chars each → ~15K chars → ~3,750 tokens for the synthes
 New migration (012):
 - Create `llm_model_config` table
 - Seed with planner and synthesizer tier data (Section 3.2)
-- **Must verify `alembic heads` before creating** — current head is `d68e82e90c96` (migration 011). Avoid split-head.
 - Include `downgrade()` that drops the table (reversible migration)
+
+**Migration Safety Protocol** (learned from Session 51 data loss incident):
+
+1. **NEVER use `alembic revision --autogenerate`** — it falsely detects ALL existing tables as new and rewrites the entire schema. It also falsely drops TimescaleDB internal indexes (`_compressed_hypertable_*`). Always write migrations manually with only `op.create_table()` / `op.add_column()`.
+2. **Verify `alembic heads` before creating** — current head is `d68e82e90c96` (migration 011). Avoid split-head situations.
+3. **Check Docker containers before running** — `docker ps | grep 5433` to verify only `ssp-postgres` is running. The `idp-postgres` container also binds to 5433 and caused data loss when both were running (Session 51).
+4. **Verify after running** — `SELECT * FROM alembic_version;` should show the new revision. Then verify `SELECT count(*) FROM llm_model_config;` returns the seed data count.
+5. **If migration fails** — do NOT re-run blindly. Check `alembic_version` for stale pointer. If tables are missing but version is set: `DELETE FROM alembic_version;` then `uv run alembic upgrade head`.
+6. **Startup validation** — `main.py` lifespan already checks critical tables exist via `information_schema`. Add `llm_model_config` to the critical tables list after migration.
 
 ### 7.2 Config Changes
 
