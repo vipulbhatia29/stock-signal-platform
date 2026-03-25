@@ -40,12 +40,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 0. Database schema validation — catch stale alembic_version early
     from sqlalchemy import text
 
-    from backend.agents.general_agent import GeneralAgent
-    from backend.agents.graph import build_agent_graph
     from backend.agents.llm_client import LLMClient
     from backend.agents.providers.anthropic import AnthropicProvider
     from backend.agents.providers.groq import GroqProvider
-    from backend.agents.stock_agent import StockAgent
     from backend.database import async_session_factory
     from backend.mcp_server.server import create_mcp_app
     from backend.tools.build_registry import build_registry
@@ -86,18 +83,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         providers.append(AnthropicProvider(api_key=settings.ANTHROPIC_API_KEY))
     llm_client = LLMClient(providers=providers)
 
-    # 4. Build LangGraph agent graphs (one per agent type)
-    if providers:
-        active_llm = llm_client.get_active_chat_model()
-        app.state.stock_graph = build_agent_graph(StockAgent(), registry, active_llm)
-        app.state.general_graph = build_agent_graph(GeneralAgent(), registry, active_llm)
-        logger.info("LangGraph agent graphs compiled (stock + general)")
-    else:
-        app.state.stock_graph = None
-        app.state.general_graph = None
-        logger.warning("No LLM providers configured — chat disabled")
-
-    # 4b. MCP subprocess (when MCP_TOOLS enabled)
+    # 4. MCP subprocess (when MCP_TOOLS enabled)
     mcp_manager = None
     if settings.MCP_TOOLS:
         from backend.mcp_server.lifecycle import MCPSubprocessManager
@@ -110,10 +96,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.warning("MCP Tool Server failed to start — falling back to direct calls")
             mcp_manager = None
 
-    # 4c. Build Agent V2 graph when feature flag is enabled
-    if settings.AGENT_V2 and providers:
+    # 5. Build Agent graph (Plan→Execute→Synthesize)
+    if providers:
         from backend.agents.executor import execute_plan
-        from backend.agents.graph_v2 import build_agent_graph_v2
+        from backend.agents.graph import build_agent_graph
         from backend.agents.planner import plan_query
         from backend.agents.simple_formatter import format_simple_result
         from backend.agents.synthesizer import synthesize_results
@@ -147,7 +133,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 llm_chat=lambda **kw: llm_client.chat(**kw, tier="synthesizer"),
             )
 
-        app.state.agent_v2_graph = build_agent_graph_v2(
+        app.state.agent_graph = build_agent_graph(
             plan_fn=_plan_fn,
             execute_fn=execute_plan,
             synthesize_fn=_synthesize_fn,
@@ -155,9 +141,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             tool_executor=_tool_executor,
             tools_description=tools_desc,
         )
-        logger.info("Agent V2 graph compiled (Plan→Execute→Synthesize)")
-    elif settings.AGENT_V2:
-        logger.warning("AGENT_V2=true but no LLM providers — V2 graph not built")
+        logger.info("Agent graph compiled (Plan→Execute→Synthesize)")
+    else:
+        app.state.agent_graph = None
+        logger.warning("No LLM providers configured — chat disabled")
 
     # 5. MCP server (Layer 3 — Expose) with JWT auth middleware
     from backend.mcp_server.auth import MCPAuthMiddleware

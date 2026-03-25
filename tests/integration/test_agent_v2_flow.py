@@ -11,7 +11,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.agents.graph_v2 import AgentStateV2, build_agent_graph_v2
+from backend.agents.graph import AgentStateV2, build_agent_graph
 from backend.tools.base import ToolResult
 
 
@@ -100,7 +100,7 @@ class TestFullAnalysisFlow:
             ),
         }
 
-        graph = build_agent_graph_v2(
+        graph = build_agent_graph(
             plan_fn=_make_plan_fn(plan),
             execute_fn=AsyncMock(
                 return_value={
@@ -146,7 +146,7 @@ class TestOutOfScopeFlow:
 
         execute_fn = AsyncMock()  # Should never be called
 
-        graph = build_agent_graph_v2(
+        graph = build_agent_graph(
             plan_fn=_make_plan_fn(plan),
             execute_fn=execute_fn,
             synthesize_fn=_make_synthesize_fn({}),
@@ -177,7 +177,7 @@ class TestSimpleQueryFlow:
 
         synthesize_fn = AsyncMock()  # Should never be called
 
-        graph = build_agent_graph_v2(
+        graph = build_agent_graph(
             plan_fn=_make_plan_fn(plan),
             execute_fn=AsyncMock(
                 return_value={
@@ -228,7 +228,7 @@ class TestCircuitBreakerFlow:
             "gaps": ["Multiple tools failed"],
         }
 
-        graph = build_agent_graph_v2(
+        graph = build_agent_graph(
             plan_fn=_make_plan_fn(plan),
             execute_fn=AsyncMock(
                 return_value={
