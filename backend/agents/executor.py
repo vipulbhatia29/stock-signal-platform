@@ -7,12 +7,14 @@ with retries and a circuit breaker.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import time
 from datetime import datetime, timezone
 from typing import Any
 
+from backend.agents.observability import ObservabilityCollector
 from backend.agents.result_validator import validate_tool_result
 from backend.tools.base import ToolResult
 
@@ -103,6 +105,7 @@ async def execute_plan(
     steps: list[dict[str, Any]],
     tool_executor: Any,
     on_step: Any | None = None,
+    collector: ObservabilityCollector | None = None,
 ) -> dict[str, Any]:
     """Execute a tool plan mechanically (no LLM).
 
@@ -144,6 +147,7 @@ async def execute_plan(
         params = _resolve_params(raw_params, results)
 
         # Execute with retry
+        tool_start = time.monotonic()
         result: ToolResult | None = None
         for attempt in range(1 + MAX_RETRIES):
             try:
@@ -162,6 +166,23 @@ async def execute_plan(
                     result = ToolResult(status="error", error=str(e))
 
         tool_calls += 1
+
+        # Record to observability collector
+        if collector:
+            tool_elapsed_ms = int((time.monotonic() - tool_start) * 1000)
+            result_data = result.data if result else None
+            try:
+                result_bytes = len(json.dumps(result_data, default=str)) if result_data else 0
+            except (TypeError, ValueError):
+                result_bytes = 0
+            await collector.record_tool_execution(
+                tool_name=tool_name,
+                latency_ms=tool_elapsed_ms,
+                status=result.status if result else "error",
+                result_size_bytes=result_bytes,
+                params=params,
+                error=result.error if result and result.status == "error" else None,
+            )
 
         # Validate result
         validated = validate_tool_result(
