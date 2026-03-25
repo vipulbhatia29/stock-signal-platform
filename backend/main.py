@@ -183,7 +183,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.agent_graph = build_agent_graph(
             plan_fn=_plan_fn,
             execute_fn=lambda steps, tool_executor, on_step=None: execute_plan(
-                steps, tool_executor, on_step=on_step, collector=collector
+                steps,
+                tool_executor,
+                on_step=on_step,
+                collector=collector,
+                cache=cache_service,
             ),
             synthesize_fn=_synthesize_fn,
             format_simple_fn=format_simple_result,
