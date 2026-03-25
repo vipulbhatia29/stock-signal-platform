@@ -1506,6 +1506,87 @@ git add -A && git commit -m "chore: Phase 6A final fixups and lint"
 
 ---
 
+## Task 11: Documentation Updates
+
+**Files:**
+- Modify: `docs/TDD.md`
+- Modify: `docs/FSD.md`
+- Modify: `PROGRESS.md`
+- Modify: `project-plan.md`
+- Serena memories: `architecture/system-overview`, `domain/agent-tools`, `project/state`
+
+- [ ] **Step 1: Update TDD.md**
+
+Add to the architecture diagram:
+- `/admin` router in the Routers subgraph
+- LLM cascade flow: `LLMClient → tier_config → GroqProvider (multi-model cascade) → AnthropicProvider → OpenAIProvider`
+- `llm_model_config` table in the data model section
+- Token budget description in the agent architecture section
+
+Add new API contracts section for admin endpoints:
+```markdown
+### Admin API (superuser only)
+
+| Method | Path | Request | Response | Purpose |
+|---|---|---|---|---|
+| GET | /admin/llm-models | — | LLMModelConfigResponse[] | List cascade config |
+| PATCH | /admin/llm-models/{id} | LLMModelConfigUpdate | LLMModelConfigResponse | Update model config |
+| POST | /admin/llm-models/reload | — | {status, tiers} | Reload cascade from DB |
+```
+
+Update the LLM Routing section (§5 or wherever it currently lives):
+- Remove V1 ReAct references
+- Document the two-level cascade (GroqProvider internal → LLMClient inter-provider)
+- Document tier_config: planner uses cheap/fast models, synthesizer uses quality models
+- Document token budget sliding-window approach
+
+- [ ] **Step 2: Update FSD.md**
+
+Add functional requirement for admin model management:
+```markdown
+### FR-ADMIN: LLM Model Management
+- Admin can view, enable/disable, and reorder LLM models via API
+- Cascade order is configurable per tier (planner vs synthesizer)
+- Changes take effect via reload without server restart
+```
+
+- [ ] **Step 3: Ensure Swagger/OpenAPI is complete**
+
+Verify all admin endpoints have:
+- `summary=` on the decorator
+- `description=` in the docstring
+- `response_model=` for typed responses
+- Proper `responses=` dict for error codes (403, 404, 422)
+
+Test by visiting `http://localhost:8181/docs` and confirming the admin section appears.
+
+- [ ] **Step 4: Update Serena memories**
+
+Update `architecture/system-overview`:
+- Add `/admin` router to the entry points table
+- Update LLM Routing section: V2-only, tier_config, multi-model cascade
+- Add `llm_model_config` to the filesystem layout
+
+Update `domain/agent-tools`:
+- Update LLM Client section: tier_config is now active, not dead code
+- Note cascade architecture: GroqProvider → AnthropicProvider → OpenAIProvider
+
+Update `project/state`:
+- Phase 6A status + key changes
+
+- [ ] **Step 5: Update PROGRESS.md and project-plan.md**
+
+Add session entry to PROGRESS.md. Mark Phase 6A deliverables in project-plan.md.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add docs/TDD.md docs/FSD.md PROGRESS.md project-plan.md
+git commit -m "docs: update TDD, FSD, Swagger for Phase 6A — LLM cascade + admin API"
+```
+
+---
+
 ## Summary
 
 | Task | Description | New Tests |
@@ -1520,4 +1601,5 @@ git add -A && git commit -m "chore: Phase 6A final fixups and lint"
 | 8 | Tool result truncation | ~4 |
 | 9 | LLM Client tier routing tests | ~4 |
 | 10 | Final integration pass | 0 |
+| 11 | Documentation: TDD, FSD, Swagger, Serena memories, PROGRESS | 0 |
 | **Total** | | **~23 new tests** |
