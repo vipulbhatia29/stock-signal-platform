@@ -518,6 +518,29 @@ PATCH /api/v1/alerts/read
   Auth:     Required
 ```
 
+### 3.13 Admin Endpoints (Phase 6A) ✅ IMPLEMENTED
+
+Superuser-only endpoints for managing LLM model cascade configuration.
+
+```
+GET /api/v1/admin/llm-models
+  Response: LLMModelConfigResponse[] { id, provider, model_name, tier, priority, is_enabled, tpm_limit, rpm_limit, tpd_limit, rpd_limit, cost_per_1k_input, cost_per_1k_output, notes }
+  Auth:     Required (role=ADMIN)
+  Errors:   401 (unauthenticated), 403 (not admin)
+
+PATCH /api/v1/admin/llm-models/{model_id}
+  Body:     LLMModelConfigUpdate { priority?, is_enabled?, tpm_limit?, rpm_limit?, tpd_limit?, rpd_limit?, cost_per_1k_input?, cost_per_1k_output?, notes? }
+  Response: LLMModelConfigResponse
+  Auth:     Required (role=ADMIN)
+  Errors:   401, 403, 404 (model not found)
+
+POST /api/v1/admin/llm-models/reload
+  Response: { status: "ok", tiers: int, models: int }
+  Auth:     Required (role=ADMIN)
+  Errors:   401, 403
+  Notes:    Force-reloads model configs from DB into running cascade. Takes effect immediately.
+```
+
 ---
 
 ## 4. Service Layer Design
@@ -600,7 +623,7 @@ async def get_signal_service(
 
 ## 5. Agent Architecture
 
-> **Implementation status:** Phase 4B ✅ (V1 ReAct, PRs #12-13) + Phase 4D ✅ (V2 Plan→Execute→Synthesize, PRs #26-32). V2 behind `AGENT_V2=true` feature flag. Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`.
+> **Implementation status:** Phase 4D ✅ (Plan→Execute→Synthesize, PRs #26-32) + Phase 6A ✅ (LLM Factory, PR #95). V1 ReAct loop removed in Phase 6A (KAN-140). Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`.
 
 ### 5.1 Three-Layer Architecture
 
@@ -645,17 +668,35 @@ Agent types = registry filters:
 
 Max 15 iterations. Few-shot prompted (prompt templates in `backend/agents/prompts/`).
 
-### 5.4 LLM Client
+### 5.4 LLM Client & Factory (Phase 6A) ✅ IMPLEMENTED
 
-Provider-agnostic abstraction. Fallback: Groq → Anthropic → Local.
-Retry policy: exponential backoff (1s, 2s, 4s) for transient errors. Immediate switch for quota exhaustion, timeouts, connection failures. Provider health tracking skips exhausted providers.
+Provider-agnostic abstraction with data-driven multi-model cascade.
 
-**Tier routing (Phase 4D):** `tier_config` dict maps tier names to provider lists. `chat(tier="planner")` selects providers from tier config. Falls back to default providers if tier not found. Backward compatible — existing code works without tier param.
+**LLM Factory Architecture:**
+- `llm_model_config` table stores cascade configuration (provider, model, tier, priority, limits, costs)
+- `ModelConfigLoader` (`backend/agents/model_config.py`) reads DB → groups by tier → caches in memory
+- `TokenBudget` (`backend/agents/token_budget.py`) async sliding-window rate tracker (TPM/RPM/TPD/RPD, 80% threshold)
+- `GroqProvider` (`backend/providers/groq.py`) cascades through models in priority order per tier
+
+**Cascade flow:**
+1. `LLMClient.chat(tier="planner")` → selects models for tier from `ModelConfigLoader` cache
+2. For each model in priority order: check `TokenBudget` → if under limits, attempt call
+3. On error: classify as `rate_limit`, `context_length`, `auth`, `transient`, `permanent`
+4. `auth` errors stop cascade immediately; others try next model
+5. If all models exhausted → `AllModelsExhaustedError`
+
+**Tier configuration (seeded in migration 012):**
+- `planner` tier: 5 cheap/fast models (Groq Llama, Gemma) — intent classification + tool planning
+- `synthesizer` tier: 4 quality models (Groq Llama 70B, DeepSeek) — response synthesis
+
+**Tool result truncation:** `_truncate_tool_results()` in synthesizer caps each tool result at `MAX_TOOL_RESULT_CHARS` (configurable) with truncation marker.
+
+**Admin management:** Model configs changeable via `GET/PATCH/POST /admin/llm-models` without redeploy (see §3.13).
 
 ### 5.5 Agent V2 — Plan→Execute→Synthesize (Phase 4D) ✅ IMPLEMENTED
 
 > **Full spec:** `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
-> **Feature flag:** `AGENT_V2=true` in `backend/config.py`. When false, V1 ReAct loop (§5.3) is used.
+> V1 ReAct loop removed in Phase 6A (KAN-140). V2 is now the only agent architecture.
 
 **Three-phase LangGraph StateGraph:**
 

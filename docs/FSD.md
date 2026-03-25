@@ -444,12 +444,11 @@ Users can override weights via UserPreference.composite_weights.
 - Agent type bound at session creation (cannot switch mid-session)
 
 **FR-8.2: Tool Orchestration**
-- Tool Registry with 13 internal tools and 4 MCPAdapter external sources
-- V1 (AGENT_V2=false): LLM tool-calling ReAct loop, max 15 iterations
-- V2 (AGENT_V2=true): Plan→Execute→Synthesize three-phase architecture:
-  - Planner (LLM): classifies intent, generates ordered tool plan (max 10 steps)
+- Tool Registry with 20 internal tools and 4 MCPAdapter external sources
+- Plan→Execute→Synthesize three-phase architecture (V1 ReAct loop removed in Phase 6A):
+  - Planner (LLM, tier=planner): classifies intent, generates ordered tool plan (max 10 steps)
   - Executor (mechanical, no LLM): runs tools via registry, $PREV_RESULT resolution, retries, circuit breaker
-  - Synthesizer (LLM): confidence scoring, bull/base/bear scenarios, evidence tree with citations
+  - Synthesizer (LLM, tier=synthesizer): confidence scoring, bull/base/bear scenarios, evidence tree with citations
 - All data in responses must come from tool results (no hallucination)
 - If a tool fails, result marked "unavailable" with reason; synthesizer acknowledges gap
 - Scope enforcement: financial-only queries. Non-financial/speculative queries declined gracefully.
@@ -491,10 +490,15 @@ Users can override weights via UserPreference.composite_weights.
 - Callable by Claude Code, Cursor, or any MCP-compatible client
 - Authenticated via JWT (same as REST API)
 
-**FR-8.8: Graceful Degradation**
+**FR-8.8: Graceful Degradation & LLM Factory (Phase 6A) ✅ IMPLEMENTED**
 - Individual tool failures don't crash the response
-- LLM provider fallback: Groq → Anthropic → Local
-- Exponential backoff for transient errors, immediate switch for quota/timeout
+- Data-driven multi-model cascade: models configured in `llm_model_config` DB table
+- Tier routing: planner uses cheap/fast models, synthesizer uses quality models
+- Per-model rate limiting: TokenBudget tracks TPM/RPM/TPD/RPD with 80% threshold
+- Error classification: rate_limit/context_length → try next model; auth → stop cascade
+- Admin API: `GET/PATCH /admin/llm-models`, `POST /admin/llm-models/reload` (superuser-only)
+- Model configs changeable without redeploy via admin endpoints
+- Tool result truncation: per-result cap prevents context overflow in synthesizer
 - MCP server health tracking — disconnected adapters excluded from tool set
 - User informed of degraded data availability in response
 

@@ -9,12 +9,12 @@ category: project
 
 ```bash
 # Backend — fast, no external deps
-uv run pytest tests/unit/ -v                          # Unit tests (~596, <6s)
+uv run pytest tests/unit/ -v                          # Unit tests (~766, <6s)
 uv run pytest tests/unit/test_{module}.py -v          # Single module
 
 # Backend — requires Docker (testcontainers auto-manages Postgres+Redis)
 uv run pytest tests/integration/ -v                   # Integration tests
-uv run pytest tests/api/ -v                           # API endpoint tests (~174)
+uv run pytest tests/api/ -v                           # API endpoint tests (~190)
 
 # Full suite with coverage
 uv run pytest --cov=backend --cov-fail-under=80       # Coverage gate
@@ -32,8 +32,9 @@ tests/
 ├── unit/                # No external deps. Pure logic, tool functions, schemas.
 │   └── conftest.py      # TEST_ENV guard — overrides to prevent testcontainers
 ├── integration/         # Real Postgres + TimescaleDB + Redis via testcontainers
-└── api/                 # FastAPI endpoints via httpx AsyncClient
-    └── conftest.py      # TEST_ENV guard
+├── api/                 # FastAPI endpoints via httpx AsyncClient
+│   └── conftest.py      # TEST_ENV guard
+└── e2e/                 # Playwright browser tests
 ```
 
 ## Test-After-Feature Rule
