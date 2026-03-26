@@ -139,7 +139,9 @@ class TestListTransactions:
         """No transactions returns empty list."""
         resp = await authenticated_client.get("/api/v1/portfolio/transactions")
         assert resp.status_code == 200
-        assert resp.json() == []
+        data = resp.json()
+        assert data["transactions"] == []
+        assert data["total"] == 0
 
     async def test_filter_by_ticker(self, authenticated_client: AsyncClient, db_url: str) -> None:
         """?ticker=AAPL filters to only AAPL transactions."""
@@ -166,7 +168,8 @@ class TestListTransactions:
 
         resp = await authenticated_client.get("/api/v1/portfolio/transactions?ticker=AAPL")
         assert resp.status_code == 200
-        tickers = [t["ticker"] for t in resp.json()]
+        data = resp.json()
+        tickers = [t["ticker"] for t in data["transactions"]]
         assert all(t == "AAPL" for t in tickers)
 
 

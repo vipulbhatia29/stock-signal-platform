@@ -55,6 +55,7 @@ from backend.schemas.stock import (
     PiotroskiBreakdown,
     PricePeriod,
     PricePointResponse,
+    RecommendationListResponse,
     RecommendationResponse,
     ReturnsResponse,
     RSIResponse,
@@ -606,17 +607,20 @@ async def refresh_all_watchlist(
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.get("/recommendations", response_model=list[RecommendationResponse])
+@router.get("/recommendations", response_model=RecommendationListResponse)
 async def get_recommendations(
+    request: Request,
     action: Literal["BUY", "WATCH", "AVOID", "HOLD", "SELL"] | None = Query(
         default=None, description="Filter by action: BUY, WATCH, AVOID, HOLD, SELL"
     ),
     confidence: Literal["HIGH", "MEDIUM", "LOW"] | None = Query(
         default=None, description="Filter by confidence: HIGH, MEDIUM, LOW"
     ),
+    limit: int = Query(default=50, ge=1, le=200, description="Page size"),
+    offset: int = Query(default=0, ge=0, description="Offset"),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
-) -> list[RecommendationSnapshot]:
+) -> RecommendationListResponse:
     """Get today's stock recommendations.
 
     Returns the most recent recommendations for the current user.
@@ -626,28 +630,43 @@ async def get_recommendations(
     older recommendations are based on stale signals and may no longer
     be valid.
     """
-    # ── Start with a base query for this user's recommendations ──────
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"user:{current_user.id}:recommendations:{action or 'all'}:{confidence or 'all'}"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return RecommendationListResponse.model_validate_json(cached)
+
     query = select(RecommendationSnapshot).where(RecommendationSnapshot.user_id == current_user.id)
 
-    # ── Apply optional filters ───────────────────────────────────────
-    # These let the client ask "show me only BUY recommendations" or
-    # "show me only HIGH confidence recommendations"
     if action is not None:
         query = query.where(RecommendationSnapshot.action == action.upper())
 
     if confidence is not None:
         query = query.where(RecommendationSnapshot.confidence == confidence.upper())
 
-    # ── Only return recent recommendations (last 24 hours) ───────────
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     query = query.where(RecommendationSnapshot.generated_at >= cutoff)
 
-    # ── Order by composite score descending ──────────────────────────
-    # Best opportunities (highest scores) appear first
+    # Count total before pagination
+    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
+    total = count_result.scalar_one()
+
     query = query.order_by(RecommendationSnapshot.composite_score.desc())
+    query = query.limit(limit).offset(offset)
 
     result = await db.execute(query)
-    return list(result.scalars().all())
+    recs = list(result.scalars().all())
+
+    response = RecommendationListResponse(
+        recommendations=[RecommendationResponse.model_validate(r) for r in recs],
+        total=total,
+    )
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), CacheTier.VOLATILE)
+    return response
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1014,6 +1033,7 @@ async def get_signal_history(
 @router.get("/{ticker}/fundamentals", response_model=FundamentalsResponse)
 async def get_fundamentals(
     ticker: str,
+    request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> FundamentalsResponse:
@@ -1027,13 +1047,20 @@ async def get_fundamentals(
     ingest first. ETFs, SPACs, or very new listings may have missing data.
     """
     stock = await _require_stock(ticker, db)
-    ticker = ticker.upper().strip()
+    t = ticker.upper().strip()
+
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:fundamentals:{t}"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return FundamentalsResponse.model_validate_json(cached)
 
     import asyncio
 
-    result = await asyncio.get_event_loop().run_in_executor(None, fetch_fundamentals, ticker)
+    result = await asyncio.get_event_loop().run_in_executor(None, fetch_fundamentals, t)
 
-    return FundamentalsResponse(
+    response = FundamentalsResponse(
         ticker=result.ticker,
         pe_ratio=result.pe_ratio,
         peg_ratio=result.peg_ratio,
@@ -1055,6 +1082,11 @@ async def get_fundamentals(
         analyst_hold=stock.analyst_hold,
         analyst_sell=stock.analyst_sell,
     )
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), CacheTier.STABLE)
+    return response
 
 
 @router.get("/{ticker}/news")

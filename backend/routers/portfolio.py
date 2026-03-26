@@ -6,7 +6,7 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +25,7 @@ from backend.schemas.portfolio import (
     RebalancingResponse,
     RebalancingSuggestion,
     TransactionCreate,
+    TransactionListResponse,
     TransactionResponse,
 )
 from backend.tools.divestment import check_divestment_rules
@@ -122,31 +123,39 @@ async def create_transaction(
 
 @router.get(
     "/transactions",
-    response_model=list[TransactionResponse],
+    response_model=TransactionListResponse,
     summary="Get transaction history",
 )
 async def list_transactions(
     ticker: str | None = Query(None, description="Filter by ticker"),
+    limit: int = Query(default=50, ge=1, le=200, description="Page size"),
+    offset: int = Query(default=0, ge=0, description="Offset"),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
-) -> list[TransactionResponse]:
-    """Return all transactions sorted by date descending.
+) -> TransactionListResponse:
+    """Return paginated transactions sorted by date descending.
 
     Optionally filter by ticker symbol.
     """
     portfolio = await get_or_create_portfolio(current_user.id, db)
 
-    stmt = (
-        select(Transaction)
-        .where(Transaction.portfolio_id == portfolio.id)
-        .order_by(Transaction.transacted_at.desc())
-    )
+    base = select(Transaction).where(Transaction.portfolio_id == portfolio.id)
     if ticker:
-        stmt = stmt.where(Transaction.ticker == ticker.upper().strip())
+        base = base.where(Transaction.ticker == ticker.upper().strip())
 
+    # Count total before pagination
+    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
+    total = count_result.scalar_one()
+
+    # Apply ordering + pagination
+    stmt = base.order_by(Transaction.transacted_at.desc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     txns = result.scalars().all()
-    return [TransactionResponse.model_validate(t) for t in txns]
+
+    return TransactionListResponse(
+        transactions=[TransactionResponse.model_validate(t) for t in txns],
+        total=total,
+    )
 
 
 @router.delete(
@@ -209,6 +218,7 @@ async def delete_transaction(
     summary="Get current positions with live P&L and divestment alerts",
 )
 async def list_positions(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> list[PositionWithAlerts]:
@@ -217,6 +227,15 @@ async def list_positions(
     Alerts are computed on-demand using the user's preference thresholds.
     Three queries: positions, user preferences, latest signals.
     """
+    import json
+
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"user:{current_user.id}:positions"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return json.loads(cached)
+
     portfolio = await get_or_create_portfolio(current_user.id, db)
     positions = await get_positions_with_pnl(portfolio.id, db)
 
@@ -278,6 +297,11 @@ async def list_positions(
             )
         )
 
+    if cache:
+        from backend.services.cache import CacheTier
+
+        serialized = json.dumps([r.model_dump(mode="json") for r in result], default=str)
+        await cache.set(cache_key, serialized, CacheTier.VOLATILE)
     return result
 
 

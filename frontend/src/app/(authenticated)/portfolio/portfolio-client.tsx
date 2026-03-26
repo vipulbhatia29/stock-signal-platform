@@ -33,6 +33,7 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { PageTransition } from "@/components/motion-primitives";
 import type {
   DivestmentAlert,
+  PaginatedTransactions,
   Position,
   PortfolioSummary,
   Transaction,
@@ -44,7 +45,10 @@ import type {
 function useTransactions() {
   return useQuery<Transaction[]>({
     queryKey: ["portfolio", "transactions"],
-    queryFn: () => get<Transaction[]>("/portfolio/transactions"),
+    queryFn: async () => {
+      const resp = await get<PaginatedTransactions>("/portfolio/transactions");
+      return resp.transactions;
+    },
     staleTime: 60 * 1000,
   });
 }

@@ -396,7 +396,9 @@ class TestRecommendations:
         """Should return an empty list when no recommendations exist."""
         response = await authenticated_client.get("/api/v1/stocks/recommendations")
         assert response.status_code == 200
-        assert response.json() == []
+        data = response.json()
+        assert data["recommendations"] == []
+        assert data["total"] == 0
 
     @pytest.mark.asyncio
     async def test_recommendations_returns_data(
@@ -410,11 +412,13 @@ class TestRecommendations:
         assert response.status_code == 200
 
         data = response.json()
-        assert len(data) >= 1
-        assert data[0]["ticker"] == "AAPL"
-        assert "action" in data[0]
-        assert "confidence" in data[0]
-        assert "composite_score" in data[0]
+        recs = data["recommendations"]
+        assert data["total"] >= 1
+        assert len(recs) >= 1
+        assert recs[0]["ticker"] == "AAPL"
+        assert "action" in recs[0]
+        assert "confidence" in recs[0]
+        assert "composite_score" in recs[0]
 
     @pytest.mark.asyncio
     async def test_recommendations_filter_by_action(
@@ -428,7 +432,7 @@ class TestRecommendations:
         response = await authenticated_client.get("/api/v1/stocks/recommendations?action=WATCH")
         assert response.status_code == 200
         data = response.json()
-        assert all(r["action"] == "WATCH" for r in data)
+        assert all(r["action"] == "WATCH" for r in data["recommendations"])
 
     @pytest.mark.asyncio
     async def test_recommendations_filter_no_match(
@@ -441,7 +445,9 @@ class TestRecommendations:
         # Factory creates WATCH, so BUY should return empty
         response = await authenticated_client.get("/api/v1/stocks/recommendations?action=BUY")
         assert response.status_code == 200
-        assert response.json() == []
+        data = response.json()
+        assert data["recommendations"] == []
+        assert data["total"] == 0
 
     @pytest.mark.asyncio
     async def test_stale_recommendations_excluded(
@@ -471,4 +477,4 @@ class TestRecommendations:
         assert response.status_code == 200
         # Old recommendation should be excluded
         data = response.json()
-        assert all(r["ticker"] != "OLD2" for r in data)
+        assert all(r["ticker"] != "OLD2" for r in data["recommendations"])
