@@ -45,6 +45,10 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.portfolio.snapshot_all_portfolios_task",
         "schedule": crontab(hour=16, minute=30),
     },
+    "snapshot-portfolio-health-daily": {
+        "task": "backend.tasks.portfolio.snapshot_health_task",
+        "schedule": crontab(hour=16, minute=45),  # 15 min after value snapshot
+    },
     # ── Warm data sync ──
     "sync-analyst-consensus": {
         "task": "backend.tasks.warm_data.sync_analyst_consensus_task",

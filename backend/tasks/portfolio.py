@@ -68,3 +68,95 @@ def snapshot_all_portfolios_task(self) -> dict:
             self.max_retries + 1,
         )
         raise
+
+
+async def _snapshot_health_async() -> dict:
+    """Compute and store health snapshots for all portfolios.
+
+    Returns:
+        Dict with computed and skipped counts.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+    from backend.models.portfolio_health import PortfolioHealthSnapshot
+    from backend.tools.portfolio_health import compute_portfolio_health
+
+    async with async_session_factory() as db:
+        portfolio_ids = await get_all_portfolio_ids(db)
+
+    computed = 0
+    skipped = 0
+    for pid in portfolio_ids:
+        try:
+            async with async_session_factory() as db:
+                health = await compute_portfolio_health(pid, db)
+                if health is None:
+                    skipped += 1
+                    continue
+
+                now = datetime.now(timezone.utc)
+                component_map = {c.name: c.score for c in health.components}
+
+                stmt = (
+                    pg_insert(PortfolioHealthSnapshot)
+                    .values(
+                        portfolio_id=pid,
+                        snapshot_date=now,
+                        health_score=health.health_score,
+                        grade=health.grade,
+                        diversification_score=component_map.get("diversification", 0),
+                        signal_quality_score=component_map.get("signal_quality", 0),
+                        risk_score=component_map.get("risk", 0),
+                        income_score=component_map.get("income", 0),
+                        sector_balance_score=component_map.get("sector_balance", 0),
+                        hhi=health.metrics.get("hhi", 0),
+                        weighted_beta=health.metrics.get("weighted_beta"),
+                        weighted_sharpe=health.metrics.get("weighted_sharpe"),
+                        weighted_yield=health.metrics.get("weighted_yield"),
+                        position_count=len(health.position_details),
+                    )
+                    .on_conflict_do_update(
+                        constraint="portfolio_health_snapshots_pkey",
+                        set_={
+                            "health_score": health.health_score,
+                            "grade": health.grade,
+                            "diversification_score": component_map.get("diversification", 0),
+                            "signal_quality_score": component_map.get("signal_quality", 0),
+                            "risk_score": component_map.get("risk", 0),
+                            "income_score": component_map.get("income", 0),
+                            "sector_balance_score": component_map.get("sector_balance", 0),
+                            "hhi": health.metrics.get("hhi", 0),
+                            "weighted_beta": health.metrics.get("weighted_beta"),
+                            "weighted_sharpe": health.metrics.get("weighted_sharpe"),
+                            "weighted_yield": health.metrics.get("weighted_yield"),
+                            "position_count": len(health.position_details),
+                        },
+                    )
+                )
+                await db.execute(stmt)
+                await db.commit()
+                computed += 1
+        except Exception:
+            logger.warning("Failed to snapshot health for portfolio %s", pid, exc_info=True)
+            skipped += 1
+
+    logger.info("Health snapshots: %d computed, %d skipped", computed, skipped)
+    return {"computed": computed, "skipped": skipped}
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    max_retries=2,
+    retry_backoff=True,
+    name="backend.tasks.portfolio.snapshot_health_task",
+)
+def snapshot_health_task(self) -> dict:
+    """Capture daily health score snapshots for all portfolios.
+
+    Runs on Celery Beat schedule, 15 minutes after value snapshots.
+    """
+    logger.info("Starting health snapshots (attempt %d)", self.request.retries + 1)
+    return asyncio.run(_snapshot_health_async())
