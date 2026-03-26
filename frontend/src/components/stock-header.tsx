@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ScoreBadge } from "@/components/score-badge";
 import { ChangeIndicator } from "@/components/change-indicator";
-import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 
 interface StockHeaderProps {
