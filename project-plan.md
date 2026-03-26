@@ -744,14 +744,57 @@ Address findings from comprehensive `/sc:analyze` audit. Security, performance, 
 - [x] KAN-171: Fix 4 ESLint unused variable warnings (PR #116)
 
 #### Remaining
-- [ ] KAN-168: Add pagination to transactions + recommendations (~1h)
-- [ ] KAN-170: Extend CacheService to uncached endpoints (~2h)
+- [x] KAN-168: Add pagination to transactions + recommendations (~1h) ✅ Session 59
+- [x] KAN-170: Extend CacheService to uncached endpoints (~2h) ✅ Session 59
 - [ ] KAN-172: Extract service layer from routers (~8h, large refactor)
 - [ ] KAN-173: Split stocks.py into domain-specific sub-routers (~3h)
-- [ ] KAN-174: Evaluate passlib replacement with direct bcrypt (~1h)
+- [x] KAN-174: Evaluate passlib replacement with direct bcrypt (~1h) ✅ Session 59
 
 ### Success Criteria
-7/12 stories shipped. Unmaintained security dep replaced. Critical N+1 queries fixed. Docs fully refreshed. Coding conventions added to `.claude/rules/`.
+10/12 stories shipped. Unmaintained security dep replaced. Critical N+1 queries fixed. Docs fully refreshed. Coding conventions added to `.claude/rules/`.
+
+---
+
+## Phase 7.6: Scale Readiness — Multi-Worker & SaaS Hardening
+
+### Goal
+Fix single-process assumptions, security regressions, and performance bottlenecks identified in the deep architecture audit (Session 59). Required before multi-user cloud deployment.
+
+### Audit Summary
+SaaS readiness scored **6.5/10**. Strong async foundation and user isolation, but agent subsystem (TokenBudget, ObservabilityCollector) is per-process, 20+ tools leak `str(e)`, and a ContextVar IDOR regression from Phase 4E was found.
+
+### Deliverables — Security Fixes (Sprint 1, ~5h)
+- [ ] KAN-177: [Bug] ContextVar tokens not reset in chat_stream — latent IDOR risk (~2h)
+- [ ] KAN-178: [Bug] str(e) leaked in 20+ tool ToolResult error paths (~2-3h)
+
+### Deliverables — Quick Performance Wins (Sprint 1, ~3h)
+- [ ] KAN-179: Cache planner prompt at module level (~10 min)
+- [ ] KAN-180: [Bug] Health endpoint missing Redis connectivity check (~30 min)
+- [ ] KAN-181: Parallelize build_user_context DB queries with asyncio.gather (~2h)
+
+### Deliverables — Scalability Hardening (Sprint 2, ~16h)
+- [ ] KAN-182: Cache get_current_user in Redis (~4h)
+- [ ] KAN-183: Increase DB pool size + document PgBouncer (~4h)
+- [ ] KAN-184: [Bug] MCP HTTP endpoint doesn't set ContextVar — portfolio tools fail (~4h)
+- [ ] KAN-185: Parallelize Celery portfolio snapshot/health tasks (~4h)
+
+### Deliverables — Multi-Worker Architecture (Sprint 3, ~3 days)
+- [ ] KAN-186: Move TokenBudget sliding windows to Redis + ObservabilityCollector admin metrics from DB (~2-3 days)
+
+### Dependencies
+None — all findings are independent of feature backlog.
+
+### Success Criteria
+- ContextVar IDOR fixed and tested
+- Zero `str(e)` in any ToolResult error path
+- Health endpoint checks Redis + MCP + DB
+- `build_user_context` uses asyncio.gather
+- Auth user lookup cached in Redis
+- DB pool configurable via env vars
+- MCP HTTP portfolio tools work with JWT auth
+- Celery tasks use asyncio.gather with semaphore
+- TokenBudget works correctly across 2+ Uvicorn workers
+- SaaS readiness re-audit scores ≥8/10
 
 ---
 

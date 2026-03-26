@@ -19,7 +19,7 @@ uv run alembic current                                 # Check migration head
 - `config.py` uses Pydantic Settings to load `backend/.env`
 - `database.py` provides `get_async_session()` as a FastAPI dependency
 - All routers are mounted in `main.py` under `/api/v1/`
-- 24 internal tools in `tools/` registered via `ToolRegistry` (build_registry.py)
+- 24 internal tools + 4 MCP adapters in `tools/` registered via `ToolRegistry` (build_registry.py)
 - Agent pipeline: Plan→Execute→Synthesize (LangGraph StateGraph in `agents/graph.py`)
 - Input/output guardrails in `agents/guards.py` (PII, injection, disclaimer)
 - Background tasks in `tasks/` are Celery tasks scheduled by Celery Beat (9-step nightly chain)

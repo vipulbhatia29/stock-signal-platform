@@ -1,6 +1,6 @@
 # stock-signal-platform
 
-Personal stock analysis platform — US equities, signal detection, portfolio tracking.
+Stock analysis SaaS platform for part-time investors — US equities, signal detection, portfolio tracking, AI-powered recommendations. Multi-user cloud deployment target — design for scale, not single-user.
 
 ## Session Start
 
@@ -43,7 +43,7 @@ Load what you need for the task at hand:
 | `project/jira-integration-brainstorm` | JIRA instance details, ticket map, transition IDs, automation rules |
 | `debugging/backend-gotchas` | asyncpg, UserRole enum, circular imports |
 | `debugging/frontend-gotchas` | ESLint hooks, Recharts, template literals |
-| `conventions/auth-patterns` | JWT, httpOnly cookies, bcrypt pinning |
+| `conventions/auth-patterns` | JWT, httpOnly cookies, direct bcrypt |
 | `conventions/jira-sdlc-workflow` | **MANDATORY** — full JIRA SDLC process, branching, CI/CD integration |
 | `serena/tool-usage` | Serena MCP prefix, tool priority rules |
 | `serena/memory-map` | Full taxonomy — use when adding new modules |
@@ -59,6 +59,7 @@ Load what you need for the task at hand:
 7. **No mutable module state** — constants and `settings` only at module level.
 8. **Serena first** — use symbolic tools for all code reads/edits. Built-ins only when Serena can't.
 9. **JIRA workflow** — follow `conventions/jira-sdlc-workflow` exactly. Never skip refinement. Never create implementation subtasks before plan is approved.
+10. **No str(e) anywhere** — never pass `str(e)` to `ToolResult(error=...)`, `HTTPException(detail=...)`, or any user-facing output. Log the real error, return a safe generic message.
 
 ## Services (local dev)
 

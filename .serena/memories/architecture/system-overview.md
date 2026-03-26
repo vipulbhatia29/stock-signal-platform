@@ -1,7 +1,7 @@
 ---
 scope: project
 category: architecture
-updated_by: session-58
+updated_by: session-59
 ---
 
 # System Architecture Overview
@@ -33,7 +33,7 @@ Phase 7 additions: input/output guardrails, PII/injection detection, financial d
 
 ## LLM Routing (Phase 6A)
 
-Data-driven cascade from `llm_model_config` DB table (migration 012). TokenBudget tracks per-model limits. Admin API at `/api/v1/admin/llm-models`.
+Data-driven cascade from `llm_model_config` DB table (migration 012). TokenBudget tracks per-model limits (in-process only — KAN-186 will move to Redis for multi-worker). Admin API at `/api/v1/admin/llm-models`.
 
 ## DB Migrations
 

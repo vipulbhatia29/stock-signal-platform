@@ -8,9 +8,9 @@ category: conventions
 ## JWT + httpOnly Cookies
 - JWT signed with `JWT_SECRET_KEY` (from `backend/config.py` Pydantic Settings).
 - Stored in httpOnly, Secure, SameSite=Lax cookie — NOT localStorage (XSS protection).
-- `python-jose` for JWT encode/decode; `passlib` + `bcrypt==4.2.1` for password hashing.
+- `PyJWT` for JWT encode/decode; direct `bcrypt` (>=4.2.1) for password hashing (Session 59: passlib removed).
 - Auth logic: `backend/dependencies.py` → `get_current_user` → injected into all protected endpoints.
-- CRITICAL: `bcrypt` pinned to 4.2.x — bcrypt >= 5.0 broke passlib API (passlib is unmaintained).
+- `hash_password()` uses `bcrypt.hashpw()` with 12 rounds; `verify_password()` uses `bcrypt.checkpw()`.
 
 ## Frontend Auth
 - All API calls use `credentials: "include"` in `lib/api.ts` to send cookie automatically.

@@ -1,27 +1,31 @@
-# Project State — Updated 2026-03-26 (Session 58)
+# Project State — Updated 2026-03-26 (Session 59)
 
 ## Current Phase
-- Phases 1-7 complete. Phase 7.5 (Tech Debt) in progress — 7/12 stories shipped.
-- Session 58: `/sc:analyze` audit + 7 PRs merged (#110–116).
+- Phases 1-7 complete. Phase 7.5 (Tech Debt) 10/12 shipped. Phase 7.6 (Scale Readiness) backlogged.
+- Session 59: 3 tech debt PRs merged (#118), deep SaaS architecture audit, 10 new JIRA tickets (KAN-177–186).
 
 ## Branch State
-- Current branch: `develop` (clean, synced with remote)
-- Latest commit: `9a30691` [KAN-171]
+- Current branch: `feat/KAN-176-scale-readiness-backlog` (1 commit: project-plan update, NOT yet pushed)
+- `develop` synced with remote after PR #118 merge
 
 ## Resume Point
-- **Next work:** Remaining KAN-163 tech debt (KAN-168 pagination, KAN-170 cache, KAN-174 passlib — all quick)
-- **Or:** Feature backlog KAN-149–157 + KAN-162
-- **Then:** Phase 8 (Subscriptions)
+- **Unpushed work:** `feat/KAN-176-scale-readiness-backlog` has project-plan update commit — needs push + PR to develop
+- **Next work:** Phase 7.6 Sprint 1 — KAN-177 (ContextVar IDOR, 2h) + KAN-178 (str(e) leaks, 2-3h) + KAN-179 (prompt cache, 10min) + KAN-180 (Redis health, 30min) + KAN-181 (user_context gather, 2h)
+- **Then:** Sprint 2 — KAN-182-185 (auth cache, DB pool, MCP ContextVar, Celery parallelization)
+- **Then:** Sprint 3 — KAN-186 (TokenBudget → Redis, 2-3 days)
+- **Remaining Phase 7.5:** KAN-172 (service layer, ~8h) + KAN-173 (router split, ~3h) — deferred, low priority
 
 ## Test Counts
-- 806 unit + 236 API + 27 frontend + 24 integration + 17 Playwright ≈ 1,110 total
+- 821 unit + 236 API + 27 frontend + 24 integration + 17 Playwright ≈ 1,125 total
 - Alembic head: `758e69475884` (migration 015 — portfolio_health_snapshots)
 
-## Session 58 Shipped
-- PR #110: KAN-175 TDD/FSD/Architecture doc refresh
-- PR #111: KAN-164 python-jose → PyJWT
-- PR #112: KAN-165 N+1 forecast fix (40→3 queries)
-- PR #113: KAN-166 N+1 portfolio summary fix (20→1 query)
-- PR #114: KAN-167 Safe error messages
-- PR #115: KAN-169 Parallel market briefing
-- PR #116: KAN-171 ESLint cleanup
+## Session 59 Shipped
+- PR #118 (squash merged): KAN-174 passlib→bcrypt, KAN-168 pagination, KAN-170 cache extension
+- Epic KAN-176 created with 10 tickets (KAN-177–186) from architecture audit
+- Phase 7.6 added to project-plan
+
+## Key Learnings
+- Product is SaaS for part-time investors, NOT a personal tool — design for multi-user cloud deployment
+- SaaS readiness scored 6.5/10 — strong async + user isolation, but single-process agent assumptions
+- Phase 4E fixes (KAN-72 ContextVar, KAN-167 str(e)) regressed — new tools added without same treatment
+- ObservabilityCollector has DB writer (ground truth exists), in-memory is only for admin endpoint
