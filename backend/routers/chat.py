@@ -36,6 +36,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
+async def _decline_stream(message: str):
+    """Yield a decline NDJSON stream."""
+    from backend.agents.stream import StreamEvent
+
+    yield StreamEvent(type="decline", content=message).to_ndjson() + "\n"
+    yield StreamEvent(type="done", usage={}).to_ndjson() + "\n"
+
+
 async def _get_session(
     db: AsyncSession,
     session_id: uuid.UUID,
@@ -83,6 +91,24 @@ async def chat_stream(
     Resumes an existing session if session_id is given.
     Uses the Plan→Execute→Synthesize graph.
     """
+    # ── Input guard ──────────────────────────────────────────────────
+    from backend.agents.guards import (
+        detect_and_strip_pii,
+        detect_injection,
+        sanitize_input,
+        validate_input_length,
+    )
+
+    length_err = validate_input_length(body.message)
+    if length_err:
+        return StreamingResponse(_decline_stream(length_err), media_type="application/x-ndjson")
+
+    body.message = sanitize_input(body.message)
+
+    body.message, pii_found = detect_and_strip_pii(body.message)
+    if pii_found:
+        logger.warning("PII redacted from chat message: %s", pii_found)
+
     # Resolve or create session
     if body.session_id:
         session_messages = await load_session_messages(db, body.session_id)
@@ -93,6 +119,30 @@ async def chat_stream(
         title = auto_title(body.message)
         chat_session = await create_session(db, user.id, body.agent_type, title=title)
         session_messages = []
+
+    # Injection detection (after session is available for decline tracking)
+    if detect_injection(body.message):
+        logger.warning("Prompt injection detected in session %s", chat_session.id)
+        chat_session.decline_count = (chat_session.decline_count or 0) + 1
+        db.add(chat_session)
+        await db.commit()
+        return StreamingResponse(
+            _decline_stream(
+                "I can only help with financial analysis and portfolio management. "
+                "Please ask a question about stocks, markets, or your portfolio."
+            ),
+            media_type="application/x-ndjson",
+        )
+
+    # Session abuse check
+    if (chat_session.decline_count or 0) >= 5:
+        return StreamingResponse(
+            _decline_stream(
+                "This session has been flagged for repeated off-topic queries. "
+                "Please start a new session with a financial analysis question."
+            ),
+            media_type="application/x-ndjson",
+        )
 
     # Persist user message BEFORE streaming
     await save_message(db, chat_session.id, role="user", content=body.message)
