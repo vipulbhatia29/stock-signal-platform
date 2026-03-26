@@ -264,23 +264,27 @@ graph TB
             R_Auth["/auth"]
             R_Stocks["/stocks"]
             R_Portfolio["/portfolio"]
+            R_Market["/market"]
             R_Chat["/chat/stream"]
             R_Forecast["/forecasts"]
             R_Alerts["/alerts"]
         end
 
-        subgraph Tools["20 Internal Tools"]
+        subgraph Tools["24 Internal Tools"]
             T_Market["market data"]
             T_Signals["signals"]
             T_Fund["fundamentals"]
             T_Forecast["forecasting"]
             T_Portfolio["portfolio"]
             T_Recs["recommendations"]
+            T_Intel["news + intelligence"]
+            T_Health["health + briefing"]
         end
 
         subgraph Agent["AI Agent (LangGraph)"]
             AG["Plan → Execute → Synthesize"]
             LLM["LLMClient<br/>Claude / Groq"]
+            Guards["Guardrails<br/>PII | Injection | Disclaimer"]
         end
     end
 
