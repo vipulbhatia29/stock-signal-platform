@@ -176,6 +176,30 @@ async def execute_plan(
         raw_params = step.get("params", {})
         params = _resolve_params(raw_params, results)
 
+        # Tool parameter validation
+        from backend.agents.guards import (
+            SEARCH_TOOLS,
+            TICKER_TOOLS,
+            validate_search_query,
+            validate_ticker,
+        )
+
+        if tool_name in TICKER_TOOLS and "ticker" in params:
+            ticker_err = validate_ticker(str(params["ticker"]))
+            if ticker_err:
+                validated = {"tool": tool_name, "status": "error", "reason": ticker_err}
+                results.append(validated)
+                tool_calls += 1
+                continue
+
+        if tool_name in SEARCH_TOOLS and "query" in params:
+            query_err = validate_search_query(str(params["query"]))
+            if query_err:
+                validated = {"tool": tool_name, "status": "error", "reason": query_err}
+                results.append(validated)
+                tool_calls += 1
+                continue
+
         # Session cache check (cacheable tools only)
         cache_key = None
         if cache and session_id and tool_name in CACHEABLE_TOOLS:

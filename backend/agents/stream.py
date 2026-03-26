@@ -111,6 +111,11 @@ async def stream_graph_v2_events(
         if response_text:
             yield StreamEvent(type="token", content=response_text)
 
+        # Append financial disclaimer to every substantive response
+        from backend.agents.guards import DISCLAIMER
+
+        yield StreamEvent(type="token", content=DISCLAIMER)
+
     except Exception:
         logger.exception("stream_graph_v2_events error")
         yield StreamEvent(type="error", error="An internal error occurred. Please try again.")

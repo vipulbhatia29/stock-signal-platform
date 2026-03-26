@@ -430,7 +430,7 @@ class TestSynthesizerEdgeCases:
                     {
                         "confidence": 0.75,
                         "summary": "AAPL looks strong",
-                        "evidence": [],
+                        "evidence": [{"tool": "analyze_stock", "finding": "Score 8.0"}],
                         "gaps": [],
                     }
                 )
