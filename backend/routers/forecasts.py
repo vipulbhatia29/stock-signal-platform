@@ -276,6 +276,7 @@ async def get_ticker_forecast(
 )
 async def get_sector_forecast(
     sector: str,
+    request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> SectorForecastResponse:
@@ -292,6 +293,13 @@ async def get_sector_forecast(
     etf_ticker = SECTOR_ETF_MAP.get(sector.lower())
     if etf_ticker is None:
         raise HTTPException(status_code=404, detail=f"Unknown sector: {sector}")
+
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:forecast:sector:{sector}"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return SectorForecastResponse.model_validate_json(cached)
 
     # Get ETF forecast
     latest_result = await db.execute(
@@ -350,12 +358,17 @@ async def get_sector_forecast(
             )
             user_tickers = [r[0] for r in sector_result.all()]
 
-    return SectorForecastResponse(
+    response = SectorForecastResponse(
         sector=sector.title(),
         etf_ticker=etf_ticker,
         horizons=horizons,
         user_tickers_in_sector=user_tickers,
     )
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), CacheTier.STANDARD)
+    return response
 
 
 @router.get(
