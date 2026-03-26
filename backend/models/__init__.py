@@ -16,6 +16,7 @@ from backend.models.portfolio import (  # noqa: F401
     Position,
     Transaction,
 )
+from backend.models.portfolio_health import PortfolioHealthSnapshot
 from backend.models.price import StockPrice
 from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
@@ -36,6 +37,7 @@ __all__ = [
     "PipelineRun",
     "PipelineWatermark",
     "Portfolio",
+    "PortfolioHealthSnapshot",
     "PortfolioSnapshot",
     "Position",
     "RecommendationOutcome",
