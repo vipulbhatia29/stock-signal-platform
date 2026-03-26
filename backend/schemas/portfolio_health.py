@@ -34,3 +34,23 @@ class PortfolioHealthResult(BaseModel):
     top_concerns: list[str]
     top_strengths: list[str]
     position_details: list[PositionHealth]
+
+
+class PortfolioHealthSnapshotResponse(BaseModel):
+    """A single daily health snapshot for trend display."""
+
+    snapshot_date: str
+    health_score: float
+    grade: str
+    diversification_score: float
+    signal_quality_score: float
+    risk_score: float
+    income_score: float
+    sector_balance_score: float
+    hhi: float
+    weighted_beta: float | None = None
+    weighted_sharpe: float | None = None
+    weighted_yield: float | None = None
+    position_count: int
+
+    model_config = {"from_attributes": True}

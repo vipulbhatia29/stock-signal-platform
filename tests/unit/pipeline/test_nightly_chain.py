@@ -116,6 +116,7 @@ class TestNightlyPriceRefresh:
 class TestNightlyPipelineChain:
     """Tests for the nightly_pipeline_chain_task."""
 
+    @patch("backend.tasks.portfolio.snapshot_health_task")
     @patch("backend.tasks.alerts.generate_alerts_task")
     @patch("backend.tasks.evaluation.check_drift_task")
     @patch("backend.tasks.evaluation.evaluate_recommendations_task")
@@ -134,8 +135,9 @@ class TestNightlyPipelineChain:
         mock_eval_rec,
         mock_drift,
         mock_alerts,
+        mock_health_snapshot,
     ) -> None:
-        """Chain should call all 8 pipeline steps in order."""
+        """Chain should call all 9 pipeline steps in order."""
         from backend.tasks.market_data import nightly_pipeline_chain_task
 
         mock_price.return_value = {"status": "success"}
@@ -146,6 +148,7 @@ class TestNightlyPipelineChain:
         mock_drift.return_value = {"degraded": [], "retrain_triggered": []}
         mock_alerts.return_value = {"alerts_created": 2}
         mock_snapshot.return_value = {"snapshots_created": 3}
+        mock_health_snapshot.return_value = {"computed": 3, "skipped": 0}
 
         result = nightly_pipeline_chain_task()
 
@@ -157,6 +160,7 @@ class TestNightlyPipelineChain:
         assert result["drift"]["degraded"] == []
         assert result["alerts"]["alerts_created"] == 2
         assert result["portfolio_snapshots"]["snapshots_created"] == 3
+        assert result["health_snapshots"]["computed"] == 3
         mock_price.assert_called_once()
         mock_forecast.assert_called_once()
         mock_recs.assert_called_once()
@@ -165,6 +169,7 @@ class TestNightlyPipelineChain:
         mock_drift.assert_called_once()
         mock_alerts.assert_called_once()
         mock_snapshot.assert_called_once()
+        mock_health_snapshot.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

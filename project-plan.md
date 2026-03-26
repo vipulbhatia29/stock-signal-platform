@@ -698,12 +698,14 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 - [x] API endpoints: GET /portfolio/health, GET /market/briefing
 - [x] Portfolio health schemas split from infra health
 
-#### KAN-161: Spec D — Health Materialization (planned, 4 tasks, depends on KAN-160)
-- [ ] portfolio_health_snapshots TimescaleDB hypertable + migration
-- [ ] Celery Beat task at 4:45 PM + nightly chain Step 9
-- [ ] GET /portfolio/health/history endpoint
+#### KAN-161: Spec D — Health Materialization ✅ (Session 56, PR #105)
+- [x] PortfolioHealthSnapshot model + migration 015 (TimescaleDB hypertable)
+- [x] Celery Beat task at 4:45 PM + nightly chain Step 9
+- [x] GET /portfolio/health/history endpoint + 3 API tests
+- [x] Extracted compute_portfolio_health() standalone function
 
-#### Remaining Backlog (KAN-149–157)
+#### Remaining Backlog (KAN-149–157 + Schwab Import)
+- [ ] **Schwab CSV Import** — parse Schwab "Positions" CSV export, create BUY transactions + auto-ingest tickers
 - [ ] KAN-149: Portfolio aggregation tool (superseded by KAN-160 portfolio_health)
 - [ ] KAN-150: Candlestick OHLC endpoint
 - [ ] KAN-151: Benchmark comparison endpoint

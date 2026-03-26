@@ -126,6 +126,165 @@ def _compute_composite(component_scores: dict[str, float]) -> float:
 # ── Agent tool ───────────────────────────────────────────────────────────────
 
 
+async def compute_portfolio_health(
+    portfolio_id: Any,
+    db: Any,
+) -> Any:
+    """Compute portfolio health for a given portfolio ID using provided DB session.
+
+    This is the standalone computation function used by both the agent tool
+    and the Celery snapshot task. Returns None if portfolio has no positions.
+
+    Args:
+        portfolio_id: UUID of the portfolio.
+        db: Async SQLAlchemy session.
+
+    Returns:
+        PortfolioHealthResult or None if no active positions.
+    """
+    from collections import defaultdict
+
+    from sqlalchemy import func, select
+
+    from backend.models.portfolio import Position
+    from backend.models.signal import SignalSnapshot
+    from backend.models.stock import Stock
+    from backend.schemas.portfolio_health import (
+        HealthComponent,
+        PortfolioHealthResult,
+        PositionHealth,
+    )
+
+    stmt = (
+        select(Position, Stock)
+        .join(Stock, Position.ticker == Stock.ticker)
+        .where(Position.portfolio_id == portfolio_id)
+        .where(Position.shares > 0)
+    )
+    rows = (await db.execute(stmt)).all()
+
+    if not rows:
+        return None
+
+    total_value = sum(float(pos.shares) * float(pos.avg_cost_basis) for pos, _ in rows)
+    if total_value <= 0:
+        return None
+
+    tickers = [pos.ticker for pos, _ in rows]
+    latest_signals_subq = (
+        select(
+            SignalSnapshot.ticker,
+            func.max(SignalSnapshot.snapshot_date).label("max_date"),
+        )
+        .where(SignalSnapshot.ticker.in_(tickers))
+        .group_by(SignalSnapshot.ticker)
+        .subquery()
+    )
+    signals_stmt = select(SignalSnapshot).join(
+        latest_signals_subq,
+        (SignalSnapshot.ticker == latest_signals_subq.c.ticker)
+        & (SignalSnapshot.snapshot_date == latest_signals_subq.c.max_date),
+    )
+    signal_rows = (await db.execute(signals_stmt)).scalars().all()
+    signal_map = {s.ticker: s for s in signal_rows}
+
+    position_details = []
+    weights = []
+    sector_allocs: dict[str, float] = defaultdict(float)
+    weighted_composite = 0.0
+    weighted_sharpe = 0.0
+    weighted_yield = 0.0
+    weighted_beta = 0.0
+
+    for pos, stock in rows:
+        value = float(pos.shares) * float(pos.avg_cost_basis)
+        weight_pct = (value / total_value) * 100
+        weights.append(weight_pct)
+
+        sector = stock.sector or "Unknown"
+        sector_allocs[sector] += weight_pct
+
+        signal = signal_map.get(pos.ticker)
+        signal_score = float(signal.composite_score) if signal and signal.composite_score else None
+        sharpe = float(signal.sharpe_ratio) if signal and signal.sharpe_ratio else 0.0
+
+        w = weight_pct / 100
+        if signal_score is not None:
+            weighted_composite += signal_score * w
+        weighted_sharpe += sharpe * w
+        weighted_yield += (stock.dividend_yield or 0.0) * w
+        weighted_beta += (stock.beta or 1.0) * w
+
+        contribution = "strength" if (signal_score or 0) >= 7.0 else "drag"
+        position_details.append(
+            PositionHealth(
+                ticker=pos.ticker,
+                weight_pct=round(weight_pct, 1),
+                signal_score=round(signal_score, 1) if signal_score else None,
+                sector=sector,
+                contribution=contribution,
+            )
+        )
+
+    hhi = sum(w**2 for w in weights)
+    max_sector_pct = max(sector_allocs.values()) if sector_allocs else 0.0
+    component_scores = {
+        "diversification": _score_diversification(hhi),
+        "signal_quality": _score_signal_quality(weighted_composite),
+        "risk": _score_risk(weighted_sharpe),
+        "income": _score_income(weighted_yield),
+        "sector_balance": _score_sector_balance(max_sector_pct),
+    }
+
+    health_score = _compute_composite(component_scores)
+    grade = _score_to_grade(health_score)
+
+    components = [
+        HealthComponent(
+            name=name,
+            score=score,
+            weight=COMPONENT_WEIGHTS[name],
+            detail=f"{name}: {score}/10",
+        )
+        for name, score in component_scores.items()
+    ]
+
+    concerns = []
+    strengths = []
+    if hhi > 1500:
+        concerns.append(f"Portfolio is concentrated (HHI={hhi:.0f})")
+    if max_sector_pct > 35:
+        top_sector = max(sector_allocs, key=sector_allocs.get)  # type: ignore[arg-type]
+        concerns.append(f"{top_sector} sector overweight at {max_sector_pct:.0f}%")
+    for pd_item in position_details:
+        if pd_item.signal_score is not None and pd_item.signal_score < 5.0:
+            concerns.append(f"{pd_item.ticker} has weak signals ({pd_item.signal_score})")
+        if pd_item.weight_pct > 25:
+            concerns.append(f"{pd_item.ticker} overweight at {pd_item.weight_pct:.0f}%")
+        if pd_item.signal_score is not None and pd_item.signal_score >= 8.0:
+            strengths.append(f"{pd_item.ticker} has strong signals ({pd_item.signal_score})")
+    if hhi < 1000:
+        strengths.append("Well diversified portfolio")
+
+    return PortfolioHealthResult(
+        health_score=health_score,
+        grade=grade,
+        components=components,
+        metrics={
+            "hhi": round(hhi, 0),
+            "effective_stocks": len(rows),
+            "weighted_beta": round(weighted_beta, 2),
+            "weighted_sharpe": round(weighted_sharpe, 2),
+            "weighted_yield": round(weighted_yield, 4),
+            "max_sector_pct": round(max_sector_pct, 1),
+            "total_value": round(total_value, 2),
+        },
+        top_concerns=concerns[:5],
+        top_strengths=strengths[:5],
+        position_details=position_details,
+    )
+
+
 class PortfolioHealthInput(BaseModel):
     """Input schema for portfolio health tool."""
 
@@ -154,27 +313,17 @@ class PortfolioHealthTool(BaseTool):
     async def execute(self, params: dict[str, Any]) -> ToolResult:
         """Execute portfolio health computation."""
         try:
+            from sqlalchemy import select
+
             from backend.database import async_session_factory
-            from backend.models.portfolio import Portfolio, Position
-            from backend.models.signal import SignalSnapshot
-            from backend.models.stock import Stock
+            from backend.models.portfolio import Portfolio
             from backend.request_context import current_user_id
-            from backend.schemas.portfolio_health import (
-                HealthComponent,
-                PortfolioHealthResult,
-                PositionHealth,
-            )
 
             user_id = current_user_id.get()
             if not user_id:
                 return ToolResult(status="error", error="No user context")
 
-            from collections import defaultdict
-
-            from sqlalchemy import func, select
-
             async with async_session_factory() as db:
-                # Get user's portfolio
                 portfolio = (
                     await db.execute(select(Portfolio).where(Portfolio.user_id == user_id))
                 ).scalar_one_or_none()
@@ -184,153 +333,12 @@ class PortfolioHealthTool(BaseTool):
                         data={"message": "No portfolio found. Add positions first."},
                     )
 
-                # Get positions with stock data
-                stmt = (
-                    select(Position, Stock)
-                    .join(Stock, Position.ticker == Stock.ticker)
-                    .where(Position.portfolio_id == portfolio.id)
-                    .where(Position.shares > 0)
-                )
-                rows = (await db.execute(stmt)).all()
-
-                if not rows:
+                result = await compute_portfolio_health(portfolio.id, db)
+                if result is None:
                     return ToolResult(
                         status="ok",
                         data={"message": "Portfolio has no active positions."},
                     )
-
-                # Compute total value and weights
-                total_value = sum(float(pos.shares) * float(pos.avg_cost_basis) for pos, _ in rows)
-                if total_value <= 0:
-                    return ToolResult(status="error", error="Portfolio value is zero")
-
-                # Get latest signal snapshots for each ticker
-                tickers = [pos.ticker for pos, _ in rows]
-                latest_signals_subq = (
-                    select(
-                        SignalSnapshot.ticker,
-                        func.max(SignalSnapshot.snapshot_date).label("max_date"),
-                    )
-                    .where(SignalSnapshot.ticker.in_(tickers))
-                    .group_by(SignalSnapshot.ticker)
-                    .subquery()
-                )
-                signals_stmt = select(SignalSnapshot).join(
-                    latest_signals_subq,
-                    (SignalSnapshot.ticker == latest_signals_subq.c.ticker)
-                    & (SignalSnapshot.snapshot_date == latest_signals_subq.c.max_date),
-                )
-                signal_rows = (await db.execute(signals_stmt)).scalars().all()
-                signal_map = {s.ticker: s for s in signal_rows}
-
-                # Build position data
-                position_details = []
-                weights = []
-                sector_allocs: dict[str, float] = defaultdict(float)
-                weighted_composite = 0.0
-                weighted_sharpe = 0.0
-                weighted_yield = 0.0
-                weighted_beta = 0.0
-
-                for pos, stock in rows:
-                    value = float(pos.shares) * float(pos.avg_cost_basis)
-                    weight_pct = (value / total_value) * 100
-                    weights.append(weight_pct)
-
-                    sector = stock.sector or "Unknown"
-                    sector_allocs[sector] += weight_pct
-
-                    signal = signal_map.get(pos.ticker)
-                    signal_score = (
-                        float(signal.composite_score) if signal and signal.composite_score else None
-                    )
-                    sharpe = float(signal.sharpe_ratio) if signal and signal.sharpe_ratio else 0.0
-
-                    w = weight_pct / 100
-                    if signal_score is not None:
-                        weighted_composite += signal_score * w
-                    weighted_sharpe += sharpe * w
-                    weighted_yield += (stock.dividend_yield or 0.0) * w
-                    weighted_beta += (stock.beta or 1.0) * w
-
-                    contribution = "strength" if (signal_score or 0) >= 7.0 else "drag"
-                    position_details.append(
-                        PositionHealth(
-                            ticker=pos.ticker,
-                            weight_pct=round(weight_pct, 1),
-                            signal_score=round(signal_score, 1) if signal_score else None,
-                            sector=sector,
-                            contribution=contribution,
-                        )
-                    )
-
-                # Compute HHI
-                hhi = sum(w**2 for w in weights)
-
-                # Compute component scores
-                max_sector_pct = max(sector_allocs.values()) if sector_allocs else 0.0
-                component_scores = {
-                    "diversification": _score_diversification(hhi),
-                    "signal_quality": _score_signal_quality(weighted_composite),
-                    "risk": _score_risk(weighted_sharpe),
-                    "income": _score_income(weighted_yield),
-                    "sector_balance": _score_sector_balance(max_sector_pct),
-                }
-
-                health_score = _compute_composite(component_scores)
-                grade = _score_to_grade(health_score)
-
-                # Build component details
-                components = []
-                for name, score in component_scores.items():
-                    components.append(
-                        HealthComponent(
-                            name=name,
-                            score=score,
-                            weight=COMPONENT_WEIGHTS[name],
-                            detail=f"{name}: {score}/10",
-                        )
-                    )
-
-                # Identify concerns and strengths
-                concerns = []
-                strengths = []
-                if hhi > 1500:
-                    concerns.append(f"Portfolio is concentrated (HHI={hhi:.0f})")
-                if max_sector_pct > 35:
-                    top_sector = max(sector_allocs, key=sector_allocs.get)  # type: ignore[arg-type]
-                    concerns.append(f"{top_sector} sector overweight at {max_sector_pct:.0f}%")
-                for pd_item in position_details:
-                    if pd_item.signal_score is not None and pd_item.signal_score < 5.0:
-                        concerns.append(
-                            f"{pd_item.ticker} has weak signals ({pd_item.signal_score})"
-                        )
-                    if pd_item.weight_pct > 25:
-                        concerns.append(f"{pd_item.ticker} overweight at {pd_item.weight_pct:.0f}%")
-                    if pd_item.signal_score is not None and pd_item.signal_score >= 8.0:
-                        strengths.append(
-                            f"{pd_item.ticker} has strong signals ({pd_item.signal_score})"
-                        )
-                if hhi < 1000:
-                    strengths.append("Well diversified portfolio")
-
-                result = PortfolioHealthResult(
-                    health_score=health_score,
-                    grade=grade,
-                    components=components,
-                    metrics={
-                        "hhi": round(hhi, 0),
-                        "effective_stocks": len(rows),
-                        "weighted_beta": round(weighted_beta, 2),
-                        "weighted_sharpe": round(weighted_sharpe, 2),
-                        "weighted_yield": round(weighted_yield, 4),
-                        "max_sector_pct": round(max_sector_pct, 1),
-                        "total_value": round(total_value, 2),
-                    },
-                    top_concerns=concerns[:5],
-                    top_strengths=strengths[:5],
-                    position_details=position_details,
-                )
 
                 return ToolResult(status="ok", data=result.model_dump())
 

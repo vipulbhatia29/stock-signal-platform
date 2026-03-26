@@ -457,6 +457,58 @@ async def get_dividends_for_ticker(
     return DividendSummaryResponse(**summary)
 
 
+@router.get("/health/history")
+async def get_health_history(
+    days: int = Query(default=90, le=365, ge=1),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> list:
+    """Get portfolio health score history for trend chart.
+
+    Returns daily health snapshots for the specified number of days.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from backend.models.portfolio import Portfolio
+    from backend.models.portfolio_health import PortfolioHealthSnapshot
+    from backend.schemas.portfolio_health import PortfolioHealthSnapshotResponse
+
+    portfolio = (
+        await db.execute(select(Portfolio).where(Portfolio.user_id == user.id))
+    ).scalar_one_or_none()
+    if not portfolio:
+        return []
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    result = await db.execute(
+        select(PortfolioHealthSnapshot)
+        .where(
+            PortfolioHealthSnapshot.portfolio_id == portfolio.id,
+            PortfolioHealthSnapshot.snapshot_date >= cutoff,
+        )
+        .order_by(PortfolioHealthSnapshot.snapshot_date.asc())
+    )
+    snapshots = result.scalars().all()
+    return [
+        PortfolioHealthSnapshotResponse(
+            snapshot_date=s.snapshot_date.isoformat(),
+            health_score=s.health_score,
+            grade=s.grade,
+            diversification_score=s.diversification_score,
+            signal_quality_score=s.signal_quality_score,
+            risk_score=s.risk_score,
+            income_score=s.income_score,
+            sector_balance_score=s.sector_balance_score,
+            hhi=s.hhi,
+            weighted_beta=s.weighted_beta,
+            weighted_sharpe=s.weighted_sharpe,
+            weighted_yield=s.weighted_yield,
+            position_count=s.position_count,
+        )
+        for s in snapshots
+    ]
+
+
 @router.get("/health")
 async def get_portfolio_health(
     request: Request,

@@ -188,7 +188,7 @@ def nightly_price_refresh_task() -> dict:
 def nightly_pipeline_chain_task() -> dict:
     """Orchestrate the full nightly pipeline chain.
 
-    Runs 8 steps sequentially:
+    Runs 9 steps sequentially:
         1. Price refresh + signal computation
         2. Forecast refresh (predict using existing models)
         3. Recommendation generation
@@ -267,8 +267,14 @@ def nightly_pipeline_chain_task() -> dict:
     results["alerts"] = generate_alerts_task(pipeline_context=results.get("drift"))
 
     # Step 8: Portfolio snapshots
-    logger.info("Nightly chain step 8/8: portfolio snapshots")
+    logger.info("Nightly chain step 8/9: portfolio snapshots")
     results["portfolio_snapshots"] = snapshot_all_portfolios_task()
+
+    # Step 9: Portfolio health snapshots
+    logger.info("Nightly chain step 9/9: health snapshots")
+    from backend.tasks.portfolio import snapshot_health_task
+
+    results["health_snapshots"] = snapshot_health_task()
 
     logger.info("Nightly pipeline chain complete: %s", results)
     return results
