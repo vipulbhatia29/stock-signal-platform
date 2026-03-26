@@ -364,6 +364,16 @@ def fetch_analyst_data(ticker: str) -> dict:
     if website:
         result["website"] = str(website)
 
+    # Market risk & income (for portfolio health computation)
+    for yf_key, field_name in [
+        ("beta", "beta"),
+        ("dividendYield", "dividend_yield"),
+        ("forwardPE", "forward_pe"),
+    ]:
+        val = _get_float(yf_key)
+        if val is not None:
+            result[field_name] = val
+
     return result
 
 

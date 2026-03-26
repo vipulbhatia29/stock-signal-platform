@@ -105,6 +105,16 @@ class IngestStockTool(BaseTool):
                 earnings = await loop.run_in_executor(None, fetch_earnings_history, ticker)
                 await persist_earnings_snapshots(ticker, earnings, session)
 
+                # 4d. Sync dividend history
+                try:
+                    from backend.tools.dividends import fetch_dividends, store_dividends
+
+                    dividends = await loop.run_in_executor(None, fetch_dividends, ticker)
+                    if dividends:
+                        await store_dividends(ticker, dividends, session)
+                except Exception:
+                    logger.warning("Failed to sync dividends for %s", ticker)
+
                 # 5. Compute and store signals
                 composite_score = None
                 if not full_df.empty:
