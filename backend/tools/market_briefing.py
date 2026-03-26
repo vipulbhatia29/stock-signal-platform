@@ -187,22 +187,43 @@ class MarketBriefingTool(BaseTool):
                             )
                             top_tickers = [p.ticker for p in positions[:3]]
 
-                            # Fetch news for top holdings
+                            # Fetch news for top holdings (parallel)
                             from backend.tools.news import fetch_yfinance_news
 
-                            for t in top_tickers:
-                                articles = await asyncio.to_thread(fetch_yfinance_news, t)
-                                for a in articles[:2]:
-                                    a["portfolio_ticker"] = t
+                            news_results = await asyncio.gather(
+                                *[asyncio.to_thread(fetch_yfinance_news, t) for t in top_tickers],
+                                return_exceptions=True,
+                            )
+                            for ticker, result in zip(top_tickers, news_results):
+                                if isinstance(result, Exception):
+                                    logger.warning(
+                                        "news_fetch_failed",
+                                        extra={"ticker": ticker, "error": str(result)},
+                                    )
+                                    continue
+                                for a in result[:2]:
+                                    a["portfolio_ticker"] = ticker
                                     portfolio_news.append(a)
 
-                            # Fetch upcoming earnings
+                            # Fetch upcoming earnings (parallel)
                             from backend.tools.intelligence import (
                                 fetch_next_earnings_date,
                             )
 
-                            for p in positions:
-                                ed = await asyncio.to_thread(fetch_next_earnings_date, p.ticker)
+                            earnings_results = await asyncio.gather(
+                                *[
+                                    asyncio.to_thread(fetch_next_earnings_date, p.ticker)
+                                    for p in positions
+                                ],
+                                return_exceptions=True,
+                            )
+                            for p, ed in zip(positions, earnings_results):
+                                if isinstance(ed, Exception):
+                                    logger.warning(
+                                        "earnings_fetch_failed",
+                                        extra={"ticker": p.ticker, "error": str(ed)},
+                                    )
+                                    continue
                                 if ed:
                                     upcoming_earnings.append({"ticker": p.ticker, "date": ed})
             except Exception:
