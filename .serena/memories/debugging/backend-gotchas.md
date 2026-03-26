@@ -70,8 +70,9 @@ category: debugging
 - MCP `stdio_client` uses anyio TaskGroup. If you `connect()` in a fixture and `close()` in teardown, you get `RuntimeError: Attempted to exit cancel scope in a different task`.
 - Fix: wrap `close()` in `try/except RuntimeError` in fixture teardown. Harmless — subprocess is dead anyway.
 
-## passlib / bcrypt
-- bcrypt >= 5.0 broke passlib API. Pin `bcrypt==4.2.1` in pyproject.toml.
+## bcrypt (passlib removed Session 59)
+- passlib removed in Session 59 (KAN-174). Direct `bcrypt` used now (>=4.2.1, unpinned).
+- `hash_password()` and `verify_password()` in `backend/dependencies.py` use `bcrypt.hashpw`/`bcrypt.checkpw`.
 
 ## compute_signals()
 - Accepts optional `piotroski_score` param — omit for pure technical composite.

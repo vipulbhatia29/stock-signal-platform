@@ -12,7 +12,7 @@ category: project
 - Auth: `backend/dependencies.py` (JWT validation, `get_current_user`)
 
 ## Critical Gotchas
-- `bcrypt` pinned to 4.2.x (passlib incompatible with bcrypt 5.x)
+- `bcrypt` >=4.2.1 (passlib removed in Session 59, bcrypt unpinned)
 - Docker ports: Postgres 5433, Redis 6380 (NOT defaults)
 - `API_BASE = "/api/v1"` in `lib/api.ts` — hooks use `/portfolio/...` NOT `/api/v1/portfolio/...` (double-prefix bug)
 - `async_session_factory` is the correct import name (from `backend/database.py`)
