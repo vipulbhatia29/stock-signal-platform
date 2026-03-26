@@ -21,6 +21,7 @@ from backend.routers import (
     forecasts,
     health,
     indexes,
+    market,
     portfolio,
     preferences,
     sectors,
@@ -277,3 +278,4 @@ app.include_router(chat.router, prefix="/api/v1")
 app.include_router(forecasts.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
+app.include_router(market.router, prefix="/api/v1")
