@@ -17,10 +17,10 @@ class TestBuildRegistry:
     """Tests for the build_registry() function."""
 
     def test_build_registry_returns_all_tools(self) -> None:
-        """Verify build_registry() returns 20 internal + 12 adapter = 32 tools."""
+        """Verify build_registry() returns 24 internal + 12 adapter = 36 tools."""
         registry = build_registry()
         tools = registry.discover()
-        assert len(tools) == 32, f"Expected 32 tools, got {len(tools)}"
+        assert len(tools) == 36, f"Expected 36 tools, got {len(tools)}"
 
     def test_build_registry_has_expected_tool_names(self) -> None:
         """Check that specific well-known tool names are present."""
@@ -52,8 +52,8 @@ class TestBuildRegistry:
         assert not missing, f"Missing tools: {missing}"
 
     def test_build_registry_internal_tool_count(self) -> None:
-        """Verify the INTERNAL_TOOL_CLASSES list has 20 entries."""
-        assert len(INTERNAL_TOOL_CLASSES) == 20
+        """Verify the INTERNAL_TOOL_CLASSES list has 24 entries."""
+        assert len(INTERNAL_TOOL_CLASSES) == 24
 
 
 # ---------------------------------------------------------------------------

@@ -455,3 +455,37 @@ async def get_dividends_for_ticker(
     price = await get_latest_price(ticker, db)
     summary = await get_dividend_summary(ticker, db, current_price=price)
     return DividendSummaryResponse(**summary)
+
+
+@router.get("/health")
+async def get_portfolio_health(
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> dict:
+    """Get portfolio health score with component breakdown.
+
+    Computes a 0-10 health score from diversification, signal quality,
+    risk, income, and sector balance.
+    """
+    from backend.services.cache import CacheTier
+    from backend.tools.portfolio_health import PortfolioHealthTool
+
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"user:{user.id}:portfolio_health"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            import json
+
+            return json.loads(cached)
+
+    tool = PortfolioHealthTool()
+    result = await tool.execute({})
+
+    if result.status == "ok" and result.data and cache:
+        import json
+
+        await cache.set(cache_key, json.dumps(result.data, default=str), CacheTier.VOLATILE)
+
+    return result.data or {"error": result.error}

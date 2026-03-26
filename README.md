@@ -53,7 +53,7 @@ The agent uses a **Plan → Execute → Synthesize** architecture:
 2. **Executor** (mechanical, no LLM) calls tools in order, validates results, retries on failure
 3. **Synthesizer** (Claude Sonnet) produces confidence-weighted analysis with bull/base/bear scenarios
 
-20 internal tools across market data, signals, fundamentals, forecasting, portfolio, recommendations, dividends, and risk analysis. Every claim traces back to a specific data source and timestamp.
+24 internal tools across market data, signals, fundamentals, forecasting, portfolio, recommendations, dividends, risk analysis, and intelligent aggregation (portfolio health, market briefings, stock intelligence, multi-signal recommendations). Every claim traces back to a specific data source and timestamp.
 
 ### Prophet Forecasting
 
@@ -264,23 +264,27 @@ graph TB
             R_Auth["/auth"]
             R_Stocks["/stocks"]
             R_Portfolio["/portfolio"]
+            R_Market["/market"]
             R_Chat["/chat/stream"]
             R_Forecast["/forecasts"]
             R_Alerts["/alerts"]
         end
 
-        subgraph Tools["20 Internal Tools"]
+        subgraph Tools["24 Internal Tools"]
             T_Market["market data"]
             T_Signals["signals"]
             T_Fund["fundamentals"]
             T_Forecast["forecasting"]
             T_Portfolio["portfolio"]
             T_Recs["recommendations"]
+            T_Intel["news + intelligence"]
+            T_Health["health + briefing"]
         end
 
         subgraph Agent["AI Agent (LangGraph)"]
             AG["Plan → Execute → Synthesize"]
             LLM["LLMClient<br/>Claude / Groq"]
+            Guards["Guardrails<br/>PII | Injection | Disclaimer"]
         end
     end
 
@@ -383,6 +387,8 @@ cd frontend && npm run lint             # TypeScript/React lint
 | `/api/v1/stocks/{ticker}/fundamentals` | GET | P/E, PEG, FCF yield, Piotroski, margins |
 | `/api/v1/stocks/signals/bulk` | GET | Screener — filter/sort/paginate 500+ stocks |
 | `/api/v1/stocks/{ticker}/ingest` | POST | On-demand data ingestion for any ticker |
+| `/api/v1/stocks/{ticker}/news` | GET | News articles from yfinance + Google News RSS |
+| `/api/v1/stocks/{ticker}/intelligence` | GET | Analyst upgrades, insider trades, earnings calendar |
 | `/api/v1/portfolio/transactions` | POST/GET/DELETE | Log and manage BUY/SELL transactions |
 | `/api/v1/portfolio/positions` | GET | Current holdings with live P&L |
 | `/api/v1/portfolio/summary` | GET | KPI totals + sector allocation |
@@ -391,6 +397,8 @@ cd frontend && npm run lint             # TypeScript/React lint
 | `/api/v1/forecasts/{ticker}` | GET | Prophet forecast with confidence bands |
 | `/api/v1/alerts` | GET | In-app alerts (signal flips, new buys, drift) |
 | `/api/v1/recommendations` | GET | Today's actionable BUY/SELL/WATCH items |
+| `/api/v1/portfolio/health` | GET | Portfolio health score + component breakdown |
+| `/api/v1/market/briefing` | GET | Market overview with portfolio context |
 
 Full API docs available at http://localhost:8181/docs (Swagger UI) when the backend is running.
 

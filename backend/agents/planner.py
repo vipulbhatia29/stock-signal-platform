@@ -123,6 +123,9 @@ def parse_plan_response(response_text: str) -> dict[str, Any]:
         logger.warning("plan_truncated", extra={"original_steps": len(plan["steps"])})
         plan["steps"] = plan["steps"][:10]
 
+    # Extract response_type for synthesizer format routing (default: stock_analysis)
+    plan.setdefault("response_type", "stock_analysis")
+
     return plan
 
 

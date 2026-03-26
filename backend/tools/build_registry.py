@@ -28,13 +28,17 @@ from backend.tools.forecast_tools import (
 from backend.tools.fundamentals_tool import FundamentalsTool
 from backend.tools.geopolitical import GeopoliticalEventsTool
 from backend.tools.ingest_stock_tool import IngestStockTool
+from backend.tools.market_briefing import MarketBriefingTool
 from backend.tools.portfolio_exposure import PortfolioExposureTool
+from backend.tools.portfolio_health import PortfolioHealthTool
+from backend.tools.recommend_stocks import RecommendStocksTool
 from backend.tools.recommendations_tool import RecommendationsTool
 from backend.tools.registry import ToolRegistry
 from backend.tools.risk_narrative import RiskNarrativeTool
 from backend.tools.scorecard_tool import GetRecommendationScorecardTool
 from backend.tools.screen_stocks import ScreenStocksTool
 from backend.tools.search_stocks_tool import SearchStocksTool
+from backend.tools.stock_intelligence import StockIntelligenceTool
 from backend.tools.web_search import WebSearchTool
 
 logger = logging.getLogger(__name__)
@@ -61,6 +65,10 @@ INTERNAL_TOOL_CLASSES: list[type] = [
     GetRecommendationScorecardTool,
     DividendSustainabilityTool,
     RiskNarrativeTool,
+    PortfolioHealthTool,
+    MarketBriefingTool,
+    StockIntelligenceTool,
+    RecommendStocksTool,
 ]
 
 
@@ -68,7 +76,7 @@ def build_registry() -> ToolRegistry:
     """Build a ToolRegistry with all internal tools and MCP adapters.
 
     Creates and returns a fully populated registry containing:
-    - 20 internal tools (analysis, screening, forecasting, etc.)
+    - 24 internal tools (analysis, screening, forecasting, intelligence, etc.)
     - 4 MCP adapter tools (Edgar, Alpha Vantage, FRED, Finnhub)
 
     Returns:

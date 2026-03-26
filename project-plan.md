@@ -678,25 +678,25 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 - [x] CacheService with 3-tier namespace (app/user/session), TTL tiers, cache-aside
 - [x] Cache warmup on startup, agent tool session cache, nightly invalidation
 
-#### KAN-158: Spec A — Agent Guardrails (planned, 8 tasks)
-- [ ] Input guard (length, injection, PII, control chars)
-- [ ] Output guard (evidence check, disclaimer)
-- [ ] Multi-turn abuse tracking (decline_count on ChatSession)
-- [ ] Tool param validation (ticker format, query sanitization)
-- [ ] 5 new planner decline examples
+#### KAN-158: Spec A — Agent Guardrails ✅ (Session 56, PR #102)
+- [x] Input guard (length, injection, PII, control chars)
+- [x] Output guard (evidence check, disclaimer)
+- [x] Multi-turn abuse tracking (decline_count on ChatSession, migration 013)
+- [x] Tool param validation (ticker format, query sanitization)
+- [x] 5 new planner decline examples + 9 adversarial tests
 
-#### KAN-159: Spec C — Data Enrichment (planned, 7 tasks)
-- [ ] Stock model: add beta, dividend_yield, forward_pe
-- [ ] News endpoint (yfinance + Google News RSS with defusedxml)
-- [ ] Intelligence endpoint (upgrades, insider, earnings, EPS revisions)
-- [ ] Dividend sync in ingest + nightly pipeline
-- [ ] Nightly beta/yield/PE refresh
+#### KAN-159: Spec C — Data Enrichment ✅ (Session 56, PR #103)
+- [x] Stock model: add beta, dividend_yield, forward_pe (migration 014)
+- [x] News endpoint (yfinance + Google News RSS with defusedxml)
+- [x] Intelligence endpoint (upgrades, insider, earnings, EPS revisions)
+- [x] Dividend sync in ingest + nightly pipeline
+- [x] Nightly beta/yield/PE refresh
 
-#### KAN-160: Spec B — Agent Intelligence (planned, 8 tasks, depends on KAN-159)
-- [ ] 4 new tools: get_portfolio_health, get_market_briefing, get_stock_intelligence, recommend_stocks
-- [ ] 12 new planner few-shots + response_type routing
-- [ ] 3 synthesizer response format variants (health, briefing, recommendation)
-- [ ] API endpoints: GET /portfolio/health, GET /market/briefing
+#### KAN-160: Spec B — Agent Intelligence ✅ (Session 56, PR #104)
+- [x] 4 new tools: portfolio_health, market_briefing, get_stock_intelligence, recommend_stocks
+- [x] 6 new planner few-shots + response_type routing in graph state
+- [x] API endpoints: GET /portfolio/health, GET /market/briefing
+- [x] Portfolio health schemas split from infra health
 
 #### KAN-161: Spec D — Health Materialization (planned, 4 tasks, depends on KAN-160)
 - [ ] portfolio_health_snapshots TimescaleDB hypertable + migration
@@ -720,7 +720,7 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 - [ ] Earnings card on stock detail page
 
 ### Success Criteria
-Guardrails deployed. Portfolio health answerable. Market briefing tool works. 24 agent tools (was 20). All free data from yfinance exploited.
+Guardrails deployed. Portfolio health answerable. Market briefing tool works. 24 agent tools (was 20). All free data from yfinance exploited. ✅ Achieved (KAN-158, 159, 160 shipped in Session 56). Remaining: KAN-161 (Health Materialization) + backlog items.
 
 ---
 

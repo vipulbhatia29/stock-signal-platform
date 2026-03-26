@@ -1,61 +1,26 @@
-# Project State (updated Session 53, 2026-03-25)
+# Project State (updated Session 56, 2026-03-26)
 
 ## Current Phase
-- Phase 1-5: ALL COMPLETE
-- Phase 5.5 (Security): COMPLETE — PR #79, Redis refresh token blocklist
-- Phase 5.6 (MCP stdio): ALL COMPLETE (S1-S6 Done, PRs #81-84, #86). Epic KAN-119 Done.
-- Phase 6A (LLM Factory & Cascade): IN PROGRESS — Session 54
-- Phase 6B (Agent Observability): spec approved, plan pending
-- Phase 6C (Testing Infrastructure): spec approved, plan pending
+- Phase 1-6: ALL COMPLETE
+- Phase 7 Specs A+C+B: COMPLETE (Session 56, PRs #102-104)
+- Phase 7 Spec D (Health Materialization): NEXT — KAN-161
 
-## JIRA Phase 6A
-- Epic KAN-139: Phase 6A — LLM Factory & Cascade (To Do)
-- KAN-140: S1 V1 Deprecation (In Progress — Session 54)
-- KAN-141: S2 Bug Fix + Token Budget
-- KAN-142: S3 LLM Model Config
-- KAN-143: S4 GroqProvider Cascade
-- KAN-144: S5 Admin API + Tier Config
-- KAN-145: S6 Tool Result Truncation + Tests
-- KAN-146: S7 Integration Testing + Docs
-
-## Session 54 Summary
-Phase 6A LLM Factory & Cascade — ALL 7 stories (KAN-140–146) shipped.
-V1 deprecated, multi-model cascade, TokenBudget, admin API, tool truncation, tier wiring.
-734 unit tests + 226 API + 17 Playwright. Redis cache shipped (PR #100). Phase 6 complete.. Alembic head: c965b4058c70 (migration 012).
-Bug fix: LLMModelConfig datetime columns — tz-naive for asyncpg compatibility.
+## Session 56 Summary
+Phase 7 implementation — 3 specs shipped in one session:
+- KAN-158 Guardrails: guards.py, input/output guards, PII, injection, disclaimer, decline_count (migration 013). 32 new tests. PR #102.
+- KAN-159 Data Enrichment: beta/yield/PE on Stock (migration 014), news.py (defusedxml), intelligence.py, 2 API endpoints. 16 new tests. PR #103.
+- KAN-160 Agent Intelligence: 4 new tools (portfolio_health, market_briefing, get_stock_intelligence, recommend_stocks), planner response_type, 2 API endpoints. 28 new tests. PR #104.
+Portfolio health schemas split from infra health.py into portfolio_health.py.
 
 ## Resume Point
-Phase 7 implementation. Execute Plans A+C (parallel) → B → D.
-- KAN-158: Guardrails (8 tasks) — `docs/superpowers/plans/2026-03-25-guardrails-plan.md`
-- KAN-159: Data Enrichment (7 tasks) — `docs/superpowers/plans/2026-03-25-data-enrichment-plan.md`
-- KAN-160: Agent Intelligence (8 tasks, depends on KAN-159) — `docs/superpowers/plans/2026-03-25-agent-intelligence-plan.md`
-- KAN-161: Health Materialization (4 tasks, depends on KAN-160) — `docs/superpowers/plans/2026-03-25-health-materialization-plan.md`
+KAN-161 (Health Materialization) — last spec in Phase 7. Depends on KAN-160 (done).
+Then: backlog items KAN-149-157.
 
 ## Stats
-- ~980 total tests (766 unit + ~180 API + 7 e2e + 24 integration + 107 frontend)
-- 41 new tests this session (net +31 after V1 deletion)
-- 20 internal tools, 4 MCP adapter wrappers
-- Alembic head: c965b4058c70 (migration 012)
-
-## Session 52 Summary
-Dashboard refresh bug sprint — 4 fixes:
-1. Route shadowing: `/forecasts/portfolio` matched by `/{ticker}` → moved before parameterized route.
-2. Partial cache invalidation: Refresh All now invalidates all 9 dashboard query keys (was 2).
-3. Unnecessary `/forecasts/portfolio` call: guarded with `enabled: hasPositions`.
-4. Stale prices: `on_conflict_do_nothing` → `on_conflict_do_update` in `market_data.py`.
-Pre-existing test failure: `test_analyze_stock_tool_error_handling` (connects to running local DB).
-Remaining: S6 (validation), earnings_snapshots investigation, llm_call_log/tool_execution_log dead code.
-
-## Phase 5.6 JIRA
-- KAN-119: Epic (In Progress — needs transition to Done)
-- KAN-121: Refinement (Done)
-- KAN-132-135: S1-S4 (Done)
-- KAN-136: S5 Integration Tests (Done)
-- KAN-131: S6 Validation (Done)
+- 806 unit tests passing (+72 new this session)
+- 24 internal tools (was 20) + 12 MCP adapters = 36 total
+- Alembic head: migration 014 (beta/yield/PE)
+- Migrations: 012 (LLM config) -> 013 (decline_count) -> 014 (beta/yield/PE)
 
 ## Open Bugs
-- None — KAN-138 fixed (PR #93) and Done
-
-## New Files This Session
-- tests/integration/test_mcp_stdio.py — 14 integration tests
-- tests/integration/test_mcp_regression.py — 6 regression tests
+- None
