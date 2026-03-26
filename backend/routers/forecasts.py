@@ -1,9 +1,10 @@
 """Forecast and scorecard API endpoints."""
 
 import logging
+from collections import defaultdict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
@@ -79,61 +80,64 @@ async def get_portfolio_forecast(
     if not positions:
         return PortfolioForecastResponse(horizons=[], ticker_count=0)
 
-    # Compute total value for weights
+    tickers = [pos.ticker for pos in positions]
+
+    # Batch fetch latest prices for all position tickers (DISTINCT ON is PostgreSQL-specific)
+    price_query = await db.execute(
+        select(StockPrice.ticker, StockPrice.close)
+        .distinct(StockPrice.ticker)
+        .where(StockPrice.ticker.in_(tickers))
+        .order_by(StockPrice.ticker, StockPrice.time.desc())
+    )
+    price_map: dict[str, float] = {row.ticker: float(row.close) for row in price_query}
+
+    # Compute total value for weights using batch-fetched prices
     total_value = 0.0
     position_values: dict[str, float] = {}
 
     for pos in positions:
-        price_result = await db.execute(
-            select(StockPrice.close)
-            .where(StockPrice.ticker == pos.ticker)
-            .order_by(StockPrice.time.desc())
-            .limit(1)
-        )
-        price = price_result.scalar_one_or_none()
+        price = price_map.get(pos.ticker)
         if price:
-            value = float(pos.shares) * float(price)
+            value = float(pos.shares) * price
             position_values[pos.ticker] = value
             total_value += value
 
     if total_value == 0:
         return PortfolioForecastResponse(horizons=[], ticker_count=0)
 
-    # Weighted forecast aggregation per horizon
+    # Batch fetch latest forecast dates per ticker
+    latest_dates_subq = (
+        select(
+            ForecastResult.ticker,
+            func.max(ForecastResult.forecast_date).label("latest_date"),
+        )
+        .where(ForecastResult.ticker.in_(list(position_values.keys())))
+        .group_by(ForecastResult.ticker)
+        .subquery()
+    )
+
+    # Batch fetch all forecast results for latest dates
+    fc_query = await db.execute(
+        select(ForecastResult).join(
+            latest_dates_subq,
+            (ForecastResult.ticker == latest_dates_subq.c.ticker)
+            & (ForecastResult.forecast_date == latest_dates_subq.c.latest_date),
+        )
+    )
+    forecasts_by_ticker: dict[str, list[ForecastResult]] = defaultdict(list)
+    for fc in fc_query.scalars().all():
+        forecasts_by_ticker[fc.ticker].append(fc)
+
+    # Weighted forecast aggregation per horizon using batch-fetched data
     horizon_agg: dict[int, dict] = {}
 
     for ticker, value in position_values.items():
         weight = value / total_value
-
-        latest_result = await db.execute(
-            select(ForecastResult.forecast_date)
-            .where(ForecastResult.ticker == ticker)
-            .order_by(ForecastResult.forecast_date.desc())
-            .limit(1)
-        )
-        latest_date = latest_result.scalar_one_or_none()
-        if latest_date is None:
-            continue
-
-        fc_result = await db.execute(
-            select(ForecastResult).where(
-                ForecastResult.ticker == ticker,
-                ForecastResult.forecast_date == latest_date,
-            )
-        )
-        forecasts = fc_result.scalars().all()
-
-        # Get current price for return calculation
-        price_result = await db.execute(
-            select(StockPrice.close)
-            .where(StockPrice.ticker == ticker)
-            .order_by(StockPrice.time.desc())
-            .limit(1)
-        )
-        current_price = price_result.scalar_one_or_none()
+        current_price = price_map.get(ticker)
         if not current_price:
             continue
 
+        forecasts = forecasts_by_ticker.get(ticker, [])
         for fc in forecasts:
             if fc.horizon_days not in horizon_agg:
                 horizon_agg[fc.horizon_days] = {
@@ -141,9 +145,9 @@ async def get_portfolio_forecast(
                     "lower_sum": 0.0,
                     "upper_sum": 0.0,
                 }
-            expected_return = (fc.predicted_price - float(current_price)) / float(current_price)
-            lower_return = (fc.predicted_lower - float(current_price)) / float(current_price)
-            upper_return = (fc.predicted_upper - float(current_price)) / float(current_price)
+            expected_return = (fc.predicted_price - current_price) / current_price
+            lower_return = (fc.predicted_lower - current_price) / current_price
+            upper_return = (fc.predicted_upper - current_price) / current_price
 
             horizon_agg[fc.horizon_days]["return_sum"] += weight * expected_return
             horizon_agg[fc.horizon_days]["lower_sum"] += weight * lower_return
