@@ -29,6 +29,7 @@ class AgentStateV2(TypedDict):
     response_text: str
     decline_message: str
     entity_registry: dict[str, Any]
+    response_type: str
 
 
 def build_agent_graph(
@@ -100,6 +101,7 @@ def build_agent_graph(
             "phase": "plan",
             "skip_synthesis": plan.get("skip_synthesis", False),
             "decline_message": plan.get("decline_message", ""),
+            "response_type": plan.get("response_type", "stock_analysis"),
         }
 
     async def execute_node(state: AgentStateV2) -> dict:
@@ -151,9 +153,11 @@ def build_agent_graph(
 
     async def synthesize_node(state: AgentStateV2) -> dict:
         """Synthesize phase: produce final analysis from tool results."""
+        user_context = dict(state.get("user_context", {}))
+        user_context["response_type"] = state.get("response_type", "stock_analysis")
         synthesis = await synthesize_fn(
             tool_results=state.get("tool_results", []),
-            user_context=state.get("user_context", {}),
+            user_context=user_context,
         )
 
         response_text = synthesis.get("summary", "Analysis complete.")
