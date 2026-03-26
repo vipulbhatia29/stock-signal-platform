@@ -715,7 +715,7 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 - [ ] KAN-155: Forecast blending into composite score
 - [ ] KAN-156: Red flag scanner (insider data now available via KAN-159)
 - [ ] KAN-157: Live LLM eval tests (CI_GROQ_API_KEY available)
-- [ ] **Langfuse Integration** — self-hosted LLM observability: trace agent pipeline, eval datasets, confidence calibration, tool latency dashboards. Pick up during observability phase.
+- [ ] KAN-162: Langfuse Integration — self-hosted LLM observability: trace agent pipeline, eval datasets, confidence calibration, tool latency dashboards. Pick up during observability phase.
 
 #### Deferred (UI)
 - [x] ~~UI-6: Sectors Page~~ ✅ Done (Session 45)

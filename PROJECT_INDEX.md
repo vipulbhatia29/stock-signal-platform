@@ -1,6 +1,6 @@
 # Project Index: stock-signal-platform
 
-Generated: 2026-03-25 | Phase 6A COMPLETE | Next: Phase 6B (Agent Observability)
+Generated: 2026-03-26 | Phase 7 A+B+C COMPLETE | Next: KAN-161 (Health Materialization)
 
 ---
 
@@ -8,7 +8,7 @@ Generated: 2026-03-25 | Phase 6A COMPLETE | Next: Phase 6B (Agent Observability)
 
 ```
 stock-signal-platform/
-├── backend/                    Python FastAPI backend (118 .py files)
+├── backend/                    Python FastAPI backend (~130 .py files)
 │   ├── main.py                 App entry + router mounts + startup validation + MCP lifespan
 │   ├── config.py               Pydantic Settings (.env) — MCP_TOOLS, MAX_TOOL_RESULT_CHARS
 │   ├── database.py             Async SQLAlchemy engine + async_session_factory
@@ -27,25 +27,28 @@ stock-signal-platform/
 │   │   ├── entity_registry.py  EntityRegistry for tool→entity mapping
 │   │   ├── token_budget.py     Async sliding-window rate tracker (TPM/RPM/TPD/RPD)
 │   │   ├── model_config.py     ModelConfig dataclass + ModelConfigLoader (DB cache)
+│   │   ├── guards.py           Input sanitizer, PII redactor, injection detector, output validator
+│   │   ├── observability.py    ObservabilityCollector (ContextVars tracing)
+│   │   ├── observability_writer.py  Fire-and-forget DB writer for LLM/tool logs
 │   │   ├── stream.py           NDJSON stream events
 │   │   ├── base.py             Agent base class + tool filter
 │   │   ├── stock_agent.py      V1 stock-focused agent
 │   │   ├── general_agent.py    V1 general agent
 │   │   ├── providers/          LLM providers (Anthropic, Groq, OpenAI)
 │   │   └── prompts/            planner.md, synthesizer.md, stock_agent.md, general_agent.md
-│   ├── models/                 SQLAlchemy 2.0 ORM models (17 files)
-│   ├── routers/                FastAPI endpoint handlers (12 routers)
-│   ├── schemas/                Pydantic v2 request/response schemas (11 files)
-│   ├── tools/                  Business logic + 20 registered tools + 5 MCP adapters
+│   ├── models/                 SQLAlchemy 2.0 ORM models (19 files)
+│   ├── routers/                FastAPI endpoint handlers (14 routers)
+│   ├── schemas/                Pydantic v2 request/response schemas (15 files)
+│   ├── tools/                  Business logic + 24 registered tools + 5 MCP adapters
 │   ├── tasks/                  Celery background jobs (pipeline, forecasting, alerts, evaluation)
-│   ├── services/               Service layer (token_blocklist)
+│   ├── services/               Service layer (cache, redis_pool, token_blocklist)
 │   ├── mcp_server/             FastMCP server — stdio tool server + HTTP /mcp endpoint
 │   │   ├── server.py           FastMCP server definition (registers all internal tools)
 │   │   ├── tool_server.py      Stdio tool server subprocess entry point
 │   │   ├── tool_client.py      MCPToolClient — stdio transport with param wrapping
 │   │   ├── lifecycle.py        Lifespan manager (start/stop tool server subprocess)
 │   │   └── auth.py             MCP JWT auth middleware
-│   └── migrations/             Alembic versions (head: c965b4058c70 = 012)
+│   └── migrations/             Alembic versions (head: 1a001d6d3535 = 015)
 ├── frontend/                   Next.js 16, React 19, TypeScript, Tailwind v4, shadcn/ui v4
 │   └── src/
 │       ├── app/                App Router pages + layouts (8 pages)
@@ -54,11 +57,11 @@ stock-signal-platform/
 │       ├── hooks/              TanStack Query hooks + chat state management (10 files)
 │       ├── lib/                Utilities, auth, design tokens, formatters (13 files)
 │       └── types/api.ts        Shared TypeScript API types
-├── tests/                      96 test files across 10 domain subdirs
-│   ├── unit/                   ~50 files — agents, auth, chat, infra, pipeline, portfolio, etc.
-│   ├── api/                    15 files — endpoint tests (needs Postgres + Redis)
-│   ├── integration/            Agent V2 flow + MCP stdio integration (20 tests)
-│   └── e2e/                    eval/ (rubric, judge, golden set) + live LLM tests
+├── tests/                      131 test files across 12 domain subdirs
+│   ├── unit/                   ~70 files — agents, auth, chat, infra, pipeline, portfolio, etc.
+│   ├── api/                    ~20 files — endpoint tests (needs Postgres + Redis)
+│   ├── integration/            Agent V2 flow + MCP stdio integration (24 tests)
+│   └── e2e/                    eval/ + playwright/ (POM scaffolding + 17 E2E specs)
 ├── docs/
 │   ├── PRD.md                  Product requirements (WHAT + WHY)
 │   ├── FSD.md                  Functional spec (acceptance criteria)
@@ -96,9 +99,9 @@ stock-signal-platform/
 
 ## Backend Modules
 
-### `backend/tools/` -- 20 Registered Tools + 5 MCP Adapters
+### `backend/tools/` -- 24 Registered Tools + 5 MCP Adapters
 
-**Internal Tools (20):**
+**Internal Tools (24):**
 
 | Tool | Module | Purpose |
 |------|--------|---------|
@@ -122,6 +125,10 @@ stock-signal-platform/
 | `get_scorecard` | `scorecard_tool.py` | Comprehensive stock scorecard |
 | `get_dividend_sustainability` | `dividend_sustainability.py` | Dividend payout + sustainability analysis |
 | `get_risk_narrative` | `risk_narrative.py` | Risk assessment narrative |
+| `get_portfolio_health` | `portfolio_health.py` | HHI diversification, signal quality, Sharpe, dividend, sector balance → 0-10 score |
+| `get_market_briefing` | `market_briefing.py` | S&P 500/NASDAQ/Dow/VIX + sector ETFs + portfolio news + earnings |
+| `get_stock_intelligence` | `stock_intelligence.py` | Analyst upgrades, insider transactions, earnings calendar, EPS revisions |
+| `recommend_stocks` | `recommend_stocks.py` | Multi-signal consensus (signals 35%, fundamentals 25%, momentum 20%, fit 20%) |
 
 **MCP Adapters (5):** EdgarAdapter (SEC), AlphaVantageAdapter, FredAdapter, FinnhubAdapter, base adapter
 
@@ -170,9 +177,10 @@ stock-signal-platform/
 | `forecasts.py` | `/api/v1/forecasts` | GET /{ticker}, /portfolio, /accuracy |
 | `sectors.py` | `/api/v1/sectors` | GET /summary, /{sector}/stocks, /correlation |
 | `health.py` | `/api/v1/health` | GET /health, /mcp (MCP server status) |
-| `admin.py` | `/api/v1/admin` | GET/PATCH/POST /llm-models (superuser-only) |
+| `admin.py` | `/api/v1/admin` | GET/PATCH/POST /llm-models, observability endpoints (superuser-only) |
+| `market.py` | `/api/v1/market` | GET /briefing (market overview + portfolio news) |
 
-### `backend/models/` -- ORM Models (16 files)
+### `backend/models/` -- ORM Models (19 files)
 
 | Model | Table | Notes |
 |-------|-------|-------|
@@ -196,6 +204,15 @@ stock-signal-platform/
 | `PipelineRun` | `pipeline_runs` | Nightly pipeline execution tracking |
 | `RecommendationEvaluation` | `recommendation_evaluations` | Recommendation accuracy tracking |
 | `LLMModelConfig` | `llm_model_config` | Data-driven LLM cascade config (provider, model, tier, limits) |
+| `PortfolioHealthSnapshot` | `portfolio_health_snapshots` | TimescaleDB hypertable — materialized portfolio health scores |
+
+### `backend/services/` -- Service Layer
+
+| Module | Purpose |
+|--------|---------|
+| `cache.py` | CacheService — 3-tier namespace (app/user/session), 4 TTL tiers, agent tool session cache |
+| `redis_pool.py` | Shared Redis connection pool |
+| `token_blocklist.py` | Refresh token blocklist (Redis-backed) |
 
 ### `backend/tasks/` -- Celery Background Jobs
 
@@ -296,22 +313,23 @@ stock-signal-platform/
 
 | Suite | Files | Approx Tests | Command |
 |-------|-------|-------------|---------|
-| Backend unit | ~54 | ~766 | `uv run pytest tests/unit/ -v` |
-| Backend API | 15 | ~180 | `uv run pytest tests/api/ -v` |
+| Backend unit | ~70 | ~806 | `uv run pytest tests/unit/ -v` |
+| Backend API | ~20 | ~180 | `uv run pytest tests/api/ -v` |
 | Backend integration | 2 | ~24 | `uv run pytest tests/integration/ -v` |
 | Backend e2e/eval | 1 | 7 | `uv run pytest tests/e2e/ -v` (needs API key) |
+| Playwright E2E | 17 | ~17 | `cd tests/e2e/playwright && npx playwright test` |
 | Frontend | 27 | ~107 | `cd frontend && npx jest` |
-| **Total** | **~100** | **~1000** | |
+| **Total** | **~131** | **~1050** | |
 
 ---
 
 ## Database
 
 - **PostgreSQL 16 + TimescaleDB** -- Docker port 5433
-- **Redis 7** -- Docker port 6380 (session cache + refresh token blocklist)
-- **Alembic head:** `c965b4058c70` (migration 012 -- Phase 6A llm_model_config)
-- **Migrations:** 13 total (001-012 + stock index memberships)
-- **Hypertables:** `stock_prices`, `signal_snapshots`, `portfolio_snapshots`, `dividend_payments`
+- **Redis 7** -- Docker port 6380 (3-tier cache + refresh token blocklist)
+- **Alembic head:** `1a001d6d3535` (migration 015 -- portfolio_health_snapshots)
+- **Migrations:** 16 total (001-015 + stock index memberships)
+- **Hypertables:** `stock_prices`, `signal_snapshots`, `portfolio_snapshots`, `dividend_payments`, `portfolio_health_snapshots`
 - **Enriched tables:** `earnings_snapshots` (ticker+quarter PK), `stocks` (+15 columns)
 
 ---
@@ -332,11 +350,8 @@ stock-signal-platform/
 | `docs/FSD.md` | Functional spec + acceptance criteria |
 | `docs/TDD.md` | API contracts + technical architecture |
 | `docs/data-architecture.md` | DB schema + TimescaleDB patterns |
-| `docs/superpowers/specs/2026-03-25-llm-factory-cascade-design.md` | Phase 6A LLM Factory spec |
-| `docs/superpowers/plans/2026-03-25-llm-factory-cascade-plan.md` | Phase 6A implementation plan |
-| `docs/superpowers/specs/2026-03-25-agent-observability-design.md` | Observability spec |
-| `docs/superpowers/specs/2026-03-25-testing-infrastructure-design.md` | Testing infra spec |
-| `docs/superpowers/specs/2026-03-25-architecture-gaps-backlog.md` | Backlog of architecture gaps |
+| `docs/superpowers/specs/2026-03-25-*` | Phase 6-7 specs (LLM factory, observability, testing, backlog) |
+| `docs/superpowers/plans/2026-03-25-*` | Phase 7 plans (guardrails, enrichment, intelligence, health) |
 | `PROGRESS.md` | Session log -- read first each session |
 | `project-plan.md` | Phase roadmap with completions |
 
@@ -357,7 +372,7 @@ uv run uvicorn backend.main:app --reload --port 8181
 cd frontend && npm install && npm run dev
 
 # 4. Verify
-uv run pytest tests/unit/ -v          # ~745 green
+uv run pytest tests/unit/ -v          # ~806 green
 cd frontend && npx jest                # ~107 green
 
 # 5. Enable Agent V2 + MCP (optional)
@@ -391,7 +406,14 @@ echo "MCP_TOOLS=true" >> backend/.env
 | 5.5 -- Refresh Token Blocklist | Done | PR #79 |
 | 5.6 -- MCP Stdio Tool Server | Done | PRs #81-86 |
 | Dashboard Bug Sprints | Done | PRs #87-93 |
-| **6A -- LLM Factory & Cascade** | **Done** | Session 54, PR pending |
-| 7 -- Architecture Backlog | Planned | |
+| 6A -- LLM Factory & Cascade | Done | PR #95 |
+| 6B -- Agent Observability | Done | PR #97 |
+| 6C -- Testing Infrastructure | Done | PRs #98-99 |
+| KAN-148 -- Redis Cache | Done | PR #100 |
+| 7A -- Agent Guardrails (KAN-158) | Done | PR #102 |
+| 7B -- Agent Intelligence (KAN-160) | Done | PR #104 |
+| 7C -- Data Enrichment (KAN-159) | Done | PR #103 |
+| 7D -- Health Materialization (KAN-161) | Done | PR #105 |
+| **Next: Backlog** | **KAN-149-157, KAN-162** | |
 | 8 -- Subscriptions | Planned | |
 | 9 -- Cloud Deployment | Planned | |
