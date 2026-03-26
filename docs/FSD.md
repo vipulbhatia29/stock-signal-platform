@@ -444,7 +444,7 @@ Users can override weights via UserPreference.composite_weights.
 - Agent type bound at session creation (cannot switch mid-session)
 
 **FR-8.2: Tool Orchestration**
-- Tool Registry with 20 internal tools and 4 MCPAdapter external sources
+- Tool Registry with 24 internal tools and 4 MCPAdapter external sources
 - Plan→Execute→Synthesize three-phase architecture (V1 ReAct loop removed in Phase 6A):
   - Planner (LLM, tier=planner): classifies intent, generates ordered tool plan (max 10 steps)
   - Executor (mechanical, no LLM): runs tools via registry, $PREV_RESULT resolution, retries, circuit breaker

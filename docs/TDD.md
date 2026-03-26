@@ -43,7 +43,7 @@ graph TB
             R_MCP["/mcp"]
         end
 
-        subgraph Tools["Tool Layer (20 internal tools)"]
+        subgraph Tools["Tool Layer (24 internal tools)"]
             T_Market["market_data"]
             T_Signals["signals"]
             T_Fund["fundamentals"]
@@ -694,12 +694,17 @@ class ToolRegistry:
     def health() -> dict[str, bool]
 ```
 
-Internal tools (20):
+Internal tools (24):
 - **Original (9):** `analyze_stock`, `get_portfolio_exposure`, `screen_stocks`, `get_recommendations`, `compute_signals`, `get_geopolitical_events`, `web_search`, `search_stocks`, `ingest_stock`
 - **Phase 4D (4):** `get_fundamentals`, `get_analyst_targets`, `get_earnings_history`, `get_company_profile` — read from DB, data materialized during `ingest_stock`
 - **Phase 5 (7):** `get_forecast`, `get_sector_forecast`, `get_portfolio_forecast`, `compare_stocks`, `get_recommendation_scorecard`, `dividend_sustainability`, `risk_narrative`
+- **Phase 7 (4):** `portfolio_health`, `market_briefing`, `get_stock_intelligence`, `recommend_stocks` — intelligent aggregation tools
 
 Phase 5 tools: forecast tools read pre-computed Prophet data from DB. `dividend_sustainability` is the only runtime yfinance call (payout ratio not persisted). `risk_narrative` combines signals + fundamentals + forecast + sector ETF context.
+
+Phase 7 tools: `portfolio_health` computes HHI/signal/risk/income/sector scores. `market_briefing` fetches indexes/sectors/news via yfinance. `get_stock_intelligence` wraps analyst upgrades/insider/earnings from `intelligence.py`. `recommend_stocks` ranks by multi-signal consensus (signals 35%, fundamentals 25%, momentum 20%, portfolio fit 20%). Planner outputs `response_type` to route synthesizer format.
+
+Phase 7 DB changes: Migration 013 adds `decline_count` to `chat_session` (guardrails). Migration 014 adds `beta`, `dividend_yield`, `forward_pe` to `stocks` (data enrichment).
 
 **Entity Registry** (`backend/agents/entity_registry.py`): session-scoped ticker tracking for pronoun resolution ("compare them", "what about it?"). Wired into AgentStateV2 — execute_node extracts entities from tool results, plan_node resolves pronouns.
 
