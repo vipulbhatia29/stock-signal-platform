@@ -1059,16 +1059,25 @@ Compared SSP vs aset-platform. 12 gaps identified. 3 specs + 1 backlog + 1 plan 
 - `tests/e2e/playwright/` (full POM scaffolding)
 - 8 spec + plan documents
 
-### Session 58 — Comprehensive Code Analysis + Tech Debt Backlog (2026-03-26)
-**Branch:** `develop` (no code changes) | **Tests:** ~1,110 (unchanged)
+### Session 58 — Code Analysis + Tech Debt Sprint (2026-03-26)
+**Branch:** `develop` | **PRs:** #110–#116 (7 merged) | **Tests:** ~1,110 (unchanged)
 
-- **`/sc:analyze` scan** across 4 domains: quality, security, performance, architecture
-- **3 parallel analysis agents:** code quality (ruff, tsc, ESLint, complexity), security (semgrep, OWASP, auth audit, dependency review), performance/architecture (N+1, caching, layer violations, coupling)
-- **Results:** Overall grade B+. Quality A- (clean lint, 6 long functions), Security A- (0 semgrep findings, 2 unmaintained deps), Performance B (N+1 queries, cache gaps), Architecture B+ (no service layer, god files)
-- **JIRA Epic KAN-163** created with 11 stories (KAN-164–KAN-174):
-  - HIGH: KAN-164 (python-jose→PyJWT), KAN-165 (N+1 forecast), KAN-166 (N+1 portfolio summary)
-  - MEDIUM: KAN-167 (str(e) leak), KAN-168 (pagination), KAN-169 (asyncio.gather), KAN-170 (cache extension)
-  - LOW: KAN-171 (ESLint warnings), KAN-172 (service layer), KAN-173 (split stocks.py), KAN-174 (passlib eval)
-- **Total estimated effort:** ~19h. HIGH items: ~3.5h.
+**Analysis phase:**
+- `/sc:analyze` — 4-domain scan (quality, security, performance, architecture). Overall grade: B+.
+- 3 parallel audit agents on TDD.md, FSD.md, Serena architecture memory — found 30+ stale items.
+- JIRA Epic KAN-163 created with 12 stories (KAN-164–175).
+
+**Implementation phase (7/12 shipped):**
+- **KAN-175** (PR #110): TDD/FSD/README doc refresh — 303 lines, 3 diagrams fixed, 5 new API sections, 5 new FRs
+- **KAN-164** (PR #111): python-jose → PyJWT migration (security CVE fix)
+- **KAN-165** (PR #112): N+1 fix in portfolio forecast (40→3 queries)
+- **KAN-166** (PR #113): N+1 fix in portfolio summary (20→1 query)
+- **KAN-167** (PR #114): Safe error messages (remove str(e) from HTTPException)
+- **KAN-169** (PR #115): Parallel market briefing with asyncio.gather (~5x faster)
+- **KAN-171** (PR #116): Fix 4 ESLint unused variable warnings
+
+**Conventions added:** `.claude/rules/python-backend.md` + `api-endpoints.md` — N+1, str(e), pagination, asyncio.gather, cache, router size limits.
+
+**Remaining KAN-163:** KAN-168 (pagination), KAN-170 (cache extension), KAN-172 (service layer), KAN-173 (split stocks.py), KAN-174 (passlib eval).
 
 ---

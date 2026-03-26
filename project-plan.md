@@ -723,7 +723,35 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 - [ ] Earnings card on stock detail page
 
 ### Success Criteria
-Guardrails deployed. Portfolio health answerable. Market briefing tool works. 24 agent tools (was 20). All free data from yfinance exploited. ✅ Achieved (KAN-158, 159, 160 shipped in Session 56). Remaining: KAN-161 (Health Materialization) + backlog items.
+Guardrails deployed. Portfolio health answerable. Market briefing tool works. 24 agent tools (was 20). All free data from yfinance exploited. ✅ Achieved (KAN-158, 159, 160 shipped in Session 56).
+
+---
+
+## Phase 7.5: Code Analysis Tech Debt (Session 58)
+
+### Goal
+Address findings from comprehensive `/sc:analyze` audit. Security, performance, architecture improvements.
+
+### Epic: KAN-163 — Code Analysis Tech Debt
+
+#### Shipped (Session 58, PRs #110-116)
+- [x] KAN-175: TDD + FSD + Architecture doc refresh (PR #110)
+- [x] KAN-164: Migrate python-jose → PyJWT — unmaintained dep with CVE (PR #111)
+- [x] KAN-165: Fix N+1 in portfolio forecast — 40→3 queries (PR #112)
+- [x] KAN-166: Fix N+1 in portfolio summary — 20→1 query (PR #113)
+- [x] KAN-167: Remove str(e) from HTTPException details (PR #114)
+- [x] KAN-169: Parallelize market briefing with asyncio.gather (PR #115)
+- [x] KAN-171: Fix 4 ESLint unused variable warnings (PR #116)
+
+#### Remaining
+- [ ] KAN-168: Add pagination to transactions + recommendations (~1h)
+- [ ] KAN-170: Extend CacheService to uncached endpoints (~2h)
+- [ ] KAN-172: Extract service layer from routers (~8h, large refactor)
+- [ ] KAN-173: Split stocks.py into domain-specific sub-routers (~3h)
+- [ ] KAN-174: Evaluate passlib replacement with direct bcrypt (~1h)
+
+### Success Criteria
+7/12 stories shipped. Unmaintained security dep replaced. Critical N+1 queries fixed. Docs fully refreshed. Coding conventions added to `.claude/rules/`.
 
 ---
 
