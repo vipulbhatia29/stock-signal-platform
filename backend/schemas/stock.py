@@ -214,6 +214,13 @@ class RecommendationResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RecommendationListResponse(BaseModel):
+    """Paginated recommendation list."""
+
+    recommendations: list[RecommendationResponse]
+    total: int
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Ingestion schemas
 # ─────────────────────────────────────────────────────────────────────────────

@@ -140,6 +140,11 @@ export interface Recommendation {
   is_actionable: boolean;
 }
 
+export interface PaginatedRecommendations {
+  recommendations: Recommendation[];
+  total: number;
+}
+
 // ── Ingestion ─────────────────────────────────────────────────────────────────
 
 export interface IngestResponse {
@@ -239,6 +244,11 @@ export interface Transaction {
   transacted_at: string;
   notes: string | null;
   created_at: string;
+}
+
+export interface PaginatedTransactions {
+  transactions: Transaction[];
+  total: number;
 }
 
 export interface TransactionCreate {

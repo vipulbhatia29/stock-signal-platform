@@ -43,6 +43,13 @@ class TransactionResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TransactionListResponse(BaseModel):
+    """Paginated transaction list."""
+
+    transactions: list[TransactionResponse]
+    total: int
+
+
 class PositionResponse(BaseModel):
     """Current position with live P&L fields."""
 

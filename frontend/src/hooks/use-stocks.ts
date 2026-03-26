@@ -22,6 +22,7 @@ import type {
   PortfolioSummary,
   PortfolioSnapshot,
   Recommendation,
+  PaginatedRecommendations,
 } from "@/types/api";
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -301,7 +302,10 @@ export function usePortfolioHistory(days = 365) {
 export function useRecommendations() {
   return useQuery<Recommendation[]>({
     queryKey: ["recommendations"],
-    queryFn: () => get<Recommendation[]>("/stocks/recommendations"),
+    queryFn: async () => {
+      const resp = await get<PaginatedRecommendations>("/stocks/recommendations");
+      return resp.recommendations;
+    },
     staleTime: 5 * 60 * 1000,
   });
 }
