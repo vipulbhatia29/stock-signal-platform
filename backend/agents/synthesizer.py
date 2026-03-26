@@ -197,4 +197,8 @@ async def synthesize_results(
 
     response = await llm_chat(messages=messages, tools=[])
 
-    return parse_synthesis_response(response.content)
+    synthesis = parse_synthesis_response(response.content)
+
+    from backend.agents.guards import validate_synthesis_output
+
+    return validate_synthesis_output(synthesis)
