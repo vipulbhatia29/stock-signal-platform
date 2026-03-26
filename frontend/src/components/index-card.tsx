@@ -20,7 +20,6 @@ export function IndexCard({
   name,
   slug,
   stockCount,
-  description,
   value,
   changePct,
   sparklineData,

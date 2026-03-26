@@ -20,7 +20,7 @@ import { usePortfolioSummary } from "@/hooks/use-stocks";
 import { AllocationDonut, DONUT_COLORS } from "@/components/allocation-donut";
 import { SectionHeading } from "@/components/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { SectorScope, SectorSummary } from "@/types/api";
+import type { SectorScope } from "@/types/api";
 
 export function SectorsClient() {
   const [scope, setScope] = useState<SectorScope>("all");
@@ -113,7 +113,6 @@ export function SectorsClient() {
                   onToggle={() => handleToggle(sector.sector)}
                 >
                   <SectorAccordionContent
-                    sector={sector}
                     stocks={stocksData?.stocks ?? []}
                     stocksLoading={stocksLoading && openSector === sector.sector}
                     correlationTickers={correlationTickers}
@@ -169,7 +168,6 @@ function ScopeToggle({
 // ── Accordion Content ────────────────────────────────────────────────────────
 
 function SectorAccordionContent({
-  sector,
   stocks,
   stocksLoading,
   correlationTickers,
@@ -177,7 +175,6 @@ function SectorAccordionContent({
   onAddToCorrelation,
   onRemoveFromCorrelation,
 }: {
-  sector: SectorSummary;
   stocks: import("@/types/api").SectorStock[];
   stocksLoading: boolean;
   correlationTickers: string[];

@@ -22,7 +22,6 @@ import { FundamentalsCard } from "@/components/fundamentals-card";
 import { DividendCard } from "@/components/dividend-card";
 import { ForecastCard } from "@/components/forecast-card";
 import { EmptyState } from "@/components/empty-state";
-import { Breadcrumbs } from "@/components/breadcrumbs";
 import { SectionHeading } from "@/components/section-heading";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
