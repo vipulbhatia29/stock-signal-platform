@@ -159,7 +159,7 @@ class PortfolioHealthTool(BaseTool):
             from backend.models.signal import SignalSnapshot
             from backend.models.stock import Stock
             from backend.request_context import current_user_id
-            from backend.schemas.health import (
+            from backend.schemas.portfolio_health import (
                 HealthComponent,
                 PortfolioHealthResult,
                 PositionHealth,
