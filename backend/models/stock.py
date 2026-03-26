@@ -51,6 +51,11 @@ class Stock(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     profit_margins: Mapped[float | None] = mapped_column(Float, nullable=True)
     return_on_equity: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Market risk & income (populated during ingestion from yfinance)
+    beta: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dividend_yield: Mapped[float | None] = mapped_column(Float, nullable=True)
+    forward_pe: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Analyst targets
     analyst_target_mean: Mapped[float | None] = mapped_column(Float, nullable=True)
     analyst_target_high: Mapped[float | None] = mapped_column(Float, nullable=True)
