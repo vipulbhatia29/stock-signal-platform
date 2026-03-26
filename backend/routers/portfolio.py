@@ -457,7 +457,7 @@ async def get_dividends_for_ticker(
     return DividendSummaryResponse(**summary)
 
 
-@router.get("/portfolio/health")
+@router.get("/health")
 async def get_portfolio_health(
     request: Request,
     user: User = Depends(get_current_user),
