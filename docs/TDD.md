@@ -37,6 +37,7 @@ graph TB
             R_Auth["/auth"]
             R_Stocks["/stocks"]
             R_Portfolio["/portfolio"]
+            R_Market["/market"]
             R_Chat["/chat/stream"]
             R_Forecast["/forecasts"]
             R_Alerts["/alerts"]
@@ -52,6 +53,13 @@ graph TB
             T_Recs["recommendations"]
             T_Divs["dividends"]
             T_Risk["risk_narrative"]
+            T_Intel["news + intelligence"]
+            T_Health["portfolio_health"]
+        end
+
+        subgraph Guards["Guardrails"]
+            G_Input["Input Guard<br/>PII | Injection | Length"]
+            G_Output["Output Guard<br/>Disclaimer | Validation"]
         end
 
         subgraph Agents["Agent Layer"]
@@ -139,6 +147,9 @@ erDiagram
         boolean is_etf
         float market_cap
         float revenue_growth
+        float beta
+        float dividend_yield
+        float forward_pe
     }
 
     stock_prices {
