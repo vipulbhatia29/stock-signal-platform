@@ -696,9 +696,10 @@ async def ingest_ticker(
     try:
         stock = await ensure_stock_exists(ticker, db)
     except ValueError as e:
+        logger.error("Stock lookup failed for %s: %s", ticker, e)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Stock not found",
         )
 
     is_new = stock.last_fetched_at is None
@@ -707,9 +708,10 @@ async def ingest_ticker(
     try:
         delta_df = await fetch_prices_delta(ticker, db)
     except ValueError as e:
+        logger.error("Failed to fetch price data for %s: %s", ticker, e)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
+            detail="Failed to fetch price data",
         )
 
     rows_fetched = len(delta_df) if not delta_df.empty else 0
