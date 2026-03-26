@@ -1059,4 +1059,16 @@ Compared SSP vs aset-platform. 12 gaps identified. 3 specs + 1 backlog + 1 plan 
 - `tests/e2e/playwright/` (full POM scaffolding)
 - 8 spec + plan documents
 
+### Session 58 — Comprehensive Code Analysis + Tech Debt Backlog (2026-03-26)
+**Branch:** `develop` (no code changes) | **Tests:** ~1,110 (unchanged)
+
+- **`/sc:analyze` scan** across 4 domains: quality, security, performance, architecture
+- **3 parallel analysis agents:** code quality (ruff, tsc, ESLint, complexity), security (semgrep, OWASP, auth audit, dependency review), performance/architecture (N+1, caching, layer violations, coupling)
+- **Results:** Overall grade B+. Quality A- (clean lint, 6 long functions), Security A- (0 semgrep findings, 2 unmaintained deps), Performance B (N+1 queries, cache gaps), Architecture B+ (no service layer, god files)
+- **JIRA Epic KAN-163** created with 11 stories (KAN-164–KAN-174):
+  - HIGH: KAN-164 (python-jose→PyJWT), KAN-165 (N+1 forecast), KAN-166 (N+1 portfolio summary)
+  - MEDIUM: KAN-167 (str(e) leak), KAN-168 (pagination), KAN-169 (asyncio.gather), KAN-170 (cache extension)
+  - LOW: KAN-171 (ESLint warnings), KAN-172 (service layer), KAN-173 (split stocks.py), KAN-174 (passlib eval)
+- **Total estimated effort:** ~19h. HIGH items: ~3.5h.
+
 ---

@@ -2,9 +2,9 @@
 
 ## Stock Signal Platform
 
-**Version:** 1.1
+**Version:** 2.0
 **Date:** March 2026
-**Status:** Living Document — Phase 1-5 complete, Phase 5.5/6 planned
+**Status:** Living Document — Phases 1-7 complete. Phase 8 (Subscriptions) planned.
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -50,7 +50,7 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 **FR-1.3: Token Refresh**
 - Input: refresh_token
 - Output: new { access_token, refresh_token } pair
-- **Note:** Token rotation (invalidation of old refresh tokens) is NOT implemented in Phase 1. Both old and new refresh JWTs remain valid until expiry. A server-side blacklist (Redis or DB) is needed — see Phase 3 backlog.
+- **Token rotation:** ✅ Implemented (Phase 5.5, PR #79). Redis-backed JTI blocklist (`backend/services/token_blocklist.py`) invalidates old refresh tokens on rotation. TTL auto-expires entries matching token lifetime.
 - Error: 401 if refresh_token expired or invalid
 
 **FR-1.4: User Preferences**
@@ -484,11 +484,12 @@ Users can override weights via UserPreference.composite_weights.
 - History summary when context exceeds 12K tokens
 - Sessions auto-expire after 24 hours of inactivity
 
-**FR-8.7: MCP Server (pulled forward from Phase 6)**
-- Platform intelligence exposed as MCP server at `/mcp` (Streamable HTTP)
-- Same Tool Registry powers both chat endpoint and MCP server
-- Callable by Claude Code, Cursor, or any MCP-compatible client
-- Authenticated via JWT (same as REST API)
+**FR-8.7: MCP Server (Phase 4B + 5.6) ✅ IMPLEMENTED**
+- **Streamable HTTP** at `/mcp` — for external MCP clients (Claude Code, Cursor). JWT authenticated.
+- **stdio transport** (`mcp_server/tool_server.py`) — spawned as subprocess by FastAPI lifespan for internal agent use when `MCP_TOOLS=True` (default). Phase 5.6.
+- Same Tool Registry powers chat endpoint, MCP HTTP server, and stdio server
+- `MCPToolClient` wraps params as `{"params": {...}}` for FastMCP dispatch
+- 20+ integration tests in `tests/integration/`
 
 **FR-8.8: Graceful Degradation & LLM Factory (Phase 6A) ✅ IMPLEMENTED**
 - Individual tool failures don't crash the response
@@ -540,11 +541,8 @@ Users can override weights via UserPreference.composite_weights.
 - Acknowledged alerts don't re-fire until condition clears and re-triggers
 
 **FR-9.3: Notification Channels**
-- Telegram: real-time alerts + daily morning briefing
-- Morning briefing contents: overnight signal changes, portfolio P&L,
-  today's recommendations, any triggered alerts
-- Quiet hours: no notifications between quiet_hours_start and quiet_hours_end
-  (from UserPreference)
+- **In-app only** (current) — alerts stored in `in_app_alerts` table, displayed via AlertBell component
+- Telegram integration: **NOT IMPLEMENTED — deferred.** Morning briefing, quiet hours, and real-time push are future backlog items.
 
 ### FR-10: Recommendation Evaluation (Phase 5) ✅ IMPLEMENTED
 
@@ -673,6 +671,45 @@ flowchart TD
 - 7 new agent tools allow chat queries: "forecast for AAPL", "compare AAPL and MSFT", "is AAPL's dividend safe?", "what are the risks?", "how accurate are your calls?"
 - Entity Registry enables pronoun resolution: "compare them", "what about it?"
 
+### FR-12: Sectors Analysis (Phase 4F) ✅ IMPLEMENTED
+
+- Sector summary: aggregated metrics (stock count, avg composite score, total market cap) per sector
+- Drill-down: all stocks in a sector with key metrics
+- Correlation matrix: price correlation between top stocks in a sector
+- Frontend: SectorAccordion, SectorStocksTable, CorrelationHeatmap components
+
+### FR-13: Portfolio Health Score (Phase 7) ✅ IMPLEMENTED
+
+- Real-time portfolio health score (0-10) with component breakdown: concentration (HHI), diversification, Sharpe ratio, beta exposure
+- `PortfolioHealthSnapshot` hypertable for trend tracking
+- `GET /portfolio/health` — current score + components
+- `GET /portfolio/health/history` — historical trend
+- `PortfolioHealthTool` agent tool for chat queries
+- Daily snapshots via Celery beat task (4:45 PM ET)
+
+### FR-14: Agent Guardrails (Phase 7/4E) ✅ IMPLEMENTED
+
+- **Input guards:** PII detection + stripping, injection pattern detection, input length validation, ticker/query sanitization
+- **Output guards:** mandatory disclaimer appended to financial advice, synthesis validation
+- `decline_count` tracked on ChatSession (migration 013) — excessive out-of-scope queries
+- Scope enforcement: financial-only queries, data-grounded responses, speculative/non-financial declined
+
+### FR-15: CacheService (Phase 6) ✅ IMPLEMENTED
+
+- 3-tier namespace: `app:` (shared), `user:{id}:` (per-user), `session:{id}:` (per-chat)
+- 4 TTL tiers: volatile (2min), standard (15min), stable (60min), session (30min) — all with ±10% jitter
+- Shared Redis pool (`backend/services/redis_pool.py`) replaces standalone connections
+- Cached endpoints: signals, sectors, forecasts, portfolio summary
+- Agent tool session cache: 10 cacheable tools skip re-execution within session
+- Cache warmup on startup (indexes), nightly invalidation in pipeline
+
+### FR-16: Stock News & Intelligence (Phase 7) ✅ IMPLEMENTED
+
+- `GET /stocks/{ticker}/news` — Yahoo Finance news feed for a ticker
+- `GET /stocks/{ticker}/intelligence` — enriched stock data (beta, dividend yield, forward PE, news, earnings)
+- `StockIntelligenceTool` agent tool for chat queries
+- Market briefing: `GET /market/briefing` — aggregated market data, portfolio news, upcoming earnings
+
 ---
 
 ## 4. Non-Functional Requirements
@@ -769,8 +806,8 @@ flowchart TD
 | BUY correct definition | stock return > benchmark return | RecommendationOutcome |
 | SELL correct definition | stock return < benchmark return | RecommendationOutcome |
 | Alert dedup window | 24 hours | AlertLog |
-| Max chat tool calls per turn | 15 | Agent loop |
-| LLM fallback order | Groq → Claude → LM Studio | Agent config |
+| Max chat tool calls per turn | 10 | Planner prompt (§5.5) |
+| LLM model cascade | Data-driven via `llm_model_config` DB table (Phase 6A) | Per-tier priority order |
 
 ---
 
@@ -803,40 +840,36 @@ flowchart TD
 
 ## 7. Feature × Phase Matrix
 
-| Feature | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 |
-|---------|---------|---------|---------|---------|---------|---------|
-| Auth + JWT refresh | ✓ | httpOnly cookies | | | | |
-| User preferences | ✓ | | Enhanced | | Enhanced | |
-| Stock universe + watchlist | ✓ | Index membership | | | | |
-| Technical signals | ✓ | | | | | |
-| Composite score (tech only) | ✓ | | Upgraded 50/50 | | | |
-| Basic recommendations | ✓ | | Portfolio-aware | | Macro-aware | |
-| Signal API | ✓ | | | | | |
-| Dashboard UI | | ✓ | Enhanced | | Enhanced | |
-| Screener UI | | ✓ | | | | |
-| Stock detail page | | ✓ | Enhanced | | | |
-| Screener column tabs | | ✓ (Phase 2.5) | | | | |
-| Screener grid view | | ✓ (Phase 2.5) | | | | |
-| Design system (colors, components) | | ✓ (Phase 2.5) | | | | |
-| Entry animations | | ✓ (Phase 2.5) | | | | |
-| Fundamental signals | | | ✓ | | | |
-| Portfolio tracker | | | ✓ | | | |
-| Dividends ✅ + splits | | | ✓ | | | |
-| Portfolio snapshots | | | ✓ | | | |
-| Alert rules engine | | | ✓ | | | |
-| Position sizing | | | ✓ | | | |
-| AI chatbot backend | | | | ✓ (4B) | | |
-| Tool Registry + MCPAdapters | | | | ✓ (4B) | | |
-| External MCP integrations | | | | ✓ (4B) | | |
-| Warm data pipeline | | | | ✓ (4B) | | |
-| MCP server (`/mcp`) | | | | ✓ (4B) | | |
-| Chat UI (frontend wiring) | | | | ✓ (4C done) | | |
-| CI/CD pipeline | | | | ✓ (done) | | |
-| Background jobs (Celery) | | | | | ✓ | |
-| Forecasting (Prophet) | | | | | ✓ | |
-| Model versioning | | | | | ✓ | |
-| Options flow (Unusual Whales) | | | | | ✓ | |
-| Telegram notifications | | | | | ✓ | |
-| Recommendation evaluation | | | | | ✓ | |
-| LLMOps / Gateway | | | | | | ✓ |
-| Cloud deployment | | | | | | ✓ |
+| Feature | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 | Phase 7 |
+|---------|---------|---------|---------|---------|---------|---------|---------|
+| Auth + JWT refresh | ✓ | httpOnly | | | Token blocklist (5.5) | | |
+| User preferences | ✓ | | Enhanced | | Enhanced | | |
+| Stock universe + watchlist | ✓ | Index membership | | | | | |
+| Technical signals | ✓ | | | | | | |
+| Composite score | ✓ | | 50/50 blend | | | | |
+| Recommendations | ✓ | | Portfolio-aware | | Macro-aware | | |
+| Dashboard UI | | ✓ | Enhanced | Redesign (4A/4F) | Enhanced | | |
+| Screener UI | | ✓ | | | | | |
+| Stock detail page | | ✓ | Enhanced | | | | News + Intelligence |
+| Design system | | ✓ (2.5) | | Navy command center (4A) | | | |
+| Fundamental signals | | | ✓ | | | | |
+| Portfolio tracker | | | ✓ | | | | Health score |
+| Dividends + snapshots | | | ✓ | | | | |
+| AI chatbot backend | | | | ✓ (4B) | | | |
+| Tool Registry + MCP | | | | ✓ (4B) | stdio (5.6) | | |
+| Chat UI | | | | ✓ (4C) | | | |
+| Agent V2 (Plan→Execute→Synth) | | | | ✓ (4D) | | V1 removed | |
+| Agent guardrails | | | | | | | ✓ (PII, injection) |
+| CI/CD pipeline | | | | ✓ | | | |
+| Forecasting (Prophet) | | | | | ✓ | | |
+| Model versioning + drift | | | | | ✓ | | |
+| Rec evaluation + scorecard | | | | | ✓ | | |
+| Celery + nightly pipeline | | | | | ✓ | | |
+| Sectors page | | | | ✓ (4F) | | | |
+| LLM Factory + observability | | | | | | ✓ (6A-6C) | |
+| CacheService | | | | | | ✓ | |
+| Data enrichment (beta, PE) | | | | | | | ✓ |
+| Agent intelligence tools | | | | | | | ✓ (4 new tools) |
+| Options flow (Unusual Whales) | | | | | _deferred_ | | |
+| Telegram notifications | | | | | _deferred_ | | |
+| Cloud deployment | | | | | | _planned_ | |
