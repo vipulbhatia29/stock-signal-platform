@@ -265,9 +265,12 @@ graph TB
             R_Stocks["/stocks"]
             R_Portfolio["/portfolio"]
             R_Market["/market"]
-            R_Chat["/chat/stream"]
+            R_Chat["/chat"]
             R_Forecast["/forecasts"]
             R_Alerts["/alerts"]
+            R_Sectors["/sectors"]
+            R_Admin["/admin"]
+            R_Indexes["/indexes"]
         end
 
         subgraph Tools["24 Internal Tools"]

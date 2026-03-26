@@ -1,7 +1,7 @@
 ---
 scope: project
 category: architecture
-updated_by: session-56
+updated_by: session-58
 ---
 
 # System Architecture Overview
@@ -11,7 +11,7 @@ updated_by: session-56
 | Service | Port | Entry Point | Stack |
 |---------|------|-------------|-------|
 | Backend | 8181 | `backend/main.py` | Python 3.12, FastAPI, SQLAlchemy 2.0 async, Celery |
-| Frontend | 3000 | `frontend/app/layout.tsx` | Next.js (latest), React, TypeScript, Tailwind CSS, shadcn/ui |
+| Frontend | 3000 | `frontend/src/app/layout.tsx` | Next.js (latest), React, TypeScript, Tailwind CSS, shadcn/ui |
 | Postgres | 5433 | Docker | PostgreSQL 16 + TimescaleDB extension |
 | Redis | 6380 | Docker | Redis 7 (cache + Celery broker) |
 | Celery worker | — | `backend/tasks/__init__.py` | Beat scheduler + worker |
@@ -21,10 +21,11 @@ updated_by: session-56
 
 ## Agent Architecture (Plan->Execute->Synthesize)
 
-Three-phase LangGraph StateGraph (V1 deleted Session 54):
+LangGraph StateGraph with 4 nodes (V1 deleted Session 54):
 1. **Planner (LLM):** Intent classification, tool plan, pronoun resolution, response_type routing (Phase 7)
 2. **Executor (mechanical):** ToolRegistry, $PREV_RESULT, retries, circuit breaker, 45s timeout, param validation (Phase 7)
 3. **Synthesizer (LLM):** Confidence scoring, scenarios, evidence tree, output validation (Phase 7)
+4. **format_simple:** Bypass synthesis for simple_lookup intents (template output, no LLM)
 
 24 internal tools + 4 MCP adapters = 28 total (36 with adapter sub-tools). See `domain/agent-tools` for full list.
 
@@ -36,8 +37,8 @@ Data-driven cascade from `llm_model_config` DB table (migration 012). TokenBudge
 
 ## DB Migrations
 
-Alembic head: migration 014 (beta/dividend_yield/forward_pe on stocks).
-Chain: 012 (LLM config) -> 013 (decline_count on chat_session) -> 014 (enriched stock data).
+Alembic head: migration 015 (portfolio_health_snapshots).
+Chain: 012 (LLM config) -> 013 (decline_count) -> 014 (enriched stock data) -> 015 (portfolio_health_snapshots).
 
 ## Key Entry Points
 
@@ -49,6 +50,32 @@ Chain: 012 (LLM config) -> 013 (decline_count on chat_session) -> 014 (enriched 
 - `backend/tools/build_registry.py` — constructs registry with all 24 tools
 - `backend/agents/guards.py` — input/output guardrails (Phase 7)
 - `backend/mcp_server/server.py` — FastMCP at `/mcp` (Streamable HTTP)
+- `backend/mcp_server/tool_server.py` — stdio MCP server (Phase 5.6, for agent use when MCP_TOOLS=True)
+- `backend/mcp_server/tool_client.py` — MCPToolClient (wraps params for FastMCP dispatch)
+- `backend/services/cache.py` — CacheService (3-tier namespace, 4 TTL tiers)
+- `backend/services/redis_pool.py` — shared Redis connection pool
+- `backend/services/token_blocklist.py` — Redis JTI blocklist for refresh token rotation
+
+## Routers (13 files, all mounted at /api/v1/)
+
+admin, alerts, auth, chat, forecasts, health, indexes, market, portfolio, preferences, sectors, stocks, tasks
+
+## Models (17 files in backend/models/)
+
+alert, chat, dividend, earnings, forecast, index, llm_config, logs, pipeline, portfolio, portfolio_health, price, recommendation, signal, stock, user + base
+
+## Frontend Pages
+
+- Dashboard (`src/app/(authenticated)/dashboard/`)
+- Portfolio (`src/app/(authenticated)/portfolio/`)
+- Screener (`src/app/(authenticated)/screener/`)
+- Sectors (`src/app/(authenticated)/sectors/`)
+- Stock Detail (`src/app/(authenticated)/stocks/[ticker]/`)
+- Login + Register (`src/app/login/`, `src/app/register/`)
+
+## Celery Task Modules (8 in backend/tasks/)
+
+alerts, evaluation, forecasting, market_data, pipeline, portfolio, recommendations, warm_data
 
 ## Core Architecture Patterns
 

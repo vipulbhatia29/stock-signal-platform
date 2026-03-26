@@ -2,9 +2,9 @@
 
 ## Stock Signal Platform
 
-**Version:** 1.1
+**Version:** 2.0
 **Date:** March 2026
-**Status:** Living Document — Phase 1-5 complete, Phase 5.5/6 planned
+**Status:** Living Document — Phases 1-7 complete. Phase 8 (Subscriptions) planned.
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -38,10 +38,15 @@ graph TB
             R_Stocks["/stocks"]
             R_Portfolio["/portfolio"]
             R_Market["/market"]
-            R_Chat["/chat/stream"]
+            R_Chat["/chat"]
             R_Forecast["/forecasts"]
             R_Alerts["/alerts"]
-            R_MCP["/mcp"]
+            R_Sectors["/sectors"]
+            R_Admin["/admin"]
+            R_Indexes["/indexes"]
+            R_Health["/health"]
+            R_Prefs["/preferences"]
+            R_Tasks["/tasks"]
         end
 
         subgraph Tools["Tool Layer (24 internal tools)"]
@@ -117,6 +122,7 @@ erDiagram
     portfolios ||--o{ positions : contains
     portfolios ||--o{ transactions : records
     portfolios ||--o{ portfolio_snapshots : tracked
+    portfolios ||--o{ portfolio_health_snapshots : health_tracked
 
     stocks ||--o{ stock_prices : has
     stocks ||--o{ signal_snapshots : computed
@@ -132,6 +138,50 @@ erDiagram
     model_versions ||--o{ forecast_results : generates
 
     chat_session ||--o{ chat_message : contains
+
+    llm_model_config {
+        uuid id PK
+        string tier
+        string provider
+        string model_name
+        boolean is_active
+    }
+
+    llm_call_log {
+        uuid id PK
+        uuid user_id FK
+        string tier
+        string model
+        int input_tokens
+        int output_tokens
+    }
+
+    tool_execution_log {
+        uuid id PK
+        string tool_name
+        string status
+        int duration_ms
+    }
+
+    pipeline_runs {
+        uuid id PK
+        string pipeline_name
+        string status
+        timestamp started_at
+    }
+
+    pipeline_watermarks {
+        string pipeline_name PK
+        timestamp last_success_at
+    }
+
+    portfolio_health_snapshots {
+        uuid portfolio_id FK
+        timestamp snapshot_time
+        float health_score
+        float hhi
+        float sharpe
+    }
 
     users {
         uuid id PK
@@ -205,7 +255,7 @@ erDiagram
     }
 ```
 
-> 25 tables total. Hypertables: `stock_prices`, `signal_snapshots`, `portfolio_snapshots`. Full schema in `docs/data-architecture.md`.
+> 27 tables total. Hypertables: `stock_prices`, `signal_snapshots`, `portfolio_snapshots`, `portfolio_health_snapshots`. Full schema in `docs/data-architecture.md`.
 
 ### 2.2 Layer Responsibilities
 
@@ -382,8 +432,7 @@ POST /api/v1/chat/stream
   Request:  { message: string, session_id?: uuid, agent_type: "general"|"stock" }
   Response: NDJSON stream of events (see §3.6.1)
   Auth:     Required (httpOnly cookie)
-  Behavior: When AGENT_V2=true, uses Plan→Execute→Synthesize graph (§5.5).
-            When AGENT_V2=false, uses V1 ReAct graph (§5.3).
+  Behavior: Uses Plan→Execute→Synthesize graph (§5.5).
             User context (portfolio, preferences, watchlist) injected automatically.
             query_id (UUID) generated per request for trace correlation.
 ```
@@ -391,16 +440,7 @@ POST /api/v1/chat/stream
 ### 3.6.1 NDJSON Stream Events (Phase 4C + 4D)
 
 ```
-V1 Events (ReAct graph):
-  { type: "thinking", content: "Analyzing your question..." }
-  { type: "tool_start", tool: "analyze_stock", params: {...} }
-  { type: "tool_result", tool: "analyze_stock", status: "ok", data: {...} }
-  { type: "token", content: "..." }                           # Streamed text
-  { type: "done", usage: {...} }
-  { type: "error", error: "..." }
-  { type: "provider_fallback", content: "Switching to..." }
-
-V2 Events (Plan→Execute→Synthesize graph, AGENT_V2=true):
+Stream Events (Plan→Execute→Synthesize graph):
   { type: "thinking", content: "Planning research approach..." }
   { type: "plan", content: "reasoning...", data: { steps: ["tool1", "tool2"] } }
   { type: "tool_result", tool: "...", status: "ok", data: {...} }
@@ -577,11 +617,81 @@ GET /api/v1/admin/llm-usage
   Notes:    30-day aggregated usage from llm_call_log table. Escalation rate = Anthropic calls / total.
 ```
 
+### 3.15 Sectors Endpoints (Phase 4F) ✅ IMPLEMENTED
+
+```
+GET /api/v1/sectors
+  Response: [{ sector, stock_count, avg_composite_score, top_ticker, market_cap_sum }]
+  Auth:     Required
+  Notes:    Aggregated sector summary across all tracked stocks.
+
+GET /api/v1/sectors/{sector}/stocks
+  Response: [{ ticker, name, composite_score, market_cap, beta }]
+  Auth:     Required
+  Notes:    All stocks in a given sector with key metrics.
+
+GET /api/v1/sectors/{sector}/correlation
+  Response: { tickers: [...], matrix: [[...]] }
+  Auth:     Required
+  Notes:    Price correlation matrix for top stocks in sector.
+```
+
+### 3.16 Market Endpoint (Phase 7) ✅ IMPLEMENTED
+
+```
+GET /api/v1/market/briefing
+  Response: { indexes: [...], portfolio_news: [...], upcoming_earnings: [...] }
+  Auth:     Required
+  Notes:    Agent tool that aggregates market data, news, and earnings for portfolio tickers.
+```
+
+### 3.17 Health Endpoint
+
+```
+GET /api/v1/health
+  Response: { status: "ok", database: "ok", redis: "ok" }
+  Auth:     None (public)
+  Notes:    System health check. Validates critical table existence on startup.
+```
+
+### 3.18 Task Status Endpoint
+
+```
+GET /api/v1/tasks/{task_id}/status
+  Response: { task_id, status: "PENDING"|"STARTED"|"SUCCESS"|"FAILURE", result? }
+  Auth:     Required
+  Notes:    Polls Celery task status. TODO: store task_id→user_id mapping in Redis for stricter isolation.
+```
+
+### 3.19 Additional Undocumented Endpoints in Existing Routers
+
+**Stocks router (`/stocks`):**
+```
+GET  /api/v1/stocks/{ticker}/news          # Yahoo Finance news feed
+GET  /api/v1/stocks/{ticker}/intelligence   # Enriched stock data (beta, yield, PE, news, earnings)
+POST /api/v1/stocks/watchlist/{ticker}/acknowledge  # Mark stale price as acknowledged
+POST /api/v1/stocks/watchlist/refresh-all   # Refresh all watchlist tickers (sequential ingest)
+```
+
+**Portfolio router (`/portfolio`):**
+```
+GET  /api/v1/portfolio/rebalancing        # Rebalancing suggestions based on target allocations
+GET  /api/v1/portfolio/health             # Real-time health score with component breakdown (HHI, Sharpe, beta)
+GET  /api/v1/portfolio/health/history     # Portfolio health score trend (hypertable)
+```
+
+**Chat router (`/chat`):**
+```
+GET    /api/v1/chat/sessions                       # List user's chat sessions
+GET    /api/v1/chat/sessions/{session_id}/messages  # Get messages for a session
+DELETE /api/v1/chat/sessions/{session_id}           # Delete a chat session
+```
+
 ---
 
 ## 4. Service Layer Design
 
-> **Implementation status:** The service layer pattern described below is ASPIRATIONAL. It is planned for Phase 3+. In the current implementation (Phases 1-2), routers call tools directly (e.g., `from backend.tools.signals import compute_signals`). The Redis caching strategy is also not yet implemented.
+> **Implementation status:** Partially implemented. `CacheService` (`backend/services/cache.py`), `redis_pool` (`backend/services/redis_pool.py`), and `token_blocklist` (`backend/services/token_blocklist.py`) exist as service layer components. Routers still call tools directly for most business logic — a full service extraction is tracked as KAN-172.
 
 ### 4.1 Service Pattern
 
@@ -688,7 +798,7 @@ Redis cache-aside with 3-tier key namespace and `CacheService` (`backend/service
 
 Layer 1: Consume external data sources (EdgarTools, Alpha Vantage, FRED, Finnhub — via API wrapper adapters, not MCP protocol)
 Layer 2: Enrich in backend (Tool Registry + caching + cross-source analysis)
-Layer 3: Expose as MCP server at `/mcp` (Streamable HTTP, JWT auth) — currently for external clients only; agent uses direct calls until Phase 5.6 (stdio MCP refactor)
+Layer 3: Expose as MCP server — Streamable HTTP at `/mcp` (JWT auth) for external clients + stdio transport (`mcp_server/tool_server.py`) for internal agent use when `MCP_TOOLS=True` (Phase 5.6 ✅)
 
 ### 5.2 Tool Registry
 
@@ -725,12 +835,11 @@ Agent types = registry filters:
 - Stock agent: all categories (analysis, data, portfolio, macro, news, sec)
 - General agent: data + news only
 
-### 5.3 Agentic Loop (two-phase per iteration)
+### 5.3 Agent Pipeline
 
-1. Tool-calling phase: LLM called in non-streaming mode. Tool calls detected, executed with per-tool timeout (10s internal, 30s proxied). Safe execution wrapper handles timeouts/errors gracefully.
-2. Synthesis phase: when LLM responds without tool calls, stream tokens to client.
+> V1 ReAct loop was removed in Phase 6A (KAN-140). The current architecture is the V2 Plan→Execute→Synthesize graph described in §5.5.
 
-Max 15 iterations. Few-shot prompted (prompt templates in `backend/agents/prompts/`).
+Few-shot prompted (prompt templates in `backend/agents/prompts/`). Max 10 tool calls per plan.
 
 ### 5.4 LLM Client & Factory (Phase 6A) ✅ IMPLEMENTED
 
@@ -862,6 +971,7 @@ flowchart TB
         B1["Every 30 min: Watchlist Refresh"]
         B2["6-7 AM: Warm Data Sync"]
         B3["4:30 PM: Portfolio Snapshots"]
+        B3a["4:45 PM: Health Snapshots"]
         B4["9:30 PM: Nightly Pipeline Chain"]
         B5["Sunday 2 AM: Model Retrain"]
     end
@@ -906,6 +1016,7 @@ flowchart TB
 | 7:00 AM | `sync_fred_indicators_task` | Daily |
 | Every 30 min | `refresh_all_watchlist_tickers_task` | Intraday |
 | 4:30 PM | `snapshot_all_portfolios_task` | Daily |
+| 4:45 PM | `snapshot_health_task` | Daily |
 | 9:30 PM | `nightly_pipeline_chain_task` (8 steps) | Daily |
 
 All tasks are in `backend/tasks/`. Celery is configured in `backend/tasks/__init__.py`.
@@ -1005,7 +1116,6 @@ frontend/
 │   ├── chart-theme.ts          # useChartColors() hook + CHART_STYLE constants
 │   ├── typography.ts           # Semantic type scale (PAGE_TITLE, METRIC_PRIMARY, etc.)
 │   ├── density-context.tsx     # DensityProvider + useDensity() for screener
-│   ├── storage-keys.ts         # Namespaced localStorage key registry (stocksignal: prefix)
 │   └── market-hours.ts         # Pure isNYSEOpen() — IANA America/New_York, DST-correct
 ├── types/
 │   └── api.ts                  # Shared TypeScript types
@@ -1178,34 +1288,11 @@ async def fetch_prices(ticker: str, period: str = "10y") -> pd.DataFrame:
 
 ### 8.2 FRED API Integration (Phase 5)
 
-```python
-# tools/macro.py
-FRED_SERIES = {
-    "yield_curve_10y2y": "T10Y2Y",
-    "vix": "VIXCLS",
-    "unemployment_claims": "ICSA",
-    "fed_funds_rate": "FEDFUNDS",
-}
+FRED data is accessed via `FredAdapter` in `backend/tools/adapters/fred.py`, registered as an MCP adapter tool. Used by warm data sync task (`backend/tasks/warm_data.py:sync_fred_indicators_task`).
 
-async def fetch_macro_indicators() -> dict:
-    for name, series_id in FRED_SERIES.items():
-        data = fred_client.get_series(series_id, limit=1)
-        store_macro_snapshot(name, data)
-```
+### 8.3 Telegram Integration
 
-### 8.3 Telegram Integration (Phase 5)
-
-```python
-# services/notification.py
-async def send_telegram(user_id: uuid, message: str):
-    prefs = await get_user_preferences(user_id)
-    if not prefs.notify_telegram:
-        return
-    if is_quiet_hours(prefs):
-        await schedule_for_after_quiet_hours(user_id, message)
-        return
-    await telegram_bot.send_message(chat_id=prefs.telegram_chat_id, text=message)
-```
+> **Status: NOT IMPLEMENTED — deferred.** Notification channels are in-app only (`in_app_alerts` table). Telegram integration is a future backlog item.
 
 ---
 
@@ -1501,9 +1588,13 @@ External clients (Claude Code, Telegram, mobile)
   └── MCP Client → HTTP → :8282
 ```
 
-### 12.3 Current State (Phase 4B/4D)
+### 12.3 Current State (Phase 5.6 ✅)
 
-The agent currently calls tools via **direct in-process Python calls** (`tool.execute(params)`). The `/mcp` Streamable HTTP endpoint exists and works but is only used by external MCP clients — the agent does not go through it. The "MCPAdapter" classes (EdgarAdapter, AlphaVantageAdapter, etc.) are plain API wrappers, not actual MCP clients.
+**Two MCP transport modes:**
+1. **Streamable HTTP** (`/mcp`) — for external MCP clients (Claude Code, Cursor). JWT auth via `MCPAuthMiddleware`.
+2. **stdio** (`mcp_server/tool_server.py`) — spawned as subprocess by FastAPI lifespan. Agent uses this when `MCP_TOOLS=True` (default). No auth (same-machine IPC).
+
+The agent calls tools through `MCPToolClient` (`mcp_server/tool_client.py`) which wraps params as `{"params": {...}}` for FastMCP dispatch. 20+ integration tests in `tests/integration/`.
 
 ### 12.4 Authentication
 
