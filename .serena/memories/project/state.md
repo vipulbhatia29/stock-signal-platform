@@ -21,11 +21,15 @@
 ## Session 54 Summary
 Phase 6A LLM Factory & Cascade — ALL 7 stories (KAN-140–146) shipped.
 V1 deprecated, multi-model cascade, TokenBudget, admin API, tool truncation, tier wiring.
-766 unit tests + 10 admin API tests. Alembic head: c965b4058c70 (migration 012).
+734 unit tests + 226 API + 17 Playwright. Redis cache shipped (PR #100). Phase 6 complete.. Alembic head: c965b4058c70 (migration 012).
 Bug fix: LLMModelConfig datetime columns — tz-naive for asyncpg compatibility.
 
 ## Resume Point
-Phase 6A COMPLETE. Next: Phase 6B (Agent Observability) or Phase 6C (Testing Infrastructure).
+Phase 7 implementation. Execute Plans A+C (parallel) → B → D.
+- KAN-158: Guardrails (8 tasks) — `docs/superpowers/plans/2026-03-25-guardrails-plan.md`
+- KAN-159: Data Enrichment (7 tasks) — `docs/superpowers/plans/2026-03-25-data-enrichment-plan.md`
+- KAN-160: Agent Intelligence (8 tasks, depends on KAN-159) — `docs/superpowers/plans/2026-03-25-agent-intelligence-plan.md`
+- KAN-161: Health Materialization (4 tasks, depends on KAN-160) — `docs/superpowers/plans/2026-03-25-health-materialization-plan.md`
 
 ## Stats
 - ~980 total tests (766 unit + ~180 API + 7 e2e + 24 integration + 107 frontend)

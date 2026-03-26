@@ -674,33 +674,53 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 
 ### Deliverables
 
-#### Immediate Priority (KAN-148) ✅ (Session 55)
-- [x] **Redis read cache** — CacheService with 3-tier namespace (app/user/session), TTL tiers (volatile/standard/stable/session), cache-aside pattern
-- [x] **Cache warmup** on startup (indexes)
-- [x] **Agent tool session cache** — per-session tool result caching in executor (10 cacheable tools)
-- [x] **Nightly invalidation** — clear stale screener/sector/signal/forecast cache before recomputation
-- [ ] **Portfolio aggregation tool** — weighted summary for 100+ stock portfolios
-- [ ] **Earnings card** on stock detail page (EPS estimate vs actual chart)
+#### KAN-148: Redis Cache ✅ (Session 55, PR #100)
+- [x] CacheService with 3-tier namespace (app/user/session), TTL tiers, cache-aside
+- [x] Cache warmup on startup, agent tool session cache, nightly invalidation
 
-#### Medium Priority
-- [ ] **Google OAuth (SSO)** — PKCE flow, CachedJWKSClient, frontend "Sign in with Google"
-- [ ] **Chat audit trail** — admin query endpoints for session transcripts
-- [ ] **Centralized input validation** module
-- [ ] **Candlestick chart toggle** on stock detail
-- [ ] **Benchmark comparison chart** (stock vs S&P 500 vs NASDAQ)
+#### KAN-158: Spec A — Agent Guardrails (planned, 8 tasks)
+- [ ] Input guard (length, injection, PII, control chars)
+- [ ] Output guard (evidence check, disclaimer)
+- [ ] Multi-turn abuse tracking (decline_count on ChatSession)
+- [ ] Tool param validation (ticker format, query sanitization)
+- [ ] 5 new planner decline examples
 
-#### Deferred (UI-6, UI-9 from Phase 4F)
-- [x] ~~**UI-6: Sectors Page**~~ ✅ Done (Session 45)
-- [ ] **UI-9: Animations + Final Polish** — framer-motion, glow effects, scrollbar
+#### KAN-159: Spec C — Data Enrichment (planned, 7 tasks)
+- [ ] Stock model: add beta, dividend_yield, forward_pe
+- [ ] News endpoint (yfinance + Google News RSS with defusedxml)
+- [ ] Intelligence endpoint (upgrades, insider, earnings, EPS revisions)
+- [ ] Dividend sync in ingest + nightly pipeline
+- [ ] Nightly beta/yield/PE refresh
 
-#### Deferred Backend (Phase 4G backlog)
-- [ ] Live LLM eval tests (CI_GROQ_API_KEY available)
-- [ ] Red flag scanner (controversies, short interest)
-- [ ] Forecast blending into composite score
-- ~~Telegram notifications~~ REMOVED — in-app alerts sufficient
+#### KAN-160: Spec B — Agent Intelligence (planned, 8 tasks, depends on KAN-159)
+- [ ] 4 new tools: get_portfolio_health, get_market_briefing, get_stock_intelligence, recommend_stocks
+- [ ] 12 new planner few-shots + response_type routing
+- [ ] 3 synthesizer response format variants (health, briefing, recommendation)
+- [ ] API endpoints: GET /portfolio/health, GET /market/briefing
+
+#### KAN-161: Spec D — Health Materialization (planned, 4 tasks, depends on KAN-160)
+- [ ] portfolio_health_snapshots TimescaleDB hypertable + migration
+- [ ] Celery Beat task at 4:45 PM + nightly chain Step 9
+- [ ] GET /portfolio/health/history endpoint
+
+#### Remaining Backlog (KAN-149–157)
+- [ ] KAN-149: Portfolio aggregation tool (superseded by KAN-160 portfolio_health)
+- [ ] KAN-150: Candlestick OHLC endpoint
+- [ ] KAN-151: Benchmark comparison endpoint
+- [ ] KAN-152: Google OAuth (PKCE flow)
+- [ ] KAN-153: Chat audit trail
+- [ ] KAN-154: Centralized input validation (partially addressed by KAN-158 guardrails)
+- [ ] KAN-155: Forecast blending into composite score
+- [ ] KAN-156: Red flag scanner (insider data now available via KAN-159)
+- [ ] KAN-157: Live LLM eval tests (CI_GROQ_API_KEY available)
+
+#### Deferred (UI)
+- [x] ~~UI-6: Sectors Page~~ ✅ Done (Session 45)
+- [ ] UI-9: Animations + Final Polish
+- [ ] Earnings card on stock detail page
 
 ### Success Criteria
-All HIGH priority backlog items addressed. Google OAuth working. Portfolio aggregation handles 100+ stocks.
+Guardrails deployed. Portfolio health answerable. Market briefing tool works. 24 agent tools (was 20). All free data from yfinance exploited.
 
 ---
 
