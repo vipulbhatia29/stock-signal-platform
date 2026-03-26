@@ -12,8 +12,19 @@ Next.js application with TypeScript, Tailwind CSS, shadcn/ui, and Recharts.
 - Charts use Recharts — import from `recharts`
 - UI primitives from shadcn/ui — install with `npx shadcn@latest add <component>`
 
+## Commands
+
+```bash
+npm run dev          # Start dev server (port 3000)
+npm run build        # Production build
+npm run lint         # ESLint
+npx tsc --noEmit     # Type check
+npx jest             # Unit tests (jsdom env)
+```
+
 ## Important
 
 - Backend API runs on port 8181: `NEXT_PUBLIC_API_URL=http://localhost:8181`
 - This is a SINGLE app — no iframes, no embedded services
-- Use `npm run dev` to start (port 3000)
+- Jest needs `testEnvironment: "jsdom"` (not `"node"`)
+- Tailwind v4: use `font-family: var(--font-sora)` in `@layer base`, not `@theme`
