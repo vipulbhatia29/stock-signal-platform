@@ -4,6 +4,8 @@ import asyncio
 import logging
 from datetime import date
 
+from sqlalchemy import select
+
 from backend.database import async_session_factory
 from backend.tasks import celery_app
 from backend.tasks.pipeline import PipelineRunner, detect_gap, set_watermark_status
@@ -34,6 +36,42 @@ async def _refresh_ticker_async(ticker: str) -> dict:
 
         signal_result = compute_signals(ticker, full_df)
         await store_signal_snapshot(signal_result, db)
+
+        # Refresh beta/yield/forward_pe from yfinance info
+        try:
+            import yfinance as yf
+
+            from backend.models.stock import Stock
+
+            info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info or {})
+            result = await db.execute(select(Stock).where(Stock.ticker == ticker))
+            stock_obj = result.scalar_one_or_none()
+            if stock_obj and info:
+                for yf_key, field in [
+                    ("beta", "beta"),
+                    ("dividendYield", "dividend_yield"),
+                    ("forwardPE", "forward_pe"),
+                ]:
+                    val = info.get(yf_key)
+                    if val is not None:
+                        try:
+                            setattr(stock_obj, field, float(val))
+                        except (TypeError, ValueError):
+                            pass
+                db.add(stock_obj)
+        except Exception:
+            logger.warning("Failed to refresh beta/yield for %s", ticker, exc_info=True)
+
+        # Sync dividends
+        try:
+            from backend.tools.dividends import fetch_dividends, store_dividends
+
+            divs = await asyncio.to_thread(fetch_dividends, ticker)
+            if divs:
+                await store_dividends(ticker, divs, db)
+        except Exception:
+            logger.warning("Failed to sync dividends for %s", ticker, exc_info=True)
+
         await db.commit()
         logger.info("Refreshed %s — composite_score=%.1f", ticker, signal_result.composite_score)
         return {"ticker": ticker, "status": "ok"}
