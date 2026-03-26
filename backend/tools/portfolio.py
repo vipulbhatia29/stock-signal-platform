@@ -240,17 +240,21 @@ async def get_positions_with_pnl(
         )
         sector_map = {row.ticker: row.sector for row in sector_result}
 
+    # Batch-fetch latest prices for all position tickers (fixes N+1 query)
+    price_map: dict[str, float] = {}
+    if tickers:
+        price_result = await db.execute(
+            select(StockPrice.ticker, StockPrice.adj_close)
+            .distinct(StockPrice.ticker)
+            .where(StockPrice.ticker.in_(tickers))
+            .order_by(StockPrice.ticker, StockPrice.time.desc())
+        )
+        price_map = {row.ticker: float(row.adj_close) for row in price_result}
+
     pnl_rows = []
     total_value = 0.0
     for pos in positions:
-        price_result = await db.execute(
-            select(StockPrice.adj_close)
-            .where(StockPrice.ticker == pos.ticker)
-            .order_by(StockPrice.time.desc())
-            .limit(1)
-        )
-        current_price_raw = price_result.scalar_one_or_none()
-        current_price = float(current_price_raw) if current_price_raw is not None else None
+        current_price = price_map.get(pos.ticker)
 
         shares = float(pos.shares)
         avg_cost = float(pos.avg_cost_basis)
