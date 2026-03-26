@@ -1055,6 +1055,99 @@ async def get_fundamentals(
     )
 
 
+@router.get("/{ticker}/news")
+async def get_stock_news(
+    ticker: str,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Get recent news articles for a stock from multiple sources."""
+    import asyncio
+    from datetime import datetime, timezone
+
+    from backend.schemas.intelligence import StockNewsResponse
+    from backend.services.cache import CacheTier
+    from backend.tools.news import (
+        fetch_google_news_rss,
+        fetch_yfinance_news,
+        merge_and_deduplicate,
+    )
+
+    await _require_stock(ticker, db)
+    t = ticker.upper()
+
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:news:{t}"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return StockNewsResponse.model_validate_json(cached)
+
+    yf_articles = await asyncio.to_thread(fetch_yfinance_news, t)
+    google_articles = await fetch_google_news_rss(t)
+    merged = merge_and_deduplicate(yf_articles + google_articles)
+
+    response = StockNewsResponse(
+        ticker=t,
+        articles=merged,
+        fetched_at=datetime.now(timezone.utc).isoformat(),
+    )
+    if cache:
+        await cache.set(cache_key, response.model_dump_json(), CacheTier.VOLATILE)
+    return response
+
+
+@router.get("/{ticker}/intelligence")
+async def get_stock_intelligence(
+    ticker: str,
+    request: Request,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Get analyst upgrades, insider transactions, earnings calendar, EPS revisions."""
+    import asyncio
+    from datetime import datetime, timezone
+
+    from backend.schemas.intelligence import StockIntelligenceResponse
+    from backend.services.cache import CacheTier
+    from backend.tools.intelligence import (
+        fetch_eps_revisions,
+        fetch_insider_transactions,
+        fetch_next_earnings_date,
+        fetch_upgrades_downgrades,
+    )
+
+    await _require_stock(ticker, db)
+    t = ticker.upper()
+
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:intelligence:{t}"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return StockIntelligenceResponse.model_validate_json(cached)
+
+    upgrades, insider, earnings, eps = await asyncio.gather(
+        asyncio.to_thread(fetch_upgrades_downgrades, t),
+        asyncio.to_thread(fetch_insider_transactions, t),
+        asyncio.to_thread(fetch_next_earnings_date, t),
+        asyncio.to_thread(fetch_eps_revisions, t),
+    )
+
+    response = StockIntelligenceResponse(
+        ticker=t,
+        upgrades_downgrades=upgrades,
+        insider_transactions=insider,
+        next_earnings_date=earnings,
+        eps_revisions=eps,
+        fetched_at=datetime.now(timezone.utc).isoformat(),
+    )
+    if cache:
+        await cache.set(cache_key, response.model_dump_json(), CacheTier.VOLATILE)
+    return response
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Shared helpers
 # ─────────────────────────────────────────────────────────────────────────────
