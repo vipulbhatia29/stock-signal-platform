@@ -3,8 +3,8 @@
 import logging
 import re
 
+import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from jose import jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,7 +47,12 @@ def _get_token_remaining_ttl(token: str) -> int:
     """
     import time
 
-    payload = jwt.get_unverified_claims(token)
+    payload = jwt.decode(
+        token,
+        settings.JWT_SECRET_KEY,
+        algorithms=[settings.JWT_ALGORITHM],
+        options={"verify_exp": False},
+    )
     exp = payload.get("exp", 0)
     remaining = int(exp - time.time())
     return max(remaining, 0)
