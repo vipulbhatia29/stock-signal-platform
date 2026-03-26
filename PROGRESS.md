@@ -981,6 +981,54 @@ Compared SSP vs aset-platform. 12 gaps identified. 3 specs + 1 backlog + 1 plan 
 
 ---
 
+## Session 56 — Phase 7 Specs A+C+B Implementation (KAN-158, 159, 160)
+
+**Date:** 2026-03-26 | **Tests:** 806 unit (+72 new) | **PRs:** #102, #103, #104
+
+### KAN-158: Agent Guardrails (PR #102)
+- `backend/agents/guards.py` — input sanitizer, injection detector, PII redactor, output validator, ticker/search validation, financial disclaimer constant
+- Wired input guard in chat router (length → sanitize → PII → injection → abuse check)
+- Auto-append financial disclaimer to every substantive response (stream.py)
+- Tool parameter validation in executor (ticker format, search query URLs)
+- Output validation in synthesizer (downgrade unsupported high-confidence claims)
+- 5 new planner decline examples + redirect for subjective queries
+- Migration 013: `decline_count` on `chat_session`
+- 32 new tests (23 guards + 9 adversarial)
+
+### KAN-159: Data Enrichment (PR #103)
+- 3 new Stock columns: `beta`, `dividend_yield`, `forward_pe` (migration 014)
+- Extract beta/dividendYield/forwardPE in `fetch_analyst_data()` during ingestion
+- Dividend sync added to ingest tool (step 4d)
+- `backend/tools/news.py` — yfinance + Google News RSS (defusedxml for XXE protection)
+- `backend/tools/intelligence.py` — analyst upgrades, insider transactions, earnings calendar, EPS revisions
+- 2 new API endpoints: `GET /{ticker}/news`, `GET /{ticker}/intelligence` with volatile Redis cache
+- Nightly pipeline refreshes beta/yield/PE + syncs dividends
+- 16 new tests (7 news + 5 intelligence + 4 API)
+
+### KAN-160: Agent Intelligence (PR #104)
+- 4 new agent tools (24 internal total): `portfolio_health`, `market_briefing`, `get_stock_intelligence`, `recommend_stocks`
+- Portfolio health: HHI diversification, signal quality, Sharpe risk, dividend income, sector balance → 0-10 score + letter grade
+- Market briefing: S&P 500/NASDAQ/Dow/VIX + 10 sector ETFs + portfolio news + upcoming earnings
+- Recommend stocks: multi-signal consensus (signals 35%, fundamentals 25%, momentum 20%, portfolio fit 20%)
+- `backend/schemas/portfolio_health.py` split from infra `health.py` (clean domain separation)
+- Planner: `response_type` field + 6 new few-shot examples, propagated through graph state
+- 2 new API endpoints: `GET /portfolio/health`, `GET /market/briefing`
+- Market router mounted in main.py
+- 28 new tests (18 health + 4 briefing + 6 recommend)
+
+### Key Decisions
+- Parallel execution of KAN-158 + KAN-159: separate branches, sequential merge (158 first for migration 013, then 159 rebased for migration 014)
+- Worktree agents failed on permissions — executed directly instead
+- Split `schemas/health.py`: infra health (MCP heartbeats) stays, portfolio health gets own file
+
+### Stats
+- 806 unit tests passing (was 734, +72 new)
+- Alembic head: migration 014 (beta/yield/PE)
+- 24 internal tools (was 20) + 12 MCP adapters = 36 total
+- 3 PRs merged to develop this session
+
+---
+
 ## Session 55 — Phase 6 Complete + KAN-148 Redis Cache + Phase 7 Design
 
 **Date:** 2026-03-25 | **Tests:** 734 unit + 226 API + 17 Playwright
