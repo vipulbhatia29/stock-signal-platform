@@ -86,7 +86,7 @@ async def test_get_fundamentals_returns_200(
     await _insert_stock(db_url, "FUND1")
     result = _make_fundamental_result("FUND1")
 
-    with patch("backend.routers.stocks.fetch_fundamentals", return_value=result):
+    with patch("backend.routers.stocks.data.fetch_fundamentals", return_value=result):
         response = await authenticated_client.get("/api/v1/stocks/FUND1/fundamentals")
 
     assert response.status_code == 200
@@ -108,7 +108,7 @@ async def test_get_fundamentals_includes_piotroski_breakdown(
     await _insert_stock(db_url, "FUND2")
     result = _make_fundamental_result("FUND2")
 
-    with patch("backend.routers.stocks.fetch_fundamentals", return_value=result):
+    with patch("backend.routers.stocks.data.fetch_fundamentals", return_value=result):
         response = await authenticated_client.get("/api/v1/stocks/FUND2/fundamentals")
 
     assert response.status_code == 200
@@ -135,7 +135,7 @@ async def test_get_fundamentals_null_fields_when_data_missing(
         piotroski_breakdown={},
     )
 
-    with patch("backend.routers.stocks.fetch_fundamentals", return_value=result):
+    with patch("backend.routers.stocks.data.fetch_fundamentals", return_value=result):
         response = await authenticated_client.get("/api/v1/stocks/FUND3/fundamentals")
 
     assert response.status_code == 200

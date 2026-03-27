@@ -55,7 +55,7 @@ class TestRefreshAll:
             json={"ticker": "RFRSH"},
         )
 
-        with patch("backend.routers.stocks.refresh_ticker_task") as mock_task:
+        with patch("backend.routers.stocks.watchlist.refresh_ticker_task") as mock_task:
             mock_task.delay.return_value = MagicMock(id="mock-task-123")
             response = await authenticated_client.post(
                 "/api/v1/stocks/watchlist/refresh-all",

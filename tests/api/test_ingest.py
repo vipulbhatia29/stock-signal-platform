@@ -20,17 +20,17 @@ class TestIngestTicker:
         assert response.status_code == 400
         assert "invalid ticker" in response.json()["detail"].lower()
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_ingest_new_ticker_success(
         self,
         mock_ensure: AsyncMock,
@@ -79,17 +79,17 @@ class TestIngestTicker:
         call_kwargs = mock_compute.call_args
         assert call_kwargs.kwargs.get("piotroski_score") == 7
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_ingest_passes_none_piotroski_when_fundamentals_unavailable(
         self,
         mock_ensure: AsyncMock,
@@ -130,7 +130,7 @@ class TestIngestTicker:
         call_kwargs = mock_compute.call_args
         assert call_kwargs.kwargs.get("piotroski_score") is None
 
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_ingest_unknown_ticker_returns_404(
         self,
         mock_ensure: AsyncMock,
