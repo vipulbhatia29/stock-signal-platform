@@ -191,6 +191,4 @@ async def test_fast_path_simple_lookup_falls_through_without_tool_executor():
 
     # Falls through to graph path; graph=None → error event
     assert len(events) >= 1
-    assert '"error"' in events[0], (
-        f"Expected error event when graph is None, got: {events[0]}"
-    )
+    assert '"error"' in events[0], f"Expected error event when graph is None, got: {events[0]}"
