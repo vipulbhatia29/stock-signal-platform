@@ -250,3 +250,88 @@ class TestWriteEvent:
         row = mock_session.add.call_args[0][0]
         assert row.agent_type == "stock"
         assert row.agent_instance_id == "abc-123"
+
+    @pytest.mark.asyncio
+    async def test_writes_loop_step_on_llm_call(self) -> None:
+        """loop_step should be set on the LLMCallLog row when provided."""
+        from backend.agents.observability_writer import write_event
+
+        mock_session = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+        patch_factory = "backend.agents.observability_writer.async_session_factory"
+        patch_sid = "backend.agents.observability_writer.current_session_id"
+        patch_qid = "backend.agents.observability_writer.current_query_id"
+        patch_at = "backend.agents.observability_writer.current_agent_type"
+        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        with (
+            patch(patch_factory, return_value=mock_cm),
+            patch(patch_sid) as m_sid,
+            patch(patch_qid) as m_qid,
+            patch(patch_at) as m_at,
+            patch(patch_ai) as m_ai,
+        ):
+            m_sid.get.return_value = uuid.uuid4()
+            m_qid.get.return_value = uuid.uuid4()
+            m_at.get.return_value = None
+            m_ai.get.return_value = None
+            await write_event(
+                "llm_call",
+                {
+                    "provider": "groq",
+                    "model": "llama-3.3-70b",
+                    "tier": "planner",
+                    "latency_ms": 150,
+                    "prompt_tokens": 100,
+                    "completion_tokens": 50,
+                    "error": None,
+                    "loop_step": 5,
+                },
+            )
+
+        row = mock_session.add.call_args[0][0]
+        assert row.loop_step == 5
+
+    @pytest.mark.asyncio
+    async def test_writes_loop_step_on_tool_execution(self) -> None:
+        """loop_step should be set on the ToolExecutionLog row when provided."""
+        from backend.agents.observability_writer import write_event
+
+        mock_session = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+        patch_factory = "backend.agents.observability_writer.async_session_factory"
+        patch_sid = "backend.agents.observability_writer.current_session_id"
+        patch_qid = "backend.agents.observability_writer.current_query_id"
+        patch_at = "backend.agents.observability_writer.current_agent_type"
+        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        with (
+            patch(patch_factory, return_value=mock_cm),
+            patch(patch_sid) as m_sid,
+            patch(patch_qid) as m_qid,
+            patch(patch_at) as m_at,
+            patch(patch_ai) as m_ai,
+        ):
+            m_sid.get.return_value = uuid.uuid4()
+            m_qid.get.return_value = uuid.uuid4()
+            m_at.get.return_value = None
+            m_ai.get.return_value = None
+            await write_event(
+                "tool_execution",
+                {
+                    "tool_name": "analyze_stock",
+                    "latency_ms": 300,
+                    "status": "ok",
+                    "result_size_bytes": 1024,
+                    "params": {"ticker": "AAPL"},
+                    "error": None,
+                    "loop_step": 2,
+                },
+            )
+
+        row = mock_session.add.call_args[0][0]
+        assert row.loop_step == 2
