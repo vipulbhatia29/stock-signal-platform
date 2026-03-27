@@ -10,7 +10,7 @@ class TestExtendedFundamentals:
 
     def test_fetch_fundamentals_includes_growth_margins(self) -> None:
         """Extended fundamentals should include revenue growth, margins, ROE."""
-        with patch("backend.tools.fundamentals.yf.Ticker") as mock_ticker:
+        with patch("backend.services.stock_data.yf.Ticker") as mock_ticker:
             mock_info = {
                 "trailingPE": 28.5,
                 "pegRatio": 1.2,
@@ -40,7 +40,7 @@ class TestExtendedFundamentals:
 
     def test_fetch_fundamentals_missing_growth_returns_none(self) -> None:
         """Missing growth/margin fields should be None, not error."""
-        with patch("backend.tools.fundamentals.yf.Ticker") as mock_ticker:
+        with patch("backend.services.stock_data.yf.Ticker") as mock_ticker:
             mock_ticker.return_value.info = {"trailingPE": 15.0}
 
             from backend.tools.fundamentals import fetch_fundamentals
@@ -58,7 +58,7 @@ class TestFetchAnalystData:
 
     def test_returns_analyst_targets(self) -> None:
         """Should extract analyst target prices from yfinance info."""
-        with patch("backend.tools.fundamentals.yf.Ticker") as mock_ticker:
+        with patch("backend.services.stock_data.yf.Ticker") as mock_ticker:
             mock_ticker.return_value.info = {
                 "targetMeanPrice": 186.60,
                 "targetHighPrice": 260.0,
@@ -84,7 +84,7 @@ class TestFetchAnalystData:
 
     def test_yfinance_failure_returns_empty_dict(self) -> None:
         """If yfinance fails, return empty dict (no crash)."""
-        with patch("backend.tools.fundamentals.yf.Ticker", side_effect=Exception("boom")):
+        with patch("backend.services.stock_data.yf.Ticker", side_effect=Exception("boom")):
             from backend.tools.fundamentals import fetch_analyst_data
 
             result = fetch_analyst_data("INVALID")

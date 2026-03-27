@@ -220,7 +220,7 @@ def test_fetch_fundamentals_returns_result():
         debt_to_equity=0.4,
     )
     mock_ticker = _make_ticker_mock(info)
-    with patch("backend.tools.fundamentals.yf.Ticker", return_value=mock_ticker):
+    with patch("backend.services.stock_data.yf.Ticker", return_value=mock_ticker):
         result = fetch_fundamentals("AAPL")
 
     assert isinstance(result, FundamentalResult)
@@ -234,7 +234,7 @@ def test_fetch_fundamentals_computes_fcf_yield():
     """FCF yield = free_cashflow / market_cap."""
     info = _make_info(free_cashflow=100_000_000, market_cap=2_000_000_000)
     mock_ticker = _make_ticker_mock(info)
-    with patch("backend.tools.fundamentals.yf.Ticker", return_value=mock_ticker):
+    with patch("backend.services.stock_data.yf.Ticker", return_value=mock_ticker):
         result = fetch_fundamentals("MSFT")
 
     expected_yield = round(100_000_000 / 2_000_000_000, 4)
@@ -245,7 +245,7 @@ def test_fetch_fundamentals_missing_pe_returns_none():
     """Missing P/E ratio should result in pe_ratio=None, not crash."""
     info = _make_info(trailing_pe=None)
     mock_ticker = _make_ticker_mock(info)
-    with patch("backend.tools.fundamentals.yf.Ticker", return_value=mock_ticker):
+    with patch("backend.services.stock_data.yf.Ticker", return_value=mock_ticker):
         result = fetch_fundamentals("XYZ")
 
     assert result.pe_ratio is None
@@ -255,7 +255,7 @@ def test_fetch_fundamentals_zero_market_cap_gives_none_fcf_yield():
     """Zero market cap must not cause division by zero — fcf_yield should be None."""
     info = _make_info(market_cap=0, free_cashflow=50_000_000)
     mock_ticker = _make_ticker_mock(info)
-    with patch("backend.tools.fundamentals.yf.Ticker", return_value=mock_ticker):
+    with patch("backend.services.stock_data.yf.Ticker", return_value=mock_ticker):
         result = fetch_fundamentals("BAD")
 
     assert result.fcf_yield is None
@@ -264,7 +264,7 @@ def test_fetch_fundamentals_zero_market_cap_gives_none_fcf_yield():
 def test_fetch_fundamentals_empty_info_returns_none_fields():
     """An empty info dict should return all-None FundamentalResult without crashing."""
     mock_ticker = _make_ticker_mock({})
-    with patch("backend.tools.fundamentals.yf.Ticker", return_value=mock_ticker):
+    with patch("backend.services.stock_data.yf.Ticker", return_value=mock_ticker):
         result = fetch_fundamentals("EMPTY")
 
     assert result.ticker == "EMPTY"
@@ -279,7 +279,7 @@ def test_fetch_fundamentals_piotroski_included():
     """fetch_fundamentals must include a piotroski_score in the result."""
     info = _make_info()
     mock_ticker = _make_ticker_mock(info)
-    with patch("backend.tools.fundamentals.yf.Ticker", return_value=mock_ticker):
+    with patch("backend.services.stock_data.yf.Ticker", return_value=mock_ticker):
         result = fetch_fundamentals("GOOG")
 
     assert result.piotroski_score is not None
@@ -291,7 +291,7 @@ def test_fetch_fundamentals_ticker_uppercased():
     """Ticker should be stored uppercase regardless of input case."""
     info = _make_info()
     mock_ticker = _make_ticker_mock(info)
-    with patch("backend.tools.fundamentals.yf.Ticker", return_value=mock_ticker):
+    with patch("backend.services.stock_data.yf.Ticker", return_value=mock_ticker):
         result = fetch_fundamentals("aapl")
 
     assert result.ticker == "AAPL"
@@ -299,7 +299,7 @@ def test_fetch_fundamentals_ticker_uppercased():
 
 def test_fetch_fundamentals_yfinance_exception_returns_none_result():
     """If yfinance raises, return a FundamentalResult with all None fields."""
-    with patch("backend.tools.fundamentals.yf.Ticker", side_effect=Exception("network error")):
+    with patch("backend.services.stock_data.yf.Ticker", side_effect=Exception("network error")):
         result = fetch_fundamentals("FAIL")
 
     assert result.ticker == "FAIL"
