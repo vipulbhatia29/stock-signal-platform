@@ -105,7 +105,7 @@ class TestFetchEarningsHistory:
         )
         mock_df.index.name = "quarter"
 
-        with patch("backend.tools.fundamentals.yf.Ticker") as mock_ticker:
+        with patch("backend.services.stock_data.yf.Ticker") as mock_ticker:
             mock_ticker.return_value.earnings_history = mock_df
 
             from backend.tools.fundamentals import fetch_earnings_history
@@ -119,7 +119,7 @@ class TestFetchEarningsHistory:
 
     def test_yfinance_failure_returns_empty(self) -> None:
         """Should return empty list on yfinance error."""
-        with patch("backend.tools.fundamentals.yf.Ticker", side_effect=Exception("boom")):
+        with patch("backend.services.stock_data.yf.Ticker", side_effect=Exception("boom")):
             from backend.tools.fundamentals import fetch_earnings_history
 
             result = fetch_earnings_history("BAD")

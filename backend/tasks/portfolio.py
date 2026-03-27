@@ -4,8 +4,8 @@ import asyncio
 import logging
 
 from backend.database import async_session_factory
+from backend.services.portfolio import get_all_portfolio_ids, snapshot_portfolio_value
 from backend.tasks import celery_app
-from backend.tools.portfolio import get_all_portfolio_ids, snapshot_portfolio_value
 
 logger = logging.getLogger(__name__)
 

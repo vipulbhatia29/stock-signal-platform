@@ -42,17 +42,17 @@ def _mock_signal(composite_score=7.5) -> MagicMock:
 class TestIngestPipelineHardening:
     """Additional ingest pipeline tests beyond the basic 5 in test_ingest.py."""
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_delta_refresh_returns_updated_status(
         self,
         mock_ensure,
@@ -81,17 +81,17 @@ class TestIngestPipelineHardening:
         assert resp.status_code == 200
         assert resp.json()["status"] == "updated"
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_new_ticker_returns_created_status(
         self,
         mock_ensure,
@@ -118,17 +118,17 @@ class TestIngestPipelineHardening:
         assert resp.status_code == 200
         assert resp.json()["status"] == "created"
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_empty_price_data_returns_zero_rows(
         self,
         mock_ensure,
@@ -157,17 +157,17 @@ class TestIngestPipelineHardening:
         assert data["rows_fetched"] == 0
         assert data["composite_score"] is None
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_rows_fetched_matches_delta_length(
         self,
         mock_ensure,
@@ -194,17 +194,17 @@ class TestIngestPipelineHardening:
         assert resp.status_code == 200
         assert resp.json()["rows_fetched"] == 12
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_signal_snapshot_stored_when_composite_available(
         self,
         mock_ensure,
@@ -230,17 +230,17 @@ class TestIngestPipelineHardening:
         await authenticated_client.post("/api/v1/stocks/SIG1/ingest")
         mock_store.assert_called_once()
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_signal_snapshot_not_stored_when_no_composite(
         self,
         mock_ensure,
@@ -266,7 +266,7 @@ class TestIngestPipelineHardening:
         await authenticated_client.post("/api/v1/stocks/SIG2/ingest")
         mock_store.assert_not_called()
 
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_fetch_prices_delta_error_returns_404(
         self,
         mock_ensure,
@@ -276,24 +276,24 @@ class TestIngestPipelineHardening:
         mock_ensure.return_value = _mock_stock()
 
         with patch(
-            "backend.tools.market_data.fetch_prices_delta",
+            "backend.services.pipelines.fetch_prices_delta",
             new_callable=AsyncMock,
             side_effect=ValueError("No price data for BADX"),
         ):
             resp = await authenticated_client.post("/api/v1/stocks/BADX/ingest")
         assert resp.status_code == 404
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_idempotent_double_ingest(
         self,
         mock_ensure,
@@ -326,17 +326,17 @@ class TestIngestPipelineHardening:
         resp2 = await authenticated_client.post("/api/v1/stocks/IDEM/ingest")
         assert resp2.status_code == 200
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_ticker_case_normalized_to_uppercase(
         self,
         mock_ensure,
@@ -365,17 +365,17 @@ class TestIngestPipelineHardening:
         call_args = mock_ensure.call_args[0]
         assert call_args[0] == "AAPL"
 
-    @patch("backend.tools.signals.store_signal_snapshot", new_callable=AsyncMock)
-    @patch("backend.tools.signals.compute_signals")
-    @patch("backend.tools.fundamentals.persist_earnings_snapshots", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_earnings_history", return_value=[])
-    @patch("backend.tools.fundamentals.persist_enriched_fundamentals", new_callable=AsyncMock)
-    @patch("backend.tools.fundamentals.fetch_analyst_data", return_value={})
-    @patch("backend.tools.fundamentals.fetch_fundamentals")
-    @patch("backend.tools.market_data.update_last_fetched_at", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.load_prices_df", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.fetch_prices_delta", new_callable=AsyncMock)
-    @patch("backend.tools.market_data.ensure_stock_exists", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.compute_signals")
+    @patch("backend.services.pipelines.persist_earnings_snapshots", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_earnings_history", return_value=[])
+    @patch("backend.services.pipelines.persist_enriched_fundamentals", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_analyst_data", return_value={})
+    @patch("backend.services.pipelines.fetch_fundamentals")
+    @patch("backend.services.pipelines.update_last_fetched_at", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.load_prices_df", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.fetch_prices_delta", new_callable=AsyncMock)
+    @patch("backend.services.pipelines.ensure_stock_exists", new_callable=AsyncMock)
     async def test_last_fetched_at_updated_after_ingest(
         self,
         mock_ensure,

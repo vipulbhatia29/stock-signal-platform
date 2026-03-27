@@ -98,7 +98,7 @@ class RiskNarrativeTool(BaseTool):
                 # Sector ETF forecast if available
                 sector_fc = None
                 if stock.sector:
-                    from backend.routers.forecasts import SECTOR_ETF_MAP
+                    from backend.constants import SECTOR_ETF_MAP
 
                     etf = SECTOR_ETF_MAP.get(stock.sector.lower())
                     if etf:

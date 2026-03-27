@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.routers.stocks import _yahoo_search
+from backend.routers.stocks.search import _yahoo_search
 
 
 def _mock_httpx_client(json_data: dict) -> MagicMock:
@@ -44,7 +44,7 @@ async def test_yahoo_search_returns_us_equities():
         }
     )
 
-    with patch("backend.routers.stocks.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
         results = await _yahoo_search("palantir")
 
     assert len(results) == 1
@@ -70,7 +70,7 @@ async def test_yahoo_search_includes_etfs():
         }
     )
 
-    with patch("backend.routers.stocks.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
         results = await _yahoo_search("spy")
 
     assert len(results) == 1
@@ -106,7 +106,7 @@ async def test_yahoo_search_excludes_non_equity():
         }
     )
 
-    with patch("backend.routers.stocks.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
         results = await _yahoo_search("aapl")
 
     assert len(results) == 1
@@ -121,7 +121,7 @@ async def test_yahoo_search_handles_failure_gracefully():
     mock_client.__aenter__.return_value = mock_client
     mock_client.__aexit__.return_value = False
 
-    with patch("backend.routers.stocks.httpx.AsyncClient", return_value=mock_client):
+    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=mock_client):
         results = await _yahoo_search("palantir")
 
     assert results == []
@@ -143,7 +143,7 @@ async def test_yahoo_search_converts_dot_to_dash():
         }
     )
 
-    with patch("backend.routers.stocks.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
         results = await _yahoo_search("berkshire")
 
     assert results[0].ticker == "BRK-B"
@@ -165,7 +165,7 @@ async def test_yahoo_search_uses_shortname_fallback():
         }
     )
 
-    with patch("backend.routers.stocks.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
         results = await _yahoo_search("nvidia")
 
     assert results[0].name == "NVIDIA Corporation"

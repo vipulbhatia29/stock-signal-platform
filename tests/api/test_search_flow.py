@@ -99,7 +99,7 @@ class TestSearchFlow:
         ac = await _make_auth_client(client, db_url)
 
         with patch(
-            "backend.routers.stocks._yahoo_search",
+            "backend.routers.stocks.search._yahoo_search",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -126,7 +126,7 @@ class TestSearchFlow:
         ac = await _make_auth_client(client, db_url)
 
         with patch(
-            "backend.routers.stocks._yahoo_search",
+            "backend.routers.stocks.search._yahoo_search",
             new_callable=AsyncMock,
             return_value=[],
         ):
@@ -177,7 +177,7 @@ class TestSearchFlow:
             ticker="PLTR", name="Palantir", exchange="NYSE", in_db=False
         )
         with patch(
-            "backend.routers.stocks._yahoo_search",
+            "backend.routers.stocks.search._yahoo_search",
             new_callable=AsyncMock,
             return_value=[mock_result],
         ) as mock_yahoo:

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.constants import SECTOR_ETF_MAP
 from backend.database import get_async_session
 from backend.dependencies import get_current_user
 from backend.models.forecast import ForecastResult, ModelVersion
@@ -27,21 +28,6 @@ from backend.schemas.forecasts import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["forecasts"])
-
-# Sector-to-ETF mapping
-SECTOR_ETF_MAP: dict[str, str] = {
-    "technology": "XLK",
-    "healthcare": "XLV",
-    "financials": "XLF",
-    "consumer discretionary": "XLY",
-    "consumer staples": "XLP",
-    "energy": "XLE",
-    "industrials": "XLI",
-    "materials": "XLB",
-    "utilities": "XLU",
-    "real estate": "XLRE",
-    "communication services": "XLC",
-}
 
 
 @router.get(
