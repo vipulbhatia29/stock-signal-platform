@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from backend.agents.llm_client import LLMProvider, LLMResponse, ProviderHealth
@@ -72,7 +73,9 @@ class AnthropicProvider(LLMProvider):
         if anthropic_tools:
             kwargs["tools"] = anthropic_tools
 
+        start = time.monotonic()
         response = await client.messages.create(**kwargs)
+        latency_ms = int((time.monotonic() - start) * 1000)
 
         # Normalize Anthropic response to LLMResponse
         content = ""
@@ -89,10 +92,19 @@ class AnthropicProvider(LLMProvider):
                     }
                 )
 
-        return LLMResponse(
+        result = LLMResponse(
             content=content,
             tool_calls=tool_calls,
             model=self._model,
             prompt_tokens=response.usage.input_tokens,
             completion_tokens=response.usage.output_tokens,
         )
+
+        await self._record_success(
+            model=self._model,
+            latency_ms=latency_ms,
+            prompt_tokens=response.usage.input_tokens,
+            completion_tokens=response.usage.output_tokens,
+        )
+
+        return result

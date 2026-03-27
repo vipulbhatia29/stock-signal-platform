@@ -1098,6 +1098,35 @@ Phase 7.6 Sprint 1: 8 parallel subagents in worktrees. Group A (PR #120): KAN-17
 
 ---
 
+## Session 61 — Service Layer Extraction + Router Split (2026-03-27) *(compact)*
+Extracted 6 service modules, split stocks.py into 4 sub-routers (KAN-172/173). 49 new tests. PR #123 merged.
+
+## Session 62 — Phase 8A Observability Completeness (2026-03-27)
+
+**Branch:** `feat/KAN-190-observability-gaps` | **Tests:** 891 → 903 unit (+12 new)
+
+### KAN-190: Observability Completeness (S1-S8)
+Thorough impact analysis → refinement → 6 spec flaws found and fixed → ReAct-awareness analysis → spec+plan approved → 8 JIRA subtasks (KAN-191–198) → serial+parallel execution.
+
+- [x] **S1 (KAN-191):** Migration 016 — `agent_type`, `agent_instance_id`, `loop_step` on both log tables
+- [x] **S2 (KAN-192):** Collector `cost_usd` + `cache_hit` params, writer ContextVar wiring, `fallback_rate_last_60s()` (+7 tests)
+- [x] **S3 (KAN-193):** Provider base class — `_record_success`, `_record_cascade`, `_compute_cost` on `LLMProvider` ABC. `ModelConfigLoader.get_pricing_map()`
+- [x] **S4 (KAN-194):** Groq refactor — removed `self._collector`, uses base class `self.collector` (parallel subagent)
+- [x] **S5 (KAN-195):** Anthropic + OpenAI instrumentation — both had zero observability (parallel subagent)
+- [x] **S6 (KAN-196):** LLMClient cross-provider cascade recording (+3 tests, parallel subagent)
+- [x] **S7 (KAN-197):** Executor cache-hit logging, chat ContextVars, main.py provider loop injection (+2 tests)
+- [x] **S8 (KAN-198):** Admin per-query cost endpoint, `fallback_rate_60s` in llm-metrics (+4 API tests)
+
+### Architecture Highlights
+- **Provider base class observability** — new providers inherit `_record_success()` with zero boilerplate
+- **Two-layer cascade recording** — intra-provider (Groq model→model) + cross-provider (Groq→Anthropic) in `LLMClient`
+- **Forward-compatible migration** — `loop_step` (Phase 8B ReAct) + `agent_instance_id` (Phase 9A multi-agent) pre-added as nullable
+- **ReAct-aware design** — 90% of work is permanent infrastructure; only ~5 lines in executor are temporary
+
+**22 files changed, Alembic head: ea8da8624c85 (migration 016)**
+
+---
+
 ## Session 61 — Service Layer Extraction + Router Split (2026-03-27)
 
 **Branch:** `feat/KAN-172-service-layer` | **PR:** #123 (merged to develop) | **Tests:** 842 → 891 unit, 1127 total

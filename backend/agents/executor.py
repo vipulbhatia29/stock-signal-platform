@@ -210,6 +210,14 @@ async def execute_plan(
                 cached_data = json.loads(cached)
                 results.append(cached_data)
                 tool_calls += 1
+                if collector:
+                    await collector.record_tool_execution(
+                        tool_name=tool_name,
+                        latency_ms=0,
+                        status="success",
+                        result_size_bytes=len(cached),
+                        cache_hit=True,
+                    )
                 if on_step:
                     try:
                         await on_step(i, tool_name, cached_data.get("status", "ok"))
@@ -253,6 +261,7 @@ async def execute_plan(
                 result_size_bytes=result_bytes,
                 params=params,
                 error=result.error if result and result.status == "error" else None,
+                cache_hit=False,
             )
 
         # Validate result

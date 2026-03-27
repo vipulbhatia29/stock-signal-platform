@@ -806,12 +806,18 @@ Close observability gaps (cost tracking, cache_hit, agent_id, fallback_rate). Th
 **JIRA:** KAN-190 (observability gaps), KAN-189 (agent redesign Epic)
 **Serena:** `future_work/AgentArchitectureBrainstorming`
 
-### 8A — Observability Gaps (KAN-190, ~7h)
-- [ ] Wire `cost_usd` on LLMCallLog (pricing from `llm_model_config` → `observability_writer`)
-- [ ] Populate `cache_hit` on ToolExecutionLog (executor already knows)
-- [ ] Add `agent_id` column to both log tables (Alembic migration) + parameter on collector methods
-- [ ] Add `fallback_rate_last_60s()` computed method on ObservabilityCollector
-- [ ] Per-query cost endpoint: `GET /admin/observability/query/{query_id}/cost`
+### 8A — Observability Completeness ✅ (KAN-190, Session 62)
+- [x] Provider base class observability — `_record_success`, `_record_cascade`, `_compute_cost` on LLMProvider ABC
+- [x] Anthropic + OpenAI instrumentation (both had zero observability)
+- [x] LLMClient cross-provider cascade recording (Groq→Anthropic now visible)
+- [x] Wire `cost_usd` on LLMCallLog via `_compute_cost` + pricing from `llm_model_config`
+- [x] Populate `cache_hit` on ToolExecutionLog (cache hits now logged as rows)
+- [x] Migration 016: `agent_type`, `agent_instance_id`, `loop_step` on both log tables
+- [x] ContextVar propagation for `agent_type` + `agent_instance_id`
+- [x] `fallback_rate_last_60s()` on ObservabilityCollector (includes cross-provider cascades)
+- [x] `GET /admin/observability/query/{query_id}/cost` — per-model + per-tool breakdown
+- [x] `ModelConfigLoader.get_pricing_map()` convenience method
+- [x] 12 new unit tests + 4 API tests
 
 ### 8B — ReAct Loop (KAN-189 Step 1, ~20h)
 - [ ] Replace Plan→Execute→Synthesize pipeline with reason⇄act loop

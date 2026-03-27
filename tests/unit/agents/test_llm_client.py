@@ -1,6 +1,7 @@
 """Tests for LLMClient and provider abstraction."""
 
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, PropertyMock
 
 import pytest
 
@@ -226,3 +227,75 @@ def test_is_available_after_exhaustion_expires():
 def test_all_models_exhausted_error_exists():
     """AllModelsExhaustedError is importable and is an Exception."""
     assert issubclass(AllModelsExhaustedError, Exception)
+
+
+# ─── Cross-provider cascade recording ─────────────────────────────────────────
+
+
+def _make_mock_provider(name: str, *, fail: bool = False) -> MagicMock:
+    """Create a mock LLMProvider."""
+    provider = MagicMock()
+    type(provider).name = PropertyMock(return_value=name)
+    provider.health = ProviderHealth(provider=name)
+    if fail:
+        provider.chat = AsyncMock(side_effect=Exception(f"{name} down"))
+    else:
+        provider.chat = AsyncMock(
+            return_value=LLMResponse(
+                content="ok",
+                tool_calls=[],
+                model=f"{name}-model",
+                prompt_tokens=10,
+                completion_tokens=5,
+            )
+        )
+    return provider
+
+
+class TestCrossProviderCascade:
+    """Tests for LLMClient recording cascades when providers fail."""
+
+    @pytest.mark.asyncio
+    async def test_cross_provider_cascade_recorded(self) -> None:
+        """When provider A fails and B succeeds, cascade should be recorded for A."""
+        collector = AsyncMock()
+        provider_a = _make_mock_provider("groq", fail=True)
+        provider_b = _make_mock_provider("anthropic")
+        client = LLMClient(providers=[provider_a, provider_b], collector=collector)
+
+        result = await client.chat(messages=[{"role": "user", "content": "hi"}], tools=[])
+
+        assert result.content == "ok"
+        collector.record_cascade.assert_awaited_once()
+        call_kwargs = collector.record_cascade.call_args[1]
+        assert call_kwargs["from_model"] == "groq"
+        assert call_kwargs["provider"] == "groq"
+
+    @pytest.mark.asyncio
+    async def test_no_collector_no_error(self) -> None:
+        """LLMClient with no collector should not raise on cascade."""
+        provider_a = _make_mock_provider("groq", fail=True)
+        provider_b = _make_mock_provider("anthropic")
+        client = LLMClient(providers=[provider_a, provider_b])  # no collector
+
+        result = await client.chat(messages=[{"role": "user", "content": "hi"}], tools=[])
+        assert result.content == "ok"
+
+    @pytest.mark.asyncio
+    async def test_tier_passed_to_cascade(self) -> None:
+        """Tier should be passed through to cascade recording."""
+        collector = AsyncMock()
+        provider_a = _make_mock_provider("groq", fail=True)
+        provider_b = _make_mock_provider("anthropic")
+        client = LLMClient(
+            providers=[provider_a, provider_b],
+            tier_config={"synthesizer": [provider_a, provider_b]},
+            collector=collector,
+        )
+
+        await client.chat(
+            messages=[{"role": "user", "content": "hi"}], tools=[], tier="synthesizer"
+        )
+
+        call_kwargs = collector.record_cascade.call_args[1]
+        assert call_kwargs["tier"] == "synthesizer"

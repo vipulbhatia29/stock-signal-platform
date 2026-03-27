@@ -30,5 +30,5 @@ uv run alembic current                                 # Check migration head
 - Database URL format: `postgresql+asyncpg://user:pass@localhost:5433/stockdb` (port **5433**)
 - Redis URL format: `redis://localhost:6380/0` (port **6380**)
 - TimescaleDB hypertables are created via raw SQL in Alembic migrations after table creation
-- Alembic head: migration 015 (portfolio_health_snapshots)
+- Alembic head: migration 016 (observability columns — agent_type, agent_instance_id, loop_step)
 - New models must be imported in `backend/models/__init__.py` for Alembic discovery + test teardown

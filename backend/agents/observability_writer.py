@@ -11,7 +11,12 @@ import logging
 
 from backend.database import async_session_factory
 from backend.models.logs import LLMCallLog, ToolExecutionLog
-from backend.request_context import current_query_id, current_session_id
+from backend.request_context import (
+    current_agent_instance_id,
+    current_agent_type,
+    current_query_id,
+    current_session_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +31,8 @@ async def write_event(event_type: str, data: dict) -> None:
     try:
         session_id = current_session_id.get()
         query_id = current_query_id.get()
+        agent_type = current_agent_type.get(None)
+        agent_instance_id = current_agent_instance_id.get(None)
 
         async with async_session_factory() as db:
             if event_type == "llm_call":
@@ -38,7 +45,11 @@ async def write_event(event_type: str, data: dict) -> None:
                     latency_ms=data.get("latency_ms"),
                     prompt_tokens=data.get("prompt_tokens"),
                     completion_tokens=data.get("completion_tokens"),
+                    cost_usd=data.get("cost_usd"),
                     error=data.get("error"),
+                    agent_type=agent_type,
+                    agent_instance_id=agent_instance_id,
+                    # loop_step: deferred to Phase 8B (ReAct loop) — column exists, wiring pending
                 )
             elif event_type == "tool_execution":
                 row = ToolExecutionLog(
@@ -50,6 +61,10 @@ async def write_event(event_type: str, data: dict) -> None:
                     result_size_bytes=data.get("result_size_bytes"),
                     params=data.get("params"),
                     error=data.get("error"),
+                    cache_hit=data.get("cache_hit", False),
+                    agent_type=agent_type,
+                    agent_instance_id=agent_instance_id,
+                    # loop_step: deferred to Phase 8B (ReAct loop) — column exists, wiring pending
                 )
             else:
                 logger.warning("Unknown event type: %s", event_type)

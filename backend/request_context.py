@@ -18,3 +18,10 @@ current_user_id: ContextVar[uuid.UUID | None] = ContextVar("current_user_id", de
 # observability writer without changing any function signatures.
 current_session_id: ContextVar[uuid.UUID | None] = ContextVar("current_session_id", default=None)
 current_query_id: ContextVar[uuid.UUID | None] = ContextVar("current_query_id", default=None)
+
+# Agent attribution — set by chat_stream, read by observability writer.
+# agent_type: "stock" | "general" etc.; agent_instance_id: unique per-query UUID.
+current_agent_type: ContextVar[str | None] = ContextVar("current_agent_type", default=None)
+current_agent_instance_id: ContextVar[str | None] = ContextVar(
+    "current_agent_instance_id", default=None
+)

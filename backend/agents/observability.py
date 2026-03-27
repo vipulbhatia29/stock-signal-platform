@@ -49,6 +49,7 @@ class ObservabilityCollector:
         latency_ms: int,
         prompt_tokens: int,
         completion_tokens: int,
+        cost_usd: float | None = None,
     ) -> None:
         """Record a successful LLM request."""
         now = time.monotonic()
@@ -75,6 +76,7 @@ class ObservabilityCollector:
                         "latency_ms": latency_ms,
                         "prompt_tokens": prompt_tokens,
                         "completion_tokens": completion_tokens,
+                        "cost_usd": cost_usd,
                         "error": None,
                     },
                 )
@@ -129,6 +131,7 @@ class ObservabilityCollector:
         result_size_bytes: int | None = None,
         params: dict | None = None,
         error: str | None = None,
+        cache_hit: bool = False,
     ) -> None:
         """Record a tool execution event (fire-and-forget DB write only)."""
         if self._db_writer:
@@ -142,6 +145,7 @@ class ObservabilityCollector:
                         "result_size_bytes": result_size_bytes,
                         "params": params,
                         "error": error,
+                        "cache_hit": cache_hit,
                     },
                 )
             )
@@ -217,6 +221,26 @@ class ObservabilityCollector:
             "disabled": sum(1 for t in tiers if t["status"] == "disabled"),
         }
         return {"tiers": tiers, "summary": summary}
+
+    def fallback_rate_last_60s(self) -> float:
+        """Fraction of LLM calls that cascaded/failed in the last 60 seconds.
+
+        Includes both intra-provider cascades (Groq model→model) and
+        cross-provider cascades (Groq→Anthropic) when LLMClient records them.
+        """
+        now = time.monotonic()
+        total_failures = 0
+        total_successes = 0
+        for window in self._failures_windows.values():
+            self._prune_window(window, now, _RPM_WINDOW_S)
+            total_failures += len(window)
+        for window in self._successes_windows.values():
+            self._prune_window(window, now, _RPM_WINDOW_S)
+            total_successes += len(window)
+        total = total_failures + total_successes
+        if total == 0:
+            return 0.0
+        return total_failures / total
 
     async def _safe_db_write(self, event_type: str, data: dict) -> None:
         """Write to DB, swallowing all errors."""

@@ -103,9 +103,20 @@ class LLMResponse:
 
 
 class LLMProvider(ABC):
-    """Abstract base for LLM providers."""
+    """Abstract base for LLM providers.
+
+    Subclasses implement chat() for LLM API calls. Observability is provided
+    by base class methods — subclasses call self._record_success() after a
+    successful API response and self._record_cascade() on failure/skip.
+
+    Attributes:
+        collector: ObservabilityCollector instance, injected by main.py lifespan.
+        pricing: model_name → (cost_per_1k_input, cost_per_1k_output) dict.
+    """
 
     health: ProviderHealth
+    collector: Any = None  # ObservabilityCollector | None — avoid circular import
+    pricing: dict[str, tuple[float, float]] | None = None
 
     @property
     @abstractmethod
@@ -128,6 +139,46 @@ class LLMProvider(ABC):
         """Send a chat completion request."""
         ...
 
+    def _compute_cost(self, model: str, prompt_tokens: int, completion_tokens: int) -> float | None:
+        """Compute cost in USD from token counts and pricing config."""
+        if not self.pricing or model not in self.pricing:
+            return None
+        cost_input, cost_output = self.pricing[model]
+        return (prompt_tokens / 1000) * cost_input + (completion_tokens / 1000) * cost_output
+
+    async def _record_success(
+        self,
+        model: str,
+        latency_ms: int,
+        prompt_tokens: int,
+        completion_tokens: int,
+        tier: str = "",
+    ) -> None:
+        """Record a successful LLM call with cost. Called by subclass after API response."""
+        if not self.collector:
+            return
+        cost = self._compute_cost(model, prompt_tokens, completion_tokens)
+        await self.collector.record_request(
+            model=model,
+            provider=self.name,
+            tier=tier,
+            latency_ms=latency_ms,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            cost_usd=cost,
+        )
+
+    async def _record_cascade(self, from_model: str, reason: str, tier: str = "") -> None:
+        """Record a cascade/failure event. Called by subclass on error or budget skip."""
+        if not self.collector:
+            return
+        await self.collector.record_cascade(
+            from_model=from_model,
+            reason=reason,
+            provider=self.name,
+            tier=tier,
+        )
+
 
 class LLMClient:
     """Provider-agnostic LLM client with fallback chain and retry logic."""
@@ -137,10 +188,12 @@ class LLMClient:
         providers: list[LLMProvider],
         retry_policy: RetryPolicy | None = None,
         tier_config: dict[str, list[LLMProvider]] | None = None,
+        collector: Any = None,  # ObservabilityCollector | None
     ) -> None:
         self._providers = providers
         self._retry_policy = retry_policy or RetryPolicy()
         self._tier_config = tier_config
+        self._collector = collector
 
     def get_active_chat_model(self) -> Any:
         """Return the LangChain chat model from the first healthy provider."""
@@ -187,6 +240,13 @@ class LLMClient:
                 provider.health.consecutive_failures += 1
                 provider.health.last_failure = datetime.now(timezone.utc)
                 errors.append((provider.name, e))
+                if self._collector:
+                    await self._collector.record_cascade(
+                        from_model=provider.name,
+                        reason=type(e).__name__,
+                        provider=provider.name,
+                        tier=tier or "",
+                    )
                 logger.warning(
                     "provider_failed",
                     extra={

@@ -209,3 +209,65 @@ class TestToggleModel:
         collector.toggle_model("llama-3.3-70b", enabled=False)
         collector.toggle_model("llama-3.3-70b", enabled=True)
         assert "llama-3.3-70b" not in collector._disabled_models
+
+
+class TestFallbackRate:
+    """Tests for fallback_rate_last_60s()."""
+
+    @pytest.mark.asyncio
+    async def test_fallback_rate_empty(self) -> None:
+        """No data should return 0.0."""
+        collector = ObservabilityCollector()
+        assert collector.fallback_rate_last_60s() == 0.0
+
+    @pytest.mark.asyncio
+    async def test_fallback_rate_all_success(self) -> None:
+        """Only successes should return 0.0."""
+        collector = ObservabilityCollector()
+        for _ in range(5):
+            await collector.record_request(
+                model="llama-3.3-70b",
+                provider="groq",
+                tier="planner",
+                latency_ms=100,
+                prompt_tokens=50,
+                completion_tokens=25,
+            )
+        assert collector.fallback_rate_last_60s() == 0.0
+
+    @pytest.mark.asyncio
+    async def test_fallback_rate_mixed(self) -> None:
+        """3 failures + 7 successes should return 0.3."""
+        collector = ObservabilityCollector()
+        for _ in range(7):
+            await collector.record_request(
+                model="llama-3.3-70b",
+                provider="groq",
+                tier="planner",
+                latency_ms=100,
+                prompt_tokens=50,
+                completion_tokens=25,
+            )
+        for _ in range(3):
+            await collector.record_cascade(
+                from_model="llama-3.3-70b",
+                reason="rate_limit",
+                provider="groq",
+                tier="planner",
+            )
+        rate = collector.fallback_rate_last_60s()
+        assert abs(rate - 0.3) < 0.01
+
+    @pytest.mark.asyncio
+    async def test_fallback_rate_prunes_old_entries(self) -> None:
+        """Entries older than 60s should be excluded from the rate."""
+        import time
+
+        collector = ObservabilityCollector()
+        # Record a failure with an old timestamp
+        old_time = time.monotonic() - 120  # 2 minutes ago
+        collector._failures_windows["model-a"] = __import__("collections").deque([old_time])
+        now = time.monotonic()
+        collector._successes_windows["model-a"] = __import__("collections").deque([now])
+        # Only the recent success should count
+        assert collector.fallback_rate_last_60s() == 0.0

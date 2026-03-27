@@ -15,7 +15,13 @@ from backend.database import async_session_factory, get_async_session
 from backend.dependencies import get_current_user
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.user import User
-from backend.request_context import current_query_id, current_session_id, current_user_id
+from backend.request_context import (
+    current_agent_instance_id,
+    current_agent_type,
+    current_query_id,
+    current_session_id,
+    current_user_id,
+)
 from backend.schemas.chat import (
     ChatMessageResponse,
     ChatRequest,
@@ -155,6 +161,8 @@ async def chat_stream(
     query_id = uuid.uuid4()
     ctx_token_session = current_session_id.set(chat_session.id)
     ctx_token_query = current_query_id.set(query_id)
+    ctx_token_agent_type = current_agent_type.set(chat_session.agent_type)
+    ctx_token_agent_instance = current_agent_instance_id.set(str(uuid.uuid4()))
 
     return StreamingResponse(
         _event_generator(
@@ -164,7 +172,13 @@ async def chat_stream(
             session_messages,
             user,
             query_id,
-            ctx_tokens=(ctx_token_user, ctx_token_session, ctx_token_query),
+            ctx_tokens=(
+                ctx_token_user,
+                ctx_token_session,
+                ctx_token_query,
+                ctx_token_agent_type,
+                ctx_token_agent_instance,
+            ),
         ),
         media_type="application/x-ndjson",
     )
@@ -177,7 +191,7 @@ async def _event_generator(
     session_messages: list[dict],
     user: User,
     query_id: uuid.UUID,
-    ctx_tokens: tuple[Token, Token, Token] | None = None,
+    ctx_tokens: tuple[Token, Token, Token, Token, Token] | None = None,
 ):
     """Yield NDJSON events from the Plan→Execute→Synthesize graph.
 
@@ -268,6 +282,8 @@ async def _event_generator(
             current_user_id.reset(ctx_tokens[0])
             current_session_id.reset(ctx_tokens[1])
             current_query_id.reset(ctx_tokens[2])
+            current_agent_type.reset(ctx_tokens[3])
+            current_agent_instance_id.reset(ctx_tokens[4])
 
 
 @router.patch(
