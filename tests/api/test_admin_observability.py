@@ -146,3 +146,95 @@ class TestLLMUsage:
         assert "escalation_rate" in data
         assert data["total_requests"] == 0
         assert data["escalation_rate"] == 0.0
+
+
+class TestQueryCostEndpoint:
+    """Tests for GET /admin/observability/query/{query_id}/cost."""
+
+    @pytest.mark.asyncio
+    async def test_unauthenticated_returns_401(self, client: AsyncClient) -> None:
+        """Unauthenticated request should return 401."""
+        qid = str(uuid.uuid4())
+        response = await client.get(f"/api/v1/admin/observability/query/{qid}/cost")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_non_admin_returns_403(self, client: AsyncClient, db_url: str) -> None:
+        """Non-admin user should get 403."""
+        user = await _create_user(db_url, role=UserRole.USER)
+        qid = str(uuid.uuid4())
+        response = await client.get(
+            f"/api/v1/admin/observability/query/{qid}/cost",
+            headers=_auth_headers(user),
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_unknown_query_returns_404(self, client: AsyncClient, db_url: str) -> None:
+        """Random query_id with no data should return 404."""
+        admin = await _create_user(db_url, role=UserRole.ADMIN)
+        qid = str(uuid.uuid4())
+        response = await client.get(
+            f"/api/v1/admin/observability/query/{qid}/cost",
+            headers=_auth_headers(admin),
+        )
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_returns_cost_breakdown(self, client: AsyncClient, db_url: str) -> None:
+        """Should return cost breakdown when log rows exist for query."""
+        from backend.models.logs import LLMCallLog, ToolExecutionLog
+
+        admin = await _create_user(db_url, role=UserRole.ADMIN)
+        qid = uuid.uuid4()
+
+        # Seed log rows
+        engine = create_async_engine(db_url, echo=False)
+        factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory() as db:
+            db.add(
+                LLMCallLog(
+                    provider="groq",
+                    model="llama-3.3-70b",
+                    prompt_tokens=100,
+                    completion_tokens=50,
+                    cost_usd=0.0008,
+                    latency_ms=150,
+                    query_id=qid,
+                    agent_type="stock",
+                )
+            )
+            db.add(
+                ToolExecutionLog(
+                    tool_name="analyze_stock",
+                    latency_ms=300,
+                    status="ok",
+                    query_id=qid,
+                    cache_hit=False,
+                )
+            )
+            db.add(
+                ToolExecutionLog(
+                    tool_name="analyze_stock",
+                    latency_ms=0,
+                    status="success",
+                    query_id=qid,
+                    cache_hit=True,
+                )
+            )
+            await db.commit()
+        await engine.dispose()
+
+        response = await client.get(
+            f"/api/v1/admin/observability/query/{qid}/cost",
+            headers=_auth_headers(admin),
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_cost_usd"] == 0.0008
+        assert data["total_prompt_tokens"] == 100
+        assert len(data["llm_calls"]) == 1
+        assert data["llm_calls"][0]["agent_type"] == "stock"
+        assert data["tool_calls"]["total"] == 2
+        assert data["tool_calls"]["cache_hits"] == 1
+        assert data["tool_calls"]["cache_hit_rate"] == 0.5

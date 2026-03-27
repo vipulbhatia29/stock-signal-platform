@@ -17,7 +17,8 @@ class TestGroqProviderObservability:
         collector = ObservabilityCollector()
         from backend.agents.providers.groq import GroqProvider
 
-        provider = GroqProvider(api_key="test-key", models=["model-a"], collector=collector)
+        provider = GroqProvider(api_key="test-key", models=["model-a"])
+        provider.collector = collector
         mock_response = LLMResponse(
             content="hello",
             tool_calls=[],
@@ -39,9 +40,8 @@ class TestGroqProviderObservability:
         collector = ObservabilityCollector()
         from backend.agents.providers.groq import GroqProvider
 
-        provider = GroqProvider(
-            api_key="test-key", models=["model-a", "model-b"], collector=collector
-        )
+        provider = GroqProvider(api_key="test-key", models=["model-a", "model-b"])
+        provider.collector = collector
         mock_response = LLMResponse(
             content="hello",
             tool_calls=[],

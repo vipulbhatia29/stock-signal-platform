@@ -77,3 +77,11 @@ class ModelConfigLoader:
     def cached(self) -> dict[str, list[ModelConfig]]:
         """Return the last-loaded config without hitting DB."""
         return self._cache
+
+    def get_pricing_map(self) -> dict[str, tuple[float, float]]:
+        """Return model_name → (cost_per_1k_input, cost_per_1k_output) for all cached models."""
+        return {
+            mc.model_name: (mc.cost_per_1k_input, mc.cost_per_1k_output)
+            for tier_models in self._cache.values()
+            for mc in tier_models
+        }

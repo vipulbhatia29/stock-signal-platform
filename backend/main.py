@@ -139,12 +139,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 api_key=settings.GROQ_API_KEY,
                 models=groq_models or None,
                 token_budget=token_budget,
-                collector=collector,
             )
         )
     if settings.ANTHROPIC_API_KEY:
         providers.append(AnthropicProvider(api_key=settings.ANTHROPIC_API_KEY))
-    llm_client = LLMClient(providers=providers)
+
+    # Inject observability onto all providers (base class attrs)
+    pricing = config_loader.get_pricing_map()
+    for provider in providers:
+        provider.collector = collector
+        provider.pricing = pricing
+
+    llm_client = LLMClient(providers=providers, collector=collector)
 
     app.state.config_loader = config_loader
     app.state.token_budget = token_budget

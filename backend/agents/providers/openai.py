@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from backend.agents.llm_client import LLMProvider, LLMResponse, ProviderHealth
@@ -53,12 +54,14 @@ class OpenAIProvider(LLMProvider):
             kwargs["base_url"] = self._base_url
 
         client = AsyncOpenAI(**kwargs)
+        start = time.monotonic()
         response = await client.chat.completions.create(
             model=self._model,
             messages=messages,
             tools=tools if tools else None,
             stream=False,
         )
+        latency_ms = int((time.monotonic() - start) * 1000)
         choice = response.choices[0]
         tool_calls = []
         if choice.message.tool_calls:
@@ -71,10 +74,19 @@ class OpenAIProvider(LLMProvider):
                     }
                 )
 
-        return LLMResponse(
+        result = LLMResponse(
             content=choice.message.content or "",
             tool_calls=tool_calls,
             model=self._model,
             prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
             completion_tokens=response.usage.completion_tokens if response.usage else 0,
         )
+
+        await self._record_success(
+            model=self._model,
+            latency_ms=latency_ms,
+            prompt_tokens=response.usage.prompt_tokens if response.usage else 0,
+            completion_tokens=response.usage.completion_tokens if response.usage else 0,
+        )
+
+        return result

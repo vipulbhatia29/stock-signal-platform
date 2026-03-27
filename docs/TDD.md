@@ -603,7 +603,7 @@ POST /api/v1/admin/llm-models/reload
 GET /api/v1/admin/llm-metrics
   Response: { requests_by_model, cascade_count, cascades_by_model, rpm_by_model, cascade_log }
   Auth:     Required (role=ADMIN)
-  Notes:    Real-time in-memory metrics from ObservabilityCollector.
+  Notes:    Real-time in-memory metrics from ObservabilityCollector. Includes `fallback_rate_60s` (Session 62).
 
 GET /api/v1/admin/tier-health
   Response: { tiers: [{ model, status, failures_5m, successes_5m, cascade_count, latency: { avg_ms, p95_ms } }], summary: { total, healthy, degraded, down, disabled } }
@@ -620,6 +620,11 @@ GET /api/v1/admin/llm-usage
   Response: { total_requests, total_cost_usd, avg_latency_ms, models: [{ model, provider, request_count, cost_usd }], escalation_rate }
   Auth:     Required (role=ADMIN)
   Notes:    30-day aggregated usage from llm_call_log table. Escalation rate = Anthropic calls / total.
+
+GET /api/v1/admin/observability/query/{query_id}/cost
+  Response: { query_id, total_cost_usd, total_prompt_tokens, total_completion_tokens, llm_calls: [{ model, provider, cost_usd, ... }], tool_calls: { total, cache_hits, cache_hit_rate, by_tool } }
+  Auth:     Required (role=ADMIN)
+  Notes:    Per-query cost breakdown with LLM and tool call stats. Added Session 62 (KAN-190).
 ```
 
 ### 3.15 Sectors Endpoints (Phase 4F) ✅ IMPLEMENTED
