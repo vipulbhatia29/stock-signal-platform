@@ -1,6 +1,6 @@
 # Project Index: stock-signal-platform
 
-Generated: 2026-03-26 | Phase 7 A+B+C COMPLETE | Next: KAN-161 (Health Materialization)
+Generated: 2026-03-27 | Service Layer + Router Split COMPLETE | Next: KAN-190 (Observability Gaps)
 
 ---
 
@@ -37,11 +37,11 @@ stock-signal-platform/
 │   │   ├── providers/          LLM providers (Anthropic, Groq, OpenAI)
 │   │   └── prompts/            planner.md, synthesizer.md, stock_agent.md, general_agent.md
 │   ├── models/                 SQLAlchemy 2.0 ORM models (19 files)
-│   ├── routers/                FastAPI endpoint handlers (14 routers)
+│   ├── routers/                FastAPI endpoint handlers (14 routers, stocks/ is a package)
 │   ├── schemas/                Pydantic v2 request/response schemas (15 files)
-│   ├── tools/                  Business logic + 24 registered tools + 5 MCP adapters
+│   ├── tools/                  24 registered tools + 5 MCP adapters (thin wrappers → services)
 │   ├── tasks/                  Celery background jobs (pipeline, forecasting, alerts, evaluation)
-│   ├── services/               Service layer (cache, redis_pool, token_blocklist)
+│   ├── services/               Service layer (10 modules — business logic lives here)
 │   ├── mcp_server/             FastMCP server — stdio tool server + HTTP /mcp endpoint
 │   │   ├── server.py           FastMCP server definition (registers all internal tools)
 │   │   ├── tool_server.py      Stdio tool server subprocess entry point
@@ -132,15 +132,10 @@ stock-signal-platform/
 
 **MCP Adapters (5):** EdgarAdapter (SEC), AlphaVantageAdapter, FredAdapter, FinnhubAdapter, base adapter
 
-**Core Business Logic:**
+**Core Business Logic:** Moved to `backend/services/` (Session 61). Tool files are thin re-export shims for backward compatibility.
 
 | Module | Key Exports | Purpose |
 |--------|------------|---------|
-| `signals.py` | `compute_signals()`, `SignalResult` | RSI, MACD, SMA, Bollinger, composite 0-10 |
-| `recommendations.py` | `generate_recommendation()` | BUY/HOLD/SELL + portfolio-aware sizing |
-| `market_data.py` | `fetch_prices()`, `ensure_stock_exists()` | yfinance OHLCV -> TimescaleDB |
-| `fundamentals.py` | `fetch_fundamentals()`, `fetch_analyst_data()`, `fetch_earnings_history()`, `persist_*()` | All yfinance data materialized to DB during ingestion |
-| `portfolio.py` | `get_positions_with_pnl()`, `_run_fifo()` | FIFO positions, P&L, sector allocation |
 | `chat_session.py` | `create_session()`, `save_message()`, `build_context_window()` | Session CRUD, message persistence, token windowing |
 | `forecasting.py` | `run_prophet_forecast()` | Prophet time-series forecasting |
 | `scorecard.py` | `build_scorecard()` | Multi-factor stock scorecard |
@@ -167,7 +162,7 @@ stock-signal-platform/
 | Router | Prefix | Key Endpoints |
 |--------|--------|--------------|
 | `auth.py` | `/api/v1/auth` | POST /register, /login, /logout, /refresh |
-| `stocks.py` | `/api/v1/stocks` | GET /watchlist, POST /{ticker}/ingest, GET /{ticker}/signals, /fundamentals, /history |
+| `stocks/` (package) | `/api/v1/stocks` | 4 sub-routers: data (prices, signals, fundamentals), watchlist, search+ingest, recommendations+bulk |
 | `chat.py` | `/api/v1/chat` | POST /stream (V1 or V2 via feature flag), PATCH /feedback, GET /sessions |
 | `portfolio.py` | `/api/v1/portfolio` | CRUD transactions, GET positions/summary/history/rebalancing/dividends |
 | `preferences.py` | `/api/v1/preferences` | GET/PUT user thresholds |
@@ -206,7 +201,21 @@ stock-signal-platform/
 | `LLMModelConfig` | `llm_model_config` | Data-driven LLM cascade config (provider, model, tier, limits) |
 | `PortfolioHealthSnapshot` | `portfolio_health_snapshots` | TimescaleDB hypertable — materialized portfolio health scores |
 
-### `backend/services/` -- Service Layer
+### `backend/services/` -- Service Layer (10 modules)
+
+**Business logic services** (Session 61, PR #123):
+
+| Module | Key Exports | Purpose |
+|--------|------------|---------|
+| `stock_data.py` | `ensure_stock_exists()`, `fetch_prices_delta()`, `get_latest_price()`, `load_prices_df()`, `fetch_fundamentals()`, `persist_*()` | Price CRUD, fundamentals, yfinance → TimescaleDB |
+| `signals.py` | `compute_signals()`, `SignalResult`, `get_latest_signals()`, `get_signal_history()`, `get_bulk_signals()` | RSI, MACD, SMA, Bollinger, composite 0-10, screener queries |
+| `recommendations.py` | `generate_recommendation()`, `store_recommendation()`, `calculate_position_size()`, `get_recommendations()` | BUY/HOLD/SELL + portfolio-aware sizing + query |
+| `watchlist.py` | `get_watchlist()`, `add_to_watchlist()`, `remove_from_watchlist()`, `acknowledge_price()` | Watchlist CRUD with enriched data joins |
+| `portfolio.py` | `get_or_create_portfolio()`, `get_positions_with_pnl()`, `_run_fifo()`, `snapshot_portfolio_value()`, `list_transactions()`, `delete_transaction()` | FIFO positions, P&L, sector allocation, transactions |
+| `pipelines.py` | `ingest_ticker()` | Full ingest pipeline orchestrator (fetch → compute → store → recommend) |
+| `exceptions.py` | `ServiceError`, `StockNotFoundError`, `PortfolioNotFoundError`, `DuplicateWatchlistError`, `IngestFailedError` | Domain exceptions for service layer |
+
+**Infrastructure services:**
 
 | Module | Purpose |
 |--------|---------|
@@ -313,13 +322,13 @@ stock-signal-platform/
 
 | Suite | Files | Approx Tests | Command |
 |-------|-------|-------------|---------|
-| Backend unit | ~70 | ~806 | `uv run pytest tests/unit/ -v` |
-| Backend API | ~20 | ~180 | `uv run pytest tests/api/ -v` |
+| Backend unit | ~76 | ~891 | `uv run pytest tests/unit/ -v` |
+| Backend API | ~20 | ~236 | `uv run pytest tests/api/ -v` |
 | Backend integration | 2 | ~24 | `uv run pytest tests/integration/ -v` |
 | Backend e2e/eval | 1 | 7 | `uv run pytest tests/e2e/ -v` (needs API key) |
 | Playwright E2E | 17 | ~17 | `cd tests/e2e/playwright && npx playwright test` |
 | Frontend | 27 | ~107 | `cd frontend && npx jest` |
-| **Total** | **~131** | **~1050** | |
+| **Total** | **~137** | **~1127** | |
 
 ---
 
@@ -336,7 +345,7 @@ stock-signal-platform/
 
 ## Key Dependencies
 
-**Python:** fastapi, sqlalchemy[asyncio], asyncpg, alembic, pydantic[v2], celery, redis, yfinance, pandas-ta, langchain (anthropic/groq/openai), langgraph, prophet, fastmcp, mcp, python-jose, passlib, bcrypt==4.2.1, slowapi, httpx, tiktoken, structlog, edgartools, gdeltdoc
+**Python:** fastapi, sqlalchemy[asyncio], asyncpg, alembic, pydantic[v2], celery, redis, yfinance, pandas-ta, langchain (anthropic/groq/openai), langgraph, prophet, fastmcp, mcp, PyJWT, bcrypt==4.2.1, slowapi, httpx, tiktoken, structlog, edgartools, gdeltdoc, defusedxml
 
 **Node:** next 16, react 19, typescript 5, tailwindcss v4, @base-ui/react (shadcn v4), @tanstack/react-query, recharts 3, framer-motion, react-markdown, remark-gfm, rehype-highlight, cmdk, sonner, next-themes, jest 29, @testing-library/react
 
@@ -375,8 +384,7 @@ cd frontend && npm install && npm run dev
 uv run pytest tests/unit/ -v          # ~806 green
 cd frontend && npx jest                # ~107 green
 
-# 5. Enable Agent V2 + MCP (optional)
-echo "AGENT_V2=true" >> backend/.env
+# 5. Enable MCP tools (optional)
 echo "MCP_TOOLS=true" >> backend/.env
 ```
 
@@ -414,6 +422,10 @@ echo "MCP_TOOLS=true" >> backend/.env
 | 7B -- Agent Intelligence (KAN-160) | Done | PR #104 |
 | 7C -- Data Enrichment (KAN-159) | Done | PR #103 |
 | 7D -- Health Materialization (KAN-161) | Done | PR #105 |
-| **Next: Backlog** | **KAN-149-157, KAN-162** | |
-| 8 -- Subscriptions | Planned | |
-| 9 -- Cloud Deployment | Planned | |
+| 7.5 -- Code Analysis Tech Debt | Done | PRs #110-118 |
+| 7.6 -- Scale Readiness Sprint 1 | Done | PRs #120-121 |
+| KAN-172/173 -- Service Layer + Router Split | Done | PR #123 |
+| **Next: Observability** | **KAN-190, then KAN-189 (ReAct)** | |
+| 8 -- Observability + Agent Redesign | Planned | |
+| 9 -- Multi-Agent + Subscriptions | Planned | |
+| 10 -- Cloud Deployment | Planned | |
