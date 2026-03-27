@@ -219,9 +219,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             tool_executor=_tool_executor,
             tools_description=tools_desc,
         )
+        app.state.tool_executor = _tool_executor
         logger.info("Agent graph compiled (Plan→Execute→Synthesize)")
     else:
         app.state.agent_graph = None
+        app.state.tool_executor = None
         logger.warning("No LLM providers configured — chat disabled")
 
     # 5. MCP server (Layer 3 — Expose) with JWT auth middleware
