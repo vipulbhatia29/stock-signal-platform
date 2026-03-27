@@ -10,11 +10,13 @@
 - `develop` synced after PRs #120 + #121 merge
 
 ## Resume Point
-- **Unpushed work:** `feat/KAN-172-service-layer-spec` has spec + plan — needs PR to develop
-- **Next work:** Execute service layer plan (12 tasks, 5 parallel batches). Start with Tasks 1-2 (blocker fix + exceptions), then parallel batch Tasks 3-7 (5 service modules).
-- **Remaining Phase 7.6:** KAN-182 (auth cache in Redis, needs design) + KAN-186 (TokenBudget → Redis, multi-worker)
-- **New backlog:** KAN-188 (intent-based tool filtering), KAN-189 (multi-agent architecture Epic)
-
+- **Immediate:** Merge PR `feat/KAN-172-service-layer-spec` to develop (spec + plan + session save + project-plan reorg)
+- **Next work:** Execute service layer plan (12 tasks, 5 parallel batches — KAN-172/173)
+- **Then:** KAN-190 (observability gaps, ~7h — wire cost_usd, cache_hit, agent_id, fallback_rate, OpenAI provider)
+- **Then:** KAN-189 Step 1 (ReAct loop — replace pipeline) + Step 2 (tool filtering)
+- **Remaining Phase 7.6:** KAN-182 (auth cache) + KAN-186 (TokenBudget→Redis)
+- **Feature backlog:** KAN-149-157
+- **Key Serena memory:** `future_work/AgentArchitectureBrainstorming` — full 3-pronged analysis, tiered LLM audit, ReAct impact
 ## Test Counts
 - 842 unit + ~236 API + 27 frontend + 24 integration + 17 Playwright ≈ 1,146 total
 - Alembic head: `758e69475884` (migration 015)

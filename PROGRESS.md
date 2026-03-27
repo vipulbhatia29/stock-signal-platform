@@ -1132,4 +1132,16 @@ Full brainstorm session covering:
 
 **8 JIRA tickets transitioned to Done.** 2 new JIRA items created (KAN-188, KAN-189).
 
+### Agent Architecture Deep Dive (continued brainstorm)
+PM provided 10-part architectural spec challenging the current Plan→Execute→Synthesize pipeline:
+- **Current pipeline is not a real agent** — planner picks all tools upfront, executor is mechanical, synthesizer can't change the plan
+- **ReAct loop proposed** — reason⇄act loop where LLM reasons after each tool call, chooses next tool based on observations, self-determined stopping
+- **Traced multi-step query** through current code: "I hold AAPL and MSFT. One had bad earnings. Should I sell?" — pipeline can't adapt mid-execution
+- **aset-platform comparison** — read their full agent codebase. They solved sub-agents with ReAct + tool filtering. They didn't solve: cross-domain queries, fan-out, dynamic concurrency. Our spec goes further.
+- **Observability audit** — 7 gaps found. DB schema has `cost_usd`, `cache_hit` columns never populated. `llm_model_config` has pricing columns all zero. `OpenAIProvider` exists but not wired.
+- **Tiered LLM audit** — 6-layer infrastructure solid (DB config, ModelConfigLoader, TokenBudget, GroqProvider cascade, LLMClient tier routing, 3 providers). Pricing/cost wiring is the gap, not architecture.
+- KAN-189 updated with full ReAct redesign spec (6-step build order)
+- KAN-190 created (observability gaps, 7 items, ReAct migration impact analysis)
+- project-plan.md reorganized: Phase 8 (observability+ReAct), Phase 9 (multi-agent+subscriptions), Phase 10 (cloud)
+
 ---
