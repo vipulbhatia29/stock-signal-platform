@@ -4,7 +4,7 @@
 
 **Version:** 2.0
 **Date:** March 2026
-**Status:** Living Document — Phases 1-7 complete. Phase 8 (Subscriptions) planned.
+**Status:** Living Document — Phases 1-7.6 complete, service layer extracted. Phase 8 (Observability + Agent Redesign) planned.
 **Prerequisite reading:** docs/PRD.md
 
 ---

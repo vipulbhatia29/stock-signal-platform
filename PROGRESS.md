@@ -1091,57 +1091,50 @@ Compared SSP vs aset-platform. 12 gaps identified. 3 specs + 1 backlog + 1 plan 
 
 ---
 
-## Session 60 — Phase 7.6 Sprint 1 + Service Layer Design (2026-03-27)
+## Session 60 — Phase 7.6 Sprint 1 + Service Layer Design *(compact)*
 
-**Branch:** `develop` + `feat/KAN-172-service-layer-spec` | **PRs:** #120, #121 (merged) | **Tests:** 842 unit (+7 new)
+**Date:** 2026-03-27 | **PRs:** #120, #121, #122 (merged) | **Tests:** 842 unit (+7 new)
+Phase 7.6 Sprint 1: 8 parallel subagents in worktrees. Group A (PR #120): KAN-177 ContextVar IDOR fix, KAN-178 str(e) leak, KAN-180 health endpoint, KAN-184 MCP auth ContextVar. Group B (PR #121): KAN-179 lru_cache planner, KAN-181 gather user_context, KAN-183 DB pool env, KAN-185 parallel pipeline. Service layer spec+plan (KAN-172/173): 12 tasks, 5 batches, two-tier services (atomic+pipeline). Agent architecture brainstorm: ReAct loop proposed (KAN-189), observability gaps found (KAN-190), tiered LLM audit (6 layers solid, cost wiring missing).
 
-### Phase 7.6 Sprint 1 — Group A: Security Fixes (PR #120)
-Dispatched 4 parallel subagents in isolated worktrees. Zero file overlap.
+---
 
-- **KAN-177:** ContextVar IDOR fix — `try/finally` reset of 3 ContextVars in `_event_generator`
-- **KAN-178:** `str(e)` leak cleanup — safe generic messages in 8 tool `ToolResult` error paths
-- **KAN-180:** Redis + DB health checks on `/health` — `DependencyStatus` schema, "degraded" when down (+8 tests)
-- **KAN-184:** ContextVar in MCP auth middleware — portfolio tools now work via MCP HTTP (+6 tests)
+## Session 61 — Service Layer Extraction + Router Split (2026-03-27)
 
-CI fix: API health test needed Redis/DB mocks for MCP-focused test scenarios.
+**Branch:** `feat/KAN-172-service-layer` | **PR:** #123 (merged to develop) | **Tests:** 842 → 891 unit, 1127 total
 
-### Phase 7.6 Sprint 1 — Group B: Performance Wins (PR #121)
-Dispatched 4 parallel subagents in isolated worktrees.
+### KAN-172: Service Layer Extraction (Tasks 1-8, 10-12)
+Executed all 12 tasks from plan serially using subagents. Each task: read source → create service → write tests → update callers → lint → commit.
 
-- **KAN-179:** Cache planner prompt with `@lru_cache(maxsize=1)` — eliminates disk I/O per agent call
-- **KAN-181:** Parallelize `build_user_context` with `asyncio.gather` — independent sessions for prefs + watchlist
-- **KAN-183:** DB pool configurable via `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`DB_POOL_RECYCLE` env vars (+4 tests)
-- **KAN-185:** Nightly pipeline parallelized — 5 independent steps in Phase 2, 2 in Phase 4 via ThreadPoolExecutor (+3 tests)
+- [x] **Task 1:** Extract `SECTOR_ETF_MAP` to `backend/constants.py` — broke tools→routers circular import
+- [x] **Task 2:** Created `backend/services/exceptions.py` — 5 domain exceptions (ServiceError, StockNotFoundError, PortfolioNotFoundError, DuplicateWatchlistError, IngestFailedError)
+- [x] **Task 3:** Created `backend/services/stock_data.py` — moved ensure_stock_exists, fetch_prices_delta, get_latest_price, load_prices_df, all fundamentals functions from tools/market_data.py + tools/fundamentals.py. 4 tests.
+- [x] **Task 4:** Created `backend/services/signals.py` — moved SignalResult, compute_signals, store_signal_snapshot from tools/signals.py. Extracted get_latest_signals, get_signal_history, get_bulk_signals from router inline queries. 6 tests.
+- [x] **Task 5:** Created `backend/services/recommendations.py` — moved generate_recommendation, store_recommendation, calculate_position_size from tools/recommendations.py. Extracted get_recommendations query. 14 tests.
+- [x] **Task 6:** Created `backend/services/watchlist.py` — extracted 5 watchlist functions from routers/stocks.py inline queries. 9 tests.
+- [x] **Task 7:** Created `backend/services/portfolio.py` — moved get_or_create_portfolio, get_positions_with_pnl, _run_fifo, snapshot_portfolio_value from tools/portfolio.py. Extracted list_transactions, delete_transaction, get_health_history. 9 tests.
+- [x] **Task 8:** Created `backend/services/pipelines.py` — ingest_ticker orchestrator extracted from router endpoint. 7 tests.
+- [x] **Task 10:** Updated `backend/routers/portfolio.py` — delegates to services, -51/+20 lines
+- [x] **Task 11:** Updated tasks/market_data.py, tasks/recommendations.py, tasks/portfolio.py, agents/user_context.py — all imports point to services directly
+- [x] **Task 12:** Verification — zero service→router/tool reverse imports, all 1127 tests green
 
-### Service Layer Design (KAN-172/173)
-Full brainstorm session covering:
-- Caller audit: traced all 25 endpoints through frontend hooks, agent tools, Celery tasks
-- Found 3 critical duplications: signal computation, recommendation gen, portfolio health
-- Decided: Option A (clean break) — move proto-services from `tools/` to `services/`, tools become thin wrappers
-- Two-tier services: atomic (composable for tools/planner) + pipeline (orchestrators for routers/Celery)
-- Router split: `stocks.py` (1,216 lines) → 4 sub-routers (data, watchlist, search, recommendations)
-- Circular import blocker found: `tools/risk_narrative.py` imports `SECTOR_ETF_MAP` from `routers/forecasts.py`
-- Spec: `docs/superpowers/specs/2026-03-27-service-layer-extraction-design.md`
-- Plan: `docs/superpowers/plans/2026-03-27-service-layer-extraction.md` (12 tasks, 5 parallel batches)
+### KAN-173: Router Split (Task 9)
+- [x] Split `backend/routers/stocks.py` (1126 lines) into `backend/routers/stocks/` package:
+  - `data.py` — prices, signals, fundamentals, news, intelligence endpoints
+  - `watchlist.py` — watchlist CRUD with service delegation
+  - `search.py` — search + ingest (delegates to pipelines service)
+  - `recommendations.py` — recommendations + bulk signals + signal history
+  - `_helpers.py` — shared `require_stock()` helper
+  - `__init__.py` — composes 4 sub-routers
+- All endpoint paths unchanged (verified via 236 API tests)
 
-### Agent Architecture Discussion
-- Questioned why 1 agent with 24 tools vs specialized agents
-- Identified scaling ceiling: token waste, hallucination risk, extensibility
-- Created KAN-188 (intent-based tool filtering — near-term) + KAN-189 Epic (multi-agent architecture — Phase 9+)
-- Serena memory: `future_work/AgentArchitectureBrainstorming`
+### Architecture Result
+- **6 new service modules** in `backend/services/`: stock_data (31KB), signals (30KB), recommendations (24KB), portfolio (19KB), watchlist (8KB), pipelines
+- **Tool files are now thin re-export shims** — tools/portfolio.py (50 lines), tools/market_data.py (33), tools/signals.py (111), tools/recommendations.py (51), tools/fundamentals.py (37)
+- **Clean dependency graph** — services never import from routers/tools/agents (verified via grep)
+- **49 new service tests** — 6 test files in tests/unit/services/
+- **11 clean commits**, squash-merged via PR #123
 
-**8 JIRA tickets transitioned to Done.** 2 new JIRA items created (KAN-188, KAN-189).
-
-### Agent Architecture Deep Dive (continued brainstorm)
-PM provided 10-part architectural spec challenging the current Plan→Execute→Synthesize pipeline:
-- **Current pipeline is not a real agent** — planner picks all tools upfront, executor is mechanical, synthesizer can't change the plan
-- **ReAct loop proposed** — reason⇄act loop where LLM reasons after each tool call, chooses next tool based on observations, self-determined stopping
-- **Traced multi-step query** through current code: "I hold AAPL and MSFT. One had bad earnings. Should I sell?" — pipeline can't adapt mid-execution
-- **aset-platform comparison** — read their full agent codebase. They solved sub-agents with ReAct + tool filtering. They didn't solve: cross-domain queries, fan-out, dynamic concurrency. Our spec goes further.
-- **Observability audit** — 7 gaps found. DB schema has `cost_usd`, `cache_hit` columns never populated. `llm_model_config` has pricing columns all zero. `OpenAIProvider` exists but not wired.
-- **Tiered LLM audit** — 6-layer infrastructure solid (DB config, ModelConfigLoader, TokenBudget, GroqProvider cascade, LLMClient tier routing, 3 providers). Pricing/cost wiring is the gap, not architecture.
-- KAN-189 updated with full ReAct redesign spec (6-step build order)
-- KAN-190 created (observability gaps, 7 items, ReAct migration impact analysis)
-- project-plan.md reorganized: Phase 8 (observability+ReAct), Phase 9 (multi-agent+subscriptions), Phase 10 (cloud)
+**44 files changed:** +5,951 / -4,130 lines
+**CI:** All 6 checks passed (backend-lint, backend-test, frontend-lint, frontend-test, e2e-lint, agent regression)
 
 ---

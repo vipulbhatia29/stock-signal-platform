@@ -746,12 +746,12 @@ Address findings from comprehensive `/sc:analyze` audit. Security, performance, 
 #### Remaining
 - [x] KAN-168: Add pagination to transactions + recommendations (~1h) ✅ Session 59
 - [x] KAN-170: Extend CacheService to uncached endpoints (~2h) ✅ Session 59
-- [ ] KAN-172: Extract service layer from routers (~8h, large refactor)
-- [ ] KAN-173: Split stocks.py into domain-specific sub-routers (~3h)
+- [x] KAN-172: Extract service layer from routers ✅ Session 61 (PR #123) — 6 service modules, 49 tests
+- [x] KAN-173: Split stocks.py into domain-specific sub-routers ✅ Session 61 (PR #123) — 4 sub-routers
 - [x] KAN-174: Evaluate passlib replacement with direct bcrypt (~1h) ✅ Session 59
 
 ### Success Criteria
-10/12 stories shipped. Unmaintained security dep replaced. Critical N+1 queries fixed. Docs fully refreshed. Coding conventions added to `.claude/rules/`.
+12/12 stories shipped. Service layer fully extracted (Session 61). Unmaintained security dep replaced. Critical N+1 queries fixed. Docs fully refreshed. Coding conventions added to `.claude/rules/`.
 
 ---
 

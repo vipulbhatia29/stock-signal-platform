@@ -4,7 +4,7 @@
 
 **Version:** 2.0
 **Date:** March 2026
-**Status:** Living Document — Phases 1-7 complete. Phase 8 (Subscriptions) planned.
+**Status:** Living Document — Phases 1-7.6 complete, service layer extracted (Session 61). Phase 8 (Observability + Agent Redesign) planned.
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -49,13 +49,17 @@ graph TB
             R_Tasks["/tasks"]
         end
 
-        subgraph Tools["Tool Layer (24 internal tools)"]
-            T_Market["market_data"]
-            T_Signals["signals"]
-            T_Fund["fundamentals"]
+        subgraph Services["Service Layer (backend/services/)"]
+            S_Data["stock_data"]
+            S_Signals["signals"]
+            S_Recs["recommendations"]
+            S_Watch["watchlist"]
+            S_Port["portfolio"]
+            S_Pipe["pipelines"]
+        end
+
+        subgraph Tools["Tool Layer (24 tools — thin wrappers)"]
             T_Forecast["forecasting"]
-            T_Portfolio["portfolio"]
-            T_Recs["recommendations"]
             T_Divs["dividends"]
             T_Risk["risk_narrative"]
             T_Intel["news + intelligence"]
@@ -94,11 +98,12 @@ graph TB
     NextJS -->|HTTP/SSE| MW
     MCP_Client -->|Streamable HTTP| R_MCP
     MW --> Routers
-    Routers --> Tools
+    Routers --> Services
     Routers --> Agents
     Agents --> TR --> Tools
+    Tools --> Services
     Agents --> LLM --> Groq
-    Tools --> PG
+    Services --> PG
     Tools --> YF
     Tools --> FRED
     CB -->|schedule| CW
@@ -691,41 +696,91 @@ DELETE /api/v1/chat/sessions/{session_id}           # Delete a chat session
 
 ## 4. Service Layer Design
 
-> **Implementation status:** Partially implemented. `CacheService` (`backend/services/cache.py`), `redis_pool` (`backend/services/redis_pool.py`), and `token_blocklist` (`backend/services/token_blocklist.py`) exist as service layer components. Routers still call tools directly for most business logic — a full service extraction is tracked as KAN-172.
+> **Implementation status:** ✅ COMPLETE (Session 61, PR #123). All business logic extracted into `backend/services/`. Routers, tools, and tasks delegate to services. Tools are thin re-export shims. Clean dependency graph: services never import from routers/tools/agents.
 
-### 4.1 Service Pattern
+### 4.1 Service Architecture
 
-Every service follows:
+Two-tier service design:
+
+**Atomic services** — granular, composable functions called by tools, routers, and tasks:
+- `backend/services/stock_data.py` — price CRUD, fundamentals, ensure_stock_exists
+- `backend/services/signals.py` — signal computation, queries, SignalResult
+- `backend/services/recommendations.py` — recommendation generation, position sizing
+- `backend/services/watchlist.py` — watchlist CRUD
+- `backend/services/portfolio.py` — positions, P&L, FIFO, summary, transactions
+
+**Pipeline services** — orchestrators composing atomic services:
+- `backend/services/pipelines.py` — `ingest_ticker()` pipeline (fetch → compute → store → recommend)
+
+**Infrastructure services** (pre-existing):
+- `backend/services/cache.py` — CacheService (3-tier namespace, 4 TTL tiers)
+- `backend/services/redis_pool.py` — shared Redis connection pool
+- `backend/services/token_blocklist.py` — refresh token blocklist
+
+**Domain exceptions** (`backend/services/exceptions.py`):
+- `ServiceError` (base), `StockNotFoundError`, `PortfolioNotFoundError`, `DuplicateWatchlistError`, `IngestFailedError`
+
+### 4.1.1 Service Pattern
+
+Services are plain async functions (not classes) that receive an `AsyncSession` as parameter:
 
 ```python
-class SignalService:
-    def __init__(self, db: AsyncSession, redis: Redis):
-        self.db = db
-        self.redis = redis
+# backend/services/signals.py
+async def get_latest_signals(ticker: str, db: AsyncSession) -> SignalSnapshot | None:
+    """Get latest signal snapshot for a ticker."""
+    result = await db.execute(
+        select(SignalSnapshot).where(SignalSnapshot.ticker == ticker.upper())
+        .order_by(SignalSnapshot.computed_at.desc()).limit(1)
+    )
+    return result.scalar_one_or_none()
 
-    async def get_latest_signals(self, ticker: str) -> SignalResponse:
-        """Get latest signals, compute if stale."""
-        # 1. Check cache
-        cached = await self.redis.get(f"signals:{ticker}")
-        if cached:
-            return SignalResponse.model_validate_json(cached)
-
-        # 2. Query database
-        snapshot = await self._get_latest_snapshot(ticker)
-        if snapshot and not snapshot.is_stale:
-            response = SignalResponse.from_orm(snapshot)
-            await self.redis.set(f"signals:{ticker}", response.model_dump_json(), ex=3600)
-            return response
-
-        # 3. Compute fresh if stale or missing
-        prices = await market_data_tool.fetch_prices(ticker)
-        signals = signal_tool.compute_all(prices)
-        await self._store_snapshot(ticker, signals)
-
-        response = SignalResponse.from_signals(signals)
-        await self.redis.set(f"signals:{ticker}", response.model_dump_json(), ex=3600)
-        return response
+async def compute_signals(ticker: str, db: AsyncSession, piotroski_score: int | None = None) -> SignalResult:
+    """Compute all signals for a ticker (RSI, MACD, SMA, Bollinger, composite)."""
+    ...
 ```
+
+Callers catch domain exceptions and translate:
+```python
+# In routers:
+from backend.services.exceptions import StockNotFoundError
+try:
+    result = await add_to_watchlist(user.id, ticker, db)
+except StockNotFoundError:
+    raise HTTPException(status_code=404, detail="Stock not found")
+except DuplicateWatchlistError:
+    raise HTTPException(status_code=409, detail="Already on watchlist")
+
+# In tools:
+from backend.services.exceptions import StockNotFoundError
+try:
+    price = await get_latest_price(ticker, db)
+except StockNotFoundError:
+    return ToolResult(error="Stock not found in database")
+```
+
+### 4.1.2 Dependency Graph
+
+```
+Routers → Services → Models/Schemas/Database
+Tools   → Services → Models/Schemas/Database
+Tasks   → Services → Models/Schemas/Database
+Agents  → Services → Models/Schemas/Database
+```
+
+Services NEVER import from routers, tools, tasks, or agents. This invariant is enforced by grep in CI verification.
+
+### 4.1.3 Router Split
+
+`backend/routers/stocks.py` (1126 lines) was split into a package:
+
+| Sub-router | Endpoints |
+|------------|-----------|
+| `stocks/data.py` | `/{ticker}/prices`, `/{ticker}/signals`, `/{ticker}/fundamentals`, `/{ticker}/news`, `/{ticker}/intelligence` |
+| `stocks/watchlist.py` | `/watchlist` (GET/POST/DELETE), `/{ticker}/acknowledge`, `/refresh-all` |
+| `stocks/search.py` | `/search`, `/{ticker}/ingest` |
+| `stocks/recommendations.py` | `/recommendations`, `/signals/bulk`, `/{ticker}/signals/history` |
+
+`__init__.py` composes sub-routers. `main.py` import unchanged.
 
 ### 4.2 Dependency Injection
 
@@ -738,21 +793,12 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 # dependencies.py
-async def get_redis() -> Redis:
-    return Redis.from_url(settings.REDIS_URL)
-
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_async_session)
 ) -> User:
     # decode JWT, query user, return
     ...
-
-async def get_signal_service(
-    db: AsyncSession = Depends(get_async_session),
-    redis: Redis = Depends(get_redis)
-) -> SignalService:
-    return SignalService(db, redis)
 ```
 
 ### 4.3 Caching Strategy ✅ IMPLEMENTED (Phase 7, KAN-148)
