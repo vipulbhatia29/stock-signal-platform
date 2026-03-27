@@ -200,8 +200,8 @@ class TestContextResolution:
             "What about it?",
             entity_context=["TSLA"],
         )
-        # Should resolve "it" to TSLA and produce a stock or simple_lookup intent
-        assert result.intent in {"stock", "simple_lookup", "general"}
+        # Should resolve "it" to TSLA and produce a stock intent
+        assert result.intent in {"stock", "simple_lookup"}
         assert "TSLA" in result.tickers
 
 

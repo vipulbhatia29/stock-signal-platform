@@ -44,6 +44,10 @@ _STOP_WORDS: frozenset[str] = frozenset(
         "OLD",
         "ANY",
         "FEW",
+        # Single-letter stop words
+        "I",
+        "A",
+        "O",
     }
 )
 
@@ -114,6 +118,8 @@ _PRONOUN_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
+_POSSESSIVE_RE = re.compile(r"\bmy\b", re.IGNORECASE)
+
 _DECLINE_MESSAGE = (
     "I can only help with stock analysis, portfolio insights, and market information. "
     "Please ask me about stocks, investments, or financial markets."
@@ -133,6 +139,7 @@ class ClassifiedIntent:
         fast_path: If True, bypass the LangGraph agent entirely.
         confidence: Always 1.0 for rule-based classifier; reserved for future LLM fallback.
         decline_message: Human-readable decline reason for out_of_scope intents.
+        tool_group: Tool group key for S2 tool schema resolution. Matches intent name.
     """
 
     intent: str
@@ -140,6 +147,7 @@ class ClassifiedIntent:
     fast_path: bool = False
     confidence: float = 1.0
     decline_message: str | None = None
+    tool_group: str | None = None
 
 
 # ── Main classifier ───────────────────────────────────────────────────────────
@@ -226,6 +234,7 @@ def classify_intent(
             intent="simple_lookup",
             tickers=tickers,
             fast_path=True,
+            tool_group="simple_lookup",
         )
 
     # Bare single ticker (no other intent signals)
@@ -235,6 +244,7 @@ def classify_intent(
             intent="simple_lookup",
             tickers=tickers,
             fast_path=True,
+            tool_group="simple_lookup",
         )
 
     # ── Rule 5: comparison ────────────────────────────────────────────────────
@@ -244,6 +254,7 @@ def classify_intent(
         return ClassifiedIntent(
             intent="comparison",
             tickers=capped,
+            tool_group="comparison",
         )
 
     # Also treat 2+ tickers without explicit comparison keyword as comparison
@@ -253,6 +264,7 @@ def classify_intent(
         return ClassifiedIntent(
             intent="comparison",
             tickers=capped,
+            tool_group="comparison",
         )
 
     # ── Rule 6: portfolio ─────────────────────────────────────────────────────
@@ -262,15 +274,16 @@ def classify_intent(
         return ClassifiedIntent(
             intent="portfolio",
             tickers=resolved,
+            tool_group="portfolio",
         )
 
     # Possessive held_ticker references without explicit portfolio keyword
-    _POSSESSIVE_RE = re.compile(r"\bmy\b", re.IGNORECASE)
     if _POSSESSIVE_RE.search(stripped) and held_tickers and not tickers:
         logger.debug("classify_intent: 'my' + held_tickers → portfolio")
         return ClassifiedIntent(
             intent="portfolio",
             tickers=held_tickers,
+            tool_group="portfolio",
         )
 
     # ── Rule 7: market ────────────────────────────────────────────────────────
@@ -279,6 +292,7 @@ def classify_intent(
         return ClassifiedIntent(
             intent="market",
             tickers=tickers,
+            tool_group="market",
         )
 
     # ── Rule 8: stock analysis ────────────────────────────────────────────────
@@ -287,6 +301,7 @@ def classify_intent(
         return ClassifiedIntent(
             intent="stock",
             tickers=tickers,
+            tool_group="stock",
         )
 
     # Single ticker with no specific intent signals → stock
@@ -295,6 +310,7 @@ def classify_intent(
         return ClassifiedIntent(
             intent="stock",
             tickers=tickers,
+            tool_group="stock",
         )
 
     # ── Rule 9: general fallback ──────────────────────────────────────────────
