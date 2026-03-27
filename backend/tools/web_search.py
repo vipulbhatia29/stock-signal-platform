@@ -75,4 +75,4 @@ class WebSearchTool(BaseTool):
             return ToolResult(status="ok", data=results)
         except Exception as e:
             logger.error("web_search_failed", extra={"query": params.get("query"), "error": str(e)})
-            return ToolResult(status="error", error=str(e))
+            return ToolResult(status="error", error="Web search failed. Please try again.")

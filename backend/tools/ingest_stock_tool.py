@@ -73,10 +73,10 @@ class IngestStockTool(BaseTool):
                 # 1. Ensure stock record exists (creates from yfinance if needed)
                 try:
                     stock = await ensure_stock_exists(ticker, session)
-                except ValueError as e:
+                except ValueError:
                     return ToolResult(
                         status="error",
-                        error=f"Ticker '{ticker}' not found: {e}",
+                        error=f"Ticker '{ticker}' not found. Check the symbol and try again.",
                     )
 
                 is_new = stock.last_fetched_at is None
@@ -85,7 +85,14 @@ class IngestStockTool(BaseTool):
                 try:
                     delta_df = await fetch_prices_delta(ticker, session)
                 except ValueError as e:
-                    return ToolResult(status="error", error=str(e))
+                    logger.error(
+                        "fetch_prices_delta_failed",
+                        extra={"ticker": ticker, "error": str(e)},
+                    )
+                    return ToolResult(
+                        status="error",
+                        error=f"Failed to fetch price data for {ticker}. Please try again.",
+                    )
 
                 rows_fetched = len(delta_df) if not delta_df.empty else 0
 

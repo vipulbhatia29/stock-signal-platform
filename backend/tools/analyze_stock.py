@@ -73,4 +73,4 @@ class AnalyzeStockTool(BaseTool):
                 )
         except Exception as e:
             logger.error("analyze_stock_failed", extra={"ticker": ticker, "error": str(e)})
-            return ToolResult(status="error", error=str(e))
+            return ToolResult(status="error", error="Stock analysis failed. Please try again.")
