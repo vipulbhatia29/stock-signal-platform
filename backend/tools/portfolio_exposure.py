@@ -52,4 +52,7 @@ class PortfolioExposureTool(BaseTool):
                 return ToolResult(status="ok", data=summary.model_dump())
         except Exception as e:
             logger.error("portfolio_exposure_failed", extra={"error": str(e)})
-            return ToolResult(status="error", error=str(e))
+            return ToolResult(
+                status="error",
+                error="Failed to retrieve portfolio exposure. Please try again.",
+            )

@@ -90,4 +90,7 @@ class GeopoliticalEventsTool(BaseTool):
                 "geopolitical_failed",
                 extra={"query": params.get("query"), "error": str(e)},
             )
-            return ToolResult(status="error", error=str(e))
+            return ToolResult(
+                status="error",
+                error="Geopolitical events search failed. Please try again.",
+            )

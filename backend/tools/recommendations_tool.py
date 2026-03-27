@@ -73,4 +73,7 @@ class RecommendationsTool(BaseTool):
                 )
         except Exception as e:
             logger.error("recommendations_failed", extra={"ticker": ticker, "error": str(e)})
-            return ToolResult(status="error", error=str(e))
+            return ToolResult(
+                status="error",
+                error="Recommendation generation failed. Please try again.",
+            )

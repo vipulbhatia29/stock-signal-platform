@@ -73,4 +73,4 @@ class ComputeSignalsTool(BaseTool):
                 )
         except Exception as e:
             logger.error("compute_signals_failed", extra={"ticker": ticker, "error": str(e)})
-            return ToolResult(status="error", error=str(e))
+            return ToolResult(status="error", error="Signal computation failed. Please try again.")
