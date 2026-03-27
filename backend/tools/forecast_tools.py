@@ -7,24 +7,10 @@ from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
 
+from backend.constants import SECTOR_ETF_MAP
 from backend.tools.base import BaseTool, CachePolicy, ToolResult
 
 logger = logging.getLogger(__name__)
-
-# Sector-to-ETF mapping (canonical source: backend/routers/forecasts.py)
-SECTOR_ETF_MAP: dict[str, str] = {
-    "technology": "XLK",
-    "healthcare": "XLV",
-    "financials": "XLF",
-    "consumer discretionary": "XLY",
-    "consumer staples": "XLP",
-    "energy": "XLE",
-    "industrials": "XLI",
-    "materials": "XLB",
-    "utilities": "XLU",
-    "real estate": "XLRE",
-    "communication services": "XLC",
-}
 
 
 # ── Input schemas ────────────────────────────────────────────
