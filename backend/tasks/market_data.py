@@ -7,10 +7,10 @@ from datetime import date
 from sqlalchemy import select
 
 from backend.database import async_session_factory
+from backend.services.signals import compute_signals, store_signal_snapshot
+from backend.services.stock_data import fetch_prices_delta, load_prices_df
 from backend.tasks import celery_app
 from backend.tasks.pipeline import PipelineRunner, detect_gap, set_watermark_status
-from backend.tools.market_data import fetch_prices_delta, load_prices_df
-from backend.tools.signals import compute_signals, store_signal_snapshot
 
 logger = logging.getLogger(__name__)
 

@@ -163,7 +163,7 @@ async def _generate_recommendation_with_context(
     Returns:
         RecommendationResult or None if no price data available.
     """
-    from backend.tools.portfolio import get_or_create_portfolio, get_positions_with_pnl
+    from backend.services.portfolio import get_or_create_portfolio, get_positions_with_pnl
 
     portfolio_state: PortfolioState | None = None
     max_position_pct = 5.0

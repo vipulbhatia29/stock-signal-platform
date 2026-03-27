@@ -32,7 +32,7 @@ from backend.schemas.stock import (
     SMAResponse,
 )
 from backend.services.signals import get_latest_signals as get_latest_signals_svc
-from backend.tools.fundamentals import fetch_fundamentals
+from backend.services.stock_data import fetch_fundamentals
 
 logger = logging.getLogger(__name__)
 

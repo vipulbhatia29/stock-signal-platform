@@ -77,12 +77,12 @@ class TestBuildUserContext:
 
         with (
             patch(
-                "backend.tools.portfolio.get_or_create_portfolio",
+                "backend.services.portfolio.get_or_create_portfolio",
                 new_callable=AsyncMock,
                 return_value=FakePortfolio(),
             ),
             patch(
-                "backend.tools.portfolio.get_positions_with_pnl",
+                "backend.services.portfolio.get_positions_with_pnl",
                 new_callable=AsyncMock,
                 return_value=positions,
             ),
@@ -118,12 +118,12 @@ class TestBuildUserContext:
 
         with (
             patch(
-                "backend.tools.portfolio.get_or_create_portfolio",
+                "backend.services.portfolio.get_or_create_portfolio",
                 new_callable=AsyncMock,
                 return_value=FakePortfolio(),
             ),
             patch(
-                "backend.tools.portfolio.get_positions_with_pnl",
+                "backend.services.portfolio.get_positions_with_pnl",
                 new_callable=AsyncMock,
                 return_value=[],
             ),
@@ -156,7 +156,7 @@ class TestBuildUserContext:
 
         with (
             patch(
-                "backend.tools.portfolio.get_or_create_portfolio",
+                "backend.services.portfolio.get_or_create_portfolio",
                 new_callable=AsyncMock,
                 side_effect=Exception("DB error"),
             ),

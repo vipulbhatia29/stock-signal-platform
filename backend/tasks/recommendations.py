@@ -27,9 +27,9 @@ async def _generate_recommendations_async() -> dict:
     from backend.models.signal import SignalSnapshot
     from backend.models.stock import Watchlist
     from backend.models.user import User
-    from backend.tools.market_data import get_latest_price
-    from backend.tools.recommendations import generate_recommendation, store_recommendation
-    from backend.tools.signals import SignalResult
+    from backend.services.recommendations import generate_recommendation, store_recommendation
+    from backend.services.signals import SignalResult
+    from backend.services.stock_data import get_latest_price
 
     async with async_session_factory() as db:
         # Get all users

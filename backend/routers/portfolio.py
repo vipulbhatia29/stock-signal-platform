@@ -40,10 +40,10 @@ from backend.services.portfolio import (
 from backend.services.portfolio import delete_transaction as svc_delete_transaction
 from backend.services.portfolio import get_health_history as svc_get_health_history
 from backend.services.portfolio import list_transactions as svc_list_transactions
+from backend.services.recommendations import calculate_position_size
+from backend.services.stock_data import get_latest_price
 from backend.tools.divestment import check_divestment_rules
 from backend.tools.dividends import get_dividend_summary
-from backend.tools.market_data import get_latest_price
-from backend.tools.recommendations import calculate_position_size
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])

@@ -87,7 +87,7 @@ async def build_user_context(user_id: uuid.UUID, db: AsyncSession) -> dict[str, 
         Dict with keys: portfolio_id, positions, sector_allocation,
         preferences, watchlist. Empty/default values for new users.
     """
-    from backend.tools.portfolio import get_or_create_portfolio, get_positions_with_pnl
+    from backend.services.portfolio import get_or_create_portfolio, get_positions_with_pnl
 
     context: dict[str, Any] = {
         "user_id": str(user_id),
