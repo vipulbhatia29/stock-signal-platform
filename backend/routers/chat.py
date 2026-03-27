@@ -215,6 +215,45 @@ async def _event_generator(
         async with async_session_factory() as ctx_db:
             user_context = await build_user_context(user.id, ctx_db)
 
+        # ── Fast path: intent classifier ─────────────────────────────────────
+        from backend.agents.intent_classifier import classify_intent
+        from backend.agents.simple_formatter import format_simple_result
+        from backend.agents.stream import StreamEvent
+
+        classified = classify_intent(
+            body.message,
+            held_tickers=[p.get("ticker") for p in user_context.get("positions", [])],
+        )
+
+        if classified.intent == "out_of_scope":
+            decline_msg = classified.decline_message or (
+                "I can only help with financial analysis and portfolio management. "
+                "Please ask a question about stocks, markets, or your portfolio."
+            )
+            yield StreamEvent(type="decline", content=decline_msg).to_ndjson() + "\n"
+            yield StreamEvent(type="done", usage={}).to_ndjson() + "\n"
+            async with async_session_factory() as persist_db:
+                await save_message(
+                    persist_db, chat_session.id, role="assistant", content=decline_msg
+                )
+            return
+
+        if classified.fast_path and classified.tickers:
+            tool_executor = getattr(request.app.state, "tool_executor", None)
+            if tool_executor:
+                result = await tool_executor("analyze_stock", {"ticker": classified.tickers[0]})
+                formatted = format_simple_result(
+                    "analyze_stock", result.data if hasattr(result, "data") else result
+                )
+                yield StreamEvent(type="token", content=formatted).to_ndjson() + "\n"
+                yield StreamEvent(type="done", usage={}).to_ndjson() + "\n"
+                async with async_session_factory() as persist_db:
+                    await save_message(
+                        persist_db, chat_session.id, role="assistant", content=formatted
+                    )
+                return
+            # If no tool_executor available, fall through to graph path
+
         # Build message context
         context = build_context_window(session_messages)
         context.append({"role": "user", "content": body.message})
