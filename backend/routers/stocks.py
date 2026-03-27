@@ -32,13 +32,11 @@ from typing import Literal
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import Float, delete, func, select
-from sqlalchemy.dialects.postgresql import aggregate_order_by
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
 from backend.dependencies import get_current_user
-from backend.models.index import StockIndexMembership
 from backend.models.price import StockPrice
 from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
@@ -65,6 +63,15 @@ from backend.schemas.stock import (
     StockSearchResponse,
     WatchlistAddRequest,
     WatchlistItemResponse,
+)
+from backend.services.signals import (
+    get_bulk_signals as get_bulk_signals_svc,
+)
+from backend.services.signals import (
+    get_latest_signals as get_latest_signals_svc,
+)
+from backend.services.signals import (
+    get_signal_history as get_signal_history_svc,
 )
 from backend.tasks.market_data import refresh_ticker_task
 from backend.tools.fundamentals import fetch_fundamentals
@@ -280,15 +287,7 @@ async def get_signals(
     await _require_stock(ticker, db)
 
     # ── Fetch the latest signal snapshot for this ticker ──────────────
-    # We order by computed_at DESC and take the first row, giving us
-    # the most recent signal computation.
-    result = await db.execute(
-        select(SignalSnapshot)
-        .where(SignalSnapshot.ticker == ticker.upper())
-        .order_by(SignalSnapshot.computed_at.desc())
-        .limit(1)
-    )
-    snapshot = result.scalar_one_or_none()
+    snapshot = await get_latest_signals_svc(ticker, db)
 
     if snapshot is None:
         raise HTTPException(
@@ -854,102 +853,20 @@ async def get_bulk_signals(
     by index, RSI state, MACD state, sector, and composite score range.
     Results are paginated and sortable.
     """
-    # Latest signal per ticker using row_number window function
-    latest = select(
-        SignalSnapshot,
-        Stock.name,
-        Stock.sector.label("stock_sector"),
-        func.row_number()
-        .over(
-            partition_by=SignalSnapshot.ticker,
-            order_by=SignalSnapshot.computed_at.desc(),
-        )
-        .label("rn"),
-    ).join(Stock, SignalSnapshot.ticker == Stock.ticker)
-
-    # Apply index filter via join
-    if index_id is not None:
-        latest = latest.join(
-            StockIndexMembership,
-            Stock.ticker == StockIndexMembership.ticker,
-        ).where(StockIndexMembership.index_id == index_id)
-
-    latest = latest.subquery("latest")
-
-    # Correlated subquery: last 30 adj_close values per ticker (chronological ASC).
-    # Uses a nested subquery to pick the 30 most-recent dates (DESC limit),
-    # then array_agg with aggregate_order_by to return them sorted ASC.
-    _last_30_times = (
-        select(StockPrice.time)
-        .where(StockPrice.ticker == latest.c.ticker)
-        .order_by(StockPrice.time.desc())
-        .limit(30)
-        .correlate(latest)
-        .subquery()
+    total, rows = await get_bulk_signals_svc(
+        db,
+        index_id=index_id,
+        rsi_state=rsi_state,
+        macd_state=macd_state,
+        sector=sector,
+        score_min=score_min,
+        score_max=score_max,
+        sharpe_min=sharpe_min,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        limit=limit,
+        offset=offset,
     )
-    price_sub = (
-        select(
-            func.array_agg(
-                aggregate_order_by(
-                    StockPrice.adj_close.cast(Float),
-                    StockPrice.time.asc(),
-                )
-            )
-        )
-        .where(StockPrice.ticker == latest.c.ticker)
-        .where(StockPrice.time.in_(select(_last_30_times)))
-        .correlate(latest)
-        .scalar_subquery()
-    )
-
-    # Build main query filtering to rn=1 (most recent per ticker)
-    query = select(latest, price_sub.label("price_history")).where(latest.c.rn == 1)
-
-    # Apply filters
-    if rsi_state is not None:
-        query = query.where(latest.c.rsi_signal == rsi_state.upper())
-    if macd_state is not None:
-        query = query.where(latest.c.macd_signal_label == macd_state.upper())
-    if sector is not None:
-        query = query.where(latest.c.stock_sector == sector)
-    if score_min is not None:
-        query = query.where(latest.c.composite_score >= score_min)
-    if score_max is not None:
-        query = query.where(latest.c.composite_score <= score_max)
-    if sharpe_min is not None:
-        query = query.where(latest.c.sharpe_ratio >= sharpe_min)
-
-    # Count total before pagination
-    count_query = select(func.count()).select_from(query.subquery())
-    count_result = await db.execute(count_query)
-    total = count_result.scalar_one()
-
-    # Apply sorting (whitelist to prevent column enumeration)
-    _ALLOWED_SORT = {
-        "composite_score",
-        "ticker",
-        "rsi_value",
-        "macd_value",
-        "sma_50",
-        "sma_200",
-        "annual_return",
-        "volatility",
-        "sharpe_ratio",
-        "stock_sector",
-    }
-    if sort_by not in _ALLOWED_SORT:
-        sort_by = "composite_score"
-    sort_column = getattr(latest.c, sort_by, latest.c.composite_score)
-    if sort_order == "asc":
-        query = query.order_by(sort_column.asc().nulls_last())
-    else:
-        query = query.order_by(sort_column.desc().nulls_last())
-
-    # Apply pagination
-    query = query.limit(limit).offset(offset)
-
-    result = await db.execute(query)
-    rows = result.all()
 
     stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     items = [
@@ -1000,15 +917,7 @@ async def get_signal_history(
     """
     await _require_stock(ticker, db)
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    result = await db.execute(
-        select(SignalSnapshot)
-        .where(SignalSnapshot.ticker == ticker.upper())
-        .where(SignalSnapshot.computed_at >= cutoff)
-        .order_by(SignalSnapshot.computed_at.asc())
-        .limit(limit)
-    )
-    snapshots = result.scalars().all()
+    snapshots = await get_signal_history_svc(ticker, db, days=days, limit=limit)
 
     return [
         {
