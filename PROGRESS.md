@@ -1098,7 +1098,22 @@ Phase 7.6 Sprint 1: 8 parallel subagents in worktrees. Group A (PR #120): KAN-17
 
 ---
 
-## Session 63 — Phase 8C Intent Classifier + Tool Filtering (2026-03-27)
+## Session 63 — Phase 8C + 8B (S5-S7) (2026-03-27)
+
+**Branch:** `feat/KAN-203-phase-8b-react-loop` | **Tests:** 940 → 950 unit (+10 new)
+
+### KAN-203–205: Phase 8B prep (S5–S7, parallel)
+Dispatched 3 subagents in parallel with worktree isolation. All independent — no file overlap.
+
+- [x] **S5 (KAN-203):** Observability loop_step wiring — `loop_step: int | None` on `record_request()` + `record_tool_execution()`, writer wired, deferred comments removed. 5 new tests.
+- [x] **S6 (KAN-204):** Anthropic multi-turn normalization — `_normalize_messages_for_anthropic()` converts OpenAI-format tool_calls to Anthropic content blocks. Handles assistant+tool_calls → content blocks, role:tool → role:user+tool_result. 5 new tests.
+- [x] **S7 (KAN-205):** REACT_AGENT feature flag (`config.py`) + `scripts/seed_reason_tier.py` (copies planner tier → reason tier in llm_model_config).
+
+**PR #127 (8C) merged. 8B prep: 3 commits, +10 tests, 950 total.**
+
+---
+
+## Session 63 (earlier) — Phase 8C Intent Classifier + Tool Filtering (2026-03-27)
 
 **Branch:** `feat/KAN-199-phase-8c-intent-classifier` | **Tests:** 903 → 940 unit (+37 new)
 

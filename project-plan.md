@@ -819,12 +819,15 @@ Close observability gaps (cost tracking, cache_hit, agent_id, fallback_rate). Th
 - [x] `ModelConfigLoader.get_pricing_map()` convenience method
 - [x] 12 new unit tests + 4 API tests
 
-### 8B — ReAct Loop (KAN-189 Step 1, ~20h)
-- [ ] Replace Plan→Execute→Synthesize pipeline with reason⇄act loop
-- [ ] Reason node: LLM observes scratchpad → thought + next_action OR finish
-- [ ] Act node: runs ONE tool, appends to scratchpad, loops back to reason
-- [ ] Stream thoughts as NDJSON events for real-time UX
-- [ ] Validation: tool N+1 changes based on tool N result
+### 8B — ReAct Loop (KAN-189 Step 1, ~20h) — 3/8 done
+- [x] S5: Observability loop_step wiring (KAN-203, Session 63)
+- [x] S6: Anthropic multi-turn scratchpad normalization (KAN-204, Session 63)
+- [x] S7: REACT_AGENT feature flag + reason tier seed (KAN-205, Session 63)
+- [ ] S8: ReAct loop core — async generator + scratchpad + tool execution
+- [ ] S9: ReAct system prompt with tool_use guidance
+- [ ] S10: Chat router integration — wire ReAct + feature flag + streaming
+- [ ] S11: main.py rewiring — conditional graph + app.state components
+- [ ] S12: Integration tests + validation + doc sync + PR B
 
 ### 8C — Tool Filtering (KAN-199–202, Session 63) ✅
 - [x] Rule-based intent classifier — 8 intents, ticker extraction, pronoun resolution (27 tests)
