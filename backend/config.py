@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     MCP_TOOLS: bool = True  # MCP stdio transport for agent tool calls (kill switch: set False)
     MAX_TOOL_RESULT_CHARS: int = 3000  # Truncate tool results before synthesis
 
+    # --- Database Pool ---
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_RECYCLE: int = 3600  # seconds — prevents stale connections
+
     # --- Logging ---
     LOG_LEVEL: str = "INFO"
 
