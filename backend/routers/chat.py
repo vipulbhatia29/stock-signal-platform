@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextvars import Token
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -148,15 +149,23 @@ async def chat_stream(
     await save_message(db, chat_session.id, role="user", content=body.message)
 
     # Set request-scoped user context for tools (portfolio_exposure etc.)
-    _ctx_token = current_user_id.set(user.id)  # noqa: F841
+    ctx_token_user = current_user_id.set(user.id)
 
     # Generate query_id for tracing and propagate session/query context
     query_id = uuid.uuid4()
-    _ctx_token_session = current_session_id.set(chat_session.id)  # noqa: F841
-    _ctx_token_query = current_query_id.set(query_id)  # noqa: F841
+    ctx_token_session = current_session_id.set(chat_session.id)
+    ctx_token_query = current_query_id.set(query_id)
 
     return StreamingResponse(
-        _event_generator(request, body, chat_session, session_messages, user, query_id),
+        _event_generator(
+            request,
+            body,
+            chat_session,
+            session_messages,
+            user,
+            query_id,
+            ctx_tokens=(ctx_token_user, ctx_token_session, ctx_token_query),
+        ),
         media_type="application/x-ndjson",
     )
 
@@ -168,77 +177,97 @@ async def _event_generator(
     session_messages: list[dict],
     user: User,
     query_id: uuid.UUID,
+    ctx_tokens: tuple[Token, Token, Token] | None = None,
 ):
-    """Yield NDJSON events from the Plan→Execute→Synthesize graph."""
-    from backend.agents.graph import AgentStateV2
-    from backend.agents.stream import stream_graph_v2_events
-    from backend.agents.user_context import build_user_context
+    """Yield NDJSON events from the Plan→Execute→Synthesize graph.
 
-    # Build user context for personalization
-    async with async_session_factory() as ctx_db:
-        user_context = await build_user_context(user.id, ctx_db)
+    Args:
+        request: The FastAPI request object.
+        body: The chat request body.
+        chat_session: The resolved or newly-created chat session.
+        session_messages: Previous messages for context window.
+        user: The authenticated user.
+        query_id: Unique query ID for tracing.
+        ctx_tokens: Tuple of ContextVar tokens (user, session, query) to
+            reset when streaming completes, preventing stale state leaking
+            across async tasks.
+    """
+    try:
+        from backend.agents.graph import AgentStateV2
+        from backend.agents.stream import stream_graph_v2_events
+        from backend.agents.user_context import build_user_context
 
-    # Build message context
-    context = build_context_window(session_messages)
-    context.append({"role": "user", "content": body.message})
+        # Build user context for personalization
+        async with async_session_factory() as ctx_db:
+            user_context = await build_user_context(user.id, ctx_db)
 
-    input_state = AgentStateV2(
-        messages=context,
-        phase="plan",
-        plan={},
-        tool_results=[],
-        synthesis={},
-        iteration=0,
-        replan_count=0,
-        start_time=0.0,
-        user_context=user_context,
-        query_id=str(query_id),
-        skip_synthesis=False,
-        response_text="",
-        decline_message="",
-    )
+        # Build message context
+        context = build_context_window(session_messages)
+        context.append({"role": "user", "content": body.message})
 
-    graph = getattr(request.app.state, "agent_graph", None)
-    if graph is None:
-        from backend.agents.stream import StreamEvent
-
-        yield (
-            StreamEvent(
-                type="error", error="Chat service is starting up. Please try again in a moment."
-            ).to_ndjson()
-            + "\n"
+        input_state = AgentStateV2(
+            messages=context,
+            phase="plan",
+            plan={},
+            tool_results=[],
+            synthesis={},
+            iteration=0,
+            replan_count=0,
+            start_time=0.0,
+            user_context=user_context,
+            query_id=str(query_id),
+            skip_synthesis=False,
+            response_text="",
+            decline_message="",
         )
-        return
 
-    collected_tokens: list[str] = []
-    collected_tool_calls: list[dict] = []
+        graph = getattr(request.app.state, "agent_graph", None)
+        if graph is None:
+            from backend.agents.stream import StreamEvent
 
-    async for event in stream_graph_v2_events(graph, input_state):
-        if event.type == "token" and event.content:
-            collected_tokens.append(event.content)
-        elif event.type == "tool_result":
-            collected_tool_calls.append(
-                {"tool": event.tool, "status": event.status, "data": event.data}
+            yield (
+                StreamEvent(
+                    type="error",
+                    error="Chat service is starting up. Please try again in a moment.",
+                ).to_ndjson()
+                + "\n"
             )
-        elif event.type == "tool_error":
-            collected_tool_calls.append(
-                {"tool": event.tool, "status": "error", "error": event.error}
+            return
+
+        collected_tokens: list[str] = []
+        collected_tool_calls: list[dict] = []
+
+        async for event in stream_graph_v2_events(graph, input_state):
+            if event.type == "token" and event.content:
+                collected_tokens.append(event.content)
+            elif event.type == "tool_result":
+                collected_tool_calls.append(
+                    {"tool": event.tool, "status": event.status, "data": event.data}
+                )
+            elif event.type == "tool_error":
+                collected_tool_calls.append(
+                    {"tool": event.tool, "status": "error", "error": event.error}
+                )
+
+            yield event.to_ndjson() + "\n"
+
+        # Persist assistant message
+        final_content = "".join(collected_tokens) if collected_tokens else None
+        tool_calls_json = collected_tool_calls if collected_tool_calls else None
+
+        async with async_session_factory() as persist_db:
+            await save_message(
+                persist_db,
+                chat_session.id,
+                role="assistant",
+                content=final_content,
+                tool_calls=tool_calls_json,
             )
-
-        yield event.to_ndjson() + "\n"
-
-    # Persist assistant message
-    final_content = "".join(collected_tokens) if collected_tokens else None
-    tool_calls_json = collected_tool_calls if collected_tool_calls else None
-
-    async with async_session_factory() as persist_db:
-        await save_message(
-            persist_db,
-            chat_session.id,
-            role="assistant",
-            content=final_content,
-            tool_calls=tool_calls_json,
-        )
+    finally:
+        if ctx_tokens is not None:
+            current_user_id.reset(ctx_tokens[0])
+            current_session_id.reset(ctx_tokens[1])
+            current_query_id.reset(ctx_tokens[2])
 
 
 @router.patch(
