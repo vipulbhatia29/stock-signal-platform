@@ -18,9 +18,19 @@ class MCPToolsStatus(BaseModel):
     fallback_since: str | None = None
 
 
+class DependencyStatus(BaseModel):
+    """Status of a backend dependency (database, Redis, etc.)."""
+
+    healthy: bool
+    latency_ms: float | None = None
+    error: str | None = None
+
+
 class HealthResponse(BaseModel):
     """Application health check response."""
 
     status: Literal["ok", "degraded"]
     version: str
+    redis: DependencyStatus
+    database: DependencyStatus
     mcp_tools: MCPToolsStatus
