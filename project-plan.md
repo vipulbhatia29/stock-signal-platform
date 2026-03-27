@@ -826,10 +826,10 @@ Close observability gaps (cost tracking, cache_hit, agent_id, fallback_rate). Th
 - [ ] Stream thoughts as NDJSON events for real-time UX
 - [ ] Validation: tool N+1 changes based on tool N result
 
-### 8C — Tool Filtering (KAN-188 + KAN-189 Step 2, ~4h)
-- [ ] Rule-based intent classifier (keyword match, zero LLM cost)
-- [ ] Two-tier: keyword first, LLM classifier fallback for ambiguous queries
-- [ ] Intent → tool group mapping (stock 8, portfolio 6, market 5, comparison, general)
+### 8C — Tool Filtering (KAN-199–202, Session 63) ✅
+- [x] Rule-based intent classifier — 8 intents, ticker extraction, pronoun resolution (27 tests)
+- [x] Intent → tool group mapping (stock 8, portfolio 8, market 5, comparison 5, simple_lookup 1, general=all) (7 tests)
+- [x] Fast path wiring — out_of_scope + simple_lookup bypass graph (0 LLM calls) (3 tests)
 
 ### 8D — Dynamic Concurrency Controller (KAN-189 Step 4, ~8h)
 - [ ] ConcurrencyController reads fallback_rate → adjusts semaphore dynamically

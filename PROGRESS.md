@@ -1098,6 +1098,33 @@ Phase 7.6 Sprint 1: 8 parallel subagents in worktrees. Group A (PR #120): KAN-17
 
 ---
 
+## Session 63 — Phase 8C Intent Classifier + Tool Filtering (2026-03-27)
+
+**Branch:** `feat/KAN-199-phase-8c-intent-classifier` | **Tests:** 903 → 940 unit (+37 new)
+
+### KAN-199–202: Phase 8C (S1–S4)
+Subagent-driven development: 4 stories, each with implementer + spec review + code quality review.
+
+- [x] **S1 (KAN-199):** Rule-based intent classifier �� `ClassifiedIntent` dataclass, `classify_intent()` with 8 intents (out_of_scope, simple_lookup, comparison, portfolio, market, stock, general), ticker extraction (regex + 27 stop words), pronoun resolution via entity_context, held_tickers resolution. Imports `detect_injection()` from guards.py. 27 tests.
+- [x] **S2 (KAN-200):** Tool groups + schema resolution — `TOOL_GROUPS` dict (6 groups: stock=8, portfolio=8, market=5, comparison=5, simple_lookup=1, general=all), `get_tool_schemas_for_group()` with graceful skip for missing tools. 7 tests.
+- [x] **S3 (KAN-201):** Fast path wiring — intent classifier in `_event_generator` before graph invocation. Out-of-scope → instant decline (0 LLM calls). Simple lookup → direct `tool_executor("analyze_stock")` + template format (0 LLM calls). `app.state.tool_executor` exposed in main.py. 3 tests.
+- [x] **S4 (KAN-202):** Verification — 940 unit tests pass, lint clean.
+
+### New Files (5)
+- `backend/agents/intent_classifier.py` — 321 lines
+- `backend/agents/tool_groups.py` — 97 lines
+- `tests/unit/agents/test_intent_classifier.py` — 219 lines
+- `tests/unit/agents/test_tool_groups.py` — 180 lines
+- `tests/unit/routers/test_chat_fast_path.py` — 194 lines
+
+### Modified Files (2)
+- `backend/routers/chat.py` — +39 lines (fast path block)
+- `backend/main.py` — +2 lines (tool_executor on app.state)
+
+**5 commits, 7 files changed, +1,052 lines**
+
+---
+
 ## Session 61 — Service Layer Extraction + Router Split (2026-03-27) *(compact)*
 Extracted 6 service modules, split stocks.py into 4 sub-routers (KAN-172/173). 49 new tests. PR #123 merged.
 
