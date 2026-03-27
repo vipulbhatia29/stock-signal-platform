@@ -20,7 +20,7 @@ uv run alembic current                                 # Check migration head
 - `database.py` provides `get_async_session()` as a FastAPI dependency
 - All routers are mounted in `main.py` under `/api/v1/`
 - 24 internal tools + 4 MCP adapters in `tools/` registered via `ToolRegistry` (build_registry.py)
-- Agent pipeline: Plan→Execute→Synthesize (LangGraph StateGraph in `agents/graph.py`)
+- Agent pipeline: ReAct loop (`agents/react_loop.py`, feature-flagged via `REACT_AGENT=true`). Old Plan→Execute→Synthesize still available behind flag.
 - Input/output guardrails in `agents/guards.py` (PII, injection, disclaimer)
 - Background tasks in `tasks/` are Celery tasks scheduled by Celery Beat (9-step nightly chain)
 

@@ -1102,14 +1102,20 @@ Phase 7.6 Sprint 1: 8 parallel subagents in worktrees. Group A (PR #120): KAN-17
 
 **Branch:** `feat/KAN-203-phase-8b-react-loop` | **Tests:** 940 → 950 unit (+10 new)
 
-### KAN-203–205: Phase 8B prep (S5–S7, parallel)
-Dispatched 3 subagents in parallel with worktree isolation. All independent — no file overlap.
+### KAN-203–210: Phase 8B COMPLETE (S5–S12)
 
+**Prep (parallel, worktree isolation):**
 - [x] **S5 (KAN-203):** Observability loop_step wiring — `loop_step: int | None` on `record_request()` + `record_tool_execution()`, writer wired, deferred comments removed. 5 new tests.
-- [x] **S6 (KAN-204):** Anthropic multi-turn normalization — `_normalize_messages_for_anthropic()` converts OpenAI-format tool_calls to Anthropic content blocks. Handles assistant+tool_calls → content blocks, role:tool → role:user+tool_result. 5 new tests.
-- [x] **S7 (KAN-205):** REACT_AGENT feature flag (`config.py`) + `scripts/seed_reason_tier.py` (copies planner tier → reason tier in llm_model_config).
+- [x] **S6 (KAN-204):** Anthropic multi-turn normalization — `_normalize_messages_for_anthropic()` converts OpenAI-format tool_calls to Anthropic content blocks. 5 new tests.
+- [x] **S7 (KAN-205):** REACT_AGENT feature flag (`config.py`) + `scripts/seed_reason_tier.py`.
 
-**PR #127 (8C) merged. 8B prep: 3 commits, +10 tests, 950 total.**
+**Core (sequential, subagent-driven):**
+- [x] **S8 (KAN-206):** ReAct loop core — `react_loop()` async generator (447 lines), `_execute_tools()` with parallel asyncio.gather, scratchpad helpers, 6 constants (MAX_ITERATIONS=8, MAX_PARALLEL_TOOLS=4, MAX_TOOL_CALLS=12, WALL_CLOCK_TIMEOUT=45, CIRCUIT_BREAKER=3). 19 tests (13 loop + 6 scratchpad).
+- [x] **S9 (KAN-207):** System prompt template `prompts/react_system.md` + `_render_system_prompt()` with {{user_context}} and {{entity_context}} placeholders.
+- [x] **S10+S11 (KAN-208/209):** Chat router feature-flag split (`settings.REACT_AGENT` → ReAct path or old pipeline). main.py conditional graph compilation. `app.state.tool_registry` alias.
+- [x] **S12 (KAN-210):** 5 integration tests (stock analysis flow, portfolio drilldown, comparison parallel, simple lookup bypass, out-of-scope decline).
+
+**974 unit tests (+24 new this session). PR #127 (8C) + Phase 8B branch ready.**
 
 ---
 
