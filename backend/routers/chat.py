@@ -207,8 +207,7 @@ async def _event_generator(
             across async tasks.
     """
     try:
-        from backend.agents.graph import AgentStateV2
-        from backend.agents.stream import stream_graph_v2_events
+        from backend.agents.stream import StreamEvent
         from backend.agents.user_context import build_user_context
 
         # Build user context for personalization
@@ -218,7 +217,6 @@ async def _event_generator(
         # ── Fast path: intent classifier ─────────────────────────────────────
         from backend.agents.intent_classifier import classify_intent
         from backend.agents.simple_formatter import format_simple_result
-        from backend.agents.stream import StreamEvent
 
         classified = classify_intent(
             body.message,
@@ -254,68 +252,136 @@ async def _event_generator(
                 return
             # If no tool_executor available, fall through to graph path
 
-        # Build message context
-        context = build_context_window(session_messages)
-        context.append({"role": "user", "content": body.message})
+        # ── Route: ReAct loop vs old pipeline ─────────────────────────────
+        from backend.config import settings
 
-        input_state = AgentStateV2(
-            messages=context,
-            phase="plan",
-            plan={},
-            tool_results=[],
-            synthesis={},
-            iteration=0,
-            replan_count=0,
-            start_time=0.0,
-            user_context=user_context,
-            query_id=str(query_id),
-            skip_synthesis=False,
-            response_text="",
-            decline_message="",
-        )
+        if settings.REACT_AGENT:
+            # ReAct path: use react_loop with tool group from classifier
+            from backend.agents.react_loop import react_loop
+            from backend.agents.tool_groups import get_tool_schemas_for_group
 
-        graph = getattr(request.app.state, "agent_graph", None)
-        if graph is None:
-            from backend.agents.stream import StreamEvent
+            tool_executor = getattr(request.app.state, "tool_executor", None)
+            llm_client = getattr(request.app.state, "llm_client", None)
+            registry = getattr(request.app.state, "tool_registry", None)
+            collector = getattr(request.app.state, "collector", None)
+            cache = getattr(request.app.state, "cache", None)
 
-            yield (
-                StreamEvent(
-                    type="error",
-                    error="Chat service is starting up. Please try again in a moment.",
-                ).to_ndjson()
-                + "\n"
-            )
-            return
-
-        collected_tokens: list[str] = []
-        collected_tool_calls: list[dict] = []
-
-        async for event in stream_graph_v2_events(graph, input_state):
-            if event.type == "token" and event.content:
-                collected_tokens.append(event.content)
-            elif event.type == "tool_result":
-                collected_tool_calls.append(
-                    {"tool": event.tool, "status": event.status, "data": event.data}
+            if not tool_executor or not llm_client:
+                yield (
+                    StreamEvent(
+                        type="error",
+                        error="Chat service is starting up. Please try again in a moment.",
+                    ).to_ndjson()
+                    + "\n"
                 )
-            elif event.type == "tool_error":
-                collected_tool_calls.append(
-                    {"tool": event.tool, "status": "error", "error": event.error}
+                return
+
+            tools = get_tool_schemas_for_group(classified.tool_group, registry)
+            context = build_context_window(session_messages)
+
+            collected_tokens: list[str] = []
+            collected_tool_calls: list[dict] = []
+
+            async for event in react_loop(
+                query=body.message,
+                session_messages=context,
+                tools=tools,
+                tool_executor=tool_executor,
+                llm_chat=lambda msgs, tls: llm_client.chat(messages=msgs, tools=tls, tier="reason"),
+                user_context=user_context,
+                collector=collector,
+                cache=cache,
+                session_id=str(chat_session.id),
+            ):
+                if event.type == "token" and event.content:
+                    collected_tokens.append(event.content)
+                elif event.type == "tool_result":
+                    collected_tool_calls.append(
+                        {"tool": event.tool, "status": event.status, "data": event.data}
+                    )
+                elif event.type == "tool_error":
+                    collected_tool_calls.append(
+                        {"tool": event.tool, "status": "error", "error": event.error}
+                    )
+
+                yield event.to_ndjson() + "\n"
+
+            # Persist assistant message
+            final_content = "".join(collected_tokens) if collected_tokens else None
+            tool_calls_json = collected_tool_calls if collected_tool_calls else None
+
+            async with async_session_factory() as persist_db:
+                await save_message(
+                    persist_db,
+                    chat_session.id,
+                    role="assistant",
+                    content=final_content,
+                    tool_calls=tool_calls_json,
                 )
+        else:
+            # Old path: Plan→Execute→Synthesize graph
+            from backend.agents.graph import AgentStateV2
+            from backend.agents.stream import stream_graph_v2_events
 
-            yield event.to_ndjson() + "\n"
+            context = build_context_window(session_messages)
+            context.append({"role": "user", "content": body.message})
 
-        # Persist assistant message
-        final_content = "".join(collected_tokens) if collected_tokens else None
-        tool_calls_json = collected_tool_calls if collected_tool_calls else None
-
-        async with async_session_factory() as persist_db:
-            await save_message(
-                persist_db,
-                chat_session.id,
-                role="assistant",
-                content=final_content,
-                tool_calls=tool_calls_json,
+            input_state = AgentStateV2(
+                messages=context,
+                phase="plan",
+                plan={},
+                tool_results=[],
+                synthesis={},
+                iteration=0,
+                replan_count=0,
+                start_time=0.0,
+                user_context=user_context,
+                query_id=str(query_id),
+                skip_synthesis=False,
+                response_text="",
+                decline_message="",
             )
+
+            graph = getattr(request.app.state, "agent_graph", None)
+            if graph is None:
+                yield (
+                    StreamEvent(
+                        type="error",
+                        error="Chat service is starting up. Please try again in a moment.",
+                    ).to_ndjson()
+                    + "\n"
+                )
+                return
+
+            collected_tokens: list[str] = []
+            collected_tool_calls: list[dict] = []
+
+            async for event in stream_graph_v2_events(graph, input_state):
+                if event.type == "token" and event.content:
+                    collected_tokens.append(event.content)
+                elif event.type == "tool_result":
+                    collected_tool_calls.append(
+                        {"tool": event.tool, "status": event.status, "data": event.data}
+                    )
+                elif event.type == "tool_error":
+                    collected_tool_calls.append(
+                        {"tool": event.tool, "status": "error", "error": event.error}
+                    )
+
+                yield event.to_ndjson() + "\n"
+
+            # Persist assistant message
+            final_content = "".join(collected_tokens) if collected_tokens else None
+            tool_calls_json = collected_tool_calls if collected_tool_calls else None
+
+            async with async_session_factory() as persist_db:
+                await save_message(
+                    persist_db,
+                    chat_session.id,
+                    role="assistant",
+                    content=final_content,
+                    tool_calls=tool_calls_json,
+                )
     finally:
         if ctx_tokens is not None:
             current_user_id.reset(ctx_tokens[0])

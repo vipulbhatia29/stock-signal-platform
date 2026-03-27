@@ -49,7 +49,7 @@ async def write_event(event_type: str, data: dict) -> None:
                     error=data.get("error"),
                     agent_type=agent_type,
                     agent_instance_id=agent_instance_id,
-                    # loop_step: deferred to Phase 8B (ReAct loop) — column exists, wiring pending
+                    loop_step=data.get("loop_step"),
                 )
             elif event_type == "tool_execution":
                 row = ToolExecutionLog(
@@ -64,7 +64,7 @@ async def write_event(event_type: str, data: dict) -> None:
                     cache_hit=data.get("cache_hit", False),
                     agent_type=agent_type,
                     agent_instance_id=agent_instance_id,
-                    # loop_step: deferred to Phase 8B (ReAct loop) — column exists, wiring pending
+                    loop_step=data.get("loop_step"),
                 )
             else:
                 logger.warning("Unknown event type: %s", event_type)

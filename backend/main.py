@@ -168,18 +168,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.warning("MCP Tool Server failed to start — falling back to direct calls")
             mcp_manager = None
 
-    # 5. Build Agent graph (Plan→Execute→Synthesize)
+    # 5. Build tool executor + agent graph
     if providers:
-        from backend.agents.executor import execute_plan
-        from backend.agents.graph import build_agent_graph
-        from backend.agents.planner import plan_query
-        from backend.agents.simple_formatter import format_simple_result
-        from backend.agents.synthesizer import synthesize_results
-
-        # Build tools description for planner prompt
-        tool_infos = registry.discover()
-        tools_desc = "\n".join(f"- **{t.name}**: {t.description}" for t in tool_infos)
-
         # Tool executor: MCP when available, direct fallback
         async def _tool_executor(tool_name: str, params: dict):  # noqa: ANN202
             if mcp_manager and mcp_manager.healthy:
@@ -189,38 +179,53 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                     logger.warning("MCP fallback to direct for tool: %s", tool_name)
             return await registry.execute(tool_name, params)
 
-        # Bind LLM to plan/synthesize functions
-        async def _plan_fn(query: str, tools_description: str, user_context: dict) -> dict:
-            return await plan_query(
-                query=query,
-                tools_description=tools_description,
-                user_context=user_context,
-                llm_chat=lambda **kw: llm_client.chat(**kw, tier="planner"),
-            )
-
-        async def _synthesize_fn(tool_results: list, user_context: dict) -> dict:
-            return await synthesize_results(
-                tool_results=tool_results,
-                user_context=user_context,
-                llm_chat=lambda **kw: llm_client.chat(**kw, tier="synthesizer"),
-            )
-
-        app.state.agent_graph = build_agent_graph(
-            plan_fn=_plan_fn,
-            execute_fn=lambda steps, tool_executor, on_step=None: execute_plan(
-                steps,
-                tool_executor,
-                on_step=on_step,
-                collector=collector,
-                cache=cache_service,
-            ),
-            synthesize_fn=_synthesize_fn,
-            format_simple_fn=format_simple_result,
-            tool_executor=_tool_executor,
-            tools_description=tools_desc,
-        )
+        # Always expose tool_executor (used by both ReAct and fast path)
         app.state.tool_executor = _tool_executor
-        logger.info("Agent graph compiled (Plan→Execute→Synthesize)")
+
+        if not settings.REACT_AGENT:
+            # Old pipeline: Plan→Execute→Synthesize graph
+            from backend.agents.executor import execute_plan
+            from backend.agents.graph import build_agent_graph
+            from backend.agents.planner import plan_query
+            from backend.agents.simple_formatter import format_simple_result
+            from backend.agents.synthesizer import synthesize_results
+
+            tool_infos = registry.discover()
+            tools_desc = "\n".join(f"- **{t.name}**: {t.description}" for t in tool_infos)
+
+            async def _plan_fn(query: str, tools_description: str, user_context: dict) -> dict:
+                return await plan_query(
+                    query=query,
+                    tools_description=tools_description,
+                    user_context=user_context,
+                    llm_chat=lambda **kw: llm_client.chat(**kw, tier="planner"),
+                )
+
+            async def _synthesize_fn(tool_results: list, user_context: dict) -> dict:
+                return await synthesize_results(
+                    tool_results=tool_results,
+                    user_context=user_context,
+                    llm_chat=lambda **kw: llm_client.chat(**kw, tier="synthesizer"),
+                )
+
+            app.state.agent_graph = build_agent_graph(
+                plan_fn=_plan_fn,
+                execute_fn=lambda steps, tool_executor, on_step=None: execute_plan(
+                    steps,
+                    tool_executor,
+                    on_step=on_step,
+                    collector=collector,
+                    cache=cache_service,
+                ),
+                synthesize_fn=_synthesize_fn,
+                format_simple_fn=format_simple_result,
+                tool_executor=_tool_executor,
+                tools_description=tools_desc,
+            )
+            logger.info("Agent graph compiled (Plan→Execute→Synthesize, REACT_AGENT=false)")
+        else:
+            app.state.agent_graph = None
+            logger.info("ReAct agent enabled (REACT_AGENT=true), old graph skipped")
     else:
         app.state.agent_graph = None
         app.state.tool_executor = None
@@ -237,6 +242,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Store on app.state (not module globals — rule #7)
     app.state.registry = registry
+    app.state.tool_registry = registry  # alias for get_tool_schemas_for_group()
     app.state.llm_client = llm_client
 
     yield

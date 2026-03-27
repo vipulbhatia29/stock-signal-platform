@@ -50,6 +50,7 @@ class ObservabilityCollector:
         prompt_tokens: int,
         completion_tokens: int,
         cost_usd: float | None = None,
+        loop_step: int | None = None,
     ) -> None:
         """Record a successful LLM request."""
         now = time.monotonic()
@@ -78,6 +79,7 @@ class ObservabilityCollector:
                         "completion_tokens": completion_tokens,
                         "cost_usd": cost_usd,
                         "error": None,
+                        "loop_step": loop_step,
                     },
                 )
             )
@@ -132,6 +134,7 @@ class ObservabilityCollector:
         params: dict | None = None,
         error: str | None = None,
         cache_hit: bool = False,
+        loop_step: int | None = None,
     ) -> None:
         """Record a tool execution event (fire-and-forget DB write only)."""
         if self._db_writer:
@@ -146,6 +149,7 @@ class ObservabilityCollector:
                         "params": params,
                         "error": error,
                         "cache_hit": cache_hit,
+                        "loop_step": loop_step,
                     },
                 )
             )

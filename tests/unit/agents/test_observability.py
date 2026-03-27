@@ -1,8 +1,20 @@
 """Tests for ObservabilityCollector in-memory metrics."""
 
+import asyncio
+from unittest.mock import AsyncMock
+
 import pytest
 
 from backend.agents.observability import ObservabilityCollector
+
+
+@pytest.fixture
+def collector_with_writer():
+    """Return (collector, mock_writer) pair with writer injected."""
+    collector = ObservabilityCollector()
+    writer = AsyncMock()
+    collector.set_db_writer(writer)
+    return collector, writer
 
 
 class TestRecordRequest:
@@ -271,3 +283,59 @@ class TestFallbackRate:
         collector._successes_windows["model-a"] = __import__("collections").deque([now])
         # Only the recent success should count
         assert collector.fallback_rate_last_60s() == 0.0
+
+
+class TestLoopStepPassthrough:
+    """Tests for loop_step parameter propagation through the collector."""
+
+    @pytest.mark.asyncio
+    async def test_record_request_passes_loop_step(self, collector_with_writer) -> None:
+        """loop_step parameter flows through to DB writer data dict."""
+        collector, writer = collector_with_writer
+        await collector.record_request(
+            model="test-model",
+            provider="test",
+            tier="reason",
+            latency_ms=100,
+            prompt_tokens=50,
+            completion_tokens=25,
+            loop_step=3,
+        )
+        # Wait for fire-and-forget task
+        await asyncio.sleep(0.05)
+        writer.assert_called_once()
+        call_data = writer.call_args[0][1]  # second positional arg is data dict
+        assert call_data["loop_step"] == 3
+
+    @pytest.mark.asyncio
+    async def test_record_tool_execution_passes_loop_step(self, collector_with_writer) -> None:
+        """loop_step parameter flows through record_tool_execution to DB writer."""
+        collector, writer = collector_with_writer
+        await collector.record_tool_execution(
+            tool_name="analyze_stock",
+            latency_ms=200,
+            status="ok",
+            loop_step=7,
+        )
+        # Wait for fire-and-forget task
+        await asyncio.sleep(0.05)
+        writer.assert_called_once()
+        call_data = writer.call_args[0][1]  # second positional arg is data dict
+        assert call_data["loop_step"] == 7
+
+    @pytest.mark.asyncio
+    async def test_record_request_loop_step_defaults_none(self, collector_with_writer) -> None:
+        """loop_step defaults to None when not provided."""
+        collector, writer = collector_with_writer
+        await collector.record_request(
+            model="test-model",
+            provider="test",
+            tier="reason",
+            latency_ms=100,
+            prompt_tokens=50,
+            completion_tokens=25,
+        )
+        await asyncio.sleep(0.05)
+        writer.assert_called_once()
+        call_data = writer.call_args[0][1]
+        assert call_data["loop_step"] is None

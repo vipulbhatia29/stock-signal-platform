@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from typing import Any
@@ -9,6 +10,58 @@ from typing import Any
 from backend.agents.llm_client import LLMProvider, LLMResponse, ProviderHealth
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_messages_for_anthropic(messages: list[dict]) -> list[dict]:
+    """Convert OpenAI-format tool_calls to Anthropic content blocks.
+
+    Handles:
+    - assistant messages with tool_calls → assistant with content blocks
+    - role:tool messages → role:user with tool_result content blocks
+    - All other messages pass through unchanged.
+
+    Args:
+        messages: List of OpenAI-format message dicts.
+
+    Returns:
+        List of Anthropic-format message dicts.
+    """
+    normalized = []
+    for msg in messages:
+        if msg.get("role") == "assistant" and "tool_calls" in msg:
+            content_blocks: list[dict] = []
+            if msg.get("content"):
+                content_blocks.append({"type": "text", "text": msg["content"]})
+            for tc in msg["tool_calls"]:
+                func = tc.get("function", tc)
+                args = func.get("arguments", {})
+                if isinstance(args, str):
+                    args = json.loads(args)
+                content_blocks.append(
+                    {
+                        "type": "tool_use",
+                        "id": tc["id"],
+                        "name": func.get("name", tc.get("name", "")),
+                        "input": args,
+                    }
+                )
+            normalized.append({"role": "assistant", "content": content_blocks})
+        elif msg.get("role") == "tool":
+            normalized.append(
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": msg["tool_call_id"],
+                            "content": msg["content"],
+                        }
+                    ],
+                }
+            )
+        else:
+            normalized.append(msg)
+    return normalized
 
 
 class AnthropicProvider(LLMProvider):
@@ -42,10 +95,11 @@ class AnthropicProvider(LLMProvider):
 
         client = anthropic.AsyncAnthropic(api_key=self._api_key)
 
-        # Extract system message if present
+        # Extract system message if present; normalize OpenAI-format tool messages
         system_msg = ""
         api_messages = []
-        for msg in messages:
+        normalized = _normalize_messages_for_anthropic(messages)
+        for msg in normalized:
             if msg.get("role") == "system":
                 system_msg = msg["content"]
             else:
