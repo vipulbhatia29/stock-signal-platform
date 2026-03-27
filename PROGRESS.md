@@ -1080,4 +1080,68 @@ Compared SSP vs aset-platform. 12 gaps identified. 3 specs + 1 backlog + 1 plan 
 
 **Remaining KAN-163:** KAN-168 (pagination), KAN-170 (cache extension), KAN-172 (service layer), KAN-173 (split stocks.py), KAN-174 (passlib eval).
 
+### Session 59 — Tech Debt Sprint + SaaS Architecture Audit (2026-03-26)
+**Branch:** `develop` | **PR:** #118 (merged) | **Tests:** ~1,125
+
+- PR #118: KAN-168 (pagination on 5 endpoints), KAN-170 (cache TTL extension), KAN-174 (passlib→bcrypt direct)
+- Deep SaaS architecture audit: scored 6.5/10 — strong async + user isolation, but single-process agent assumptions
+- Epic KAN-176 created with 10 tickets (KAN-177–186) for Phase 7.6 Scale Readiness
+- Phase 7.6 added to project-plan.md
+- Product vision clarified: multi-user SaaS for part-time investors, not personal tool
+
+---
+
+## Session 60 — Phase 7.6 Sprint 1 + Service Layer Design (2026-03-27)
+
+**Branch:** `develop` + `feat/KAN-172-service-layer-spec` | **PRs:** #120, #121 (merged) | **Tests:** 842 unit (+7 new)
+
+### Phase 7.6 Sprint 1 — Group A: Security Fixes (PR #120)
+Dispatched 4 parallel subagents in isolated worktrees. Zero file overlap.
+
+- **KAN-177:** ContextVar IDOR fix — `try/finally` reset of 3 ContextVars in `_event_generator`
+- **KAN-178:** `str(e)` leak cleanup — safe generic messages in 8 tool `ToolResult` error paths
+- **KAN-180:** Redis + DB health checks on `/health` — `DependencyStatus` schema, "degraded" when down (+8 tests)
+- **KAN-184:** ContextVar in MCP auth middleware — portfolio tools now work via MCP HTTP (+6 tests)
+
+CI fix: API health test needed Redis/DB mocks for MCP-focused test scenarios.
+
+### Phase 7.6 Sprint 1 — Group B: Performance Wins (PR #121)
+Dispatched 4 parallel subagents in isolated worktrees.
+
+- **KAN-179:** Cache planner prompt with `@lru_cache(maxsize=1)` — eliminates disk I/O per agent call
+- **KAN-181:** Parallelize `build_user_context` with `asyncio.gather` — independent sessions for prefs + watchlist
+- **KAN-183:** DB pool configurable via `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`/`DB_POOL_RECYCLE` env vars (+4 tests)
+- **KAN-185:** Nightly pipeline parallelized — 5 independent steps in Phase 2, 2 in Phase 4 via ThreadPoolExecutor (+3 tests)
+
+### Service Layer Design (KAN-172/173)
+Full brainstorm session covering:
+- Caller audit: traced all 25 endpoints through frontend hooks, agent tools, Celery tasks
+- Found 3 critical duplications: signal computation, recommendation gen, portfolio health
+- Decided: Option A (clean break) — move proto-services from `tools/` to `services/`, tools become thin wrappers
+- Two-tier services: atomic (composable for tools/planner) + pipeline (orchestrators for routers/Celery)
+- Router split: `stocks.py` (1,216 lines) → 4 sub-routers (data, watchlist, search, recommendations)
+- Circular import blocker found: `tools/risk_narrative.py` imports `SECTOR_ETF_MAP` from `routers/forecasts.py`
+- Spec: `docs/superpowers/specs/2026-03-27-service-layer-extraction-design.md`
+- Plan: `docs/superpowers/plans/2026-03-27-service-layer-extraction.md` (12 tasks, 5 parallel batches)
+
+### Agent Architecture Discussion
+- Questioned why 1 agent with 24 tools vs specialized agents
+- Identified scaling ceiling: token waste, hallucination risk, extensibility
+- Created KAN-188 (intent-based tool filtering — near-term) + KAN-189 Epic (multi-agent architecture — Phase 9+)
+- Serena memory: `future_work/AgentArchitectureBrainstorming`
+
+**8 JIRA tickets transitioned to Done.** 2 new JIRA items created (KAN-188, KAN-189).
+
+### Agent Architecture Deep Dive (continued brainstorm)
+PM provided 10-part architectural spec challenging the current Plan→Execute→Synthesize pipeline:
+- **Current pipeline is not a real agent** — planner picks all tools upfront, executor is mechanical, synthesizer can't change the plan
+- **ReAct loop proposed** — reason⇄act loop where LLM reasons after each tool call, chooses next tool based on observations, self-determined stopping
+- **Traced multi-step query** through current code: "I hold AAPL and MSFT. One had bad earnings. Should I sell?" — pipeline can't adapt mid-execution
+- **aset-platform comparison** — read their full agent codebase. They solved sub-agents with ReAct + tool filtering. They didn't solve: cross-domain queries, fan-out, dynamic concurrency. Our spec goes further.
+- **Observability audit** — 7 gaps found. DB schema has `cost_usd`, `cache_hit` columns never populated. `llm_model_config` has pricing columns all zero. `OpenAIProvider` exists but not wired.
+- **Tiered LLM audit** — 6-layer infrastructure solid (DB config, ModelConfigLoader, TokenBudget, GroqProvider cascade, LLMClient tier routing, 3 providers). Pricing/cost wiring is the gap, not architecture.
+- KAN-189 updated with full ReAct redesign spec (6-step build order)
+- KAN-190 created (observability gaps, 7 items, ReAct migration impact analysis)
+- project-plan.md reorganized: Phase 8 (observability+ReAct), Phase 9 (multi-agent+subscriptions), Phase 10 (cloud)
+
 ---

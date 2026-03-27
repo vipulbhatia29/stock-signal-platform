@@ -763,20 +763,20 @@ Fix single-process assumptions, security regressions, and performance bottleneck
 ### Audit Summary
 SaaS readiness scored **6.5/10**. Strong async foundation and user isolation, but agent subsystem (TokenBudget, ObservabilityCollector) is per-process, 20+ tools leak `str(e)`, and a ContextVar IDOR regression from Phase 4E was found.
 
-### Deliverables — Security Fixes (Sprint 1, ~5h)
-- [ ] KAN-177: [Bug] ContextVar tokens not reset in chat_stream — latent IDOR risk (~2h)
-- [ ] KAN-178: [Bug] str(e) leaked in 20+ tool ToolResult error paths (~2-3h)
+### Deliverables — Security Fixes (Sprint 1, ~5h) ✅ COMPLETE (Session 60, PR #120)
+- [x] KAN-177: [Bug] ContextVar tokens not reset in chat_stream — try/finally reset ✅
+- [x] KAN-178: [Bug] str(e) leaked in 8 tool ToolResult error paths — safe generic messages ✅
 
-### Deliverables — Quick Performance Wins (Sprint 1, ~3h)
-- [ ] KAN-179: Cache planner prompt at module level (~10 min)
-- [ ] KAN-180: [Bug] Health endpoint missing Redis connectivity check (~30 min)
-- [ ] KAN-181: Parallelize build_user_context DB queries with asyncio.gather (~2h)
+### Deliverables — Quick Performance Wins (Sprint 1, ~3h) ✅ COMPLETE (Session 60, PR #121)
+- [x] KAN-179: Cache planner prompt with lru_cache ✅
+- [x] KAN-180: [Bug] Health endpoint — Redis ping + DB SELECT 1 + DependencyStatus schema ✅
+- [x] KAN-181: Parallelize build_user_context with asyncio.gather (independent sessions) ✅
 
-### Deliverables — Scalability Hardening (Sprint 2, ~16h)
-- [ ] KAN-182: Cache get_current_user in Redis (~4h)
-- [ ] KAN-183: Increase DB pool size + document PgBouncer (~4h)
-- [ ] KAN-184: [Bug] MCP HTTP endpoint doesn't set ContextVar — portfolio tools fail (~4h)
-- [ ] KAN-185: Parallelize Celery portfolio snapshot/health tasks (~4h)
+### Deliverables — Scalability Hardening (Sprint 1+2) — Partial
+- [ ] KAN-182: Cache get_current_user in Redis (~4h) — needs design (TTL, invalidation)
+- [x] KAN-183: DB pool configurable via DB_POOL_SIZE/DB_MAX_OVERFLOW/DB_POOL_RECYCLE env vars ✅ (Session 60, PR #121)
+- [x] KAN-184: [Bug] MCP auth middleware sets current_user_id ContextVar ✅ (Session 60, PR #120)
+- [x] KAN-185: Nightly pipeline parallelized — ThreadPoolExecutor, 5 phases ✅ (Session 60, PR #121)
 
 ### Deliverables — Multi-Worker Architecture (Sprint 3, ~3 days)
 - [ ] KAN-186: Move TokenBudget sliding windows to Redis + ObservabilityCollector admin metrics from DB (~2-3 days)
@@ -798,12 +798,66 @@ None — all findings are independent of feature backlog.
 
 ---
 
-## Phase 8: Subscription & Monetization
+## Phase 8: Observability Completeness + Agent Redesign Prep
 
 ### Goal
-Tiered subscription system with Stripe payment integration.
+Close observability gaps (cost tracking, cache_hit, agent_id, fallback_rate). These are prerequisites for the ReAct agent redesign and dynamic concurrency controller. Backend must be fully instrumented before frontend work.
 
-### Deliverables
+**JIRA:** KAN-190 (observability gaps), KAN-189 (agent redesign Epic)
+**Serena:** `future_work/AgentArchitectureBrainstorming`
+
+### 8A — Observability Gaps (KAN-190, ~7h)
+- [ ] Wire `cost_usd` on LLMCallLog (pricing from `llm_model_config` → `observability_writer`)
+- [ ] Populate `cache_hit` on ToolExecutionLog (executor already knows)
+- [ ] Add `agent_id` column to both log tables (Alembic migration) + parameter on collector methods
+- [ ] Add `fallback_rate_last_60s()` computed method on ObservabilityCollector
+- [ ] Per-query cost endpoint: `GET /admin/observability/query/{query_id}/cost`
+
+### 8B — ReAct Loop (KAN-189 Step 1, ~20h)
+- [ ] Replace Plan→Execute→Synthesize pipeline with reason⇄act loop
+- [ ] Reason node: LLM observes scratchpad → thought + next_action OR finish
+- [ ] Act node: runs ONE tool, appends to scratchpad, loops back to reason
+- [ ] Stream thoughts as NDJSON events for real-time UX
+- [ ] Validation: tool N+1 changes based on tool N result
+
+### 8C — Tool Filtering (KAN-188 + KAN-189 Step 2, ~4h)
+- [ ] Rule-based intent classifier (keyword match, zero LLM cost)
+- [ ] Two-tier: keyword first, LLM classifier fallback for ambiguous queries
+- [ ] Intent → tool group mapping (stock 8, portfolio 6, market 5, comparison, general)
+
+### 8D — Dynamic Concurrency Controller (KAN-189 Step 4, ~8h)
+- [ ] ConcurrencyController reads fallback_rate → adjusts semaphore dynamically
+- [ ] Stagger fan-out with random jitter
+- [ ] Add `loop_step` to observability (needs ReAct loop from 8B)
+
+### Dependencies
+- 8A: independent, do NOW
+- 8B: depends on KAN-172 (service layer)
+- 8C: alongside 8B
+- 8D: after 8A + 8B
+
+### Success Criteria
+- cost_usd on every LLM call, cache_hit on every tool call
+- ReAct loop passes validation test (adaptive tool selection)
+- Planner sees ≤10 tools for single-domain queries
+- ConcurrencyController adjusts semaphore based on live fallback_rate
+
+---
+
+## Phase 9: Multi-Agent Fan-Out + Subscriptions
+
+### Goal
+Specialized agents with fan-out for comparison queries. Subscription tiers with Stripe.
+
+### 9A — Multi-Agent Architecture (KAN-189 Steps 5-6, ~40h)
+- [ ] Stock Research Agent (structured StockFinding output, own ReAct loop)
+- [ ] Portfolio Agent (holistic — all positions at once, never fan-out)
+- [ ] Orchestrator Agent (routes, fans out for comparisons, combines)
+- [ ] Fan-out pattern: N parallel stock agents, asyncio.gather + semaphore
+- [ ] Holistic pattern: one portfolio agent for rebalancing
+- [ ] Fallback stagger + cascade protection
+
+### 9B — Subscription & Monetization (~30h)
 - [ ] User model: `subscription_tier`, `subscription_status`, `stripe_customer_id`
 - [ ] 3 tiers: Free / Pro / Premium with usage quotas
 - [ ] Stripe integration: checkout, webhooks, subscription lifecycle
@@ -813,14 +867,17 @@ Tiered subscription system with Stripe payment integration.
 - [ ] JWT claims: `subscription_tier`, `usage_remaining`
 
 ### Dependencies
-Phase 7 (Google OAuth should be done first for signup flow)
+- 9A: Phase 8 complete (ReAct loop stable, observability wired)
+- 9B: Google OAuth (KAN-152) should be done first for signup flow
 
 ### Success Criteria
-Can subscribe via Stripe, tier enforced on agent tool calls, usage tracked.
+- Comparison queries run N parallel agents in ~8s (not N×8s serial)
+- Portfolio queries use holistic agent (no fan-out)
+- Can subscribe via Stripe, tier enforced on agent tool calls
 
 ---
 
-## Phase 9: Cloud Deployment + LLMOps
+## Phase 10: Cloud Deployment + LLMOps
 
 ### Goal
 Deploy to cloud, swap MCP transport from stdio to Streamable HTTP, production-grade observability.
