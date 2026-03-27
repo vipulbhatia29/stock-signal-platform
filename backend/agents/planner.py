@@ -7,6 +7,7 @@ to decide which tools to call and in what order.
 
 from __future__ import annotations
 
+import functools
 import json
 import logging
 from pathlib import Path
@@ -26,8 +27,9 @@ VALID_INTENTS = {
 }
 
 
+@functools.lru_cache(maxsize=1)
 def _load_prompt() -> str:
-    """Load the planner prompt template."""
+    """Load and cache the planner prompt template."""
     return _PROMPT_PATH.read_text(encoding="utf-8")
 
 
@@ -122,9 +124,6 @@ def parse_plan_response(response_text: str) -> dict[str, Any]:
     if len(plan["steps"]) > 10:
         logger.warning("plan_truncated", extra={"original_steps": len(plan["steps"])})
         plan["steps"] = plan["steps"][:10]
-
-    # Extract response_type for synthesizer format routing (default: stock_analysis)
-    plan.setdefault("response_type", "stock_analysis")
 
     return plan
 

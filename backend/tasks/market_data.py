@@ -186,17 +186,26 @@ def nightly_price_refresh_task() -> dict:
     name="backend.tasks.market_data.nightly_pipeline_chain_task",
 )
 def nightly_pipeline_chain_task() -> dict:
-    """Orchestrate the full nightly pipeline chain.
+    """Orchestrate the full nightly pipeline chain with parallelized phases.
 
-    Runs 9 steps sequentially:
-        1. Price refresh + signal computation
-        2. Forecast refresh (predict using existing models)
-        3. Recommendation generation
-        4. Forecast evaluation (fill actuals for matured forecasts)
-        5. Recommendation evaluation (compare past BUY/SELL vs actuals)
-        6. Drift detection (trigger retrain if model accuracy degrades)
-        7. Alert generation (signal flips, new buys, drift warnings)
-        8. Portfolio snapshots
+    Dependency graph (steps that share a phase run concurrently)::
+
+        Phase 0: Cache invalidation
+            |
+        Phase 1: Price refresh + signal computation
+            |
+        Phase 2 (parallel):
+            ├── Forecast refresh        (needs fresh prices)
+            ├── Recommendation gen      (needs fresh signals)
+            ├── Forecast evaluation      (needs fresh prices for matured forecasts)
+            ├── Recommendation eval      (needs fresh prices for past recs)
+            └── Portfolio snapshots      (needs fresh prices)
+            |
+        Phase 3: Drift detection         (needs forecast eval MAPE updates)
+            |
+        Phase 4 (parallel):
+            ├── Alert generation         (needs drift context + new recs)
+            └── Health snapshots         (needs portfolio snapshots)
 
     Steps 4-6 will no-op until enough time has passed for forecasts
     and recommendations to mature (30-90 days).
@@ -204,6 +213,8 @@ def nightly_pipeline_chain_task() -> dict:
     Returns:
         Dict with results from each step.
     """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
     from backend.tasks.alerts import generate_alerts_task
     from backend.tasks.evaluation import (
         check_drift_task,
@@ -211,12 +222,12 @@ def nightly_pipeline_chain_task() -> dict:
         evaluate_recommendations_task,
     )
     from backend.tasks.forecasting import forecast_refresh_task
-    from backend.tasks.portfolio import snapshot_all_portfolios_task
+    from backend.tasks.portfolio import snapshot_all_portfolios_task, snapshot_health_task
     from backend.tasks.recommendations import generate_recommendations_task
 
     results: dict = {}
 
-    # Step 0: Invalidate stale app-wide cache before recomputation
+    # Phase 0: Invalidate stale app-wide cache before recomputation
     try:
         import redis
 
@@ -238,45 +249,76 @@ def nightly_pipeline_chain_task() -> dict:
     except Exception:
         logger.warning("Nightly cache invalidation failed", exc_info=True)
 
-    # Step 1: Price refresh + signal computation
-    logger.info("Nightly chain step 1/8: price refresh")
+    # Phase 1: Price refresh + signal computation (everything else depends on this)
+    logger.info("Nightly chain phase 1: price refresh")
     results["price_refresh"] = nightly_price_refresh_task()
 
-    # Step 2: Forecast refresh (predict using existing active models)
-    logger.info("Nightly chain step 2/8: forecast refresh")
-    results["forecast_refresh"] = forecast_refresh_task()
+    # Phase 2: Five independent steps run in parallel threads.
+    # Each task calls asyncio.run() internally, so each thread gets its own event loop.
+    phase2_tasks = {
+        "forecast_refresh": forecast_refresh_task,
+        "recommendations": generate_recommendations_task,
+        "forecast_evaluation": evaluate_forecasts_task,
+        "recommendation_evaluation": evaluate_recommendations_task,
+        "portfolio_snapshots": snapshot_all_portfolios_task,
+    }
+    logger.info("Nightly chain phase 2: running %d steps in parallel", len(phase2_tasks))
+    results.update(_run_tasks_parallel(phase2_tasks))
 
-    # Step 3: Recommendation generation
-    logger.info("Nightly chain step 3/8: recommendation generation")
-    results["recommendations"] = generate_recommendations_task()
-
-    # Step 4: Forecast evaluation (fill actuals for matured predictions)
-    logger.info("Nightly chain step 4/8: forecast evaluation")
-    results["forecast_evaluation"] = evaluate_forecasts_task()
-
-    # Step 5: Recommendation evaluation (compare past recs vs SPY)
-    logger.info("Nightly chain step 5/8: recommendation evaluation")
-    results["recommendation_evaluation"] = evaluate_recommendations_task()
-
-    # Step 6: Drift detection (check MAPE + volatility + VIX)
-    logger.info("Nightly chain step 6/8: drift detection")
+    # Phase 3: Drift detection (depends on forecast evaluation updating model MAPEs)
+    logger.info("Nightly chain phase 3: drift detection")
     results["drift"] = check_drift_task()
 
-    # Step 7: Alert generation (signal flips, new buys, drift)
-    logger.info("Nightly chain step 7/8: alert generation")
-    results["alerts"] = generate_alerts_task(pipeline_context=results.get("drift"))
+    # Phase 4: Alerts + health snapshots run in parallel.
+    # Alerts needs drift context + new recs (both complete).
+    # Health snapshots needs portfolio snapshots (complete from phase 2).
+    phase4_tasks: dict[str, tuple] = {
+        "alerts": (generate_alerts_task, {"pipeline_context": results.get("drift")}),
+        "health_snapshots": (snapshot_health_task, {}),
+    }
+    logger.info("Nightly chain phase 4: running %d steps in parallel", len(phase4_tasks))
 
-    # Step 8: Portfolio snapshots
-    logger.info("Nightly chain step 8/9: portfolio snapshots")
-    results["portfolio_snapshots"] = snapshot_all_portfolios_task()
+    with ThreadPoolExecutor(max_workers=len(phase4_tasks)) as executor:
+        futures = {}
+        for name, (fn, kwargs) in phase4_tasks.items():
+            futures[executor.submit(fn, **kwargs)] = name
 
-    # Step 9: Portfolio health snapshots
-    logger.info("Nightly chain step 9/9: health snapshots")
-    from backend.tasks.portfolio import snapshot_health_task
-
-    results["health_snapshots"] = snapshot_health_task()
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                results[name] = future.result()
+            except Exception:
+                logger.exception("Phase 4 step '%s' failed", name)
+                results[name] = {"status": "failed"}
 
     logger.info("Nightly pipeline chain complete: %s", results)
+    return results
+
+
+def _run_tasks_parallel(tasks: dict[str, object]) -> dict:
+    """Run multiple no-arg Celery task functions concurrently in threads.
+
+    Each task calls asyncio.run() internally, so each thread gets its own
+    event loop — no nested-loop issues.
+
+    Args:
+        tasks: Mapping of result-key to callable (no-arg task function).
+
+    Returns:
+        Dict mapping result-key to the task's return value (or error dict).
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results: dict = {}
+    with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+        futures = {executor.submit(fn): name for name, fn in tasks.items()}
+        for future in as_completed(futures):
+            name = futures[future]
+            try:
+                results[name] = future.result()
+            except Exception:
+                logger.exception("Parallel step '%s' failed", name)
+                results[name] = {"status": "failed"}
     return results
 
 

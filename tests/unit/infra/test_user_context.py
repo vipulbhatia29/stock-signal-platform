@@ -24,6 +24,28 @@ class FakePortfolio:
     id = uuid.uuid4()
 
 
+def _mock_session_factory(execute_side_effects: list[MagicMock]) -> AsyncMock:
+    """Build a mock async_session_factory that yields sessions with preset results.
+
+    Each call to async_session_factory() returns a new context manager whose
+    session.execute returns the next side_effect in order.
+    """
+    call_idx = {"i": 0}
+
+    def _factory() -> AsyncMock:
+        idx = call_idx["i"]
+        call_idx["i"] += 1
+        mock_session = AsyncMock()
+        if idx < len(execute_side_effects):
+            mock_session.execute = AsyncMock(return_value=execute_side_effects[idx])
+        cm = AsyncMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_session)
+        cm.__aexit__ = AsyncMock(return_value=False)
+        return cm
+
+    return _factory
+
+
 class TestBuildUserContext:
     """Tests for build_user_context."""
 
@@ -38,7 +60,7 @@ class TestBuildUserContext:
             FakePosition("PLTR", 100.0, 25.0, 65.0),
         ]
 
-        # Mock preferences query
+        # Mock preferences query result
         mock_pref = MagicMock()
         mock_pref.max_position_pct = 5.0
         mock_pref.max_sector_pct = 25.0
@@ -47,11 +69,11 @@ class TestBuildUserContext:
         pref_result = MagicMock()
         pref_result.scalar_one_or_none.return_value = mock_pref
 
-        # Mock watchlist query
+        # Mock watchlist query result
         watchlist_result = MagicMock()
         watchlist_result.all.return_value = [("AAPL",), ("PLTR",), ("MSFT",)]
 
-        mock_db.execute = AsyncMock(side_effect=[pref_result, watchlist_result])
+        factory = _mock_session_factory([pref_result, watchlist_result])
 
         with (
             patch(
@@ -63,6 +85,10 @@ class TestBuildUserContext:
                 "backend.tools.portfolio.get_positions_with_pnl",
                 new_callable=AsyncMock,
                 return_value=positions,
+            ),
+            patch(
+                "backend.database.async_session_factory",
+                new=factory,
             ),
         ):
             from backend.agents.user_context import build_user_context
@@ -88,7 +114,7 @@ class TestBuildUserContext:
         watchlist_result = MagicMock()
         watchlist_result.all.return_value = []
 
-        mock_db.execute = AsyncMock(side_effect=[pref_result, watchlist_result])
+        factory = _mock_session_factory([pref_result, watchlist_result])
 
         with (
             patch(
@@ -100,6 +126,10 @@ class TestBuildUserContext:
                 "backend.tools.portfolio.get_positions_with_pnl",
                 new_callable=AsyncMock,
                 return_value=[],
+            ),
+            patch(
+                "backend.database.async_session_factory",
+                new=factory,
             ),
         ):
             from backend.agents.user_context import build_user_context
@@ -122,12 +152,18 @@ class TestBuildUserContext:
         watchlist_result = MagicMock()
         watchlist_result.all.return_value = [("TSLA",)]
 
-        mock_db.execute = AsyncMock(side_effect=[pref_result, watchlist_result])
+        factory = _mock_session_factory([pref_result, watchlist_result])
 
-        with patch(
-            "backend.tools.portfolio.get_or_create_portfolio",
-            new_callable=AsyncMock,
-            side_effect=Exception("DB error"),
+        with (
+            patch(
+                "backend.tools.portfolio.get_or_create_portfolio",
+                new_callable=AsyncMock,
+                side_effect=Exception("DB error"),
+            ),
+            patch(
+                "backend.database.async_session_factory",
+                new=factory,
+            ),
         ):
             from backend.agents.user_context import build_user_context
 

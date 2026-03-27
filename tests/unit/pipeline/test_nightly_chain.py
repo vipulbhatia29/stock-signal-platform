@@ -171,6 +171,153 @@ class TestNightlyPipelineChain:
         mock_snapshot.assert_called_once()
         mock_health_snapshot.assert_called_once()
 
+    @patch("backend.tasks.portfolio.snapshot_health_task")
+    @patch("backend.tasks.alerts.generate_alerts_task")
+    @patch("backend.tasks.evaluation.check_drift_task")
+    @patch("backend.tasks.evaluation.evaluate_recommendations_task")
+    @patch("backend.tasks.evaluation.evaluate_forecasts_task")
+    @patch("backend.tasks.portfolio.snapshot_all_portfolios_task")
+    @patch("backend.tasks.recommendations.generate_recommendations_task")
+    @patch("backend.tasks.forecasting.forecast_refresh_task")
+    @patch("backend.tasks.market_data.nightly_price_refresh_task")
+    def test_phase_ordering_drift_after_forecast_eval(
+        self,
+        mock_price,
+        mock_forecast,
+        mock_recs,
+        mock_snapshot,
+        mock_eval_fc,
+        mock_eval_rec,
+        mock_drift,
+        mock_alerts,
+        mock_health_snapshot,
+    ) -> None:
+        """Drift detection (phase 3) must run after forecast evaluation (phase 2).
+
+        Verifies that check_drift_task is only called after
+        forecast evaluation has completed, since drift detection reads
+        the MAPE values that forecast evaluation updates.
+        """
+        from backend.tasks.market_data import nightly_pipeline_chain_task
+
+        call_order: list[str] = []
+
+        def _track(name: str, return_value: dict):
+            def _side_effect(*args, **kwargs):
+                call_order.append(name)
+                return return_value
+
+            return _side_effect
+
+        mock_price.side_effect = _track("price_refresh", {"status": "success"})
+        mock_forecast.side_effect = _track("forecast_refresh", {"status": "ok"})
+        mock_recs.side_effect = _track("recommendations", {"status": "ok"})
+        mock_eval_fc.side_effect = _track("forecast_eval", {"status": "ok"})
+        mock_eval_rec.side_effect = _track("rec_eval", {"status": "ok"})
+        mock_drift.side_effect = _track("drift", {"degraded": []})
+        mock_alerts.side_effect = _track("alerts", {"alerts_created": 0})
+        mock_snapshot.side_effect = _track("portfolio_snapshots", {"snapshotted": 0})
+        mock_health_snapshot.side_effect = _track("health_snapshots", {"computed": 0})
+
+        nightly_pipeline_chain_task()
+
+        # Price refresh must be first (phase 1)
+        assert call_order[0] == "price_refresh"
+
+        # Drift must come after forecast eval (phase 3 after phase 2)
+        drift_idx = call_order.index("drift")
+        fc_idx = call_order.index("forecast_eval")
+        assert drift_idx > fc_idx, f"drift ({drift_idx}) should run after forecast_eval ({fc_idx})"
+
+        # Alerts must come after drift (phase 4 after phase 3)
+        alerts_idx = call_order.index("alerts")
+        assert alerts_idx > drift_idx, f"alerts ({alerts_idx}) should run after drift ({drift_idx})"
+
+    @patch("backend.tasks.portfolio.snapshot_health_task")
+    @patch("backend.tasks.alerts.generate_alerts_task")
+    @patch("backend.tasks.evaluation.check_drift_task")
+    @patch("backend.tasks.evaluation.evaluate_recommendations_task")
+    @patch("backend.tasks.evaluation.evaluate_forecasts_task")
+    @patch("backend.tasks.portfolio.snapshot_all_portfolios_task")
+    @patch("backend.tasks.recommendations.generate_recommendations_task")
+    @patch("backend.tasks.forecasting.forecast_refresh_task")
+    @patch("backend.tasks.market_data.nightly_price_refresh_task")
+    def test_step_failure_does_not_block_pipeline(
+        self,
+        mock_price,
+        mock_forecast,
+        mock_recs,
+        mock_snapshot,
+        mock_eval_fc,
+        mock_eval_rec,
+        mock_drift,
+        mock_alerts,
+        mock_health_snapshot,
+    ) -> None:
+        """A failing step in phase 2 should not crash the entire pipeline.
+
+        Other parallel steps and subsequent phases should still run.
+        """
+        from backend.tasks.market_data import nightly_pipeline_chain_task
+
+        mock_price.return_value = {"status": "success"}
+        mock_forecast.side_effect = Exception("Prophet model crash")
+        mock_recs.return_value = {"status": "success", "recommendations": 5}
+        mock_eval_fc.return_value = {"status": "ok"}
+        mock_eval_rec.return_value = {"status": "ok"}
+        mock_drift.return_value = {"degraded": []}
+        mock_alerts.return_value = {"alerts_created": 0}
+        mock_snapshot.return_value = {"snapshotted": 3}
+        mock_health_snapshot.return_value = {"computed": 3}
+
+        result = nightly_pipeline_chain_task()
+
+        # Failed step should have error status
+        assert result["forecast_refresh"]["status"] == "failed"
+        # Other steps should still succeed
+        assert result["recommendations"]["recommendations"] == 5
+        assert result["drift"]["degraded"] == []
+        assert result["health_snapshots"]["computed"] == 3
+
+    @patch("backend.tasks.portfolio.snapshot_health_task")
+    @patch("backend.tasks.alerts.generate_alerts_task")
+    @patch("backend.tasks.evaluation.check_drift_task")
+    @patch("backend.tasks.evaluation.evaluate_recommendations_task")
+    @patch("backend.tasks.evaluation.evaluate_forecasts_task")
+    @patch("backend.tasks.portfolio.snapshot_all_portfolios_task")
+    @patch("backend.tasks.recommendations.generate_recommendations_task")
+    @patch("backend.tasks.forecasting.forecast_refresh_task")
+    @patch("backend.tasks.market_data.nightly_price_refresh_task")
+    def test_alerts_receive_drift_context(
+        self,
+        mock_price,
+        mock_forecast,
+        mock_recs,
+        mock_snapshot,
+        mock_eval_fc,
+        mock_eval_rec,
+        mock_drift,
+        mock_alerts,
+        mock_health_snapshot,
+    ) -> None:
+        """Alert generation should receive drift detection results as context."""
+        from backend.tasks.market_data import nightly_pipeline_chain_task
+
+        mock_price.return_value = {"status": "success"}
+        mock_forecast.return_value = {"status": "ok"}
+        mock_recs.return_value = {"status": "ok"}
+        mock_eval_fc.return_value = {"status": "ok"}
+        mock_eval_rec.return_value = {"status": "ok"}
+        drift_result = {"degraded": ["TSLA"], "retrain_triggered": ["TSLA"]}
+        mock_drift.return_value = drift_result
+        mock_alerts.return_value = {"alerts_created": 1}
+        mock_snapshot.return_value = {"snapshotted": 3}
+        mock_health_snapshot.return_value = {"computed": 3}
+
+        nightly_pipeline_chain_task()
+
+        mock_alerts.assert_called_once_with(pipeline_context=drift_result)
+
 
 # ---------------------------------------------------------------------------
 # Recommendation generation
