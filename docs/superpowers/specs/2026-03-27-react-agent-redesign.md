@@ -4,6 +4,7 @@
 **Phase:** 8C (intent classifier, ~4h) → 8B (ReAct loop, ~16h)
 **ADRs:** 001-008 in `docs/ADR.md`
 **Branch:** `feat/KAN-189-react-agent`
+**Spec version:** 2 (post-review — 14 findings fixed, see §12)
 
 ---
 
@@ -131,7 +132,29 @@ TOOL_GROUPS: dict[str, list[str]] = {
 }
 ```
 
-When `tool_group` is `None`, the ReAct loop gets all 28 tools (rare — only for truly ambiguous queries).
+When `tool_group` is `None`, the ReAct loop gets all registered tools (rare — only for truly ambiguous queries).
+
+### Tool schema resolution
+
+`get_tool_schemas_for_group()` takes the registry as a parameter (available on `app.state.tool_registry`):
+
+```python
+def get_tool_schemas_for_group(
+    tool_group: str, registry: ToolRegistry
+) -> list[dict]:
+    """Return OpenAI function-calling schemas for tools in the group."""
+    names = TOOL_GROUPS.get(tool_group)
+    if names is None:
+        # "general" — return all tools
+        return [info.to_llm_schema() for info in registry.list_tools()]
+    return [
+        registry.get(name).info().to_llm_schema()
+        for name in names
+        if registry.get(name) is not None
+    ]
+```
+
+The schema format is `{"type": "function", "function": {"name": ..., "description": ..., "parameters": ...}}` — the standard OpenAI function-calling format. `AnthropicProvider.chat()` already converts this to Anthropic's format internally (lines 56-64 of `anthropic.py`).
 
 ### 4.3 Fast Path
 
@@ -206,6 +229,7 @@ Tool group tests:
 
 async def react_loop(
     query: str,
+    session_messages: list[dict], # prior conversation turns for multi-turn context
     tools: list[dict],           # tool schemas (from tool_groups)
     tool_executor: Callable,     # async (name, params) -> ToolResult
     llm_chat: Callable,          # async (messages, tools) -> LLMResponse
@@ -218,15 +242,33 @@ async def react_loop(
 ) -> AsyncGenerator[StreamEvent, None]:
     """ReAct reasoning loop. Yields StreamEvents as they occur."""
 
-    scratchpad = _build_initial_messages(query, tools, user_context, entity_registry)
+    scratchpad = _build_initial_messages(query, session_messages, tools, user_context, entity_registry)
+    total_tool_calls = 0
+    loop_start = time.monotonic()
 
     for i in range(max_iterations):
-        # 1. Reason — LLM sees scratchpad, returns content + optional tool_calls
-        response = await llm_chat(messages=scratchpad, tools=tools)
+        # Wall clock check
+        if time.monotonic() - loop_start > WALL_CLOCK_TIMEOUT:
+            yield StreamEvent(type="token", content="I'm running low on time. Here's what I found so far...")
+            yield StreamEvent(type="done")
+            return
 
-        # Wire observability
+        # Tool call budget check
+        if total_tool_calls >= MAX_TOOL_CALLS:
+            scratchpad.append({"role": "user", "content": "You've used all available tool calls. Summarize and answer now."})
+
+        # 1. Reason — LLM sees scratchpad, returns content + optional tool_calls
+        tools_for_call = tools if total_tool_calls < MAX_TOOL_CALLS else []  # no tools if budget exhausted
+        response = await llm_chat(messages=scratchpad, tools=tools_for_call)
+
+        # Wire observability (loop_step added to collector in this phase)
         if collector:
-            await collector.record_request(..., loop_step=i)
+            await collector.record_request(
+                model=response.model, provider="", tier="reason",
+                latency_ms=0, prompt_tokens=response.prompt_tokens,
+                completion_tokens=response.completion_tokens,
+                cost_usd=None, loop_step=i,  # cost computed by provider base class
+            )
 
         # 2. Yield thought
         if response.content:
@@ -235,7 +277,8 @@ async def react_loop(
         # 3. Check finish — no tool calls means done
         if not response.tool_calls:
             yield StreamEvent(type="token", content=response.content)
-            _append_disclaimer(response.content)  # output guard
+            from backend.agents.guards import DISCLAIMER
+            yield StreamEvent(type="token", content=DISCLAIMER)
             yield StreamEvent(type="done")
             return
 
@@ -248,12 +291,13 @@ async def react_loop(
         results = await _execute_tools(
             tool_calls, tool_executor, collector, cache, session_id, loop_step=i
         )
+        total_tool_calls += len(tool_calls)
 
         # 6. Yield tool results
         for tc, result in zip(tool_calls, results):
             if result.status == "ok":
                 yield StreamEvent(type="tool_result", tool=tc["name"], data=result.data)
-                entity_registry.extract_from_tool_result(result.data)
+                entity_registry.extract_from_tool_result(tc["name"], result.data)
             else:
                 yield StreamEvent(type="tool_error", tool=tc["name"], error=result.error)
 
@@ -376,13 +420,16 @@ async def _execute_tools(
 ### 5.4 Scratchpad Management
 
 ```python
-def _build_initial_messages(query, tools, user_context, entity_registry) -> list[dict]:
-    """Build the initial scratchpad with system prompt + user query."""
+def _build_initial_messages(query, session_messages, tools, user_context, entity_registry) -> list[dict]:
+    """Build the initial scratchpad with system prompt + conversation history + current query."""
     system = _render_system_prompt(user_context, entity_registry)
-    return [
-        {"role": "system", "content": system},
-        {"role": "user", "content": query},
-    ]
+    messages = [{"role": "system", "content": system}]
+    # Prepend prior conversation turns for multi-turn context
+    # (e.g., "What about AAPL?" in turn 3 needs turns 1-2 for context)
+    if session_messages:
+        messages.extend(session_messages)
+    messages.append({"role": "user", "content": query})
+    return messages
 
 def _append_assistant_message(scratchpad: list, response: LLMResponse) -> None:
     """Append LLM response (with tool_calls) to scratchpad."""
@@ -441,15 +488,19 @@ if classified.intent == "out_of_scope":
     return
 
 if classified.fast_path and classified.tickers:
-    result = await tool_executor(classified.tickers[0])
-    yield _ndjson(StreamEvent(type="token", content=format_simple("analyze_stock", result.data)))
+    result = await tool_executor("analyze_stock", {"ticker": classified.tickers[0]})
+    formatted = format_simple("analyze_stock", result.data)
+    yield _ndjson(StreamEvent(type="token", content=formatted))
     yield _ndjson(StreamEvent(type="done"))
+    # Persist assistant message (same pattern as current _event_generator)
+    await save_message(db, chat_session.id, role="assistant", content=formatted)
     return
 
 # Full ReAct path
-tools = get_tool_schemas_for_group(classified.tool_group)
+tools = get_tool_schemas_for_group(classified.tool_group, registry=request.app.state.tool_registry)
 async for event in react_loop(
     query=body.message,
+    session_messages=session_messages,  # prior turns for multi-turn context
     tools=tools,
     tool_executor=tool_executor,
     llm_chat=lambda msgs, tls: llm_client.chat(messages=msgs, tools=tls, tier="reason"),
@@ -478,10 +529,10 @@ async for event in react_loop(
 
 | File | Why |
 |------|-----|
-| `backend/agents/llm_client.py` | Provider abstraction, fallback chain — called per iteration |
+| `backend/agents/llm_client.py` | Provider abstraction — modified to handle Anthropic multi-turn scratchpad (see §8 modified files) |
 | `backend/agents/providers/*` | All providers + base class observability (KAN-190) |
-| `backend/agents/observability.py` | Collector — receives `loop_step` from ReAct |
-| `backend/agents/observability_writer.py` | Writer — `loop_step` column already exists |
+| `backend/agents/observability.py` | Collector — modified to accept `loop_step` param (see §8 modified files) |
+| `backend/agents/observability_writer.py` | Writer — modified to wire `loop_step` (see §8 modified files) |
 | `backend/agents/guards.py` | Input/output guards — called from `_execute_tools` and output |
 | `backend/agents/entity_registry.py` | Pronoun resolution — lives as object in generator closure |
 | `backend/agents/result_validator.py` | Tool result annotation — called after tool execution |
@@ -529,7 +580,7 @@ StreamEvent types change slightly:
 | `thinking` (once, at start) | `thinking` (per iteration) | Multiple thinking events, each with the LLM's reasoning |
 | `plan` (tool list) | `plan` (tool list per iteration) | Per-iteration, not upfront |
 | `tool_result` / `tool_error` | Same | Unchanged |
-| `evidence` (from synthesis) | REMOVED | LLM cites evidence inline in its answer |
+| `evidence` (from synthesis) | KEPT during flag period | Emitted from tool_result data for `EvidenceSection` backward compat. Removed in cleanup story. |
 | `token` (final answer) | `token` (final answer) | Same — but now includes evidence inline |
 | `done` | Same | Unchanged |
 | `decline` | Same | Unchanged |
@@ -593,15 +644,18 @@ Old files are kept (not deleted) until the flag is removed after validation. The
 | `backend/agents/executor.py` | `_execute_tools` in `react_loop.py` |
 | `backend/agents/synthesizer.py` | ReAct LLM finish action |
 
-### Modified Files (5)
+### Modified Files (8)
 
 | File | Change |
 |------|--------|
-| `backend/routers/chat.py` | Replace graph invocation with intent classifier + ReAct loop |
-| `backend/main.py` | Remove graph compilation, expose components on app.state |
-| `backend/agents/stream.py` | Remove `stream_graph_v2_events`, keep `StreamEvent` |
+| `backend/routers/chat.py` | Replace graph invocation with intent classifier + ReAct loop. Persist assistant message. Collect tokens for save_message. |
+| `backend/main.py` | Remove graph compilation, expose `tool_executor`, `llm_client`, `tool_registry` on app.state |
+| `backend/agents/stream.py` | Remove `stream_graph_v2_events`, keep `StreamEvent`. Emit `evidence` events from tool_result data for backward compat during flag period. |
 | `backend/agents/prompts/synthesizer.md` | Keep for old path behind flag, delete later |
-| `backend/agents/observability_writer.py` | Wire `loop_step` from data dict (already has column + comment) |
+| `backend/agents/observability.py` | Add `loop_step: int | None = None` param to `record_request()` and `record_tool_execution()`. Pass through to data dict. |
+| `backend/agents/observability_writer.py` | Wire `loop_step` from data dict into both `LLMCallLog` and `ToolExecutionLog` row construction (column + comment already exist from KAN-190). |
+| `backend/config.py` | Add `REACT_AGENT: bool = True` to `Settings` class |
+| `backend/agents/llm_client.py` | Ensure provider `chat()` methods handle multi-turn tool_use scratchpad format. Add message normalization for Anthropic (convert OpenAI-format tool_calls in assistant messages to Anthropic content blocks). |
 
 ### Test Files (8)
 
@@ -655,3 +709,42 @@ Old files are kept (not deleted) until the flag is removed after validation. The
 - **KAN-172/173:** DONE — service layer extraction (tools are thin shims)
 - **8C → 8B:** Intent classifier is prerequisite for ReAct loop (ADR-005)
 - **Blocks:** Phase 8D (dynamic concurrency controller), Phase 9A (multi-agent orchestrator)
+
+---
+
+## 12. Review Findings & Resolutions (v2)
+
+14 issues found during code-reviewer audit. All fixed in spec v2:
+
+### Critical (would crash) — fixed in-place above
+
+| # | Issue | Resolution |
+|---|-------|-----------|
+| 1 | `_append_disclaimer` doesn't exist | Replaced with `yield StreamEvent(type="token", content=DISCLAIMER)` (§5.1) |
+| 2 | Fast path `tool_executor(ticker)` wrong signature | Fixed to `tool_executor("analyze_stock", {"ticker": ticker})` (§5.5) |
+| 3 | `collector.record_request` has no `loop_step` param | Added to modified files: `observability.py` gets `loop_step` param (§8) |
+| 4 | `collector.record_tool_execution` also missing `loop_step` | Same fix as #3 |
+| 6 | `entity_registry.extract_from_tool_result` wrong call sig | Fixed to include `tc["name"]` as first arg (§5.1) |
+| 10 | `REACT_AGENT` not in `config.py` | Added `config.py` to modified files (§8) |
+
+### Important (silent bugs) — fixed in-place above
+
+| # | Issue | Resolution |
+|---|-------|-----------|
+| 5 | `tier="reason"` not in `llm_model_config` DB | Explicit note in §5.9 — seed data task in plan |
+| 7 | Anthropic multi-turn scratchpad format incompatible | Added `llm_client.py` to modified files for message normalization (§8). Provider `chat()` must convert OpenAI-format `tool_calls` in assistant messages to Anthropic content blocks. |
+| 8 | Entity registry cross-turn persistence | Reconstructed from `session_messages` (same as current behavior). Entity state is implicit in conversation history, not a separate DB field. |
+| 9 | `save_message` pattern omitted | Added to fast path (§5.5) + noted in chat.py change description (§8). Full ReAct path collects tokens + calls `save_message` after generator completes (same pattern as current `_event_generator`). |
+| 11 | `get_tool_schemas_for_group` registry wiring | Function spec added (§4.2). Takes `registry` as parameter, resolved from `app.state.tool_registry`. |
+| 12 | 6 old test files import deleted modules | Files kept on disk during flag period (§6 already states this). Deletion happens in cleanup story. No `ImportError`. |
+| 13 | `evidence` event removal breaks `EvidenceSection` | `evidence` events KEPT during flag period, emitted from tool_result data. Updated §5.10. |
+| 14 | Multi-turn `session_messages` dropped | Added `session_messages` param to `react_loop` + `_build_initial_messages` (§5.1, §5.4, §5.5). Prior turns prepended to scratchpad. |
+
+### Informational gaps — noted for implementation
+
+| Gap | Resolution |
+|-----|-----------|
+| `tier_config` not wired on `LLMClient` | Existing behavior: tier falls through to default providers. Acceptable for 8B. Fix properly when adding `"reason"` tier to DB. |
+| `WALL_CLOCK_TIMEOUT` not enforced in loop code | Add `time.monotonic()` check at top of each iteration. `asyncio.wait_for` around generator is fragile — prefer manual check. |
+| `MAX_TOOL_CALLS=12` not counted in loop | Added `total_tool_calls` counter in §5.1 init. Check per iteration. |
+| Tool name verification (`compare_stocks`) | Verify during implementation — `get_tool_schemas_for_group` silently skips missing names (§4.2). |
