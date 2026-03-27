@@ -1,36 +1,31 @@
-# Project State — Updated 2026-03-27 (Session 60)
+# Project State — Updated 2026-03-27 (Session 63)
 
 ## Current Phase
 - Phases 1-7 complete. Phase 7.5: 10/12 shipped. Phase 7.6 Sprint 1: 8/10 COMPLETE.
-- Session 60: Sprint 1 Group A (KAN-177/178/180/184, PR #120) + Group B (KAN-179/181/183/185, PR #121) shipped.
-- Service layer spec + plan written (KAN-172/173). JIRA backlog items KAN-188 (tool filtering) + KAN-189 (multi-agent Epic) created.
+- Phase 8A: COMPLETE (Session 62). Phase 8C: COMPLETE (Session 63, PR #127).
+- Phase 8B: S5/S6/S7 COMPLETE (parallel worktree dispatch). S8-S12 remaining.
 
 ## Branch State
-- Current branch: `feat/KAN-172-service-layer-spec` (spec + plan, pushed, not yet PR'd to develop)
-- `develop` synced after PRs #120 + #121 merge
+- Current branch: `feat/KAN-203-phase-8b-react-loop` (3 commits: S5+S6+S7)
+- `develop` synced after PR #127 merge (Phase 8C)
 
 ## Resume Point
-- **Immediate:** Merge PR `feat/KAN-172-service-layer-spec` to develop (spec + plan + session save + project-plan reorg)
-- **Next work:** Execute service layer plan (12 tasks, 5 parallel batches — KAN-172/173)
-- **Then:** KAN-190 (observability gaps, ~7h — wire cost_usd, cache_hit, agent_id, fallback_rate, OpenAI provider)
-- **Then:** KAN-189 Step 1 (ReAct loop — replace pipeline) + Step 2 (tool filtering)
+- **Immediate:** S8 (KAN-206) — ReAct loop core (~3h, largest story). Depends on S5 (done).
+- **Then:** S9 (system prompt) → S10 (chat router) → S11 (main.py) → S12 (tests + PR)
 - **Remaining Phase 7.6:** KAN-182 (auth cache) + KAN-186 (TokenBudget→Redis)
 - **Feature backlog:** KAN-149-157
-- **Key Serena memory:** `future_work/AgentArchitectureBrainstorming` — full 3-pronged analysis, tiered LLM audit, ReAct impact
-## Test Counts
-- 842 unit + ~236 API + 27 frontend + 24 integration + 17 Playwright ≈ 1,146 total
-- Alembic head: `758e69475884` (migration 015)
 
-## Session 60 Shipped
-- PR #120 (merged): KAN-177 ContextVar IDOR, KAN-178 str(e) leaks, KAN-180 Redis health, KAN-184 MCP ContextVar
-- PR #121 (merged): KAN-179 prompt cache, KAN-181 asyncio.gather user_context, KAN-183 DB pool config, KAN-185 nightly pipeline parallel
-- Spec: `docs/superpowers/specs/2026-03-27-service-layer-extraction-design.md`
-- Plan: `docs/superpowers/plans/2026-03-27-service-layer-extraction.md`
-- JIRA: KAN-188 (tool filtering), KAN-189 (multi-agent Epic)
-- Serena: `future_work/AgentArchitectureBrainstorming` memory created
+## Test Counts
+- 950 unit + ~236 API + 27 frontend + 24 integration + 17 Playwright ≈ 1,254 total
+- Alembic head: `ea8da8624c85` (migration 016)
+
+## Session 63 Shipped
+- PR #127: Phase 8C (KAN-199-202) — intent classifier, tool groups, fast path. 37 new tests.
+- S5 (KAN-203): loop_step wiring in collector + writer. 5 new tests.
+- S6 (KAN-204): Anthropic _normalize_messages_for_anthropic(). 5 new tests.
+- S7 (KAN-205): REACT_AGENT=True flag + seed_reason_tier.py script.
 
 ## Key Learnings
-- Parallel subagent dispatch with worktrees works well for independent bug fixes (8 tickets in 2 PRs)
-- Service layer design must account for all callers (routers, tools, tasks, agents) — not just routers
-- Single agent with 24 tools has scaling ceiling — intent-based tool filtering is near-term fix, multi-agent is long-term
-- Circular import blocker: tools/risk_narrative.py imports from routers/forecasts.py — must fix first
+- Parallel worktree subagents work well for truly independent tasks (different files)
+- Subagent-driven development with spec+quality reviews catches real issues (missing tool_group field)
+- Single-letter stop words (I, A, O) needed for ticker extraction regex

@@ -422,3 +422,51 @@ async def test_empty_tool_calls_list():
     assert "token" in types
     assert types[-1] == "done"
     tool_executor.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_tool_cache_hit_skips_executor() -> None:
+    """Cache hit returns data without calling tool_executor; records cache_hit=True."""
+    cached_data = {"ticker": "AAPL", "composite_score": 8.5}
+
+    # LLM: call analyze_stock → then finish
+    llm_chat = AsyncMock(
+        side_effect=[
+            _make_response(tool_calls=[_make_tool_call("analyze_stock", "call_c1")]),
+            _make_response(content="AAPL looks great."),
+        ]
+    )
+    tool_executor = AsyncMock()  # should NOT be called
+    cache = AsyncMock()
+    cache.get = AsyncMock(return_value=cached_data)
+    cache.set = AsyncMock()
+    collector = AsyncMock()
+    collector.record_request = AsyncMock()
+    collector.record_tool_execution = AsyncMock()
+
+    events = await _collect_events(
+        react_loop(
+            query="Analyze AAPL",
+            session_messages=[],
+            tools=[{"type": "function", "function": {"name": "analyze_stock"}}],
+            tool_executor=tool_executor,
+            llm_chat=llm_chat,
+            user_context={},
+            collector=collector,
+            cache=cache,
+            session_id="test-session",
+        )
+    )
+
+    # tool_executor never called — cache served the result
+    tool_executor.assert_not_called()
+
+    # collector recorded cache_hit=True
+    collector.record_tool_execution.assert_called_once()
+    call_kwargs = collector.record_tool_execution.call_args[1]
+    assert call_kwargs["cache_hit"] is True
+
+    # tool_result event has the cached data
+    result_events = [e for e in events if e.type == "tool_result"]
+    assert len(result_events) == 1
+    assert result_events[0].data == cached_data

@@ -300,10 +300,11 @@ async def react_loop(
         elapsed = time.monotonic() - wall_start
         if elapsed > WALL_CLOCK_TIMEOUT:
             logger.warning("react_loop_timeout", extra={"elapsed": elapsed, "iteration": i})
-            yield StreamEvent(
-                type="token",
-                content="I ran out of time to complete the analysis. Here is what I found so far.",
+            timeout_msg = (
+                "I ran out of time to complete the analysis. "
+                "Here is what I found so far." + DISCLAIMER
             )
+            yield StreamEvent(type="token", content=timeout_msg)
             yield StreamEvent(type="done", usage={})
             return
 
