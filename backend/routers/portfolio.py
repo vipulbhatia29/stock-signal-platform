@@ -6,13 +6,12 @@ import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
 from backend.dependencies import get_current_user
-from backend.models.portfolio import Transaction
 from backend.models.signal import SignalSnapshot
 from backend.models.user import User
 from backend.routers.preferences import _get_or_create_preference
@@ -28,10 +27,8 @@ from backend.schemas.portfolio import (
     TransactionListResponse,
     TransactionResponse,
 )
-from backend.tools.divestment import check_divestment_rules
-from backend.tools.dividends import get_dividend_summary
-from backend.tools.market_data import get_latest_price
-from backend.tools.portfolio import (
+from backend.services.exceptions import PortfolioNotFoundError
+from backend.services.portfolio import (
     _get_transactions_for_ticker,
     _run_fifo,
     get_or_create_portfolio,
@@ -40,6 +37,12 @@ from backend.tools.portfolio import (
     get_positions_with_pnl,
     recompute_position,
 )
+from backend.services.portfolio import delete_transaction as svc_delete_transaction
+from backend.services.portfolio import get_health_history as svc_get_health_history
+from backend.services.portfolio import list_transactions as svc_list_transactions
+from backend.tools.divestment import check_divestment_rules
+from backend.tools.dividends import get_dividend_summary
+from backend.tools.market_data import get_latest_price
 from backend.tools.recommendations import calculate_position_size
 
 logger = logging.getLogger(__name__)
@@ -64,6 +67,8 @@ async def create_transaction(
     - Ticker not found in stocks table
     - SELL exceeds available shares
     """
+    from backend.models.portfolio import Transaction
+
     portfolio = await get_or_create_portfolio(current_user.id, db)
 
     # Pre-validate SELL: check it won't exceed current open shares
@@ -138,19 +143,9 @@ async def list_transactions(
     Optionally filter by ticker symbol.
     """
     portfolio = await get_or_create_portfolio(current_user.id, db)
-
-    base = select(Transaction).where(Transaction.portfolio_id == portfolio.id)
-    if ticker:
-        base = base.where(Transaction.ticker == ticker.upper().strip())
-
-    # Count total before pagination
-    count_result = await db.execute(select(func.count()).select_from(base.subquery()))
-    total = count_result.scalar_one()
-
-    # Apply ordering + pagination
-    stmt = base.order_by(Transaction.transacted_at.desc()).limit(limit).offset(offset)
-    result = await db.execute(stmt)
-    txns = result.scalars().all()
+    txns, total = await svc_list_transactions(
+        portfolio.id, db, ticker=ticker, limit=limit, offset=offset
+    )
 
     return TransactionListResponse(
         transactions=[TransactionResponse.model_validate(t) for t in txns],
@@ -177,23 +172,10 @@ async def delete_transaction(
     """
     portfolio = await get_or_create_portfolio(current_user.id, db)
 
-    result = await db.execute(
-        select(Transaction).where(
-            Transaction.id == transaction_id,
-            Transaction.portfolio_id == portfolio.id,
-        )
-    )
-    txn = result.scalar_one_or_none()
-    if txn is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found.")
-
-    ticker = txn.ticker
-
-    # Pre-delete simulation: run FIFO without this transaction (ID-based exclusion)
-    all_txns = await _get_transactions_for_ticker(portfolio.id, ticker, db)
-    remaining = [t for t in all_txns if t["id"] != str(txn.id)]
     try:
-        _run_fifo(remaining)
+        await svc_delete_transaction(portfolio.id, transaction_id, db)
+    except PortfolioNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Transaction not found.")
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -203,8 +185,6 @@ async def delete_transaction(
             ),
         )
 
-    await db.delete(txn)
-    await recompute_position(portfolio.id, ticker, db)
     await db.commit()
     logger.info("Deleted transaction %s for user %s", transaction_id, current_user.id)
     cache = getattr(request.app.state, "cache", None)
@@ -229,6 +209,8 @@ async def list_positions(
     """
     import json
 
+    from sqlalchemy import func, select
+
     cache = getattr(request.app.state, "cache", None)
     cache_key = f"user:{current_user.id}:positions"
     if cache:
@@ -247,7 +229,6 @@ async def list_positions(
 
     # Query 3: bulk-fetch latest composite_score for held tickers
     tickers = [p.ticker for p in positions]
-    from sqlalchemy import func
 
     subq = (
         select(
@@ -491,10 +472,7 @@ async def get_health_history(
 
     Returns daily health snapshots for the specified number of days.
     """
-    from datetime import datetime, timedelta, timezone
-
     from backend.models.portfolio import Portfolio
-    from backend.models.portfolio_health import PortfolioHealthSnapshot
     from backend.schemas.portfolio_health import PortfolioHealthSnapshotResponse
 
     portfolio = (
@@ -503,16 +481,7 @@ async def get_health_history(
     if not portfolio:
         return []
 
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    result = await db.execute(
-        select(PortfolioHealthSnapshot)
-        .where(
-            PortfolioHealthSnapshot.portfolio_id == portfolio.id,
-            PortfolioHealthSnapshot.snapshot_date >= cutoff,
-        )
-        .order_by(PortfolioHealthSnapshot.snapshot_date.asc())
-    )
-    snapshots = result.scalars().all()
+    snapshots = await svc_get_health_history(portfolio.id, db, days=days)
     return [
         PortfolioHealthSnapshotResponse(
             snapshot_date=s.snapshot_date.isoformat(),
