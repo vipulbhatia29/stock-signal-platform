@@ -763,20 +763,20 @@ Fix single-process assumptions, security regressions, and performance bottleneck
 ### Audit Summary
 SaaS readiness scored **6.5/10**. Strong async foundation and user isolation, but agent subsystem (TokenBudget, ObservabilityCollector) is per-process, 20+ tools leak `str(e)`, and a ContextVar IDOR regression from Phase 4E was found.
 
-### Deliverables — Security Fixes (Sprint 1, ~5h)
-- [ ] KAN-177: [Bug] ContextVar tokens not reset in chat_stream — latent IDOR risk (~2h)
-- [ ] KAN-178: [Bug] str(e) leaked in 20+ tool ToolResult error paths (~2-3h)
+### Deliverables — Security Fixes (Sprint 1, ~5h) ✅ COMPLETE (Session 60, PR #120)
+- [x] KAN-177: [Bug] ContextVar tokens not reset in chat_stream — try/finally reset ✅
+- [x] KAN-178: [Bug] str(e) leaked in 8 tool ToolResult error paths — safe generic messages ✅
 
-### Deliverables — Quick Performance Wins (Sprint 1, ~3h)
-- [ ] KAN-179: Cache planner prompt at module level (~10 min)
-- [ ] KAN-180: [Bug] Health endpoint missing Redis connectivity check (~30 min)
-- [ ] KAN-181: Parallelize build_user_context DB queries with asyncio.gather (~2h)
+### Deliverables — Quick Performance Wins (Sprint 1, ~3h) ✅ COMPLETE (Session 60, PR #121)
+- [x] KAN-179: Cache planner prompt with lru_cache ✅
+- [x] KAN-180: [Bug] Health endpoint — Redis ping + DB SELECT 1 + DependencyStatus schema ✅
+- [x] KAN-181: Parallelize build_user_context with asyncio.gather (independent sessions) ✅
 
-### Deliverables — Scalability Hardening (Sprint 2, ~16h)
-- [ ] KAN-182: Cache get_current_user in Redis (~4h)
-- [ ] KAN-183: Increase DB pool size + document PgBouncer (~4h)
-- [ ] KAN-184: [Bug] MCP HTTP endpoint doesn't set ContextVar — portfolio tools fail (~4h)
-- [ ] KAN-185: Parallelize Celery portfolio snapshot/health tasks (~4h)
+### Deliverables — Scalability Hardening (Sprint 1+2) — Partial
+- [ ] KAN-182: Cache get_current_user in Redis (~4h) — needs design (TTL, invalidation)
+- [x] KAN-183: DB pool configurable via DB_POOL_SIZE/DB_MAX_OVERFLOW/DB_POOL_RECYCLE env vars ✅ (Session 60, PR #121)
+- [x] KAN-184: [Bug] MCP auth middleware sets current_user_id ContextVar ✅ (Session 60, PR #120)
+- [x] KAN-185: Nightly pipeline parallelized — ThreadPoolExecutor, 5 phases ✅ (Session 60, PR #121)
 
 ### Deliverables — Multi-Worker Architecture (Sprint 3, ~3 days)
 - [ ] KAN-186: Move TokenBudget sliding windows to Redis + ObservabilityCollector admin metrics from DB (~2-3 days)

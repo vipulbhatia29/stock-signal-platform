@@ -1,31 +1,34 @@
-# Project State — Updated 2026-03-26 (Session 59)
+# Project State — Updated 2026-03-27 (Session 60)
 
 ## Current Phase
-- Phases 1-7 complete. Phase 7.5 (Tech Debt) 10/12 shipped. Phase 7.6 (Scale Readiness) backlogged.
-- Session 59: 3 tech debt PRs merged (#118), deep SaaS architecture audit, 10 new JIRA tickets (KAN-177–186).
+- Phases 1-7 complete. Phase 7.5: 10/12 shipped. Phase 7.6 Sprint 1: 8/10 COMPLETE.
+- Session 60: Sprint 1 Group A (KAN-177/178/180/184, PR #120) + Group B (KAN-179/181/183/185, PR #121) shipped.
+- Service layer spec + plan written (KAN-172/173). JIRA backlog items KAN-188 (tool filtering) + KAN-189 (multi-agent Epic) created.
 
 ## Branch State
-- Current branch: `feat/KAN-176-scale-readiness-backlog` (1 commit: project-plan update, NOT yet pushed)
-- `develop` synced with remote after PR #118 merge
+- Current branch: `feat/KAN-172-service-layer-spec` (spec + plan, pushed, not yet PR'd to develop)
+- `develop` synced after PRs #120 + #121 merge
 
 ## Resume Point
-- **Unpushed work:** `feat/KAN-176-scale-readiness-backlog` has project-plan update commit — needs push + PR to develop
-- **Next work:** Phase 7.6 Sprint 1 — KAN-177 (ContextVar IDOR, 2h) + KAN-178 (str(e) leaks, 2-3h) + KAN-179 (prompt cache, 10min) + KAN-180 (Redis health, 30min) + KAN-181 (user_context gather, 2h)
-- **Then:** Sprint 2 — KAN-182-185 (auth cache, DB pool, MCP ContextVar, Celery parallelization)
-- **Then:** Sprint 3 — KAN-186 (TokenBudget → Redis, 2-3 days)
-- **Remaining Phase 7.5:** KAN-172 (service layer, ~8h) + KAN-173 (router split, ~3h) — deferred, low priority
+- **Unpushed work:** `feat/KAN-172-service-layer-spec` has spec + plan — needs PR to develop
+- **Next work:** Execute service layer plan (12 tasks, 5 parallel batches). Start with Tasks 1-2 (blocker fix + exceptions), then parallel batch Tasks 3-7 (5 service modules).
+- **Remaining Phase 7.6:** KAN-182 (auth cache in Redis, needs design) + KAN-186 (TokenBudget → Redis, multi-worker)
+- **New backlog:** KAN-188 (intent-based tool filtering), KAN-189 (multi-agent architecture Epic)
 
 ## Test Counts
-- 821 unit + 236 API + 27 frontend + 24 integration + 17 Playwright ≈ 1,125 total
-- Alembic head: `758e69475884` (migration 015 — portfolio_health_snapshots)
+- 842 unit + ~236 API + 27 frontend + 24 integration + 17 Playwright ≈ 1,146 total
+- Alembic head: `758e69475884` (migration 015)
 
-## Session 59 Shipped
-- PR #118 (squash merged): KAN-174 passlib→bcrypt, KAN-168 pagination, KAN-170 cache extension
-- Epic KAN-176 created with 10 tickets (KAN-177–186) from architecture audit
-- Phase 7.6 added to project-plan
+## Session 60 Shipped
+- PR #120 (merged): KAN-177 ContextVar IDOR, KAN-178 str(e) leaks, KAN-180 Redis health, KAN-184 MCP ContextVar
+- PR #121 (merged): KAN-179 prompt cache, KAN-181 asyncio.gather user_context, KAN-183 DB pool config, KAN-185 nightly pipeline parallel
+- Spec: `docs/superpowers/specs/2026-03-27-service-layer-extraction-design.md`
+- Plan: `docs/superpowers/plans/2026-03-27-service-layer-extraction.md`
+- JIRA: KAN-188 (tool filtering), KAN-189 (multi-agent Epic)
+- Serena: `future_work/AgentArchitectureBrainstorming` memory created
 
 ## Key Learnings
-- Product is SaaS for part-time investors, NOT a personal tool — design for multi-user cloud deployment
-- SaaS readiness scored 6.5/10 — strong async + user isolation, but single-process agent assumptions
-- Phase 4E fixes (KAN-72 ContextVar, KAN-167 str(e)) regressed — new tools added without same treatment
-- ObservabilityCollector has DB writer (ground truth exists), in-memory is only for admin endpoint
+- Parallel subagent dispatch with worktrees works well for independent bug fixes (8 tickets in 2 PRs)
+- Service layer design must account for all callers (routers, tools, tasks, agents) — not just routers
+- Single agent with 24 tools has scaling ceiling — intent-based tool filtering is near-term fix, multi-agent is long-term
+- Circular import blocker: tools/risk_narrative.py imports from routers/forecasts.py — must fix first
