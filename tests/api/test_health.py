@@ -4,6 +4,18 @@ from unittest.mock import AsyncMock, patch
 
 from httpx import AsyncClient
 
+from backend.schemas.health import DependencyStatus
+
+_HEALTHY_DEP = DependencyStatus(healthy=True, latency_ms=0.1)
+
+
+def _patch_deps_healthy():
+    """Patch Redis and DB checks to return healthy for MCP-focused tests."""
+    return (
+        patch("backend.routers.health._check_redis", return_value=_HEALTHY_DEP),
+        patch("backend.routers.health._check_database", return_value=_HEALTHY_DEP),
+    )
+
 
 class TestHealthEndpoint:
     """Tests for GET /api/v1/health."""
@@ -15,10 +27,13 @@ class TestHealthEndpoint:
         data = response.json()
         assert data["version"] == "0.1.0"
         assert "mcp_tools" in data
+        assert "redis" in data
+        assert "database" in data
 
     async def test_health_mcp_disabled_shows_direct(self, client: AsyncClient) -> None:
         """When MCP_TOOLS=False, mode is 'direct' and healthy=True."""
-        with patch("backend.routers.health.settings") as mock_settings:
+        redis_p, db_p = _patch_deps_healthy()
+        with patch("backend.routers.health.settings") as mock_settings, redis_p, db_p:
             mock_settings.MCP_TOOLS = False
             response = await client.get("/api/v1/health")
 
@@ -32,7 +47,8 @@ class TestHealthEndpoint:
 
     async def test_health_mcp_enabled_no_manager(self, client: AsyncClient) -> None:
         """When MCP enabled but manager missing, shows disabled+unhealthy."""
-        with patch("backend.routers.health.settings") as mock_settings:
+        redis_p, db_p = _patch_deps_healthy()
+        with patch("backend.routers.health.settings") as mock_settings, redis_p, db_p:
             mock_settings.MCP_TOOLS = True
             # Ensure no mcp_manager on app state
             if hasattr(client._transport.app.state, "mcp_manager"):
@@ -58,7 +74,8 @@ class TestHealthEndpoint:
 
         client._transport.app.state.mcp_manager = mock_manager
 
-        with patch("backend.routers.health.settings") as mock_settings:
+        redis_p, db_p = _patch_deps_healthy()
+        with patch("backend.routers.health.settings") as mock_settings, redis_p, db_p:
             mock_settings.MCP_TOOLS = True
             response = await client.get("/api/v1/health")
 
