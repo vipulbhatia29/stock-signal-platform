@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import time
+from pathlib import Path
 from typing import Any, AsyncGenerator, Callable
 
 from backend.agents.guards import DISCLAIMER
@@ -20,12 +21,62 @@ from backend.tools.base import ToolResult
 
 logger = logging.getLogger(__name__)
 
+_PROMPT_DIR = Path(__file__).parent / "prompts"
+
 # --- Constants ---
 MAX_ITERATIONS = 8
 MAX_PARALLEL_TOOLS = 4
 MAX_TOOL_CALLS = 12
 WALL_CLOCK_TIMEOUT = 45
 CIRCUIT_BREAKER = 3
+
+
+# --- System prompt ---
+
+
+def _render_system_prompt(
+    user_context: dict[str, Any],
+    entity_registry: Any | None,
+) -> str:
+    """Render the ReAct system prompt with user and entity context.
+
+    Loads the template from prompts/react_system.md and fills
+    {{user_context}} and {{entity_context}} placeholders.
+
+    Args:
+        user_context: Portfolio, prefs, watchlist info.
+        entity_registry: EntityRegistry for recently discussed tickers.
+
+    Returns:
+        Rendered system prompt string.
+    """
+    template_path = _PROMPT_DIR / "react_system.md"
+    template = template_path.read_text(encoding="utf-8")
+
+    # Format user context summary
+    ctx_parts: list[str] = []
+    if user_context.get("positions"):
+        tickers = [p.get("ticker", "?") for p in user_context["positions"][:10]]
+        ctx_parts.append(f"Holdings: {', '.join(tickers)}")
+    if user_context.get("watchlist"):
+        ctx_parts.append(f"Watchlist: {', '.join(user_context['watchlist'][:10])}")
+    if user_context.get("preferences"):
+        ctx_parts.append(f"Preferences: {json.dumps(user_context['preferences'])}")
+    user_ctx_str = "\n".join(ctx_parts) if ctx_parts else "No portfolio data available."
+
+    # Format entity context
+    entity_ctx_str = ""
+    if entity_registry is not None:
+        try:
+            entity_ctx_str = entity_registry.format_for_prompt()
+        except Exception:
+            logger.debug("entity_registry.format_for_prompt() failed")
+    if not entity_ctx_str:
+        entity_ctx_str = "No prior context."
+
+    return template.replace("{{user_context}}", user_ctx_str).replace(
+        "{{entity_context}}", entity_ctx_str
+    )
 
 
 # --- Scratchpad helpers ---
@@ -48,8 +99,7 @@ def _build_initial_messages(
     Returns:
         List of message dicts forming the initial scratchpad.
     """
-    # Placeholder system prompt — S9 will add the real template via _render_system_prompt()
-    system = "You are a stock research assistant. Call tools to gather data before answering."
+    system = _render_system_prompt(user_context, entity_registry)
     messages: list[dict[str, Any]] = [{"role": "system", "content": system}]
 
     # Prior conversation turns (for multi-turn), capped at 10
