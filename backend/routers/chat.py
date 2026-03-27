@@ -191,7 +191,7 @@ async def _event_generator(
     session_messages: list[dict],
     user: User,
     query_id: uuid.UUID,
-    ctx_tokens: tuple[Token, Token, Token] | None = None,
+    ctx_tokens: tuple[Token, Token, Token, Token, Token] | None = None,
 ):
     """Yield NDJSON events from the Plan→Execute→Synthesize graph.
 
