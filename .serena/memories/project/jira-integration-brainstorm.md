@@ -12,7 +12,7 @@ updated_by: session-34
 - Project: StockScreener (key: `KAN`, id: 10000)
 - MCP tools prefix: `mcp__plugin_atlassian_atlassian__*`
 - Auth: OAuth 2.1 via Atlassian MCP plugin (browser-based, no API token needed for local dev)
-- API token exists (expires 2026-03-30) for headless/CI use
+- API token existed (expired 2026-03-30) — regenerate if headless/CI use needed
 
 ## Transition IDs
 | ID | Status |
@@ -39,14 +39,17 @@ Installed and connected to `stock-signal-platform` repo. Enables:
 - PR references visible in JIRA dev panel
 - Automation triggers for PR events
 
-## Completed Epics (as of Session 47)
+## Completed Epics (as of Session 67)
 - KAN-1: Phase 4B — AI Chatbot Backend (Done)
 - KAN-22: CI/CD Pipeline + Branching Strategy (Done)
 - KAN-30: Phase 4C — Frontend Chat UI (Done)
 - KAN-61: Phase 4D — Agent Intelligence (Done)
 - KAN-88: Phase 4F — UI Migration (Done)
-- KAN-106: Phase 5 — Forecasting & Automation (Done)
-
-## Key Convention
-Read `conventions/jira-sdlc-workflow` for the mandatory process. Never skip refinement.
-Query `project = KAN AND status != Done ORDER BY rank ASC` to find next work.
+- KAN-106: Phase 5 — Forecasting + Automation (Done)
+- KAN-119: Phase 5.6 — MCP Tool Server (Done)
+- KAN-139: Phase 6 — LLM Factory (Done)
+- KAN-147: Phase 7 — Backend Hardening (Done)
+- KAN-163: Phase 7.5 — Tech Debt (Done)
+- KAN-176: Phase 7.6 — Scale Readiness (Done)
+- KAN-189: Phase 8 — ReAct + Observability (Done)
+- KAN-211: Test Suite Hardening (In Progress)

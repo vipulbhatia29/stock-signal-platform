@@ -60,7 +60,7 @@ curl -X POST http://localhost:8181/api/v1/stocks/AAPL/ingest \
 
 | Problem | Fix |
 |---------|-----|
-| `passlib AttributeError` on hash | Pin `bcrypt==4.2.1` in pyproject.toml, run `uv sync` |
+| bcrypt import error | Run `uv sync` to install bcrypt >=4.2.1 (passlib was removed in Session 59) |
 | Postgres connection refused | Check `docker compose ps` — use port 5433 |
 | Redis connection refused | Check `docker compose ps` — use port 6380 |
 | `VIRTUAL_ENV` warning from uv | Ignore — uv uses `.venv/` correctly via `uv run` |

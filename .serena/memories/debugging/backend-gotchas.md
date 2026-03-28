@@ -73,6 +73,7 @@ category: debugging
 ## bcrypt (passlib removed Session 59)
 - passlib removed in Session 59 (KAN-174). Direct `bcrypt` used now (>=4.2.1, unpinned).
 - `hash_password()` and `verify_password()` in `backend/dependencies.py` use `bcrypt.hashpw`/`bcrypt.checkpw`.
+- Old gotcha "bcrypt must be pinned to 4.2.x (passlib compat)" NO LONGER APPLIES — passlib is gone.
 
 ## compute_signals()
 - Accepts optional `piotroski_score` param — omit for pure technical composite.
