@@ -24,6 +24,7 @@ from backend.schemas.forecasts import (
     ScorecardResponse,
     SectorForecastResponse,
 )
+from backend.validation import TickerPath
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,7 @@ async def get_portfolio_forecast(
     summary="Get forecast for a ticker",
 )
 async def get_ticker_forecast(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),

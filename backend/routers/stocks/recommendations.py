@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
@@ -32,6 +31,14 @@ from backend.services.signals import (
 from backend.services.signals import (
     get_signal_history as get_signal_history_svc,
 )
+from backend.validation import (
+    ActionQuery,
+    ConfidenceQuery,
+    MacdStateQuery,
+    RsiStateQuery,
+    SectorQuery,
+    TickerPath,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +53,8 @@ router = APIRouter()
 @router.get("/recommendations", response_model=RecommendationListResponse)
 async def get_recommendations(
     request: Request,
-    action: Literal["BUY", "WATCH", "AVOID", "HOLD", "SELL"] | None = Query(
-        default=None, description="Filter by action: BUY, WATCH, AVOID, HOLD, SELL"
-    ),
-    confidence: Literal["HIGH", "MEDIUM", "LOW"] | None = Query(
-        default=None, description="Filter by confidence: HIGH, MEDIUM, LOW"
-    ),
+    action: ActionQuery = None,
+    confidence: ConfidenceQuery = None,
     limit: int = Query(default=50, ge=1, le=200, description="Page size"),
     offset: int = Query(default=0, ge=0, description="Offset"),
     db: AsyncSession = Depends(get_async_session),
@@ -113,9 +116,9 @@ async def get_recommendations(
 @router.get("/signals/bulk", response_model=BulkSignalsResponse)
 async def get_bulk_signals(
     index_id: str | None = Query(default=None, description="Filter by index ID"),
-    rsi_state: str | None = Query(default=None, description="Filter by RSI signal"),
-    macd_state: str | None = Query(default=None, description="Filter by MACD signal"),
-    sector: str | None = Query(default=None, description="Filter by sector"),
+    rsi_state: RsiStateQuery = None,
+    macd_state: MacdStateQuery = None,
+    sector: SectorQuery = None,
     score_min: float | None = Query(default=None, ge=0, le=10),
     score_max: float | None = Query(default=None, ge=0, le=10),
     sharpe_min: float | None = Query(default=None, description="Minimum Sharpe ratio filter"),
@@ -183,7 +186,7 @@ async def get_bulk_signals(
 
 @router.get("/{ticker}/signals/history", response_model=list[SignalHistoryItem])
 async def get_signal_history(
-    ticker: str,
+    ticker: TickerPath,
     days: int = Query(default=90, ge=1, le=365, description="Number of days of history"),
     limit: int = Query(default=100, ge=1, le=500),
     db: AsyncSession = Depends(get_async_session),

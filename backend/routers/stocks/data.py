@@ -33,6 +33,7 @@ from backend.schemas.stock import (
 )
 from backend.services.signals import get_latest_signals as get_latest_signals_svc
 from backend.services.stock_data import fetch_fundamentals
+from backend.validation import TickerPath
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ router = APIRouter()
 
 @router.get("/{ticker}/prices", response_model=list[PricePointResponse])
 async def get_prices(
-    ticker: str,
+    ticker: TickerPath,
     period: PricePeriod = Query(
         default=PricePeriod.ONE_YEAR, description="How far back to fetch prices"
     ),
@@ -95,7 +96,7 @@ async def get_prices(
 
 @router.get("/{ticker}/signals", response_model=SignalResponse)
 async def get_signals(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
@@ -177,7 +178,7 @@ async def get_signals(
 
 @router.get("/{ticker}/fundamentals", response_model=FundamentalsResponse)
 async def get_fundamentals(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
@@ -238,7 +239,7 @@ async def get_fundamentals(
 
 @router.get("/{ticker}/news")
 async def get_stock_news(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
@@ -286,7 +287,7 @@ async def get_stock_news(
 
 @router.get("/{ticker}/intelligence")
 async def get_stock_intelligence(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
