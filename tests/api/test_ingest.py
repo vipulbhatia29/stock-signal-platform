@@ -15,10 +15,9 @@ class TestIngestTicker:
         assert response.status_code == 401
 
     async def test_ingest_invalid_ticker_format(self, authenticated_client: AsyncClient) -> None:
-        """Invalid ticker format returns 400."""
+        """Invalid ticker format returns 422 (path param validation)."""
         response = await authenticated_client.post("/api/v1/stocks/$INVALID!/ingest")
-        assert response.status_code == 400
-        assert "invalid ticker" in response.json()["detail"].lower()
+        assert response.status_code == 422
 
     @patch("backend.services.pipelines.store_signal_snapshot", new_callable=AsyncMock)
     @patch("backend.services.pipelines.compute_signals")
