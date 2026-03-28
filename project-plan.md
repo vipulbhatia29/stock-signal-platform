@@ -441,24 +441,24 @@ Comprehensive backend hardening: test directory restructure, ~211 new tests acro
 - [x] **S9 (KAN-83):** API contract hardening — 10 tests (Session 41)
 - [x] **S10 (KAN-84):** Pre-commit hooks + ci-eval.yml workflow (Session 41)
 
-### Backlog Items (identified during design, target Phase 5)
-- [ ] **Session entity registry** — Track discussed tickers + data freshness per chat session (in-memory dict on graph state). Enables pronoun resolution ("them", "both") and lazy re-fetch
-- [ ] **Stock comparison tool** — Dedicated compare_stocks tool with structured side-by-side output, depends on entity registry
-- [ ] **Context-aware planner prompt** — Extend planner prompt with `recently_discussed_tickers` from entity registry
-- [ ] **Dividend sustainability tool** — Payout ratio, FCF coverage, dividend growth history
-- [ ] **Risk narrative tool** — Ranked risk factors with monitoring indicators
+### Backlog Items (identified during design, target Phase 5) — ALL COMPLETE
+- [x] **Session entity registry** — ✅ Done: Phase 5 S8 (KAN-114, EntityRegistry on AgentStateV2)
+- [x] **Stock comparison tool** — ✅ Done: Phase 5 S8 (CompareStocksTool)
+- [x] **Context-aware planner prompt** — ✅ Done: Phase 7 KAN-160 (response_type routing + 6 few-shots)
+- [x] **Dividend sustainability tool** — ✅ Done: Phase 5 S9 (KAN-115)
+- [x] **Risk narrative tool** — ✅ Done: Phase 5 S9 (KAN-115)
 - [x] ~~**Red flag scanner**~~ — Superseded: short interest added to StockIntelligenceTool (Session 66, PR #135)
 
 ### Deferred Backend Work (from Phase 4F UI-4, Session 43)
-- [ ] **Candlestick chart toggle** — Add `format=ohlc` query param to `GET /api/v1/stocks/{ticker}/prices`. OHLC data already exists in `stock_prices` table. Frontend: Line/Candle pill toggle on stock detail price chart.
-- [ ] **Benchmark comparison chart** — Add `GET /api/v1/stocks/{ticker}/benchmark` endpoint. Fetch ^GSPC + ^IXIC price history (yfinance or cache), normalize to % change from start date. Frontend: 3-line chart (stock cyan, S&P green dashed, NASDAQ amber dashed) with zero reference line.
-- [x] **KAN-98: Hydration mismatch** — Fixed in Session 44 (PR #50). Ref-based DOM update for isNYSEOpen.
+- [x] **Candlestick chart toggle (backend)** — ✅ Backend done: KAN-150 (format=ohlc, Session 64). Frontend toggle deferred to UI polish.
+- [x] **Benchmark comparison chart (backend)** — ✅ Backend done: KAN-151 (PR #134). Frontend chart deferred to UI polish.
+- [x] **KAN-98: Hydration mismatch** — Fixed in Session 44 (PR #50).
 
-### Deferred to Phase 5.1 (identified during Phase 5 design, Session 45)
-- [x] ~~**Red flag scanner**~~ — Superseded: short interest added to StockIntelligenceTool (Session 66, PR #135). Insider transactions already covered by KAN-159.
-- ~~**Telegram notifications**~~ REMOVED — in-app alerts sufficient.
-- [ ] **Forecast blending into composite score** — Confidence-weighted 3-way blend (tech + fundamental + forecast). Deferred until forecast accuracy is validated. Phase 5 keeps forecasts as a parallel signal.
-- [ ] **Live LLM eval tests** — Deferred from Phase 4G. Needs CI_GROQ_API_KEY secret.
+### Deferred to Phase 5.1 — CLOSED (Session 66 audit)
+- [x] ~~**Red flag scanner**~~ — Superseded (Session 66)
+- ~~**Telegram notifications**~~ REMOVED
+- [x] ~~**Forecast blending**~~ — CLOSED: ReAct agent synthesizes all signals dynamically. Rigid formula adds less value. If screener sort needs forecast input, revisit as product decision.
+- [x] **Live LLM eval tests** — Moved to SaaS Launch Roadmap (rescoped for ReAct loop)
 
 ### GitHub Secrets Required
 - [ ] **CI_GROQ_API_KEY** (required) — primary LLM for agent eval calls
@@ -654,9 +654,9 @@ Data-driven multi-model LLM cascade, proactive rate limiting, agent observabilit
 - [x] ~55 new unit/integration tests for 6A/6B components *(done during 6A+6B)*
 - [x] Test suite cleanup: deleted 11 duplicate root files, relocated 2 orphans (Session 55)
 - [x] Playwright POM scaffolding: config, base page, login page, dashboard page, auth fixture, selectors (Session 55)
-- [ ] ~27 new E2E tests (auth, dashboard, chat, stocks, errors) *(deferred to next session)*
-- [ ] CI workflow: E2E job with Playwright, artifact upload *(deferred to next session)*
-- [ ] Add data-testid attributes to frontend components for E2E selectors *(deferred)*
+- ~~[ ] ~27 new E2E tests~~ STALE — Playwright POM selectors outdated after Phase 4F UI rewrite. Start fresh if needed.
+- ~~[ ] CI E2E job~~ DEFERRED — revisit after cloud deploy when E2E adds value
+- ~~[ ] data-testid attributes~~ STALE — many components rewritten since scaffold
 
 ### Success Criteria
 - LLM cascade silently handles all Groq errors — user never sees "internal error" ✅
@@ -704,23 +704,25 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 - [x] GET /portfolio/health/history endpoint + 3 API tests
 - [x] Extracted compute_portfolio_health() standalone function
 
-#### Remaining Backlog (KAN-149–157 + Schwab Import)
-- [ ] **Schwab CSV Import** — parse Schwab "Positions" CSV export, create BUY transactions + auto-ingest tickers
-- [x] ~~KAN-149: Portfolio aggregation tool~~ — superseded by KAN-160 portfolio_health ✅ Closed (Session 64)
-- [x] KAN-150: Candlestick OHLC endpoint ✅ Session 64 — format=ohlc query param on GET /prices
-- [ ] KAN-151: Benchmark comparison endpoint
-- [ ] KAN-152: Google OAuth (PKCE flow)
-- [ ] KAN-153: Chat audit trail
-- [x] KAN-154: Centralized API input validation ✅ Session 64 — TickerPath, enum filters, dedup regex
-- [ ] KAN-155: Forecast blending into composite score
-- [x] KAN-156: ~~Red flag scanner~~ — Superseded, short interest added to StockIntelligenceTool ✅ Session 66
-- [ ] KAN-157: Live LLM eval tests (CI_GROQ_API_KEY available)
-- [ ] KAN-162: Langfuse Integration — self-hosted LLM observability: trace agent pipeline, eval datasets, confidence calibration, tool latency dashboards. Pick up during observability phase.
+#### Remaining Backlog (KAN-149–157 + Schwab Import) — Audit Session 66
+- [ ] **Schwab CSV Import** — parse Schwab "Positions" CSV export, create BUY transactions + auto-ingest tickers. Low priority.
+- [x] ~~KAN-149: Portfolio aggregation tool~~ — superseded by KAN-160 ✅ Closed
+- [x] KAN-150: Candlestick OHLC endpoint ✅ Session 64
+- [x] KAN-151: Benchmark comparison endpoint ✅ Session 66 (PR #134)
+- [x] KAN-153: Chat audit trail ✅ Session 66 (PR #133)
+- [x] KAN-154: Centralized API input validation ✅ Session 64
+- [x] KAN-156: ~~Red flag scanner~~ — Superseded ✅ Session 66
+- [x] ~~KAN-155: Forecast blending~~ — CLOSED: agent synthesizes dynamically ✅ Session 66
+- [x] ~~KAN-162: Langfuse~~ — CLOSED: ObservabilityCollector + llm_call_log covers 80%. Replace with admin dashboard if needed ✅ Session 66
+- [ ] KAN-152: Google OAuth — **Moved to SaaS Launch Roadmap**
+- [ ] KAN-157: Live LLM eval — **Moved to SaaS Launch Roadmap** (rescoped for ReAct)
 
-#### Deferred (UI)
+#### Deferred (UI) — Low Priority
 - [x] ~~UI-6: Sectors Page~~ ✅ Done (Session 45)
-- [ ] UI-9: Animations + Final Polish
-- [ ] Earnings card on stock detail page
+- [x] ~~UI-9: Animations~~ — Already done in Phase 4A (Session 29). Entry animations + prefers-reduced-motion. CLOSED.
+- [ ] Earnings card on stock detail page — Frontend-only, data exists via StockIntelligenceTool. Low priority.
+- [ ] Candlestick toggle (frontend) — Backend done (KAN-150). Needs Line/Candle pill on stock detail.
+- [ ] Benchmark chart (frontend) — Backend done (KAN-151). Needs 3-line comparison chart.
 
 ### Success Criteria
 Guardrails deployed. Portfolio health answerable. Market briefing tool works. 24 agent tools (was 20). All free data from yfinance exploited. ✅ Achieved (KAN-158, 159, 160 shipped in Session 56).
@@ -772,14 +774,14 @@ SaaS readiness scored **6.5/10**. Strong async foundation and user isolation, bu
 - [x] KAN-180: [Bug] Health endpoint — Redis ping + DB SELECT 1 + DependencyStatus schema ✅
 - [x] KAN-181: Parallelize build_user_context with asyncio.gather (independent sessions) ✅
 
-### Deliverables — Scalability Hardening (Sprint 1+2) — Partial
-- [ ] KAN-182: Cache get_current_user in Redis (~4h) — needs design (TTL, invalidation)
-- [x] KAN-183: DB pool configurable via DB_POOL_SIZE/DB_MAX_OVERFLOW/DB_POOL_RECYCLE env vars ✅ (Session 60, PR #121)
-- [x] KAN-184: [Bug] MCP auth middleware sets current_user_id ContextVar ✅ (Session 60, PR #120)
-- [x] KAN-185: Nightly pipeline parallelized — ThreadPoolExecutor, 5 phases ✅ (Session 60, PR #121)
+### Deliverables — Scalability Hardening (Sprint 1+2) — ✅ COMPLETE
+- [x] KAN-182: Cache get_current_user in Redis ✅ Session 66 (PR #132) — VOLATILE TTL
+- [x] KAN-183: DB pool configurable via env vars ✅ (Session 60, PR #121)
+- [x] KAN-184: [Bug] MCP auth middleware ContextVar ✅ (Session 60, PR #120)
+- [x] KAN-185: Nightly pipeline parallelized ✅ (Session 60, PR #121)
 
-### Deliverables — Multi-Worker Architecture (Sprint 3, ~3 days)
-- [ ] KAN-186: Move TokenBudget sliding windows to Redis + ObservabilityCollector admin metrics from DB (~2-3 days)
+### Deliverables — Multi-Worker Architecture — Moved to SaaS Launch Roadmap
+- [ ] KAN-186: TokenBudget → Redis — **Moved to SaaS Launch Roadmap Phase A**
 
 ### Dependencies
 None — all findings are independent of feature backlog.
@@ -833,10 +835,8 @@ Close observability gaps (cost tracking, cache_hit, agent_id, fallback_rate). Th
 - [x] Intent → tool group mapping (stock 8, portfolio 8, market 5, comparison 5, simple_lookup 1, general=all) (7 tests)
 - [x] Fast path wiring — out_of_scope + simple_lookup bypass graph (0 LLM calls) (3 tests)
 
-### 8D — Dynamic Concurrency Controller (KAN-189 Step 4, ~8h)
-- [ ] ConcurrencyController reads fallback_rate → adjusts semaphore dynamically
-- [ ] Stagger fan-out with random jitter
-- [ ] Add `loop_step` to observability (needs ReAct loop from 8B)
+### 8D — Dynamic Concurrency Controller — DEFERRED
+~~Originally planned as standalone. loop_step already wired in 8A. Concurrency control only matters with multi-agent fan-out (Phase 9A). Merged into SaaS Launch Roadmap Phase D as a dependency of comparison fan-out.~~
 
 ### Dependencies
 - 8A: independent, do NOW
@@ -852,18 +852,14 @@ Close observability gaps (cost tracking, cache_hit, agent_id, fallback_rate). Th
 
 ---
 
-## Phase 9: Multi-Agent Fan-Out + Subscriptions
+## Phase 9: Comparison Fan-Out + Subscriptions — RESCOPED (Session 66 audit)
 
-### Goal
-Specialized agents with fan-out for comparison queries. Subscription tiers with Stripe.
+### 9A — Comparison Fan-Out (rescoped from Multi-Agent, ~15h)
+~~Original scope: 4 specialized agents (Stock Research, Portfolio, Orchestrator, Fan-out). Rescoped because the single ReAct agent with tool groups already handles multi-stock and portfolio queries well. Only comparison fan-out adds genuine value (latency: N×8s serial → ~8s parallel).~~
 
-### 9A — Multi-Agent Architecture (KAN-189 Steps 5-6, ~40h)
-- [ ] Stock Research Agent (structured StockFinding output, own ReAct loop)
-- [ ] Portfolio Agent (holistic — all positions at once, never fan-out)
-- [ ] Orchestrator Agent (routes, fans out for comparisons, combines)
-- [ ] Fan-out pattern: N parallel stock agents, asyncio.gather + semaphore
-- [ ] Holistic pattern: one portfolio agent for rebalancing
-- [ ] Fallback stagger + cascade protection
+- [ ] Comparison fan-out: asyncio.gather + semaphore for N-stock comparisons
+- [ ] ConcurrencyController: reads fallback_rate, adjusts semaphore (moved from 8D)
+- [ ] Stagger fan-out with random jitter for rate limit protection
 
 ### 9B — Subscription & Monetization (~30h)
 - [ ] User model: `subscription_tier`, `subscription_status`, `stripe_customer_id`
@@ -875,12 +871,11 @@ Specialized agents with fan-out for comparison queries. Subscription tiers with 
 - [ ] JWT claims: `subscription_tier`, `usage_remaining`
 
 ### Dependencies
-- 9A: Phase 8 complete (ReAct loop stable, observability wired)
-- 9B: Google OAuth (KAN-152) should be done first for signup flow
+- 9A: Phase 8 complete ✅ (ReAct loop stable, observability wired)
+- 9B: KAN-152 Google OAuth should be done first for signup flow
 
 ### Success Criteria
-- Comparison queries run N parallel agents in ~8s (not N×8s serial)
-- Portfolio queries use holistic agent (no fan-out)
+- Comparison queries run parallel in ~8s (not N×8s serial)
 - Can subscribe via Stripe, tier enforced on agent tool calls
 
 ---
@@ -911,3 +906,88 @@ Deploy to cloud, swap MCP transport from stdio to Streamable HTTP, production-gr
 
 ### Success Criteria
 App running in cloud, MCP Tool Server as separate container, cost tracking live. Any new client app (Telegram, mobile) can connect to MCP Tool Server and use all 20+ tools.
+
+---
+
+## SaaS Launch Roadmap — Backend First (Session 66 audit)
+
+Consolidated execution order. All prior phases complete. This is the critical path to multi-user SaaS launch.
+
+### Phase A: Multi-Worker Correctness (~3 days)
+> **No brainstorm needed** — spec exists (KAN-186 description), clear implementation.
+
+| # | Task | JIRA | Brainstorm? | Effort |
+|---|------|------|-------------|--------|
+| A1 | TokenBudget sliding windows → Redis sorted sets | KAN-186 | No | ~2 days |
+| A2 | ObservabilityCollector admin metrics → read from llm_call_log DB | KAN-186 | No | ~1 day |
+
+**Why first:** Without this, 2+ Uvicorn workers = 2× overspend on LLM rate limits. Correctness blocker.
+
+### Phase B: Agent Reliability (~2 days)
+> **Technical brainstorm needed** — eval framework, test cases, scoring rubric for ReAct loop.
+
+| # | Task | JIRA | Brainstorm? | Effort |
+|---|------|------|-------------|--------|
+| B1 | Design ReAct eval rubric (tool selection, grounding, loop termination) | KAN-157 | **Technical** | ~0.5 day |
+| B2 | Implement eval harness + golden test set (8-10 queries) | KAN-157 | No | ~1 day |
+| B3 | CI eval job (weekly scheduled, not per-PR) | KAN-157 | No | ~0.5 day |
+
+**Why second:** Must validate agent quality before exposing to real users. Needs CI_GROQ_API_KEY secret.
+
+### Phase C: Google OAuth + User Acquisition (~3 days)
+> **Business + technical brainstorm needed** — account linking policy, PKCE flow design.
+
+| # | Task | JIRA | Brainstorm? | Effort |
+|---|------|------|-------------|--------|
+| C1 | Brainstorm: account linking (merge on email match? separate accounts?) | KAN-152 | **Business** | ~0.5 day |
+| C2 | Brainstorm: PKCE flow, CachedJWKSClient, dual auth (JWT + Google) | KAN-152 | **Technical** | ~0.5 day |
+| C3 | Backend: Google OAuth provider, user linking/creation, token exchange | KAN-152 | No | ~1.5 days |
+| C4 | Frontend: "Sign in with Google" button, auth flow integration | KAN-152 | No | ~0.5 day |
+
+**Why third:** Unblocks subscriptions (Phase D) and real user signups.
+
+### Phase D: Subscriptions + Monetization (~5 days)
+> **Business + technical brainstorm needed** — tier definitions, pricing, Stripe integration.
+
+| # | Task | JIRA | Brainstorm? | Effort |
+|---|------|------|-------------|--------|
+| D1 | Brainstorm: tier definitions (Free/Pro/Premium), quotas, pricing | NEW | **Business** | ~0.5 day |
+| D2 | Brainstorm: Stripe integration, webhook handling, subscription lifecycle | NEW | **Technical** | ~0.5 day |
+| D3 | User model: subscription_tier, stripe_customer_id, migration | NEW | No | ~0.5 day |
+| D4 | Stripe checkout + webhook endpoints | NEW | No | ~1.5 days |
+| D5 | SubscriptionGuard middleware: tier + quota enforcement | NEW | No | ~1 day |
+| D6 | LLM tier routing: free users → cheap models | NEW | No | ~0.5 day |
+| D7 | Frontend: pricing cards, usage meter, billing page | NEW | No | ~1 day |
+
+**Depends on:** Phase C (Google OAuth for signup flow).
+
+### Phase E: Cloud Deployment (~4 days)
+> **Technical brainstorm needed** — cloud provider, infra choices, MCP transport swap.
+
+| # | Task | JIRA | Brainstorm? | Effort |
+|---|------|------|-------------|--------|
+| E1 | Brainstorm: cloud provider (Azure/AWS/GCP), managed services | NEW | **Technical** | ~0.5 day |
+| E2 | Docker Compose: all services containerized (inc. MCP Tool Server) | NEW | No | ~1 day |
+| E3 | MCP transport swap: stdio → Streamable HTTP (config change only) | NEW | No | ~0.5 day |
+| E4 | Terraform / IaC for cloud infra | NEW | No | ~1.5 days |
+| E5 | deploy.yml: wire actual CI/CD deployment | NEW | No | ~0.5 day |
+
+**Depends on:** Phase A (multi-worker correctness).
+
+### Phase F: Comparison Fan-Out (optional, ~2 days)
+> **Technical brainstorm needed** — concurrency strategy, rate limit protection.
+
+| # | Task | JIRA | Brainstorm? | Effort |
+|---|------|------|-------------|--------|
+| F1 | Brainstorm: fan-out pattern, semaphore sizing, fallback stagger | NEW | **Technical** | ~0.5 day |
+| F2 | asyncio.gather fan-out for N-stock comparisons | NEW | No | ~1 day |
+| F3 | ConcurrencyController: dynamic semaphore from fallback_rate | NEW | No | ~0.5 day |
+
+**Optional:** Single ReAct agent handles comparisons already (serially). Fan-out is a latency optimization, not a blocker.
+
+### Parking Lot (low priority, pick up when needed)
+- Schwab CSV import
+- Earnings card on stock detail (frontend, data exists)
+- Candlestick toggle (frontend, backend done)
+- Benchmark chart (frontend, backend done)
+- Admin LLM dashboard (frontend, data exists via admin endpoints)
