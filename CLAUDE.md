@@ -12,7 +12,8 @@ Before writing any code:
 5. Query JIRA board: `project = KAN AND status != Done ORDER BY rank ASC`
 6. Identify current phase of active Epics (Refinement? Implementation?)
 7. Pick next unblocked Subtask and present to PM for approval
-8. Run `uv run pytest tests/unit/ -v` — confirm baseline green
+8. **Local LLM triage** — before implementing, score the task (context_span + convention_density + ambiguity, each 1-5). If total ≤ 8 and LM Studio is running, present: "This scores X/15 — suitable for `/implement-local`. Delegate to local LLM? (y/n)". Always ask — never skip silently to Opus implementation.
+9. Run `uv run pytest tests/unit/ -v` — confirm baseline green
 
 ## Memory Map
 

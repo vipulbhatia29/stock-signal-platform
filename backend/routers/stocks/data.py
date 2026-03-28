@@ -334,6 +334,7 @@ async def get_stock_intelligence(
         fetch_eps_revisions,
         fetch_insider_transactions,
         fetch_next_earnings_date,
+        fetch_short_interest,
         fetch_upgrades_downgrades,
     )
 
@@ -347,11 +348,12 @@ async def get_stock_intelligence(
         if cached:
             return StockIntelligenceResponse.model_validate_json(cached)
 
-    upgrades, insider, earnings, eps = await asyncio.gather(
+    upgrades, insider, earnings, eps, short = await asyncio.gather(
         asyncio.to_thread(fetch_upgrades_downgrades, t),
         asyncio.to_thread(fetch_insider_transactions, t),
         asyncio.to_thread(fetch_next_earnings_date, t),
         asyncio.to_thread(fetch_eps_revisions, t),
+        asyncio.to_thread(fetch_short_interest, t),
     )
 
     response = StockIntelligenceResponse(
@@ -360,6 +362,7 @@ async def get_stock_intelligence(
         insider_transactions=insider,
         next_earnings_date=earnings,
         eps_revisions=eps,
+        short_interest=short,
         fetched_at=datetime.now(timezone.utc).isoformat(),
     )
     if cache:

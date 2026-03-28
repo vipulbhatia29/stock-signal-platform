@@ -87,3 +87,42 @@ class TestFetchNextEarningsDate:
         with patch("backend.tools.intelligence.yf.Ticker", return_value=mock_ticker):
             result = fetch_next_earnings_date("AAPL")
         assert result is None
+
+
+class TestFetchShortInterest:
+    """Tests for short interest data."""
+
+    def test_returns_short_data(self) -> None:
+        """Should return short interest metrics when available."""
+        from backend.tools.intelligence import fetch_short_interest
+
+        mock_ticker = MagicMock()
+        mock_ticker.info = {
+            "shortPercentOfFloat": 0.0423,
+            "shortRatio": 2.5,
+            "sharesShort": 15_000_000,
+        }
+        with patch("backend.tools.intelligence.yf.Ticker", return_value=mock_ticker):
+            result = fetch_short_interest("AAPL")
+        assert result is not None
+        assert result["short_percent_of_float"] == 4.23
+        assert result["short_ratio"] == 2.5
+        assert result["shares_short"] == 15_000_000
+
+    def test_no_short_data_returns_none(self) -> None:
+        """No short interest should return None."""
+        from backend.tools.intelligence import fetch_short_interest
+
+        mock_ticker = MagicMock()
+        mock_ticker.info = {}
+        with patch("backend.tools.intelligence.yf.Ticker", return_value=mock_ticker):
+            result = fetch_short_interest("AAPL")
+        assert result is None
+
+    def test_exception_returns_none(self) -> None:
+        """Should handle yfinance errors gracefully."""
+        from backend.tools.intelligence import fetch_short_interest
+
+        with patch("backend.tools.intelligence.yf.Ticker", side_effect=Exception("API error")):
+            result = fetch_short_interest("AAPL")
+        assert result is None

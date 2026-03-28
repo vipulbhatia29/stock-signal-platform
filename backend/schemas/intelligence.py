@@ -44,6 +44,14 @@ class InsiderTransaction(BaseModel):
     date: str
 
 
+class ShortInterest(BaseModel):
+    """Short interest metrics for a stock."""
+
+    short_percent_of_float: float
+    short_ratio: float | None = None
+    shares_short: int | None = None
+
+
 class StockIntelligenceResponse(BaseModel):
     """Response for GET /stocks/{ticker}/intelligence."""
 
@@ -52,4 +60,5 @@ class StockIntelligenceResponse(BaseModel):
     insider_transactions: list[InsiderTransaction]
     next_earnings_date: str | None = None
     eps_revisions: dict | None = None
+    short_interest: ShortInterest | None = None
     fetched_at: str
