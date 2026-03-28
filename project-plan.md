@@ -706,12 +706,12 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 
 #### Remaining Backlog (KAN-149–157 + Schwab Import)
 - [ ] **Schwab CSV Import** — parse Schwab "Positions" CSV export, create BUY transactions + auto-ingest tickers
-- [ ] KAN-149: Portfolio aggregation tool (superseded by KAN-160 portfolio_health)
-- [ ] KAN-150: Candlestick OHLC endpoint
+- [x] ~~KAN-149: Portfolio aggregation tool~~ — superseded by KAN-160 portfolio_health ✅ Closed (Session 64)
+- [x] KAN-150: Candlestick OHLC endpoint ✅ Session 64 — format=ohlc query param on GET /prices
 - [ ] KAN-151: Benchmark comparison endpoint
 - [ ] KAN-152: Google OAuth (PKCE flow)
 - [ ] KAN-153: Chat audit trail
-- [ ] KAN-154: Centralized input validation (partially addressed by KAN-158 guardrails)
+- [x] KAN-154: Centralized API input validation ✅ Session 64 — TickerPath, enum filters, dedup regex
 - [ ] KAN-155: Forecast blending into composite score
 - [ ] KAN-156: Red flag scanner (insider data now available via KAN-159)
 - [ ] KAN-157: Live LLM eval tests (CI_GROQ_API_KEY available)

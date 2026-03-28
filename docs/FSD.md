@@ -697,6 +697,21 @@ flowchart TD
 - `decline_count` tracked on ChatSession (migration 013) — excessive out-of-scope queries
 - Scope enforcement: financial-only queries, data-grounded responses, speculative/non-financial declined
 
+### FR-14.1: Centralized API Input Validation (KAN-154) ✅ IMPLEMENTED
+
+- `backend/validation.py` — single source of truth for all API input types
+- `TickerPath` Annotated type enforces `^[A-Za-z0-9.\-\^]{1,10}$` on all `{ticker}` path params
+- Signal enums (`RsiState`, `MacdState`, `SignalAction`, `ConfidenceLevel`) replace raw string query params
+- `SectorQuery` with `max_length=100` for sector filter
+- `TICKER_RE` shared between API validation and agent guardrails (deduplication)
+
+### FR-2.6: Candlestick OHLC Format (KAN-150) ✅ IMPLEMENTED
+
+- `GET /stocks/{ticker}/prices?format=ohlc` returns parallel arrays for candlestick charts
+- `PriceFormat` enum: `list` (default, backward-compatible) or `ohlc`
+- `OHLCResponse` schema: `{ ticker, period, count, timestamps[], open[], high[], low[], close[], volume[] }`
+- Same endpoint, same data, different shape — optimized for charting libraries
+
 ### FR-15: CacheService (Phase 6) ✅ IMPLEMENTED
 
 - 3-tier namespace: `app:` (shared), `user:{id}:` (per-user), `session:{id}:` (per-chat)

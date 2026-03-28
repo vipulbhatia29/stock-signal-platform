@@ -1215,3 +1215,41 @@ Executed all 12 tasks from plan serially using subagents. Each task: read source
 **CI:** All 6 checks passed (backend-lint, backend-test, frontend-lint, frontend-test, e2e-lint, agent regression)
 
 ---
+
+## Session 64 — 2026-03-28
+
+### Focus: Backlog triage + KAN-154 + KAN-150
+
+### JIRA Triage
+- **KAN-173** → Done (already shipped in PR #123, Session 61 — ticket missed)
+- **KAN-149** → Done (superseded by KAN-160 PortfolioHealthTool)
+- **KAN-154** — updated description with 5 specific gaps from audit, kept open
+- Board reduced from 14 → 12 open tickets
+
+### KAN-154: Centralized API Input Validation ✅
+- Created `backend/validation.py` — single source of truth:
+  - `TickerPath` Annotated type (regex + max 10 chars)
+  - `UUIDPath` Annotated type
+  - Signal enums: `RsiState`, `MacdState`, `SignalAction`, `ConfidenceLevel`
+  - Typed query helpers: `RsiStateQuery`, `MacdStateQuery`, `SectorQuery`, `ActionQuery`, `ConfidenceQuery`
+- Applied `TickerPath` across 7 router files (data, search, watchlist, recommendations, forecasts, portfolio)
+- Replaced raw `str | None` query params with typed enums in bulk signals + recommendations endpoints
+- Deduplicated `TICKER_RE`: removed from `guards.py` and `search.py`, import from `validation.py`
+- 23 new tests in `tests/unit/test_validation.py`
+
+### KAN-150: Candlestick OHLC Endpoint ✅
+- Added `PriceFormat` enum (list/ohlc) and `OHLCResponse` schema to `backend/schemas/stock.py`
+- Extended `GET /stocks/{ticker}/prices` with `format` query param
+- Default `format=list` preserves backward compatibility
+- `format=ohlc` returns parallel arrays (timestamps, open, high, low, close, volume)
+- 8 new tests (unit + API) in `tests/unit/test_ohlc_schema.py` and `tests/api/test_stocks.py`
+
+### Docs Updated
+- `docs/TDD.md` — §3.1.1 input validation section, §3.3 prices endpoint updated with format param
+- `docs/FSD.md` — FR-14.1 (input validation), FR-2.6 (OHLC format)
+- `project-plan.md` — KAN-149/150/154 marked complete
+- `PROGRESS.md` — this entry
+
+### Test Counts
+- 1005 unit tests (+31 new: 23 validation + 8 OHLC)
+- Branches: `feat/KAN-154-input-validation`, `feat/KAN-150-ohlc-endpoint`
