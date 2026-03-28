@@ -129,8 +129,9 @@ async def reload_llm_models(
 async def get_llm_metrics(
     request: Request,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> dict:
-    """Get real-time LLM metrics from the ObservabilityCollector."""
+    """Get LLM metrics from the llm_call_log table."""
     _require_admin(user)
     collector = getattr(request.app.state, "collector", None)
     if collector is None:
@@ -142,8 +143,8 @@ async def get_llm_metrics(
             "cascade_log": [],
             "fallback_rate_60s": 0.0,
         }
-    stats = collector.get_stats()
-    stats["fallback_rate_60s"] = collector.fallback_rate_last_60s()
+    stats = await collector.get_stats(db)
+    stats["fallback_rate_60s"] = await collector.fallback_rate_last_60s(db)
     return stats
 
 
@@ -156,8 +157,9 @@ async def get_llm_metrics(
 async def get_tier_health(
     request: Request,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> dict:
-    """Get per-model health classification."""
+    """Get per-model health classification from the DB."""
     _require_admin(user)
     collector = getattr(request.app.state, "collector", None)
     if collector is None:
@@ -165,7 +167,7 @@ async def get_tier_health(
             "tiers": [],
             "summary": {"total": 0, "healthy": 0, "degraded": 0, "down": 0, "disabled": 0},
         }
-    return collector.get_tier_health()
+    return await collector.get_tier_health(db)
 
 
 @router.post(

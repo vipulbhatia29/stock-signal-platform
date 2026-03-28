@@ -780,8 +780,8 @@ SaaS readiness scored **6.5/10**. Strong async foundation and user isolation, bu
 - [x] KAN-184: [Bug] MCP auth middleware ContextVar ✅ (Session 60, PR #120)
 - [x] KAN-185: Nightly pipeline parallelized ✅ (Session 60, PR #121)
 
-### Deliverables — Multi-Worker Architecture — Moved to SaaS Launch Roadmap
-- [ ] KAN-186: TokenBudget → Redis — **Moved to SaaS Launch Roadmap Phase A**
+### Deliverables — Multi-Worker Architecture — ✅ COMPLETE (SaaS Launch Roadmap Phase A)
+- [x] KAN-186: TokenBudget → Redis ✅ Session 67 (PR #138)
 
 ### Dependencies
 None — all findings are independent of feature backlog.
@@ -913,15 +913,15 @@ App running in cloud, MCP Tool Server as separate container, cost tracking live.
 
 Consolidated execution order. All prior phases complete. This is the critical path to multi-user SaaS launch.
 
-### Phase A: Multi-Worker Correctness (~3 days)
+### Phase A: Multi-Worker Correctness ✅ COMPLETE (Session 67, PR #138)
 > **No brainstorm needed** — spec exists (KAN-186 description), clear implementation.
 
 | # | Task | JIRA | Brainstorm? | Effort |
 |---|------|------|-------------|--------|
-| A1 | TokenBudget sliding windows → Redis sorted sets | KAN-186 | No | ~2 days |
-| A2 | ObservabilityCollector admin metrics → read from llm_call_log DB | KAN-186 | No | ~1 day |
+| A1 | TokenBudget sliding windows → Redis sorted sets | KAN-186 ✅ | No | ~2 days |
+| A2 | ObservabilityCollector admin metrics → read from llm_call_log DB | KAN-186 ✅ | No | ~1 day |
 
-**Why first:** Without this, 2+ Uvicorn workers = 2× overspend on LLM rate limits. Correctness blocker.
+**Why first:** Without this, 2+ Uvicorn workers = 2× overspend on LLM rate limits. Correctness blocker. **RESOLVED.**
 
 ### Phase B: Agent Reliability (~2 days)
 > **Technical brainstorm needed** — eval framework, test cases, scoring rubric for ReAct loop.

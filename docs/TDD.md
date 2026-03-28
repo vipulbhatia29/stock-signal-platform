@@ -632,12 +632,12 @@ POST /api/v1/admin/llm-models/reload
 GET /api/v1/admin/llm-metrics
   Response: { requests_by_model, cascade_count, cascades_by_model, rpm_by_model, cascade_log }
   Auth:     Required (role=ADMIN)
-  Notes:    Real-time in-memory metrics from ObservabilityCollector. Includes `fallback_rate_60s` (Session 62).
+  Notes:    DB-backed metrics from llm_call_log table (cross-worker ground truth). Includes `fallback_rate_60s`. Migrated from in-memory to DB reads in Session 67 (KAN-186).
 
 GET /api/v1/admin/tier-health
   Response: { tiers: [{ model, status, failures_5m, successes_5m, cascade_count, latency: { avg_ms, p95_ms } }], summary: { total, healthy, degraded, down, disabled } }
   Auth:     Required (role=ADMIN)
-  Notes:    Per-model health classification (healthy/degraded/down/disabled).
+  Notes:    Per-model health classification (healthy/degraded/down/disabled). DB-backed reads (Session 67).
 
 POST /api/v1/admin/tier-toggle
   Body:     { model: string, enabled: boolean }
@@ -944,7 +944,7 @@ Provider-agnostic abstraction with data-driven multi-model cascade.
 **LLM Factory Architecture:**
 - `llm_model_config` table stores cascade configuration (provider, model, tier, priority, limits, costs)
 - `ModelConfigLoader` (`backend/agents/model_config.py`) reads DB → groups by tier → caches in memory
-- `TokenBudget` (`backend/agents/token_budget.py`) async sliding-window rate tracker (TPM/RPM/TPD/RPD, 80% threshold)
+- `TokenBudget` (`backend/agents/token_budget.py`) Redis-backed sliding-window rate tracker (TPM/RPM/TPD/RPD, 80% threshold, Lua scripts for atomic ops, fail-open on Redis errors). Migrated from in-memory deques in Session 67 (KAN-186).
 - `GroqProvider` (`backend/providers/groq.py`) cascades through models in priority order per tier
 
 **Cascade flow:**

@@ -1,8 +1,10 @@
-"""ObservabilityCollector — in-memory real-time metrics for agent pipeline.
+"""ObservabilityCollector — DB-backed metrics for agent pipeline.
 
-Tracks LLM request counts, cascade events, per-model latency, and
-health classification. Optionally writes events to LLMCallLog and
-ToolExecutionLog tables asynchronously (fire-and-forget).
+Write path: fire-and-forget async inserts into LLMCallLog / ToolExecutionLog
+(unchanged from the original in-memory design).
+
+Read path (get_stats, get_tier_health, fallback_rate): queries the
+llm_call_log table — the single source of truth across all workers.
 """
 
 from __future__ import annotations
@@ -13,33 +15,38 @@ import time
 from collections import deque
 from typing import Any
 
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.models.logs import LLMCallLog
+
 logger = logging.getLogger(__name__)
 
-_RPM_WINDOW_S = 60
-_HEALTH_WINDOW_S = 300  # 5 minutes
-_LATENCY_MAXLEN = 100
 _CASCADE_LOG_MAXLEN = 1000
+_HEALTH_WINDOW_S = 300  # 5 minutes
+_RPM_WINDOW_S = 60
 
 
 class ObservabilityCollector:
-    """Async-safe in-memory metrics collector for LLM and tool events."""
+    """Metrics collector for LLM and tool events.
+
+    Writes are fire-and-forget (unchanged).
+    Reads query the llm_call_log table for cross-worker accuracy.
+    """
 
     def __init__(self) -> None:
-        self._lock = asyncio.Lock()
-        self._requests_by_model: dict[str, int] = {}
-        self._cascade_count: int = 0
-        self._cascades_by_model: dict[str, int] = {}
-        self._rpm_windows: dict[str, deque[float]] = {}
-        self._failures_windows: dict[str, deque[float]] = {}
-        self._successes_windows: dict[str, deque[float]] = {}
-        self._latency_by_model: dict[str, deque[int]] = {}
-        self._cascade_log: deque[dict[str, Any]] = deque(maxlen=_CASCADE_LOG_MAXLEN)
         self._disabled_models: set[str] = set()
         self._db_writer: Any = None
+        # In-memory cascade log kept for quick admin debugging (bounded deque)
+        self._cascade_log: deque[dict[str, Any]] = deque(maxlen=_CASCADE_LOG_MAXLEN)
 
     def set_db_writer(self, writer: Any) -> None:
         """Inject the async DB write function (set during app lifespan)."""
         self._db_writer = writer
+
+    # ------------------------------------------------------------------
+    # Write path — fire-and-forget (unchanged)
+    # ------------------------------------------------------------------
 
     async def record_request(
         self,
@@ -53,19 +60,6 @@ class ObservabilityCollector:
         loop_step: int | None = None,
     ) -> None:
         """Record a successful LLM request."""
-        now = time.monotonic()
-        async with self._lock:
-            self._requests_by_model[model] = self._requests_by_model.get(model, 0) + 1
-            if model not in self._rpm_windows:
-                self._rpm_windows[model] = deque()
-            self._rpm_windows[model].append(now)
-            if model not in self._successes_windows:
-                self._successes_windows[model] = deque()
-            self._successes_windows[model].append(now)
-            if model not in self._latency_by_model:
-                self._latency_by_model[model] = deque(maxlen=_LATENCY_MAXLEN)
-            self._latency_by_model[model].append(latency_ms)
-
         if self._db_writer:
             asyncio.create_task(
                 self._safe_db_write(
@@ -92,22 +86,15 @@ class ObservabilityCollector:
         tier: str,
     ) -> None:
         """Record a cascade event (model skipped)."""
-        now = time.monotonic()
-        async with self._lock:
-            self._cascade_count += 1
-            self._cascades_by_model[from_model] = self._cascades_by_model.get(from_model, 0) + 1
-            if from_model not in self._failures_windows:
-                self._failures_windows[from_model] = deque()
-            self._failures_windows[from_model].append(now)
-            self._cascade_log.append(
-                {
-                    "model": from_model,
-                    "reason": reason,
-                    "provider": provider,
-                    "tier": tier,
-                    "timestamp": now,
-                }
-            )
+        self._cascade_log.append(
+            {
+                "model": from_model,
+                "reason": reason,
+                "provider": provider,
+                "tier": tier,
+                "timestamp": time.time(),
+            }
+        )
 
         if self._db_writer:
             asyncio.create_task(
@@ -155,68 +142,128 @@ class ObservabilityCollector:
             )
 
     def toggle_model(self, model: str, *, enabled: bool) -> None:
-        """Enable or disable a model at runtime (admin action)."""
+        """Enable or disable a model at runtime (admin action, in-memory)."""
         if enabled:
             self._disabled_models.discard(model)
         else:
             self._disabled_models.add(model)
 
-    def get_stats(self) -> dict[str, Any]:
-        """Return current in-memory metrics snapshot."""
-        now = time.monotonic()
-        rpm: dict[str, int] = {}
-        for model, window in self._rpm_windows.items():
-            self._prune_window(window, now, _RPM_WINDOW_S)
-            rpm[model] = len(window)
+    # ------------------------------------------------------------------
+    # Read path — queries llm_call_log (cross-worker ground truth)
+    # ------------------------------------------------------------------
+
+    async def get_stats(self, db: AsyncSession) -> dict[str, Any]:
+        """Return metrics snapshot from the llm_call_log table."""
+        cutoff_60s = text("now() - interval '60 seconds'")
+
+        # Total requests by model (all time)
+        req_stmt = (
+            select(LLMCallLog.model, func.count().label("cnt"))
+            .where(LLMCallLog.error.is_(None))
+            .group_by(LLMCallLog.model)
+        )
+        req_result = await db.execute(req_stmt)
+        requests_by_model = {r.model: r.cnt for r in req_result.all()}
+
+        # Total cascade count + per-model
+        casc_stmt = (
+            select(LLMCallLog.model, func.count().label("cnt"))
+            .where(LLMCallLog.error.is_not(None))
+            .group_by(LLMCallLog.model)
+        )
+        casc_result = await db.execute(casc_stmt)
+        cascades_by_model = {r.model: r.cnt for r in casc_result.all()}
+        cascade_count = sum(cascades_by_model.values())
+
+        # RPM by model (last 60s, successes only)
+        rpm_stmt = (
+            select(LLMCallLog.model, func.count().label("cnt"))
+            .where(LLMCallLog.error.is_(None), LLMCallLog.created_at >= cutoff_60s)
+            .group_by(LLMCallLog.model)
+        )
+        rpm_result = await db.execute(rpm_stmt)
+        rpm_by_model = {r.model: r.cnt for r in rpm_result.all()}
+
         return {
-            "requests_by_model": dict(self._requests_by_model),
-            "cascade_count": self._cascade_count,
-            "cascades_by_model": dict(self._cascades_by_model),
-            "rpm_by_model": rpm,
+            "requests_by_model": requests_by_model,
+            "cascade_count": cascade_count,
+            "cascades_by_model": cascades_by_model,
+            "rpm_by_model": rpm_by_model,
             "cascade_log": list(self._cascade_log)[-50:],
         }
 
-    def get_tier_health(self) -> dict[str, Any]:
-        """Return per-model health classification with latency stats."""
-        now = time.monotonic()
-        tiers: list[dict[str, Any]] = []
-        all_models = (
-            set(self._requests_by_model.keys())
-            | set(self._cascades_by_model.keys())
-            | self._disabled_models
+    async def get_tier_health(self, db: AsyncSession) -> dict[str, Any]:
+        """Return per-model health classification from the DB."""
+        cutoff_5m = text("now() - interval '5 minutes'")
+
+        # Failures in last 5 min by model
+        fail_stmt = (
+            select(LLMCallLog.model, func.count().label("cnt"))
+            .where(LLMCallLog.error.is_not(None), LLMCallLog.created_at >= cutoff_5m)
+            .group_by(LLMCallLog.model)
         )
+        fail_result = await db.execute(fail_stmt)
+        failures_5m = {r.model: r.cnt for r in fail_result.all()}
+
+        # Successes in last 5 min by model
+        succ_stmt = (
+            select(LLMCallLog.model, func.count().label("cnt"))
+            .where(LLMCallLog.error.is_(None), LLMCallLog.created_at >= cutoff_5m)
+            .group_by(LLMCallLog.model)
+        )
+        succ_result = await db.execute(succ_stmt)
+        successes_5m = {r.model: r.cnt for r in succ_result.all()}
+
+        # Latency stats (last 100 per model)
+        latency_stmt = (
+            select(
+                LLMCallLog.model,
+                func.avg(LLMCallLog.latency_ms).label("avg_ms"),
+                func.percentile_cont(0.95).within_group(LLMCallLog.latency_ms).label("p95_ms"),
+            )
+            .where(LLMCallLog.error.is_(None), LLMCallLog.latency_ms.is_not(None))
+            .group_by(LLMCallLog.model)
+        )
+        lat_result = await db.execute(latency_stmt)
+        latency_map: dict[str, dict[str, int]] = {}
+        for r in lat_result.all():
+            latency_map[r.model] = {
+                "avg_ms": round(r.avg_ms) if r.avg_ms else 0,
+                "p95_ms": round(r.p95_ms) if r.p95_ms else 0,
+            }
+
+        # All-time cascade count by model (for the cascade_count field)
+        all_casc_stmt = (
+            select(LLMCallLog.model, func.count().label("cnt"))
+            .where(LLMCallLog.error.is_not(None))
+            .group_by(LLMCallLog.model)
+        )
+        all_casc_result = await db.execute(all_casc_stmt)
+        all_cascades = {r.model: r.cnt for r in all_casc_result.all()}
+
+        all_models = set(failures_5m) | set(successes_5m) | set(latency_map) | self._disabled_models
+        tiers: list[dict[str, Any]] = []
         for model in sorted(all_models):
-            failures = self._failures_windows.get(model, deque())
-            self._prune_window(failures, now, _HEALTH_WINDOW_S)
-            successes = self._successes_windows.get(model, deque())
-            self._prune_window(successes, now, _HEALTH_WINDOW_S)
+            fail_count = failures_5m.get(model, 0)
             if model in self._disabled_models:
                 status = "disabled"
-            elif len(failures) >= 4:
+            elif fail_count >= 4:
                 status = "down"
-            elif len(failures) >= 1:
+            elif fail_count >= 1:
                 status = "degraded"
             else:
                 status = "healthy"
-            latencies = list(self._latency_by_model.get(model, []))
-            if latencies:
-                avg_ms = sum(latencies) // len(latencies)
-                sorted_lat = sorted(latencies)
-                p95_idx = int(len(sorted_lat) * 0.95)
-                p95_ms = sorted_lat[min(p95_idx, len(sorted_lat) - 1)]
-            else:
-                avg_ms = 0
-                p95_ms = 0
             tiers.append(
                 {
                     "model": model,
                     "status": status,
-                    "failures_5m": len(failures),
-                    "successes_5m": len(successes),
-                    "cascade_count": self._cascades_by_model.get(model, 0),
-                    "latency": {"avg_ms": avg_ms, "p95_ms": p95_ms},
+                    "failures_5m": fail_count,
+                    "successes_5m": successes_5m.get(model, 0),
+                    "cascade_count": all_cascades.get(model, 0),
+                    "latency": latency_map.get(model, {"avg_ms": 0, "p95_ms": 0}),
                 }
             )
+
         summary = {
             "total": len(tiers),
             "healthy": sum(1 for t in tiers if t["status"] == "healthy"),
@@ -226,25 +273,25 @@ class ObservabilityCollector:
         }
         return {"tiers": tiers, "summary": summary}
 
-    def fallback_rate_last_60s(self) -> float:
-        """Fraction of LLM calls that cascaded/failed in the last 60 seconds.
+    async def fallback_rate_last_60s(self, db: AsyncSession) -> float:
+        """Fraction of LLM calls that cascaded in the last 60 seconds."""
+        cutoff = text("now() - interval '60 seconds'")
 
-        Includes both intra-provider cascades (Groq model→model) and
-        cross-provider cascades (Groq→Anthropic) when LLMClient records them.
-        """
-        now = time.monotonic()
-        total_failures = 0
-        total_successes = 0
-        for window in self._failures_windows.values():
-            self._prune_window(window, now, _RPM_WINDOW_S)
-            total_failures += len(window)
-        for window in self._successes_windows.values():
-            self._prune_window(window, now, _RPM_WINDOW_S)
-            total_successes += len(window)
-        total = total_failures + total_successes
+        stmt = select(
+            func.count().label("total"),
+            func.count().filter(LLMCallLog.error.is_not(None)).label("failures"),
+        ).where(LLMCallLog.created_at >= cutoff)
+
+        result = await db.execute(stmt)
+        row = result.one()
+        total = row.total or 0
         if total == 0:
             return 0.0
-        return total_failures / total
+        return (row.failures or 0) / total
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
 
     async def _safe_db_write(self, event_type: str, data: dict) -> None:
         """Write to DB, swallowing all errors."""
@@ -252,10 +299,3 @@ class ObservabilityCollector:
             await self._db_writer(event_type, data)
         except Exception:
             logger.warning("Failed to write %s event to DB", event_type, exc_info=True)
-
-    @staticmethod
-    def _prune_window(window: deque, now: float, max_age_s: float) -> None:
-        """Remove entries older than max_age_s from a timestamp deque."""
-        cutoff = now - max_age_s
-        while window and window[0] < cutoff:
-            window.popleft()

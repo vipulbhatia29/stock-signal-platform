@@ -1,5 +1,6 @@
 """Tests for observability instrumentation in GroqProvider."""
 
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -13,8 +14,11 @@ class TestGroqProviderObservability:
 
     @pytest.mark.asyncio
     async def test_successful_call_records_request(self) -> None:
-        """A successful Groq call should record a request event."""
+        """A successful Groq call should fire a DB write for the request."""
         collector = ObservabilityCollector()
+        writer = AsyncMock()
+        collector.set_db_writer(writer)
+
         from backend.agents.providers.groq import GroqProvider
 
         provider = GroqProvider(api_key="test-key", models=["model-a"])
@@ -31,13 +35,20 @@ class TestGroqProviderObservability:
         ):
             await provider.chat(messages=[{"role": "user", "content": "hi"}], tools=[])
 
-        stats = collector.get_stats()
-        assert stats["requests_by_model"]["model-a"] == 1
+        # Wait for fire-and-forget task
+        await asyncio.sleep(0.05)
+        writer.assert_called()
+        call_data = writer.call_args[0][1]
+        assert call_data["model"] == "model-a"
+        assert call_data["error"] is None
 
     @pytest.mark.asyncio
     async def test_cascade_records_event(self) -> None:
-        """When a model fails and cascades, a cascade event should be recorded."""
+        """When a model fails and cascades, cascade + success events should be recorded."""
         collector = ObservabilityCollector()
+        writer = AsyncMock()
+        collector.set_db_writer(writer)
+
         from backend.agents.providers.groq import GroqProvider
 
         provider = GroqProvider(api_key="test-key", models=["model-a", "model-b"])
@@ -61,10 +72,15 @@ class TestGroqProviderObservability:
         with patch.object(provider, "_call_model", side_effect=_side_effect):
             await provider.chat(messages=[{"role": "user", "content": "hi"}], tools=[])
 
-        stats = collector.get_stats()
-        assert stats["cascade_count"] == 1
-        assert stats["cascades_by_model"]["model-a"] == 1
-        assert stats["requests_by_model"]["model-b"] == 1
+        # Wait for fire-and-forget tasks
+        await asyncio.sleep(0.05)
+
+        # Cascade recorded in in-memory log
+        assert len(collector._cascade_log) == 1
+        assert collector._cascade_log[0]["model"] == "model-a"
+
+        # DB writer called for cascade (error) + success
+        assert writer.call_count == 2
 
     @pytest.mark.asyncio
     async def test_no_collector_still_works(self) -> None:

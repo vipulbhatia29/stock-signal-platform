@@ -85,9 +85,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     async with async_session_factory() as config_session:
         tier_configs = await config_loader.load(config_session)
 
-    token_budget = TokenBudget()
+    # Shared Redis pool — used by cache, token budget, blocklist
+    from backend.services.cache import CacheService
+    from backend.services.redis_pool import get_redis
 
-    # Observability collector — in-memory metrics + fire-and-forget DB writes
+    cache_redis = await get_redis()
+
+    token_budget = TokenBudget(redis=cache_redis)
+
+    # Observability collector — fire-and-forget writes + DB-backed reads
     from backend.agents.observability import ObservabilityCollector
     from backend.agents.observability_writer import write_event
 
@@ -96,10 +102,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.collector = collector
 
     # Cache service — Redis cache-aside with TTL tiers
-    from backend.services.cache import CacheService
-    from backend.services.redis_pool import get_redis
-
-    cache_redis = await get_redis()
     cache_service = CacheService(cache_redis)
     app.state.cache = cache_service
     logger.info("CacheService initialized")

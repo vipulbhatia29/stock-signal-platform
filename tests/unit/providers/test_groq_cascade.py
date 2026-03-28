@@ -9,14 +9,52 @@ from backend.agents.providers.groq import GroqProvider, _classify_error
 from backend.agents.token_budget import ModelLimits, TokenBudget
 
 
+class FakeRedis:
+    """Minimal in-memory Redis substitute for sorted-set + script operations."""
+
+    def __init__(self):
+        self._data: dict[str, list[tuple[float, str]]] = {}
+        self._scripts: dict[str, str] = {}
+        self._next_sha = 0
+
+    async def script_load(self, script: str) -> str:
+        """Store script and return a fake SHA."""
+        sha = f"sha_{self._next_sha}"
+        self._next_sha += 1
+        self._scripts[sha] = script
+        return sha
+
+    async def evalsha(self, sha: str, numkeys: int, *args) -> int:
+        """Execute the cached Lua script logic in Python."""
+        script = self._scripts[sha]
+        key = args[0]
+        if "ZREMRANGEBYSCORE" in script and "ZADD" not in script:
+            cutoff = float(args[1])
+            entries = self._data.get(key, [])
+            self._data[key] = [(s, m) for s, m in entries if s > cutoff]
+            total = 0
+            for _, member in self._data.get(key, []):
+                total += int(member.rsplit(":", 1)[-1])
+            return total
+        elif "ZADD" in script:
+            score = float(args[1])
+            member = args[2]
+            if key not in self._data:
+                self._data[key] = []
+            self._data[key].append((score, member))
+            return 1
+        return 0
+
+
 @pytest.fixture
 def budget():
-    """Budget with limits for test models."""
+    """Budget with limits for test models backed by fake Redis."""
     return TokenBudget(
+        redis=FakeRedis(),
         limits={
             "model-1": ModelLimits(tpm=10000, rpm=30, tpd=100000, rpd=1000),
             "model-2": ModelLimits(tpm=5000, rpm=30, tpd=50000, rpd=1000),
-        }
+        },
     )
 
 
