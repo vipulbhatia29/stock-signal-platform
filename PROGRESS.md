@@ -1253,3 +1253,65 @@ Executed all 12 tasks from plan serially using subagents. Each task: read source
 ### Test Counts
 - 1005 unit tests (+31 new: 23 validation + 8 OHLC)
 - Branches: `feat/KAN-154-input-validation`, `feat/KAN-150-ohlc-endpoint`
+
+---
+
+## Session 67 — 2026-03-28
+
+### Focus: KAN-186 — TokenBudget → Redis + ObservabilityCollector → DB reads
+
+### SaaS Launch Roadmap Phase A: Multi-Worker Correctness ✅ COMPLETE
+
+**Problem:** TokenBudget used in-memory Python deques with asyncio.Lock — each Uvicorn worker had independent budget state, causing 2× overspend on Groq rate limits with 2+ workers. ObservabilityCollector admin metrics also per-process, losing accuracy across workers.
+
+### KAN-186 Implementation
+
+#### TokenBudget → Redis Sorted Sets
+- **Rewrote** `backend/agents/token_budget.py` — replaced `_ModelState` + in-memory deques + `asyncio.Lock` with Redis sorted sets
+- **Lua scripts** for atomic operations:
+  - Prune-and-sum: `ZREMRANGEBYSCORE` + `ZRANGEBYSCORE` in one atomic script
+  - Record: `ZADD` + `EXPIRE` for automatic TTL cleanup
+- **Key pattern:** `budget:{model}:{window_type}` (e.g., `budget:llama-3.3-70b:minute_tokens`)
+- **Members stored as:** `{uuid12}:{count}` — parsed via Lua `string.match(v, ':(%d+)$')`
+- **TTLs:** `_MINUTE + 10` (70s) for minute windows, `_DAY + 60` (86460s) for day windows
+- **Fail-open:** Redis=None → allow request; Redis error → allow request + log warning
+- **NOSCRIPT recovery:** On any Redis error, `_invalidate_scripts()` clears cached Lua SHAs so they re-register on next call (handles Redis restart)
+- **Wall clock:** Uses `time.time()` (not `monotonic()`) for cross-worker timestamp agreement
+- **Public API unchanged:** `can_afford()`, `record()`, `estimate_tokens()`, `load_limits()`, `set_redis()`
+
+#### ObservabilityCollector → DB Reads
+- **Rewrote** `backend/agents/observability.py` read path:
+  - `get_stats(db)` — queries `llm_call_log` for request counts, cascade counts, RPM (3 queries)
+  - `get_tier_health(db)` — queries failures/successes in 5min, latency stats with `percentile_cont(0.95)`, cascade counts (4 queries)
+  - `fallback_rate_last_60s(db)` — single aggregate query (1 query)
+- **Write path unchanged:** fire-and-forget `asyncio.create_task` → `_safe_db_write`
+- **In-memory state kept:** `_cascade_log` (bounded deque for admin debugging), `_disabled_models` (runtime toggle)
+- **Removed:** `_requests_by_model`, `_cascade_count`, `_cascades_by_model`, `_rpm_windows`, `_failures_windows`, `_successes_windows`, `_latency_by_model`, `_lock`
+
+#### Integration Changes
+- `backend/main.py` — Redis pool injected into TokenBudget at startup (reordered: Redis init → TokenBudget → ObservabilityCollector → CacheService)
+- `backend/routers/admin.py` — `get_llm_metrics` + `get_tier_health` now accept `db: AsyncSession` and pass to collector
+
+#### Tests
+- `test_token_budget.py` — 16 tests with `FakeRedis` class (sorted set simulation). +5 new: fail-open, Redis error, no-Redis noop, set_redis injection, NOSCRIPT recovery
+- `test_observability.py` — 14 tests with mock DB sessions. Covers empty DB, populated data, health classification, fallback rate, cascade log, loop_step passthrough
+- `test_groq_observability.py` — updated to verify writes via DB writer mock (not `get_stats()`)
+- `test_groq_cascade.py` — added `FakeRedis` fixture for budget tests
+
+#### Code Review Findings
+| Finding | Severity | Resolution |
+|---------|----------|------------|
+| NOSCRIPT after Redis restart | Important | Fixed — `_invalidate_scripts()` clears SHAs on error |
+| Pipeline 4 Redis calls per op | Nice-to-have | Deferred — not a bottleneck at current Groq rates |
+| Integration test with real Redis TTL | Nice-to-have | Deferred — belongs in KAN-212 test hardening |
+| Per-worker cascade log | Documentation | Acceptable — counts from DB, only debug log is per-worker |
+
+### Docs Updated
+- `project-plan.md` — Phase A marked complete, KAN-186 checked off in Phase 7.6
+- `docs/TDD.md` — §3.13 admin endpoints updated (DB-backed), §5.4 TokenBudget description updated (Redis-backed)
+- `PROGRESS.md` — this entry
+
+### Test Counts
+- 1045 unit tests (+1 new: NOSCRIPT recovery) + 107 frontend = 1152 total
+- Branch: `feat/KAN-186-token-budget-redis`
+- Alembic head: `1a001d6d3535` (migration 014 — unchanged, no new migration needed)
