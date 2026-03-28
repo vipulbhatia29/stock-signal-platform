@@ -4,7 +4,7 @@
 
 **Version:** 2.0
 **Date:** March 2026
-**Status:** Living Document — Phases 1-7.6 complete, service layer extracted. Phase 8 (Observability + Agent Redesign) planned.
+**Status:** Living Document — Phases 1-8 complete. ReAct agent loop shipped (Session 63).
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -443,15 +443,18 @@ Users can override weights via UserPreference.composite_weights.
 - User selects agent type per conversation
 - Agent type bound at session creation (cannot switch mid-session)
 
-**FR-8.2: Tool Orchestration**
+**FR-8.2: Tool Orchestration (Phase 8B+8C ✅ ReAct redesign)**
 - Tool Registry with 24 internal tools and 4 MCPAdapter external sources
-- Plan→Execute→Synthesize three-phase architecture (V1 ReAct loop removed in Phase 6A):
-  - Planner (LLM, tier=planner): classifies intent, generates ordered tool plan (max 10 steps)
-  - Executor (mechanical, no LLM): runs tools via registry, $PREV_RESULT resolution, retries, circuit breaker
-  - Synthesizer (LLM, tier=synthesizer): confidence scoring, bull/base/bear scenarios, evidence tree with citations
+- **Intent Classifier** (rule-based, 0 LLM): routes queries to filtered tool groups (stock=8, portfolio=8, market=5, comparison=5, simple_lookup=1, general=all)
+- **Fast path**: simple lookups (e.g., "AAPL price") → direct tool call + template, 0 LLM calls
+- **ReAct loop** (feature-flagged `REACT_AGENT=true`, default):
+  - LLM reasons over scratchpad → decides which tools to call → observes results → repeats or finishes
+  - Parallel tool execution via asyncio.gather (capped at 4 per iteration)
+  - Limits: MAX_ITERATIONS=8, MAX_TOOL_CALLS=12, WALL_CLOCK_TIMEOUT=45s, CIRCUIT_BREAKER=3
+- Old Plan→Execute→Synthesize pipeline available behind `REACT_AGENT=false`
 - All data in responses must come from tool results (no hallucination)
-- If a tool fails, result marked "unavailable" with reason; synthesizer acknowledges gap
-- Scope enforcement: financial-only queries. Non-financial/speculative queries declined gracefully.
+- If a tool fails, result marked "unavailable" with reason; LLM acknowledges gap
+- Scope enforcement: financial-only queries. Non-financial/speculative queries declined gracefully via intent classifier
 - Phase 4D tools (get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile) read from DB — data materialized during ingestion
 
 **FR-8.3: External Data Integration (5 layers)**

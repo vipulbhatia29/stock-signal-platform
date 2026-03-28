@@ -7,7 +7,7 @@ These decisions are load-bearing — changing them requires a new ADR, not a sil
 
 ## ADR-001: Pure Async Generator for ReAct Loop (not LangGraph)
 
-**Date:** 2026-03-27 | **Status:** Accepted | **Context:** Phase 8B (KAN-189)
+**Date:** 2026-03-27 | **Status:** Implemented (Session 63, PR #128) | **Context:** Phase 8B (KAN-189)
 
 ### Decision
 Use a pure async generator function for the single-agent ReAct loop. Reserve LangGraph for the multi-agent orchestrator (Phase 9A).
@@ -34,7 +34,7 @@ Use a pure async generator function for the single-agent ReAct loop. Reserve Lan
 
 ## ADR-002: Native Tool Use API (not JSON-in-Content)
 
-**Date:** 2026-03-27 | **Status:** Accepted | **Context:** Phase 8B (KAN-189)
+**Date:** 2026-03-27 | **Status:** Implemented (Session 63) | **Context:** Phase 8B (KAN-189)
 
 ### Decision
 Use provider-native function calling (tool_use API) for the ReAct loop, not JSON-in-content parsing.
@@ -61,7 +61,7 @@ Use provider-native function calling (tool_use API) for the ReAct loop, not JSON
 
 ## ADR-003: Parallel Tool Calls (LLM-Decided, Capped)
 
-**Date:** 2026-03-27 | **Status:** Accepted | **Context:** Phase 8B (KAN-189)
+**Date:** 2026-03-27 | **Status:** Implemented (Session 63) | **Context:** Phase 8B (KAN-189)
 
 ### Decision
 Allow the LLM to return multiple tool calls per iteration. Execute them concurrently via `asyncio.gather`. Cap at MAX_PARALLEL_TOOLS = 4.
@@ -97,7 +97,7 @@ Allow the LLM to return multiple tool calls per iteration. Execute them concurre
 
 ## ADR-004: Pre-Router Fast Path for Simple Lookups
 
-**Date:** 2026-03-27 | **Status:** Accepted | **Context:** Phase 8B + 8C (KAN-189)
+**Date:** 2026-03-27 | **Status:** Implemented (Session 63) | **Context:** Phase 8B + 8C (KAN-189)
 
 ### Decision
 Keep a fast path that bypasses the ReAct loop for simple lookups. The 8C intent classifier routes `simple_lookup` queries directly to tool + template formatting — zero LLM calls.
@@ -130,7 +130,7 @@ This makes 8C (tool filtering + intent classifier) a **prerequisite** for 8B (Re
 
 ## ADR-005: 8C Before 8B (Tool Filtering is a Prerequisite)
 
-**Date:** 2026-03-27 | **Status:** Accepted | **Context:** Phase 8B + 8C (KAN-189)
+**Date:** 2026-03-27 | **Status:** Implemented (Session 63) | **Context:** Phase 8B + 8C (KAN-189)
 
 ### Decision
 Build the intent classifier and tool filtering (8C) before the ReAct loop (8B).
@@ -160,7 +160,7 @@ Phase 8B (~16h):
 
 ## ADR-006: Scratchpad Optimization Strategy
 
-**Date:** 2026-03-27 | **Status:** Accepted | **Context:** Phase 8B (KAN-189)
+**Date:** 2026-03-27 | **Status:** Implemented (Session 63) | **Context:** Phase 8B (KAN-189)
 
 ### Decision
 Truncate older tool results in the scratchpad to manage token cost growth. Keep latest results full, compress older ones.
@@ -180,7 +180,7 @@ Option 1 is low-effort and sufficient. At MAX_ITERATIONS=8 with truncation, wors
 
 ## ADR-007: Observability Wiring for ReAct
 
-**Date:** 2026-03-27 | **Status:** Accepted | **Context:** Phase 8B (KAN-189), builds on KAN-190
+**Date:** 2026-03-27 | **Status:** Implemented (Session 63) | **Context:** Phase 8B (KAN-189), builds on KAN-190
 
 ### Decision
 Wire `loop_step` into the observability writer. Use `tier="reason"` for all ReAct LLM calls.
@@ -203,7 +203,7 @@ KAN-190 (Session 62) pre-added `loop_step` (Integer, nullable) and `agent_instan
 
 ## ADR-008: Portfolio Query Handling in ReAct
 
-**Date:** 2026-03-27 | **Status:** Accepted | **Context:** Phase 8B (KAN-189)
+**Date:** 2026-03-27 | **Status:** Implemented (Session 63) | **Context:** Phase 8B (KAN-189)
 
 ### Decision
 Portfolio queries use the same ReAct loop with portfolio-filtered tool set. The LLM adaptively drills into problem areas.

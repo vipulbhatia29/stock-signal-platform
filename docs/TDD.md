@@ -4,7 +4,7 @@
 
 **Version:** 2.0
 **Date:** March 2026
-**Status:** Living Document — Phases 1-7.6 complete, service layer extracted (Session 61). Phase 8 (Observability + Agent Redesign) planned.
+**Status:** Living Document — Phases 1-8 complete. Phase 8A (observability), 8C (intent classifier), 8B (ReAct loop) all shipped (Session 63).
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -72,10 +72,12 @@ graph TB
         end
 
         subgraph Agents["Agent Layer"]
+            IC["IntentClassifier<br/>Rule-based routing"]
+            TG["ToolGroups<br/>Intent→tool filtering"]
+            RL["ReAct Loop<br/>Reason⇄Act generator"]
             TR["ToolRegistry"]
-            AG_V2["Agent V2<br/>Plan→Execute→Synthesize"]
             ER["EntityRegistry"]
-            LLM["LLMClient<br/>Groq→Claude→Local"]
+            LLM["LLMClient<br/>Groq→Claude→OpenAI"]
         end
     end
 
@@ -437,7 +439,9 @@ POST /api/v1/chat/stream
   Request:  { message: string, session_id?: uuid, agent_type: "general"|"stock" }
   Response: NDJSON stream of events (see §3.6.1)
   Auth:     Required (httpOnly cookie)
-  Behavior: Uses Plan→Execute→Synthesize graph (§5.5).
+  Behavior: Uses ReAct loop (§5.5) when REACT_AGENT=true (default).
+            Intent classifier routes: simple_lookup → fast path (0 LLM), out_of_scope → decline,
+            complex → ReAct loop with filtered tool group.
             User context (portfolio, preferences, watchlist) injected automatically.
             query_id (UUID) generated per request for trace correlation.
 ```
@@ -445,14 +449,21 @@ POST /api/v1/chat/stream
 ### 3.6.1 NDJSON Stream Events (Phase 4C + 4D)
 
 ```
-Stream Events (Plan→Execute→Synthesize graph):
+Stream Events (ReAct loop, REACT_AGENT=true):
+  { type: "thinking", content: "Let me check AAPL's fundamentals..." }  # Per-iteration reasoning
+  { type: "tool_start", tool: "analyze_stock", params: {...} }
+  { type: "tool_result", tool: "...", status: "ok", data: {...} }
+  { type: "tool_error", tool: "...", error: "API timeout" }
+  { type: "decline", content: "I focus on financial analysis..." }      # Out-of-scope
+  { type: "token", content: "..." }                                     # Final answer
+  { type: "done", usage: {...} }
+
+Stream Events (old Plan→Execute→Synthesize, REACT_AGENT=false):
   { type: "thinking", content: "Planning research approach..." }
   { type: "plan", content: "reasoning...", data: { steps: ["tool1", "tool2"] } }
   { type: "tool_result", tool: "...", status: "ok", data: {...} }
-  { type: "tool_error", tool: "...", error: "API timeout" }
   { type: "evidence", data: [{ claim, source_tool, value, timestamp }] }
-  { type: "decline", content: "I focus on financial analysis..." }
-  { type: "token", content: "..." }                           # Synthesis text
+  { type: "token", content: "..." }
   { type: "done", usage: {...} }
 ```
 
@@ -843,7 +854,7 @@ Redis cache-aside with 3-tier key namespace and `CacheService` (`backend/service
 
 ## 5. Agent Architecture
 
-> **Implementation status:** Phase 4D ✅ (Plan→Execute→Synthesize, PRs #26-32) + Phase 6A ✅ (LLM Factory, PR #95). V1 ReAct loop removed in Phase 6A (KAN-140). Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`.
+> **Implementation status:** Phase 8B ✅ ReAct loop (Session 63, PR #128) + Phase 8C ✅ Intent classifier (PR #127). Feature-flagged via `REACT_AGENT=true`. Old Plan→Execute→Synthesize still behind flag. Full spec: `docs/superpowers/specs/2026-03-27-react-agent-redesign.md`. ADRs: `docs/ADR.md` (001-008).
 
 ### 5.1 Three-Layer Architecture
 
@@ -878,19 +889,35 @@ Phase 7 tools: `portfolio_health` computes HHI/signal/risk/income/sector scores.
 
 Phase 7 DB changes: Migration 013 adds `decline_count` to `chat_session` (guardrails). Migration 014 adds `beta`, `dividend_yield`, `forward_pe` to `stocks` (data enrichment).
 
-**Entity Registry** (`backend/agents/entity_registry.py`): session-scoped ticker tracking for pronoun resolution ("compare them", "what about it?"). Wired into AgentStateV2 — execute_node extracts entities from tool results, plan_node resolves pronouns.
+**Entity Registry** (`backend/agents/entity_registry.py`): session-scoped ticker tracking for pronoun resolution ("compare them", "what about it?"). Updated in ReAct loop after each tool execution.
 
 MCPAdapter proxied tools (4 adapters): EdgarAdapter (SEC filings), AlphaVantageAdapter (news), FredAdapter (macro), FinnhubAdapter (analyst/ESG)
 
-Agent types = registry filters:
-- Stock agent: all categories (analysis, data, portfolio, macro, news, sec)
-- General agent: data + news only
+**Intent-based tool filtering** (Phase 8C): `classify_intent()` maps queries to intent categories, each with a filtered tool group:
+- stock: 8 tools | portfolio: 8 tools | market: 5 tools | comparison: 5 tools | simple_lookup: 1 tool | general: all tools
 
-### 5.3 Agent Pipeline
+### 5.3 Agent Pipeline (Phase 8B+8C) ✅ IMPLEMENTED
 
-> V1 ReAct loop was removed in Phase 6A (KAN-140). The current architecture is the V2 Plan→Execute→Synthesize graph described in §5.5.
+```
+User → Guards → Intent Classifier (rule-based, 0 LLM)
+  ├─ simple_lookup → Tool → Template → User        (0 LLM calls, ~300ms)
+  ├─ out_of_scope → Decline → User                 (0 LLM calls)
+  └─ complex → ReAct Loop (N LLM calls) → User     (adaptive, filtered tools)
+       ├─ Reason (LLM sees scratchpad + tool results)
+       ├─ Act (1-4 tools in parallel via asyncio.gather)
+       └─ repeat or finish
+```
 
-Few-shot prompted (prompt templates in `backend/agents/prompts/`). Max 10 tool calls per plan.
+**Key files:**
+- `backend/agents/intent_classifier.py` — rule-based routing (8 intents)
+- `backend/agents/tool_groups.py` — intent → filtered tool schemas
+- `backend/agents/react_loop.py` — core async generator (reason⇄act)
+- `backend/agents/prompts/react_system.md` — system prompt template
+- `backend/config.py` — `REACT_AGENT=true` feature flag
+
+**Limits:** MAX_ITERATIONS=8, MAX_PARALLEL_TOOLS=4, MAX_TOOL_CALLS=12, WALL_CLOCK_TIMEOUT=45s, CIRCUIT_BREAKER=3.
+
+**Old pipeline** (Plan→Execute→Synthesize) still available behind `REACT_AGENT=false`. Files not deleted: `graph.py`, `planner.py`, `executor.py`, `synthesizer.py`.
 
 ### 5.4 LLM Client & Factory (Phase 6A) ✅ IMPLEMENTED
 
@@ -917,10 +944,10 @@ Provider-agnostic abstraction with data-driven multi-model cascade.
 
 **Admin management:** Model configs changeable via `GET/PATCH/POST /admin/llm-models` without redeploy (see §3.13).
 
-### 5.5 Agent V2 — Plan→Execute→Synthesize (Phase 4D) ✅ IMPLEMENTED
+### 5.5 ReAct Loop (Phase 8B) ✅ IMPLEMENTED
 
-> **Full spec:** `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
-> V1 ReAct loop removed in Phase 6A (KAN-140). V2 is now the only agent architecture.
+> **Full spec:** `docs/superpowers/specs/2026-03-27-react-agent-redesign.md`
+> Replaces Plan→Execute→Synthesize (Phase 4D). Old pipeline available behind `REACT_AGENT=false` flag.
 
 **Three-phase LangGraph StateGraph:**
 
