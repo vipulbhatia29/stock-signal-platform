@@ -366,3 +366,25 @@ class FundamentalsResponse(BaseModel):
     analyst_buy: int | None = Field(None, description="Number of buy recommendations")
     analyst_hold: int | None = Field(None, description="Number of hold recommendations")
     analyst_sell: int | None = Field(None, description="Number of sell recommendations")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Benchmark comparison schemas
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class BenchmarkSeries(BaseModel):
+    """A single normalized price series for benchmark comparison."""
+
+    ticker: str
+    name: str  # e.g. "S&P 500", "NASDAQ Composite"
+    dates: list[datetime]
+    pct_change: list[float]  # normalized % change from start
+
+
+class BenchmarkComparisonResponse(BaseModel):
+    """Response for GET /stocks/{ticker}/benchmark."""
+
+    ticker: str
+    period: str
+    series: list[BenchmarkSeries]  # up to 3 series: stock, ^GSPC, ^IXIC

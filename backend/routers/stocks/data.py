@@ -20,6 +20,8 @@ from backend.models.price import StockPrice
 from backend.models.user import User
 from backend.routers.stocks._helpers import require_stock
 from backend.schemas.stock import (
+    BenchmarkComparisonResponse,
+    BenchmarkSeries,
     BollingerResponse,
     FundamentalsResponse,
     MACDResponse,
@@ -34,7 +36,11 @@ from backend.schemas.stock import (
     SMAResponse,
 )
 from backend.services.signals import get_latest_signals as get_latest_signals_svc
-from backend.services.stock_data import fetch_fundamentals
+from backend.services.stock_data import (
+    ensure_stock_exists,
+    fetch_fundamentals,
+    fetch_prices_delta,
+)
 from backend.validation import TickerPath
 
 logger = logging.getLogger(__name__)
@@ -358,4 +364,192 @@ async def get_stock_intelligence(
     )
     if cache:
         await cache.set(cache_key, response.model_dump_json(), CacheTier.VOLATILE)
+    return response
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Benchmark comparison
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Maps index tickers to human-readable names
+_BENCHMARK_INDICES: dict[str, str] = {
+    "^GSPC": "S&P 500",
+    "^IXIC": "NASDAQ Composite",
+}
+
+_STALENESS_HOURS = 24
+
+
+async def _ensure_index_fresh(
+    index_ticker: str,
+    db: AsyncSession,
+) -> bool:
+    """Ensure a benchmark index has recent price data in the DB.
+
+    Returns True if the index is available, False if ingestion failed.
+    """
+    try:
+        await ensure_stock_exists(index_ticker, db)
+    except (ValueError, Exception):
+        logger.warning("Could not create Stock record for %s", index_ticker)
+        return False
+
+    # Check staleness — fetch delta if data is old or missing
+    from sqlalchemy import func as sa_func
+
+    result = await db.execute(
+        select(sa_func.max(StockPrice.time)).where(StockPrice.ticker == index_ticker.upper())
+    )
+    max_time = result.scalar_one_or_none()
+
+    if max_time is None or (
+        datetime.now(timezone.utc) - max_time.replace(tzinfo=timezone.utc)
+    ) > timedelta(hours=_STALENESS_HOURS):
+        try:
+            await fetch_prices_delta(index_ticker, db)
+        except (ValueError, Exception):
+            logger.warning("Failed to fetch prices for %s", index_ticker)
+            # If we have *some* data, still usable; if none, not available
+            return max_time is not None
+
+    return True
+
+
+@router.get(
+    "/{ticker}/benchmark",
+    response_model=BenchmarkComparisonResponse,
+    summary="Benchmark comparison",
+    description="Compare a stock's price performance against S&P 500 and NASDAQ, "
+    "normalized to percentage change from the start of the period.",
+    responses={
+        404: {"description": "Stock not found or no price data"},
+    },
+)
+async def get_benchmark(
+    ticker: TickerPath,
+    request: Request,
+    period: PricePeriod = Query(
+        default=PricePeriod.ONE_YEAR,
+        description="How far back to compare",
+    ),
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> BenchmarkComparisonResponse:
+    """Compare a stock's performance against S&P 500 and NASDAQ.
+
+    Fetches price history for the requested ticker plus the two major
+    indices, normalizes each series to percentage change from the first
+    available date, and aligns all series to their common trading dates.
+
+    If an index cannot be fetched, the response includes only the
+    available series (graceful degradation).
+    """
+    stock = await require_stock(ticker, db)
+    t = ticker.upper()
+
+    # ── Cache check ───────────────────────────────────────────────────
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:benchmark:{t}:{period.value}"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return BenchmarkComparisonResponse.model_validate_json(cached)
+
+    # ── Ensure benchmark indices are fresh (parallel) ─────────────────
+    index_results = await asyncio.gather(
+        *[_ensure_index_fresh(idx, db) for idx in _BENCHMARK_INDICES],
+    )
+
+    # ── Query price data ──────────────────────────────────────────────
+    period_days = {
+        PricePeriod.ONE_MONTH: 30,
+        PricePeriod.THREE_MONTHS: 90,
+        PricePeriod.SIX_MONTHS: 180,
+        PricePeriod.ONE_YEAR: 365,
+        PricePeriod.TWO_YEARS: 730,
+        PricePeriod.FIVE_YEARS: 1825,
+        PricePeriod.TEN_YEARS: 3650,
+    }
+    cutoff = datetime.now(timezone.utc) - timedelta(days=period_days[period])
+
+    # Tickers to query: always the stock, plus available indices
+    tickers_to_query = [t]
+    for idx_ticker, available in zip(_BENCHMARK_INDICES, index_results):
+        if available:
+            tickers_to_query.append(idx_ticker.upper())
+
+    result = await db.execute(
+        select(StockPrice)
+        .where(StockPrice.ticker.in_(tickers_to_query))
+        .where(StockPrice.time >= cutoff)
+        .order_by(StockPrice.time.asc())
+    )
+    rows = list(result.scalars().all())
+
+    # ── Group by ticker ───────────────────────────────────────────────
+    prices_by_ticker: dict[str, list[tuple[datetime, float]]] = {}
+    for row in rows:
+        prices_by_ticker.setdefault(row.ticker, []).append((row.time, float(row.close)))
+
+    # The stock must have price data
+    if t not in prices_by_ticker or len(prices_by_ticker[t]) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No price data for '{t}' in the requested period.",
+        )
+
+    # ── Find common dates (intersection) ──────────────────────────────
+    date_sets = [{d.date() for d, _ in series} for series in prices_by_ticker.values()]
+    common_dates = sorted(set.intersection(*date_sets)) if date_sets else []
+
+    if not common_dates:
+        # Fall back to stock dates only
+        common_dates = sorted({d.date() for d, _ in prices_by_ticker[t]})
+
+    common_date_set = set(common_dates)
+
+    # ── Build normalized series ───────────────────────────────────────
+    series_list: list[BenchmarkSeries] = []
+
+    # Name map: stock name from DB, indices from constant
+    name_map: dict[str, str] = {t: stock.name or t}
+    name_map.update({k.upper(): v for k, v in _BENCHMARK_INDICES.items()})
+
+    for stk, price_list in prices_by_ticker.items():
+        # Filter to common dates and sort
+        filtered = sorted(
+            [(d, c) for d, c in price_list if d.date() in common_date_set],
+            key=lambda x: x[0],
+        )
+        if not filtered:
+            continue
+
+        first_close = filtered[0][1]
+        if first_close == 0:
+            continue  # avoid division by zero
+
+        dates = [d for d, _ in filtered]
+        pct = [(c - first_close) / first_close for _, c in filtered]
+
+        series_list.append(
+            BenchmarkSeries(
+                ticker=stk,
+                name=name_map.get(stk, stk),
+                dates=dates,
+                pct_change=pct,
+            )
+        )
+
+    response = BenchmarkComparisonResponse(
+        ticker=t,
+        period=period.value,
+        series=series_list,
+    )
+
+    # ── Cache ─────────────────────────────────────────────────────────
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), CacheTier.STANDARD)
+
     return response
