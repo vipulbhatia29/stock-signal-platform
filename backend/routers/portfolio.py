@@ -44,6 +44,7 @@ from backend.services.recommendations import calculate_position_size
 from backend.services.stock_data import get_latest_price
 from backend.tools.divestment import check_divestment_rules
 from backend.tools.dividends import get_dividend_summary
+from backend.validation import TickerPath
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
@@ -448,7 +449,7 @@ async def get_rebalancing(
     summary="Get dividend history and summary for a ticker",
 )
 async def get_dividends_for_ticker(
-    ticker: str,
+    ticker: TickerPath,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> DividendSummaryResponse:

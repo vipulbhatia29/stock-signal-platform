@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 import re
 
+from backend.validation import TICKER_RE
+
 logger = logging.getLogger(__name__)
 
 # ── Input length ─────────────────────────────────────────────────────────────
@@ -102,7 +104,6 @@ def validate_synthesis_output(synthesis: dict) -> dict:
 
 # ── Tool parameter validation ────────────────────────────────────────────────
 
-TICKER_RE = re.compile(r"^[A-Za-z0-9.\-^]{1,10}$")
 MAX_QUERY_LENGTH = 200
 
 TICKER_TOOLS = frozenset(
