@@ -19,13 +19,13 @@ updated_by: session-59
 
 **IMPORTANT:** Postgres runs on 5433 (NOT 5432), Redis on 6380 (NOT 6379).
 
-## Agent Architecture (Plan->Execute->Synthesize)
+## Agent Architecture — ReAct Loop (Phase 8B, Session 63)
 
-LangGraph StateGraph with 4 nodes (V1 deleted Session 54):
-1. **Planner (LLM):** Intent classification, tool plan, pronoun resolution, response_type routing (Phase 7)
-2. **Executor (mechanical):** ToolRegistry, $PREV_RESULT, retries, circuit breaker, 45s timeout, param validation (Phase 7)
-3. **Synthesizer (LLM):** Confidence scoring, scenarios, evidence tree, output validation (Phase 7)
-4. **format_simple:** Bypass synthesis for simple_lookup intents (template output, no LLM)
+Single-LLM reasoning loop (old Plan->Execute->Synthesize behind REACT_AGENT=false flag):
+1. **Reason:** LLM observes scratchpad -> outputs thought + next_action OR finish
+2. **Act:** Runs ONE tool, appends result to scratchpad
+3. **Loop:** Repeats until LLM emits finish or circuit breaker (max iterations)
+4. **Fast path:** Rule-based intent classifier filters tool set (zero LLM cost for out_of_scope/simple_lookup)
 
 24 internal tools + 4 MCP adapters = 28 total (36 with adapter sub-tools). See `domain/agent-tools` for full list.
 
@@ -33,12 +33,12 @@ Phase 7 additions: input/output guardrails, PII/injection detection, financial d
 
 ## LLM Routing (Phase 6A)
 
-Data-driven cascade from `llm_model_config` DB table (migration 012). TokenBudget tracks per-model limits (in-process only — KAN-186 will move to Redis for multi-worker). Admin API at `/api/v1/admin/llm-models`.
+Data-driven cascade from `llm_model_config` DB table (migration 012). TokenBudget tracks per-model limits via Redis sorted sets (KAN-186, Session 67 — multi-worker safe, fail-open). Admin API at `/api/v1/admin/llm-models`.
 
 ## DB Migrations
 
-Alembic head: migration 015 (portfolio_health_snapshots).
-Chain: 012 (LLM config) -> 013 (decline_count) -> 014 (enriched stock data) -> 015 (portfolio_health_snapshots).
+Alembic head: migration 016 (ea8da8624c85 — observability columns: agent_type, agent_instance_id, loop_step).
+Chain: 012 (LLM config) -> 013 (decline_count) -> 014 (enriched stock data) -> 015 (portfolio_health_snapshots) -> 016 (observability columns).
 
 ## Key Entry Points
 

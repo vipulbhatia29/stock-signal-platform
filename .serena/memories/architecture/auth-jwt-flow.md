@@ -3,7 +3,7 @@
 ## Token Architecture
 - Access token: httpOnly, Secure, SameSite=Lax cookie (short-lived, ACCESS_TOKEN_EXPIRE_MINUTES)
 - Refresh token: httpOnly, Secure, SameSite=Lax cookie (7-day, includes unique `jti` claim)
-- JWT signed with JWT_SECRET_KEY, python-jose, passlib+bcrypt==4.2.x
+- JWT signed with JWT_SECRET_KEY, PyJWT (migrated from python-jose in Session 58), direct bcrypt (passlib removed Session 59)
 
 ## Token Revocation (Phase 5.5 — COMPLETE)
 - Redis blocklist keyed by JTI (JWT ID) claims

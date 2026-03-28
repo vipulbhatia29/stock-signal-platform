@@ -9,7 +9,7 @@ category: project
 
 ```bash
 # Backend — fast, no external deps
-uv run pytest tests/unit/ -v                          # Unit tests (~766, <6s)
+uv run pytest tests/unit/ -v                          # Unit tests (~1045, <10s)
 uv run pytest tests/unit/test_{module}.py -v          # Single module
 
 # Backend — requires Docker (testcontainers auto-manages Postgres+Redis)

@@ -1,17 +1,17 @@
 ---
 scope: project
 category: domain
-updated_by: session-56
+updated_by: session-67
 phase: Phase 7 KAN-158/159/160 COMPLETE — 24 internal tools, guardrails, enriched data, response_type routing
 ---
 
 # Agent Tools Domain
 
-## Architecture — ReAct Loop (Phase 8B, replaced Plan->Execute->Synthesize)
+## Architecture — ReAct Loop (Phase 8B, Session 63 — replaced Plan->Execute->Synthesize)
 
 Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
 
-### Three-Phase Agent Loop
+### ReAct Loop (single LLM reason-act cycle, replaced three-phase pipeline)
 - **Planner (Sonnet):** Scope enforcement, intent classification, tool plan generation, pronoun resolution via EntityRegistry, response_type routing (Phase 7)
 - **Executor (mechanical, no LLM):** Calls tools via ToolRegistry, $PREV_RESULT resolution, retries, circuit breaker, 45s timeout. Tool param validation (ticker format, query sanitization — Phase 7 guardrails).
 - **Synthesizer (Sonnet):** Confidence scoring (>=65%), bull/base/bear scenarios, evidence tree, portfolio personalization. Output validation: unsupported high-confidence claims downgraded (Phase 7 guardrails).
@@ -56,7 +56,7 @@ Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design
 EdgarTools, Alpha Vantage, FRED, Finnhub
 
 ### LLM Client (Phase 6A — data-driven cascade)
-tier_config from llm_model_config DB table. Groq cascade by priority with TokenBudget. Admin API: /api/v1/admin/llm-models.
+tier_config from llm_model_config DB table. Groq cascade by priority with TokenBudget (Redis-backed, KAN-186 Session 67). Admin API: /api/v1/admin/llm-models.
 
 ### Key Decisions
 - V1 ReAct graph DELETED (Session 54). V2 is the only path.

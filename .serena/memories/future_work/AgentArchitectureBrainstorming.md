@@ -50,15 +50,15 @@ JIRA: KAN-189 (Epic), KAN-188 (tool filtering)
 4. **No tool filtering** — all 24 descriptions on every query
 5. **No clarifying questions** — agent guesses and proceeds
 
-### Observability Gaps
-1. **cost_usd never calculated** — `llm_model_config` has pricing, `LLMCallLog` has column, no code connects them
-2. **cache_hit never set** — executor knows (`CACHEABLE_TOOLS`), writer doesn't receive it
-3. **No agent_id** — can't attribute costs/latency to specific agents (needed for multi-agent)
-4. **No fallback_rate_last_60s()** — need windowed ratio, not just cumulative count
-5. **No loop_step tracking** — needed after ReAct loop exists
-6. **No per-query cost aggregation endpoint** — query_id exists, SQL is trivial
+### Observability Gaps (most RESOLVED as of Session 67)
+1. **cost_usd never calculated** ✅ RESOLVED Session 62 — `llm_model_config` has pricing, `LLMCallLog` has column, no code connects them
+2. **cache_hit never set** ✅ RESOLVED Session 62 — executor knows (`CACHEABLE_TOOLS`), writer doesn't receive it
+3. **No agent_id** ✅ RESOLVED Session 62 (migration 016: agent_type, agent_instance_id) — can't attribute costs/latency to specific agents (needed for multi-agent)
+4. **No fallback_rate_last_60s()** ✅ RESOLVED Session 62 — need windowed ratio, not just cumulative count
+5. **No loop_step tracking** ✅ RESOLVED Session 62 (migration 016) — needed after ReAct loop exists
+6. **No per-query cost aggregation endpoint** ✅ RESOLVED Session 62 — query_id exists, SQL is trivial
 7. **No dynamic concurrency controller** — semaphore limit is hardcoded
-8. **TokenBudget in-process only** — KAN-186 to move to Redis for multi-worker
+8. **TokenBudget in-process only** ✅ RESOLVED Session 67 (KAN-186 — Redis sorted sets) — KAN-186 to move to Redis for multi-worker
 
 ### aset-platform Comparison
 - They solved: specialized sub-agents with ReAct loops, two-tier routing, per-agent LLM instances, cost estimation

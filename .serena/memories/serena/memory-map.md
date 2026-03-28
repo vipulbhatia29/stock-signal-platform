@@ -33,7 +33,7 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | architecture/celery-patterns | Celery entry points, asyncio.run() bridge, beat schedule, task naming |
 | domain/signals-and-screener | Signal computation, screener, market hours UTC gotcha |
 | domain/portfolio-tracker | Portfolio tools, API double-prefix, patch() helper |
-| domain/agent-tools | 20 internal tools, EntityRegistry, Plan→Execute→Synthesize, MCP adapters, LLM tier routing |
+| domain/agent-tools | 24 internal tools, EntityRegistry, ReAct loop (Phase 8B), MCP adapters, LLM tier routing |
 | debugging/backend-gotchas | asyncpg, UserRole enum, circular imports, Alembic, yfinance |
 | debugging/frontend-gotchas | ESLint hooks, Recharts colors, API prefix, next/image |
 | serena/tool-usage | MCP prefix, tool priority, symbolic reading, editing |
@@ -41,6 +41,8 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | conventions/auth-patterns | JWT, httpOnly cookies, frontend auth, bcrypt pinning, security rules |
 | conventions/jira-sdlc-workflow | **MANDATORY** — full JIRA SDLC process, board, refinement lifecycle, branching, CI/CD, automation rules, transition IDs |
 | architecture/cicd-pipeline | CI/CD workflows, branch protection, fixture split, test expectations, GitHub secrets |
+| architecture/implement-local-workflow | LM Studio bridge, complexity scoring, /implement-local skill, observability |
+| architecture/mcp-transport-strategy | stdio (Phase 5.6) → Streamable HTTP (Phase 10), transport evolution |
 | project/jira-integration-brainstorm | JIRA instance details, full ticket map (KAN-1 through KAN-29), transition IDs, automation rules |
 
 ## Scope Rule

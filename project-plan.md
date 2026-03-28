@@ -183,7 +183,7 @@ prerequisites for portfolio-aware recommendations.
 
 | # | Item | Source | Why It Matters |
 |---|------|--------|----------------|
-| B1 | **Refresh token rotation** — invalidate old tokens via Redis/DB blacklist | FSD FR-1.3 | Deferred — security improvement, not blocking Phase 3 |
+| B1 | ✅ **Refresh token rotation** — Redis refresh token blocklist | FSD FR-1.3 | Done (Session 50, PR #79) |
 | B2 | ✅ **Watchlist: return `current_price` + freshness** | FSD FR-2.2 | Done (Session 16) |
 | B3 | ✅ **StockIndexMembership: add `removed_date`** field | FSD FR-2.4 | Done (Session 16, migration 003) |
 | B4 | ✅ **StockIndex: add `last_synced_at`** field | FSD FR-2.4 | Done (Session 16, migration 003) |
@@ -713,7 +713,7 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 - [x] KAN-154: Centralized API input validation ✅ Session 64
 - [x] KAN-156: ~~Red flag scanner~~ — Superseded ✅ Session 66
 - [x] ~~KAN-155: Forecast blending~~ — CLOSED: agent synthesizes dynamically ✅ Session 66
-- [x] ~~KAN-162: Langfuse~~ — CLOSED: ObservabilityCollector + llm_call_log covers 80%. Replace with admin dashboard if needed ✅ Session 66
+- [ ] KAN-162: Langfuse Self-Hosted — **Reopened Session 67.** Visual trace waterfall + eval framework. ~2 days. Slots after Phase B.
 - [ ] KAN-152: Google OAuth — **Moved to SaaS Launch Roadmap**
 - [ ] KAN-157: Live LLM eval — **Moved to SaaS Launch Roadmap** (rescoped for ReAct)
 
