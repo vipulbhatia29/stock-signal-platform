@@ -31,6 +31,7 @@ from backend.services.watchlist import (
     remove_from_watchlist as remove_from_watchlist_svc,
 )
 from backend.tasks.market_data import refresh_ticker_task
+from backend.validation import TickerPath
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +93,7 @@ async def add_to_watchlist(
 
 @router.delete("/watchlist/{ticker}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_from_watchlist(
-    ticker: str,
+    ticker: TickerPath,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> None:
@@ -112,7 +113,7 @@ async def remove_from_watchlist(
 
 @router.post("/watchlist/{ticker}/acknowledge", response_model=WatchlistItemResponse)
 async def acknowledge_watchlist_price(
-    ticker: str,
+    ticker: TickerPath,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> dict:

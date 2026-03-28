@@ -7,7 +7,6 @@ Ingest delegates to the pipelines service for full ticker orchestration.
 from __future__ import annotations
 
 import logging
-import re
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -20,10 +19,9 @@ from backend.models.stock import Stock
 from backend.models.user import User
 from backend.schemas.stock import IngestResponse, StockSearchResponse
 from backend.services.exceptions import IngestFailedError
+from backend.validation import TICKER_RE, TickerPath
 
 logger = logging.getLogger(__name__)
-
-TICKER_PATTERN = re.compile(r"^[A-Za-z0-9.\-]{1,10}$")
 
 # Yahoo Finance search — allowed quote types (equities + ETFs)
 _YF_ALLOWED_TYPES = {"EQUITY", "ETF"}
@@ -146,7 +144,7 @@ async def search_stocks(
 
 @router.post("/{ticker}/ingest", response_model=IngestResponse)
 async def ingest_ticker(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
@@ -160,7 +158,7 @@ async def ingest_ticker(
     Returns 201 for newly ingested tickers, 200 for delta updates.
     """
     ticker = ticker.upper().strip()
-    if not TICKER_PATTERN.match(ticker):
+    if not TICKER_RE.match(ticker):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid ticker format. Use alphanumeric characters, dots, and hyphens only.",

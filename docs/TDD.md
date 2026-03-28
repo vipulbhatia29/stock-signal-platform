@@ -294,6 +294,22 @@ erDiagram
 - Versioning: URL-based. If breaking changes needed, create `/api/v2/` routers.
   Old version stays active for 3 months (migration period).
 
+### 3.1.1 Centralized Input Validation (KAN-154) ✅ IMPLEMENTED
+
+All API path and query parameters use centralized types from `backend/validation.py`:
+
+| Type | Usage | Constraint |
+|------|-------|-----------|
+| `TickerPath` | All `{ticker}` path params | `^[A-Za-z0-9.\-\^]{1,10}$`, enforced by FastAPI |
+| `UUIDPath` | `{session_id}`, `{transaction_id}` | UUID format enforced by Pydantic |
+| `RsiState` | `?rsi_state=` screener filter | Enum: `OVERSOLD`, `NEUTRAL`, `OVERBOUGHT` |
+| `MacdState` | `?macd_state=` screener filter | Enum: `BULLISH`, `BEARISH`, `NEUTRAL` |
+| `SignalAction` | `?action=` recommendation filter | Enum: `BUY`, `WATCH`, `AVOID`, `HOLD`, `SELL` |
+| `ConfidenceLevel` | `?confidence=` recommendation filter | Enum: `HIGH`, `MEDIUM`, `LOW` |
+| `SectorQuery` | `?sector=` filter | `max_length=100` |
+
+`TICKER_RE` regex is shared between `validation.py` and `agents/guards.py` (tool param validation) — single source of truth.
+
 ### 3.2 Authentication Endpoints
 
 ```
@@ -337,9 +353,11 @@ GET /api/v1/stocks/{ticker}/signals
               composite_score, is_stale }
   Errors:   404 (ticker not found)
 
-GET /api/v1/stocks/{ticker}/prices?period={1mo|3mo|6mo|1y|2y|5y|10y}
-  Response: [{ time, open, high, low, close, volume }]
-  Errors:   404 (ticker not found)
+GET /api/v1/stocks/{ticker}/prices?period={1mo|3mo|6mo|1y|2y|5y|10y}&format={list|ohlc}
+  Response (format=list, default): [{ time, open, high, low, close, volume }]
+  Response (format=ohlc): { ticker, period, count, timestamps[], open[], high[], low[], close[], volume[] }
+  Note:     format=ohlc returns parallel arrays optimized for candlestick charts (KAN-150)
+  Errors:   404 (ticker not found), 422 (invalid ticker/period/format)
 
 GET /api/v1/stocks/{ticker}/signals/history?period={1m|3m|6m|1y}
   Response: [{ computed_at, composite_score, rsi_value, macd_value }]
