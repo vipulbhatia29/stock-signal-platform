@@ -1,5 +1,6 @@
 """Shared FastAPI dependencies: auth, database, redis."""
 
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -9,12 +10,16 @@ import jwt
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import PyJWTError
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.database import get_async_session
-from backend.models.user import User
+from backend.models.user import User, UserRole
+from backend.services.cache import CacheService, CacheTier
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -26,6 +31,26 @@ class TokenPayload:
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+
+# ---------- Cached user schema (no hashed_password) ----------
+
+
+class CachedUser(BaseModel):
+    """Lightweight user representation for Redis cache.
+
+    Excludes hashed_password for security. Fields mirror User ORM model
+    so downstream code can use .id, .email, .role, .is_active transparently.
+    """
+
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    email: str
+    role: UserRole
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+
 
 # Cookie configuration constants
 COOKIE_ACCESS_TOKEN = "access_token"
@@ -114,11 +139,53 @@ def _extract_token(request: Request) -> str | None:
     return request.cookies.get(COOKIE_ACCESS_TOKEN)
 
 
+def _get_cache(request: Request) -> CacheService | None:
+    """Safely retrieve CacheService from app state. Returns None if unavailable."""
+    return getattr(request.app.state, "cache", None)
+
+
+def _user_cache_key(user_id: uuid.UUID) -> str:
+    """Build the Redis cache key for a user's auth lookup."""
+    return f"user:{user_id}:auth"
+
+
+async def _get_cached_user(cache: CacheService, user_id: uuid.UUID) -> CachedUser | None:
+    """Attempt to load a CachedUser from Redis.
+
+    Returns None on cache miss or any deserialization error.
+    """
+    try:
+        raw = await cache.get(_user_cache_key(user_id))
+        if raw is None:
+            return None
+        return CachedUser.model_validate_json(raw)
+    except Exception:
+        logger.debug("Cache deserialization failed for user %s", user_id, exc_info=True)
+        return None
+
+
+async def _set_cached_user(cache: CacheService, user: User) -> None:
+    """Serialize and store a User in Redis (excluding hashed_password)."""
+    try:
+        cached = CachedUser.model_validate(user)
+        await cache.set(
+            _user_cache_key(user.id),
+            cached.model_dump_json(),
+            CacheTier.VOLATILE,
+        )
+    except Exception:
+        logger.debug("Cache set failed for user %s", user.id, exc_info=True)
+
+
 async def get_current_user(
     request: Request,
     db: AsyncSession = Depends(get_async_session),
-) -> User:
+) -> User | CachedUser:
     """FastAPI dependency: decode JWT and return the current user.
+
+    Uses Redis cache (VOLATILE tier, ~300s TTL) to avoid hitting the DB
+    on every authenticated request. Falls back to DB on cache miss or
+    when Redis is unavailable.
 
     Supports dual-mode authentication:
     - Authorization: Bearer <token> header (takes precedence)
@@ -136,11 +203,31 @@ async def get_current_user(
         )
 
     token_payload = decode_token(token, expected_type="access")
-    result = await db.execute(select(User).where(User.id == token_payload.user_id))
+    user_id = token_payload.user_id
+
+    # 1. Try cache first (graceful degradation if cache unavailable)
+    cache = _get_cache(request)
+    if cache is not None:
+        cached = await _get_cached_user(cache, user_id)
+        if cached is not None:
+            if not cached.is_active:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="User not found or inactive",
+                )
+            return cached
+
+    # 2. Cache miss or no cache — query DB
+    result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
         )
+
+    # 3. Populate cache for next request
+    if cache is not None:
+        await _set_cached_user(cache, user)
+
     return user
