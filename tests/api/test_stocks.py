@@ -183,6 +183,88 @@ class TestPriceHistory:
         assert "close" in data[0]
         assert "volume" in data[0]
 
+    @pytest.mark.asyncio
+    async def test_prices_default_format_is_list(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """Default format (no param) should return a list of price objects."""
+        await _insert_stock_with_signals(db_url, "AAPL")
+
+        response = await authenticated_client.get("/api/v1/stocks/AAPL/prices?period=1mo")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) >= 1
+        assert "time" in data[0]
+
+    @pytest.mark.asyncio
+    async def test_prices_format_list_explicit(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """Explicit format=list should return the same list format."""
+        await _insert_stock_with_signals(db_url, "AAPL")
+
+        response = await authenticated_client.get(
+            "/api/v1/stocks/AAPL/prices?period=1mo&format=list"
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) >= 1
+        assert "close" in data[0]
+
+    @pytest.mark.asyncio
+    async def test_prices_format_ohlc(self, authenticated_client: AsyncClient, db_url: str) -> None:
+        """format=ohlc should return parallel arrays for candlestick charts."""
+        await _insert_stock_with_signals(db_url, "AAPL")
+
+        response = await authenticated_client.get(
+            "/api/v1/stocks/AAPL/prices?period=1mo&format=ohlc"
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ticker"] == "AAPL"
+        assert data["period"] == "1mo"
+        assert isinstance(data["count"], int)
+        assert data["count"] >= 1
+        assert len(data["timestamps"]) == data["count"]
+        assert len(data["open"]) == data["count"]
+        assert len(data["high"]) == data["count"]
+        assert len(data["low"]) == data["count"]
+        assert len(data["close"]) == data["count"]
+        assert len(data["volume"]) == data["count"]
+
+    @pytest.mark.asyncio
+    async def test_prices_format_ohlc_empty(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """format=ohlc with no price data should return empty arrays with count=0."""
+        await _insert_stock(db_url, ticker="MSFT", name="Microsoft Corp")
+
+        response = await authenticated_client.get(
+            "/api/v1/stocks/MSFT/prices?period=1mo&format=ohlc"
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["ticker"] == "MSFT"
+        assert data["count"] == 0
+        assert data["timestamps"] == []
+        assert data["open"] == []
+
+    @pytest.mark.asyncio
+    async def test_prices_invalid_format(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """Invalid format value should return 422 validation error."""
+        await _insert_stock_with_signals(db_url, "AAPL")
+
+        response = await authenticated_client.get("/api/v1/stocks/AAPL/prices?format=invalid")
+        assert response.status_code == 422
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # Signal Tests

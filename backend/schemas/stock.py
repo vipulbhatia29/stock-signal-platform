@@ -79,6 +79,19 @@ class PricePointResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class PriceFormat(str, Enum):
+    """Response format for price data.
+
+    Controls the shape of the response from the prices endpoint:
+      - list: default — array of PricePointResponse objects (one per day)
+      - ohlc: candlestick — parallel arrays grouped by field, optimized
+              for charting libraries
+    """
+
+    LIST = "list"
+    OHLC = "ohlc"
+
+
 class PricePeriod(str, Enum):
     """Valid period options for price history queries.
 
@@ -93,6 +106,25 @@ class PricePeriod(str, Enum):
     TWO_YEARS = "2y"
     FIVE_YEARS = "5y"
     TEN_YEARS = "10y"
+
+
+class OHLCResponse(BaseModel):
+    """Candlestick-chart-friendly OHLC format with parallel arrays.
+
+    Instead of an array of objects (one per day), this groups data by field
+    into parallel arrays. All arrays have the same length (equal to ``count``).
+    This format is optimized for charting libraries that expect columnar data.
+    """
+
+    ticker: str
+    period: str
+    count: int
+    timestamps: list[datetime]
+    open: list[float]
+    high: list[float]
+    low: list[float]
+    close: list[float]
+    volume: list[int]
 
 
 # ─────────────────────────────────────────────────────────────────────────────

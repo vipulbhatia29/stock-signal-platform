@@ -23,7 +23,9 @@ from backend.schemas.stock import (
     BollingerResponse,
     FundamentalsResponse,
     MACDResponse,
+    OHLCResponse,
     PiotroskiBreakdown,
+    PriceFormat,
     PricePeriod,
     PricePointResponse,
     ReturnsResponse,
@@ -33,6 +35,7 @@ from backend.schemas.stock import (
 )
 from backend.services.signals import get_latest_signals as get_latest_signals_svc
 from backend.services.stock_data import fetch_fundamentals
+from backend.validation import TickerPath
 
 logger = logging.getLogger(__name__)
 
@@ -44,15 +47,20 @@ router = APIRouter()
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@router.get("/{ticker}/prices", response_model=list[PricePointResponse])
+@router.get("/{ticker}/prices", response_model=None)
 async def get_prices(
-    ticker: str,
+    ticker: TickerPath,
     period: PricePeriod = Query(
         default=PricePeriod.ONE_YEAR, description="How far back to fetch prices"
     ),
+    response_format: PriceFormat = Query(
+        default=PriceFormat.LIST,
+        alias="format",
+        description="Response format: 'list' (default) or 'ohlc' for candlestick arrays",
+    ),
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
-) -> list[StockPrice]:
+) -> list[PricePointResponse] | OHLCResponse:
     """Get historical OHLCV prices for a stock.
 
     Returns daily price data from our database. The 'period' parameter
@@ -60,6 +68,10 @@ async def get_prices(
       - 1mo: last month (good for short-term trends)
       - 1y:  last year (good for seeing seasonal patterns)
       - 10y: last decade (good for long-term performance)
+
+    The 'format' parameter controls the response shape:
+      - list (default): array of {time, open, high, low, close, volume} objects
+      - ohlc: parallel arrays grouped by field, optimized for candlestick charts
 
     The cutoff date is calculated by subtracting the period from today.
     For example, if period=1y and today is 2026-03-01, we return all
@@ -85,7 +97,22 @@ async def get_prices(
         .order_by(StockPrice.time.asc())
     )
 
-    return list(result.scalars().all())
+    rows = list(result.scalars().all())
+
+    if response_format == PriceFormat.OHLC:
+        return OHLCResponse(
+            ticker=ticker.upper(),
+            period=period.value,
+            count=len(rows),
+            timestamps=[r.time for r in rows],
+            open=[float(r.open) for r in rows],
+            high=[float(r.high) for r in rows],
+            low=[float(r.low) for r in rows],
+            close=[float(r.close) for r in rows],
+            volume=[r.volume for r in rows],
+        )
+
+    return rows
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -95,7 +122,7 @@ async def get_prices(
 
 @router.get("/{ticker}/signals", response_model=SignalResponse)
 async def get_signals(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
@@ -177,7 +204,7 @@ async def get_signals(
 
 @router.get("/{ticker}/fundamentals", response_model=FundamentalsResponse)
 async def get_fundamentals(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
@@ -238,7 +265,7 @@ async def get_fundamentals(
 
 @router.get("/{ticker}/news")
 async def get_stock_news(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
@@ -286,7 +313,7 @@ async def get_stock_news(
 
 @router.get("/{ticker}/intelligence")
 async def get_stock_intelligence(
-    ticker: str,
+    ticker: TickerPath,
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
