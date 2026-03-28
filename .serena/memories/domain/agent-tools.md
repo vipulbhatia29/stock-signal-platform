@@ -7,7 +7,7 @@ phase: Phase 7 KAN-158/159/160 COMPLETE — 24 internal tools, guardrails, enric
 
 # Agent Tools Domain
 
-## Architecture — Plan->Execute->Synthesize (unchanged)
+## Architecture — ReAct Loop (Phase 8B, replaced Plan->Execute->Synthesize)
 
 Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
 
@@ -16,7 +16,7 @@ Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design
 - **Executor (mechanical, no LLM):** Calls tools via ToolRegistry, $PREV_RESULT resolution, retries, circuit breaker, 45s timeout. Tool param validation (ticker format, query sanitization — Phase 7 guardrails).
 - **Synthesizer (Sonnet):** Confidence scoring (>=65%), bull/base/bear scenarios, evidence tree, portfolio personalization. Output validation: unsupported high-confidence claims downgraded (Phase 7 guardrails).
 
-### Internal Tools (24 total — Session 56)
+### Internal Tools (24 total — Session 56, short interest added Session 66)
 **Original (9):** analyze_stock, compute_signals, get_recommendations, get_portfolio_exposure, screen_stocks, search_stocks, ingest_stock, web_search, get_geopolitical_events
 
 **Phase 4D (4):** get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile — all read from DB

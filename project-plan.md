@@ -447,7 +447,7 @@ Comprehensive backend hardening: test directory restructure, ~211 new tests acro
 - [ ] **Context-aware planner prompt** — Extend planner prompt with `recently_discussed_tickers` from entity registry
 - [ ] **Dividend sustainability tool** — Payout ratio, FCF coverage, dividend growth history
 - [ ] **Risk narrative tool** — Ranked risk factors with monitoring indicators
-- [ ] **Red flag scanner** — Controversies, short interest, insider selling patterns
+- [x] ~~**Red flag scanner**~~ — Superseded: short interest added to StockIntelligenceTool (Session 66, PR #135)
 
 ### Deferred Backend Work (from Phase 4F UI-4, Session 43)
 - [ ] **Candlestick chart toggle** — Add `format=ohlc` query param to `GET /api/v1/stocks/{ticker}/prices`. OHLC data already exists in `stock_prices` table. Frontend: Line/Candle pill toggle on stock detail price chart.
@@ -455,7 +455,7 @@ Comprehensive backend hardening: test directory restructure, ~211 new tests acro
 - [x] **KAN-98: Hydration mismatch** — Fixed in Session 44 (PR #50). Ref-based DOM update for isNYSEOpen.
 
 ### Deferred to Phase 5.1 (identified during Phase 5 design, Session 45)
-- [ ] **Red flag scanner** — Controversies, short interest, insider selling patterns. Needs new data sources (insider transactions, short interest from yfinance). Deferred due to uncertain data quality.
+- [x] ~~**Red flag scanner**~~ — Superseded: short interest added to StockIntelligenceTool (Session 66, PR #135). Insider transactions already covered by KAN-159.
 - ~~**Telegram notifications**~~ REMOVED — in-app alerts sufficient.
 - [ ] **Forecast blending into composite score** — Confidence-weighted 3-way blend (tech + fundamental + forecast). Deferred until forecast accuracy is validated. Phase 5 keeps forecasts as a parallel signal.
 - [ ] **Live LLM eval tests** — Deferred from Phase 4G. Needs CI_GROQ_API_KEY secret.
@@ -713,7 +713,7 @@ Address remaining backlog items, UI gaps, and feature requests identified across
 - [ ] KAN-153: Chat audit trail
 - [x] KAN-154: Centralized API input validation ✅ Session 64 — TickerPath, enum filters, dedup regex
 - [ ] KAN-155: Forecast blending into composite score
-- [ ] KAN-156: Red flag scanner (insider data now available via KAN-159)
+- [x] KAN-156: ~~Red flag scanner~~ — Superseded, short interest added to StockIntelligenceTool ✅ Session 66
 - [ ] KAN-157: Live LLM eval tests (CI_GROQ_API_KEY available)
 - [ ] KAN-162: Langfuse Integration — self-hosted LLM observability: trace agent pipeline, eval datasets, confidence calibration, tool latency dashboards. Pick up during observability phase.
 
