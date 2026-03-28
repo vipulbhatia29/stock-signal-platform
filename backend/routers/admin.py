@@ -1,18 +1,27 @@
-"""Admin router — superuser-only endpoints for LLM model config management."""
+"""Admin router — superuser-only endpoints for LLM model config management and chat audit."""
 
 from __future__ import annotations
 
 import logging
+import uuid as uuid_mod
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
 from backend.dependencies import get_current_user
+from backend.models.chat import ChatMessage, ChatSession
 from backend.models.llm_config import LLMModelConfig
 from backend.models.logs import LLMCallLog, ToolExecutionLog
 from backend.models.user import User, UserRole
+from backend.schemas.chat import (
+    AdminChatSessionListResponse,
+    AdminChatSessionSummary,
+    AdminChatStatsResponse,
+    AdminChatTranscriptResponse,
+    ChatMessageResponse,
+)
 from backend.schemas.llm_config import (
     LLMModelConfigResponse,
     LLMModelConfigUpdate,
@@ -268,8 +277,6 @@ async def get_query_cost(
     db: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Get per-query cost breakdown with LLM and tool call details."""
-    import uuid as uuid_mod
-
     _require_admin(user)
 
     try:
@@ -335,3 +342,186 @@ async def get_query_cost(
             "by_tool": [{"tool_name": name, **stats} for name, stats in by_tool.items()],
         },
     }
+
+
+# ── Chat audit trail endpoints ──────────────────────────────────────────────
+
+
+@router.get(
+    "/chat/sessions",
+    response_model=AdminChatSessionListResponse,
+    summary="List all chat sessions",
+    description="Paginated list of chat sessions. Filterable by user and agent type.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not admin"},
+    },
+)
+async def list_chat_sessions(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+    user_id: uuid_mod.UUID | None = Query(default=None, description="Filter by user ID"),
+    agent_type: str | None = Query(default=None, description="Filter by agent type"),
+    limit: int = Query(default=50, ge=1, le=100, description="Page size"),
+    offset: int = Query(default=0, ge=0, description="Page offset"),
+) -> AdminChatSessionListResponse:
+    """List all chat sessions with user email and message count."""
+    _require_admin(user)
+
+    # Base query with join to users for email and subquery for message count
+    msg_count_sq = (
+        select(
+            ChatMessage.session_id,
+            func.count().label("message_count"),
+        )
+        .group_by(ChatMessage.session_id)
+        .subquery()
+    )
+
+    base = (
+        select(
+            ChatSession,
+            User.email.label("user_email"),
+            func.coalesce(msg_count_sq.c.message_count, 0).label("message_count"),
+        )
+        .join(User, ChatSession.user_id == User.id)
+        .outerjoin(msg_count_sq, ChatSession.id == msg_count_sq.c.session_id)
+    )
+
+    if user_id is not None:
+        base = base.where(ChatSession.user_id == user_id)
+    if agent_type is not None:
+        base = base.where(ChatSession.agent_type == agent_type)
+
+    # Total count
+    count_stmt = select(func.count()).select_from(base.subquery())
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    # Paginated results
+    rows_stmt = base.order_by(ChatSession.last_active_at.desc()).limit(limit).offset(offset)
+    result = await db.execute(rows_stmt)
+    rows = result.all()
+
+    sessions = [
+        AdminChatSessionSummary(
+            id=row.ChatSession.id,
+            agent_type=row.ChatSession.agent_type,
+            title=row.ChatSession.title,
+            is_active=row.ChatSession.is_active,
+            decline_count=row.ChatSession.decline_count,
+            user_email=row.user_email,
+            message_count=row.message_count,
+            created_at=row.ChatSession.created_at,
+            last_active_at=row.ChatSession.last_active_at,
+        )
+        for row in rows
+    ]
+
+    return AdminChatSessionListResponse(total=total, sessions=sessions)
+
+
+@router.get(
+    "/chat/sessions/{session_id}/transcript",
+    response_model=AdminChatTranscriptResponse,
+    summary="Get session transcript",
+    description="Full message transcript for a specific chat session.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not admin"},
+        404: {"description": "Session not found"},
+    },
+)
+async def get_chat_transcript(
+    session_id: uuid_mod.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> AdminChatTranscriptResponse:
+    """Get the full transcript of a chat session."""
+    _require_admin(user)
+
+    # Fetch session with user email and message count
+    msg_count_sq = (
+        select(
+            ChatMessage.session_id,
+            func.count().label("message_count"),
+        )
+        .where(ChatMessage.session_id == session_id)
+        .group_by(ChatMessage.session_id)
+        .subquery()
+    )
+
+    session_stmt = (
+        select(
+            ChatSession,
+            User.email.label("user_email"),
+            func.coalesce(msg_count_sq.c.message_count, 0).label("message_count"),
+        )
+        .join(User, ChatSession.user_id == User.id)
+        .outerjoin(msg_count_sq, ChatSession.id == msg_count_sq.c.session_id)
+        .where(ChatSession.id == session_id)
+    )
+    result = await db.execute(session_stmt)
+    row = result.one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    session_summary = AdminChatSessionSummary(
+        id=row.ChatSession.id,
+        agent_type=row.ChatSession.agent_type,
+        title=row.ChatSession.title,
+        is_active=row.ChatSession.is_active,
+        decline_count=row.ChatSession.decline_count,
+        user_email=row.user_email,
+        message_count=row.message_count,
+        created_at=row.ChatSession.created_at,
+        last_active_at=row.ChatSession.last_active_at,
+    )
+
+    # Fetch messages ordered by creation time
+    msg_stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.session_id == session_id)
+        .order_by(ChatMessage.created_at.asc())
+    )
+    msg_result = await db.execute(msg_stmt)
+    messages = [ChatMessageResponse.model_validate(m) for m in msg_result.scalars().all()]
+
+    return AdminChatTranscriptResponse(session=session_summary, messages=messages)
+
+
+@router.get(
+    "/chat/stats",
+    response_model=AdminChatStatsResponse,
+    summary="Get chat statistics",
+    description="Aggregate counts for chat sessions, messages, and feedback.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not admin"},
+    },
+)
+async def get_chat_stats(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> AdminChatStatsResponse:
+    """Get aggregate chat statistics."""
+    _require_admin(user)
+
+    total_sessions = (await db.execute(select(func.count(ChatSession.id)))).scalar() or 0
+    total_messages = (await db.execute(select(func.count(ChatMessage.id)))).scalar() or 0
+    active_sessions = (
+        await db.execute(select(func.count(ChatSession.id)).where(ChatSession.is_active.is_(True)))
+    ).scalar() or 0
+    feedback_up = (
+        await db.execute(select(func.count(ChatMessage.id)).where(ChatMessage.feedback == "up"))
+    ).scalar() or 0
+    feedback_down = (
+        await db.execute(select(func.count(ChatMessage.id)).where(ChatMessage.feedback == "down"))
+    ).scalar() or 0
+
+    return AdminChatStatsResponse(
+        total_sessions=total_sessions,
+        total_messages=total_messages,
+        active_sessions=active_sessions,
+        feedback_up=feedback_up,
+        feedback_down=feedback_down,
+    )
