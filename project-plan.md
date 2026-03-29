@@ -932,12 +932,13 @@ KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval inf
 | B4 | Span instrumentation: `react_loop.py` + `llm_client.py` (iterations, generations, tools) | KAN-221 | ~4h | ✅ S69 |
 | B5 | Migration 017: `eval_results` + `eval_runs` tables + missing log indexes | KAN-222 | ~2h | ✅ S69 |
 | B6 | Observability API: 6 endpoints (KPIs, query list, detail, eval, Langfuse URL) + schemas | KAN-222 | ~4h | ✅ S69 |
-| B7 | OIDC SSO: Langfuse authenticates via our JWT (fallback: URL token) | KAN-223 | ~3h | |
-| B8 | Golden dataset: 14 queries (10 intent + 4 reasoning) + failure variants | KAN-223 | ~3h | |
-| B9 | Eval scorer: 5 dimensions (4 deterministic + Sonnet reasoning judge) | KAN-223 | ~3h | |
-| B10 | CI eval job: weekly + on-demand, Langfuse dataset push | KAN-223 | ~2h | |
+| B7 | OIDC SSO: 4 endpoints + redirect_uri whitelist + OIDC gate | KAN-223 | ~3h | ✅ S70 |
+| B8 | Golden dataset: 20 queries (10 intent + 5 reasoning + 3 failure + 2 behavioral) | KAN-223 | ~3h | ✅ S70 |
+| B9 | Eval scorer: 5 dimensions (4 deterministic + Sonnet reasoning judge) | KAN-223 | ~3h | ✅ S70 |
+| B10 | CI eval job: weekly + on-demand, artifact upload | KAN-223 | ~2h | ✅ S70 |
+| B10b | Tool group fixes (5 tools) + 10 ReAct few-shots | KAN-223 | ~3h | ✅ S70 |
 | B11 | Frontend: `/observability` page — KPI ticker + QueryTable (L1+L2) + Langfuse deep-link | KAN-224 | ~6h | |
-| B12 | Tests + tech debt cleanup (missing indexes, shared query logic extraction) | KAN-225 | ~3h | |
+| B12 | Tests + docs + deferred review items (see KAN-225 comment) | KAN-225 | ~6h | |
 
 **Key design decisions (Session 68 brainstorm):**
 - Transparency-as-a-feature: users see observability page with structured table, not just admins
@@ -949,6 +950,15 @@ KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval inf
 **Multi-agent decision gate:** After 4 weeks of eval data, review per-category scores. If any intent category consistently scores <80% deterministic or <3/5 reasoning, that category is a candidate for a specialized agent. This is a data-driven activation threshold — NOT deprecated, NOT deferred. See Phase G below.
 
 **Why second:** Must validate agent quality + give users transparency before exposing to paying users.
+
+**Deferred to KAN-225 (from KAN-223 review, Session 70):**
+- [ ] Wire LLM-as-judge (Sonnet) for reasoning queries — `llm_chat=None` is hardcoded
+- [ ] Refine resilience hallucination detector — regex false-positives on non-failed tool data
+- [ ] Wire `LLMClient()` with Groq provider in live assessment mode
+- [ ] Sync golden dataset with spec §5.2 (spec has 17, impl has 20, some tool/text drift)
+- [ ] Add 2 missing few-shot examples (graceful decline, when to stop)
+- [ ] Deduplicate Q7/Q20 dividend queries
+- [ ] Add `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_BASEURL` to CI assessment workflow
 
 ### Phase C: Google OAuth + User Acquisition (~3 days)
 > **Business + technical brainstorm needed** — account linking policy, PKCE flow design.
