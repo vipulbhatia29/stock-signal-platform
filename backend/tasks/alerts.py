@@ -15,7 +15,100 @@ from backend.tasks import celery_app
 logger = logging.getLogger(__name__)
 
 
-async def _generate_alerts_async(pipeline_context: dict | None = None) -> dict:
+def _is_downgrade(old_action: str, new_action: str) -> bool:
+    """Return True if the signal change is a downgrade."""
+    rank = {"BUY": 3, "WATCH": 2, "AVOID": 1, "SELL": 0}
+    return rank.get(new_action, 0) < rank.get(old_action, 0)
+
+
+async def _alert_exists_recently(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    dedup_key: str,
+    hours: int = 24,
+) -> bool:
+    """Check if a similar alert was created within the dedup window."""
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    result = await db.execute(
+        select(InAppAlert.id)
+        .where(
+            InAppAlert.user_id == user_id,
+            InAppAlert.dedup_key == dedup_key,
+            InAppAlert.created_at > cutoff,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def _create_alert(
+    db: AsyncSession,
+    alert_type: str,
+    message: str,
+    metadata_: dict | None = None,
+    user_id: uuid.UUID | None = None,
+    severity: str = "info",
+    title: str = "",
+    ticker: str | None = None,
+    dedup_key: str | None = None,
+) -> bool:
+    """Create an InAppAlert row, skipping if dedup_key matches a recent alert.
+
+    If user_id is None, creates alert for ALL users (system-wide alert).
+
+    Returns:
+        True if at least one alert was created, False if deduped.
+    """
+    if user_id is not None:
+        if dedup_key:
+            if await _alert_exists_recently(db, user_id, dedup_key):
+                return False
+        alert = InAppAlert(
+            id=uuid.uuid4(),
+            user_id=user_id,
+            alert_type=alert_type,
+            severity=severity,
+            title=title,
+            ticker=ticker,
+            dedup_key=dedup_key,
+            message=message,
+            metadata_=metadata_,
+            is_read=False,
+            created_at=datetime.now(timezone.utc),
+        )
+        db.add(alert)
+        return True
+    else:
+        from backend.models.user import User
+
+        users_result = await db.execute(select(User.id))
+        user_ids = [r[0] for r in users_result.all()]
+        any_created = False
+        for uid in user_ids:
+            if dedup_key:
+                if await _alert_exists_recently(db, uid, dedup_key):
+                    continue
+            alert = InAppAlert(
+                id=uuid.uuid4(),
+                user_id=uid,
+                alert_type=alert_type,
+                severity=severity,
+                title=title,
+                ticker=ticker,
+                dedup_key=dedup_key,
+                message=message,
+                metadata_=metadata_,
+                is_read=False,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(alert)
+            any_created = True
+        return any_created
+
+
+async def _generate_alerts_async(
+    pipeline_context: dict | None = None,
+) -> dict:
     """Generate in-app alerts based on pipeline results and signal changes.
 
     Args:
@@ -29,44 +122,56 @@ async def _generate_alerts_async(pipeline_context: dict | None = None) -> dict:
     alerts_created = 0
 
     async with async_session_factory() as db:
-        # 1. New BUY recommendations
         alerts_created += await _alert_new_buy_recommendations(db)
-
-        # 2. Signal flips (action changed from yesterday)
         alerts_created += await _alert_signal_flips(db)
 
-        # 3. Model drift events (from pipeline context)
         degraded = ctx.get("degraded", [])
         for ticker in degraded:
-            await _create_alert(
+            if await _create_alert(
                 db,
                 alert_type="drift",
                 message=(
                     f"{ticker} forecast model degraded — accuracy below "
                     "threshold, retraining queued"
                 ),
-                metadata_={"ticker": ticker, "route": f"/stocks/{ticker}"},
-            )
-            alerts_created += 1
+                metadata_={
+                    "ticker": ticker,
+                    "route": f"/stocks/{ticker}",
+                },
+                severity="warning",
+                title="Forecast Degraded",
+                ticker=ticker,
+                dedup_key=f"drift:{ticker}",
+            ):
+                alerts_created += 1
 
-        # 4. Pipeline partial failures
         price_status = ctx.get("price_refresh", {}).get("status")
         if price_status == "partial":
-            await _create_alert(
+            if await _create_alert(
                 db,
                 alert_type="pipeline",
-                message="Nightly price refresh completed with some failures — check pipeline logs",
+                message=(
+                    "Nightly price refresh completed with some failures — check pipeline logs"
+                ),
                 metadata_={"route": "/dashboard"},
-            )
-            alerts_created += 1
+                severity="warning",
+                title="Pipeline Issue",
+                ticker=None,
+                dedup_key="pipeline:partial",
+            ):
+                alerts_created += 1
         elif price_status == "failed":
-            await _create_alert(
+            if await _create_alert(
                 db,
                 alert_type="pipeline",
-                message="Nightly price refresh failed — all tickers affected",
+                message=("Nightly price refresh failed — all tickers affected"),
                 metadata_={"route": "/dashboard"},
-            )
-            alerts_created += 1
+                severity="critical",
+                title="Pipeline Failed",
+                ticker=None,
+                dedup_key="pipeline:total",
+            ):
+                alerts_created += 1
 
         await db.commit()
 
@@ -94,16 +199,23 @@ async def _alert_new_buy_recommendations(db: AsyncSession) -> int:
 
     created = 0
     for rec in new_buys:
-        await _create_alert(
+        if await _create_alert(
             db,
             user_id=rec.user_id,
             alert_type="signal_change",
             message=(
                 f"New BUY signal for {rec.ticker} — composite score {rec.composite_score:.1f}/10"
             ),
-            metadata_={"ticker": rec.ticker, "route": f"/stocks/{rec.ticker}"},
-        )
-        created += 1
+            metadata_={
+                "ticker": rec.ticker,
+                "route": f"/stocks/{rec.ticker}",
+            },
+            severity="info",
+            title="New BUY Signal",
+            ticker=rec.ticker,
+            dedup_key=f"buy:{rec.ticker}",
+        ):
+            created += 1
 
     return created
 
@@ -112,14 +224,13 @@ async def _alert_signal_flips(db: AsyncSession) -> int:
     """Create alerts when a stock's recommendation action flips.
 
     Compares the most recent recommendation to the previous one. If the
-    action changed (e.g., WATCH → BUY or BUY → SELL), create an alert.
+    action changed (e.g., WATCH -> BUY or BUY -> SELL), create an alert.
 
     Returns:
         Number of alerts created.
     """
     from backend.models.recommendation import RecommendationSnapshot
 
-    # Get the latest 2 recommendations per ticker for all users
     cutoff = datetime.now(timezone.utc) - timedelta(hours=48)
     result = await db.execute(
         select(RecommendationSnapshot)
@@ -132,7 +243,6 @@ async def _alert_signal_flips(db: AsyncSession) -> int:
     )
     recs = result.scalars().all()
 
-    # Group by (user_id, ticker) and check for flips
     groups: dict[tuple, list] = {}
     for rec in recs:
         key = (str(rec.user_id), rec.ticker)
@@ -144,68 +254,35 @@ async def _alert_signal_flips(db: AsyncSession) -> int:
             continue
         latest = group[0]
         previous = group[1]
-        if latest.action != previous.action:
-            await _create_alert(
-                db,
-                user_id=latest.user_id,
-                alert_type="signal_change",
-                message=(
-                    f"{ticker} signal changed: {previous.action} → {latest.action} "
-                    f"(score {latest.composite_score:.1f}/10)"
-                ),
-                metadata_={"ticker": ticker, "route": f"/stocks/{ticker}"},
-            )
+        if latest.action == previous.action:
+            continue
+
+        downgrade = _is_downgrade(previous.action, latest.action)
+        severity = "warning" if downgrade else "info"
+        title = "Score Downgrade" if downgrade else "Score Upgrade"
+        direction = "downgrade" if downgrade else "upgrade"
+
+        if await _create_alert(
+            db,
+            user_id=latest.user_id,
+            alert_type="signal_change",
+            message=(
+                f"{ticker} signal changed: "
+                f"{previous.action} → {latest.action} "
+                f"(score {latest.composite_score:.1f}/10)"
+            ),
+            metadata_={
+                "ticker": ticker,
+                "route": f"/stocks/{ticker}",
+            },
+            severity=severity,
+            title=title,
+            ticker=ticker,
+            dedup_key=f"signal_flip:{direction}:{ticker}",
+        ):
             created += 1
 
     return created
-
-
-async def _create_alert(
-    db: AsyncSession,
-    alert_type: str,
-    message: str,
-    metadata_: dict | None = None,
-    user_id: uuid.UUID | None = None,
-) -> None:
-    """Create an InAppAlert row.
-
-    If user_id is None, creates alert for ALL users (system-wide alert).
-
-    Args:
-        db: Async database session.
-        alert_type: Alert type string.
-        message: Human-readable message.
-        metadata_: Optional JSONB metadata for deep-linking.
-        user_id: Target user, or None for all users.
-    """
-    if user_id is not None:
-        alert = InAppAlert(
-            id=uuid.uuid4(),
-            user_id=user_id,
-            alert_type=alert_type,
-            message=message,
-            metadata_=metadata_,
-            is_read=False,
-            created_at=datetime.now(timezone.utc),
-        )
-        db.add(alert)
-    else:
-        # System-wide alert: create for all users
-        from backend.models.user import User
-
-        users_result = await db.execute(select(User.id))
-        user_ids = [r[0] for r in users_result.all()]
-        for uid in user_ids:
-            alert = InAppAlert(
-                id=uuid.uuid4(),
-                user_id=uid,
-                alert_type=alert_type,
-                message=message,
-                metadata_=metadata_,
-                is_read=False,
-                created_at=datetime.now(timezone.utc),
-            )
-            db.add(alert)
 
 
 @celery_app.task(name="backend.tasks.alerts.generate_alerts_task")
