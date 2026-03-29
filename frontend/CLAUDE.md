@@ -28,3 +28,5 @@ npx jest             # Unit tests (jsdom env)
 - This is a SINGLE app — no iframes, no embedded services
 - Jest needs `testEnvironment: "jsdom"` (not `"node"`)
 - Tailwind v4: use `font-family: var(--font-sora)` in `@layer base`, not `@theme`
+- `types/api.ts` has 105 exported types — single source of truth for all backend schema types
+- Popover/Trigger components use `@base-ui/react` (NOT shadcn) — use `render` prop, NOT `asChild`
