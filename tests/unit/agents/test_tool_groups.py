@@ -76,12 +76,12 @@ _FULL_REGISTRY = _make_registry(_ALL_GROUP_TOOL_NAMES)
 class TestStockGroup:
     """Tests for the 'stock' tool group."""
 
-    def test_stock_group_returns_8_schemas(self) -> None:
-        """stock group has 8 tools and every schema has type='function'."""
+    def test_stock_group_returns_10_schemas(self) -> None:
+        """stock group has 10 tools and every schema has type='function'."""
         registry = _make_registry(TOOL_GROUPS["stock"])  # type: ignore[arg-type]
         schemas = get_tool_schemas_for_group("stock", registry)
 
-        assert len(schemas) == 8
+        assert len(schemas) == 10
         for schema in schemas:
             assert schema["type"] == "function"
             assert "function" in schema

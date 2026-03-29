@@ -1,0 +1,68 @@
+name: agent-assessment
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for running assessment'
+        required: false
+        default: 'manual'
+        type: string
+
+jobs:
+  assess:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+          POSTGRES_DB: stockdb_test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+asyncpg://postgres:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5433/stockdb_test
+      REDIS_URL: redis://localhost:6380/0
+      JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
+      JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+      GROQ_API_KEY: ${{ secrets.CI_GROQ_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.CI_ANTHROPIC_API_KEY }}
+      MCP_TOOLS: "false"
+      LANGFUSE_SECRET_KEY: ""
+      REACT_AGENT: "true"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Run migrations
+        run: uv run alembic upgrade head
+      - name: Run assessment
+        run: uv run python -m backend.tasks.assessment_runner
+      - name: Upload assessment results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: assessment-results
+          path: assessment-results.json
