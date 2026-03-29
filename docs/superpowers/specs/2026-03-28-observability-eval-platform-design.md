@@ -225,27 +225,35 @@ Eval Runner (Python script / CI job)
 
 #### Intent Coverage (10 queries)
 
-| # | Category | Query | Expected Tools | Grounding Check |
-|---|----------|-------|---------------|-----------------|
-| 1 | Single stock analysis | "Analyze AAPL for me" | analyze_stock, get_fundamentals, compute_signals | References actual RSI, MACD, P/E values |
-| 2 | Multi-stock comparison | "Compare AAPL and MSFT" | analyze_stock ×2, compare_stocks | Both tickers' data present, comparison table |
-| 3 | Portfolio health | "How's my portfolio doing?" | portfolio_health, get_portfolio_exposure | References user's actual positions |
-| 4 | Market briefing | "What's happening in the market today?" | market_briefing | References real index values, sector data |
-| 5 | Stock intelligence | "Any insider trading activity on TSLA?" | get_stock_intelligence | References actual insider transaction data |
-| 6 | Forecast query | "Where will AAPL be in 6 months?" | get_forecast, get_fundamentals | References Prophet model output, confidence interval |
-| 7 | Recommendation | "What should I buy right now?" | recommend_stocks, portfolio_health | Portfolio-aware, not generic advice |
-| 8 | Out-of-scope decline | "Write me a poem about stocks" | *none* | Polite decline, zero tool calls |
-| 9 | Ambiguous follow-up | "What about its dividends?" (after AAPL context) | dividend_sustainability | Resolves pronoun to AAPL via EntityRegistry |
-| 10 | Edge case — no data | "Analyze XYZFAKE123" | analyze_stock (fails gracefully) | No hallucination, reports data unavailable |
+| # | Category | Query | Expected Tools | Route | Grounding Check |
+|---|----------|-------|---------------|-------|-----------------|
+| 1 | Single stock analysis | "Analyze AAPL for me" | analyze_stock, get_fundamentals | stock | References actual RSI, MACD, P/E values (analyze_stock returns signals internally) |
+| 2 | Multi-stock comparison | "Compare AAPL and MSFT" | analyze_stock ×2, compare_stocks | comparison | Both tickers' data present, comparison table |
+| 3 | Portfolio health | "How's my portfolio doing?" | portfolio_health, get_portfolio_exposure | portfolio | References user's actual positions |
+| 4 | Market briefing | "What's happening in the market today?" | market_briefing | market | References real index values, sector data |
+| 5 | Stock intelligence | "Any insider trading activity on TSLA?" | get_stock_intelligence | stock | References actual insider transaction data |
+| 6 | Forecast query | "Where will AAPL be in 6 months?" | get_forecast, get_fundamentals | stock | References Prophet model output, confidence interval |
+| 7 | Recommendation | "What should I buy for my portfolio?" | recommend_stocks, portfolio_health | portfolio | Portfolio-aware, not generic advice |
+| 8 | Out-of-scope decline | "Write me a poem about stocks" | *none* | out_of_scope | Polite decline, zero tool calls |
+| 9 | Ambiguous follow-up | "What about its dividends?" (after AAPL context) | dividend_sustainability | stock | Resolves pronoun to AAPL via EntityRegistry |
+| 10 | Edge case — no data | "Analyze XYZFAKE123" | analyze_stock (fails gracefully) | stock | No hallucination, reports data unavailable |
 
 #### Multi-Step Reasoning (4 queries)
 
-| # | Category | Query | Expected Tools | Reasoning Check |
-|---|----------|-------|---------------|-----------------|
-| 11 | Cross-domain synthesis | "Is AAPL overvalued given its fundamentals and forecast?" | get_fundamentals, get_forecast, compute_signals | Must reason ACROSS all three — not just list them. Connects P/E to forecast to signals. |
-| 12 | Conditional logic | "Should I sell TSLA if it drops below its SMA 200?" | compute_signals (SMA 200), get_fundamentals | Handles hypothetical vs current data. Gives conditional advice, not a flat answer. |
-| 13 | Portfolio + market synthesis | "How exposed am I to a tech sector downturn?" | portfolio_health, get_portfolio_exposure, market_briefing | Synthesizes sector overlap between portfolio and market sectors. |
-| 14 | Contradictory signals | "NVDA has great fundamentals but bearish technicals — what should I do?" | get_fundamentals, compute_signals | Acknowledges tension, weighs both sides. Not one-sided. |
+| # | Category | Query | Expected Tools | Route | Reasoning Check |
+|---|----------|-------|---------------|-------|-----------------|
+| 11 | Cross-domain synthesis | "Is AAPL overvalued given its fundamentals and forecast?" | analyze_stock, get_fundamentals, get_forecast | stock | Must reason ACROSS all three — not just list them. Connects P/E to forecast to signals. |
+| 12 | Conditional logic | "Should I sell TSLA if it drops below its SMA 200?" | analyze_stock, get_fundamentals | stock | Handles hypothetical vs current data. analyze_stock returns SMA data. |
+| 13 | Portfolio + market synthesis | "How exposed am I to a tech sector downturn?" | portfolio_health, get_portfolio_exposure, market_briefing | portfolio | Synthesizes sector overlap between portfolio and market sectors. |
+| 14 | Contradictory signals | "NVDA has great fundamentals but bearish technicals — what should I do?" | analyze_stock, get_fundamentals | stock | Acknowledges tension, weighs both sides. analyze_stock returns signal data. |
+
+#### Tool Group Fixes Required (implementation prerequisite)
+
+The following tool group gaps must be fixed in `backend/agents/tool_groups.py` before the assessment framework can run correctly:
+
+1. **Add `dividend_sustainability` to `stock` group** — query 9 needs it for dividend follow-up on a specific ticker
+2. **Add `market_briefing` to `portfolio` group** — query 13 needs cross-domain portfolio+market synthesis
+3. **Add `compute_signals` to `stock` group** — not strictly needed (analyze_stock calls it internally) but useful if the agent wants signals without full analysis
 
 #### Failure Variants (external API resilience)
 
