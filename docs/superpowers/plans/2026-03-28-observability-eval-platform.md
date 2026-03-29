@@ -995,6 +995,28 @@ git commit -m "feat(auth): add OIDC endpoints for Langfuse SSO"
 
 ---
 
+## Task 12b: Tool Group Fixes (prerequisite for assessment)
+
+**Score:** 4 (context_span=1, convention_density=2, ambiguity=1) → **Local**
+
+**Files:**
+- Modify: `backend/agents/tool_groups.py`
+
+- [ ] **Step 1: Add missing tools to groups**
+
+In `TOOL_GROUPS` dict:
+- Add `"dividend_sustainability"` to `"stock"` list (query 9 needs it for dividend follow-ups)
+- Add `"market_briefing"` to `"portfolio"` list (query 13 needs cross-domain portfolio+market synthesis)
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add backend/agents/tool_groups.py
+git commit -m "fix(agent): add dividend_sustainability to stock group, market_briefing to portfolio group"
+```
+
+---
+
 ## Task 13: Golden Dataset Definition
 
 **Score:** 7 (context_span=2, convention_density=2, ambiguity=3) → **Local**
@@ -1004,9 +1026,15 @@ git commit -m "feat(auth): add OIDC endpoints for Langfuse SSO"
 
 - [ ] **Step 1: Define all 14 queries + failure variants**
 
-Frozen dataclass with: `query_text`, `intent_category`, `expected_tools` (frozenset), `grounding_checks` (tuple of substrings), `max_iterations`, `is_reasoning` (bool), `is_failure_variant` (bool), `mock_failures` (dict).
+Frozen dataclass with: `query_text`, `intent_category`, `expected_tools` (frozenset), `expected_route` (str), `grounding_checks` (tuple of substrings), `max_iterations`, `is_reasoning` (bool), `is_failure_variant` (bool), `mock_failures` (dict).
 
-All 14 queries from spec §5.2 plus 3 failure variants (queries 1, 4, 5 with mocked API failures).
+All 14 queries from spec §5.2 (REVISED after Session 68 routing audit) plus 3 failure variants.
+
+**Key corrections from audit:**
+- `compute_signals` removed from expected tools — `analyze_stock` calls it internally
+- Query 7 reworded to "What should I buy for my portfolio?" to trigger portfolio route
+- Each query has `expected_route` field matching actual intent classifier behavior
+- Task 12b must be completed first (tool group gaps fixed)
 
 - [ ] **Step 2: Commit**
 
