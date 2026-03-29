@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # --- Logging ---
     LOG_LEVEL: str = "INFO"
 
+    # --- Langfuse (optional — tracing + assessment) ---
+    LANGFUSE_SECRET_KEY: str = ""
+    LANGFUSE_PUBLIC_KEY: str = ""
+    LANGFUSE_BASEURL: str = "http://localhost:3001"
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Parse comma-separated CORS origins into a list."""

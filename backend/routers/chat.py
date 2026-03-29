@@ -214,6 +214,17 @@ async def _event_generator(
         async with async_session_factory() as ctx_db:
             user_context = await build_user_context(user.id, ctx_db)
 
+        # Create Langfuse trace for this query (fire-and-forget)
+        langfuse_svc = getattr(request.app.state, "langfuse", None)
+        langfuse_trace = None
+        if langfuse_svc:
+            langfuse_trace = langfuse_svc.create_trace(
+                trace_id=query_id,
+                session_id=chat_session.id,
+                user_id=user.id,
+                metadata={"agent_type": chat_session.agent_type},
+            )
+
         # ── Fast path: intent classifier ─────────────────────────────────────
         from backend.agents.intent_classifier import classify_intent
         from backend.agents.simple_formatter import format_simple_result
@@ -292,6 +303,7 @@ async def _event_generator(
                 collector=collector,
                 cache=cache,
                 session_id=str(chat_session.id),
+                langfuse_trace=langfuse_trace,
             ):
                 if event.type == "token" and event.content:
                     collected_tokens.append(event.content)

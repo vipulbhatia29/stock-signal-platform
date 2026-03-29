@@ -1,6 +1,7 @@
 """Database models package — import all models so Alembic can discover them."""
 
 from backend.models.alert import InAppAlert
+from backend.models.assessment import AssessmentResult, AssessmentRun
 from backend.models.base import Base
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.dividend import DividendPayment
@@ -24,6 +25,8 @@ from backend.models.stock import Stock, Watchlist
 from backend.models.user import User, UserPreference, UserRole
 
 __all__ = [
+    "AssessmentResult",
+    "AssessmentRun",
     "Base",
     "ChatMessage",
     "ChatSession",

@@ -1,38 +1,36 @@
+---
+scope: project
+category: project
+updated_by: session-69
+---
+
 # Project State
 
 ## Current Phase
-- SaaS Launch Roadmap Phase A COMPLETE (Session 67)
-- 3 open JIRA tickets: KAN-157 (ReAct eval), KAN-152 (OAuth), KAN-211 (Test Hardening Epic)
-- Test hardening Epic KAN-211 has 5 stories: KAN-212-216
+- SaaS Launch Roadmap Phase B: Implementation IN PROGRESS
+- Epic KAN-218: KAN-220 Done, KAN-221 Done, KAN-222 Done. KAN-223-225 To Do.
+- Branch: `feat/KAN-220-langfuse-infra` (11 commits, not yet PR'd)
 
 ## Resume Point
-- Pick next task: KAN-212 (Tool orchestration tests — quick win, ~10h, no brainstorm)
-- Or: KAN-157 (Live LLM eval — needs technical brainstorm, SaaS Phase B)
-- Or: KAN-152 (Google OAuth — needs business + technical brainstorm, SaaS Phase C)
+- Next: Push branch, open PR for KAN-220+221+222 to develop
+- Then: KAN-223 (S4: SSO + Assessment Framework — Tasks 12-16, mixed Local/Opus)
+- Plan: docs/superpowers/plans/2026-03-28-observability-eval-platform.md
 
-## Session 67 Accomplishments
-- KAN-186 COMPLETE: TokenBudget → Redis sorted sets (Lua scripts, fail-open, NOSCRIPT recovery)
-- KAN-186 COMPLETE: ObservabilityCollector reads → llm_call_log DB table (cross-worker ground truth)
-- Admin endpoints updated to pass DB session for observability reads
-- main.py reordered: Redis pool → TokenBudget → ObservabilityCollector → CacheService
-- Code review: NOSCRIPT recovery added (clear cached SHAs on Redis error)
-- 8 files changed, 16 token budget tests, 14 observability tests, 1045 unit tests total
-- Docs: project-plan Phase A marked complete, TDD §3.13 + §5.4 updated, PROGRESS.md entry
+## Session 69 Accomplishments
+- KAN-220: Docker Compose (langfuse-db + langfuse-server), config settings, LangfuseService wrapper (7 methods, fire-and-forget), lifespan wiring
+- KAN-221: Chat trace creation, ReAct loop spans (iteration/tool/synthesis), LLMClient generation recording with cost
+- KAN-222: AssessmentRun + AssessmentResult models, migration 017 (eval tables + 4 log indexes), shared observability query service (5 functions), 6 API endpoints, 8 Pydantic schemas
+- Code review fixes: 2 Critical IDOR, N+1 batch fix, LLMClient wrapper refactor, wrong import path bug, 8 new tests
+- Key bug found: `backend.agents.context_vars` import in LLMClient was non-existent module — silently swallowed by try-except. Fixed to `backend.request_context`.
 
 ## Test Counts
-- ~1045 unit + ~180 API + 7 e2e + 24 integration + 107 frontend = ~1152 total tests
-- Alembic head: 1a001d6d3535 (migration 014)
+- 1071 unit + ~180 API + 7 e2e + 24 integration + 107 frontend = ~1178 total
+- Alembic head: a7b3c4d5e6f7 (migration 017)
 
 ## Branch
-- develop — PR pending for KAN-186
+- feat/KAN-220-langfuse-infra — awaiting PR to develop
 
-## JIRA Board (8 open tickets)
-- KAN-186: TokenBudget → Redis — DONE (pending PR merge)
-- KAN-157: Live LLM eval — rescoped for ReAct (SaaS Phase B, needs technical brainstorm)
-- KAN-152: Google OAuth PKCE (SaaS Phase C, needs business + technical brainstorm)
-- KAN-211: Test Suite Hardening Epic
-- KAN-212: S1 Tool orchestration tests (~10h)
-- KAN-213: S2 Pipeline mock refactor (~8h)
-- KAN-214: S3 Error path tests (~8h)
-- KAN-215: S4 ReAct loop integration test (~6h)
-- KAN-216: S5 Frontend component tests (~15h, deferrable)
+## Key Learnings
+- Lazy imports inside try-except defeat mock patches AND mask real import errors. Always write tests for fire-and-forget code paths.
+- IDOR checks needed on every detail endpoint that takes a resource ID — list endpoints get scoping naturally, detail endpoints don't.
+- N+1 in paginated list builders: always batch enrichment with WHERE IN, never loop.

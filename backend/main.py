@@ -22,6 +22,7 @@ from backend.routers import (
     health,
     indexes,
     market,
+    observability,
     portfolio,
     preferences,
     sectors,
@@ -106,6 +107,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.cache = cache_service
     logger.info("CacheService initialized")
 
+    # Langfuse tracing — parallel to ObservabilityCollector (fire-and-forget)
+    from backend.services.langfuse_service import LangfuseService
+
+    langfuse_service = LangfuseService(
+        secret_key=settings.LANGFUSE_SECRET_KEY,
+        public_key=settings.LANGFUSE_PUBLIC_KEY,
+        base_url=settings.LANGFUSE_BASEURL,
+    )
+    app.state.langfuse = langfuse_service
+
     # Cache warmup — pre-load indexes
     try:
         from backend.services.cache import CacheTier
@@ -152,7 +163,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         provider.collector = collector
         provider.pricing = pricing
 
-    llm_client = LLMClient(providers=providers, collector=collector)
+    llm_client = LLMClient(
+        providers=providers, collector=collector, langfuse_service=langfuse_service
+    )
 
     app.state.config_loader = config_loader
     app.state.token_budget = token_budget
@@ -255,6 +268,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if mcp_manager:
         await mcp_manager.stop()
     await close_redis()  # closes shared pool (cache + blocklist)
+    if hasattr(app.state, "langfuse"):
+        app.state.langfuse.shutdown()
     logger.info("Application shutting down")
 
 
@@ -295,3 +310,4 @@ app.include_router(forecasts.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(market.router, prefix="/api/v1")
+app.include_router(observability.router, prefix="/api/v1")

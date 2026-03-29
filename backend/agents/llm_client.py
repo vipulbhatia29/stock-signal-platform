@@ -189,11 +189,13 @@ class LLMClient:
         retry_policy: RetryPolicy | None = None,
         tier_config: dict[str, list[LLMProvider]] | None = None,
         collector: Any = None,  # ObservabilityCollector | None
+        langfuse_service: Any | None = None,
     ) -> None:
         self._providers = providers
         self._retry_policy = retry_policy or RetryPolicy()
         self._tier_config = tier_config
         self._collector = collector
+        self._langfuse = langfuse_service
 
     def get_active_chat_model(self) -> Any:
         """Return the LangChain chat model from the first healthy provider."""
@@ -235,6 +237,38 @@ class LLMClient:
             try:
                 response = await self._call_with_retry(provider, messages, tools, stream)
                 provider.health.consecutive_failures = 0
+
+                # Langfuse: record generation (fire-and-forget)
+                if self._langfuse and self._langfuse.enabled:
+                    try:
+                        from backend.request_context import current_query_id
+
+                        qid = current_query_id.get(None)
+                        if qid:
+                            trace = self._langfuse.get_trace_ref(qid)
+                            cost = provider._compute_cost(
+                                response.model,
+                                response.prompt_tokens or 0,
+                                response.completion_tokens or 0,
+                            )
+                            self._langfuse.record_generation(
+                                trace=trace,
+                                name=f"llm.{provider.name}.{response.model}",
+                                model=response.model,
+                                input_messages=messages[-1:],
+                                output=response.content or "",
+                                prompt_tokens=response.prompt_tokens or 0,
+                                completion_tokens=response.completion_tokens or 0,
+                                cost_usd=cost,
+                                metadata={
+                                    "type": "llm",
+                                    "tier": tier or "",
+                                    "provider": provider.name,
+                                },
+                            )
+                    except Exception:
+                        logger.debug("langfuse_generation_failed")
+
                 return response
             except Exception as e:
                 provider.health.consecutive_failures += 1
