@@ -920,24 +920,24 @@ Consolidated execution order. All prior phases complete. This is the critical pa
 **Why first:** Without this, 2+ Uvicorn workers = 2× overspend on LLM rate limits. Correctness blocker. **RESOLVED.**
 
 ### Phase B: Observability + Eval Platform (~4-5 days) — MERGED KAN-162 + KAN-157
-> **Brainstorm COMPLETE (Session 68).** Spec: `docs/superpowers/specs/2026-03-28-observability-eval-platform-design.md`
+> **Brainstorm COMPLETE (Session 68). Implementation IN PROGRESS (Session 69).** Spec: `docs/superpowers/specs/2026-03-28-observability-eval-platform-design.md`
 
 KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval infrastructure that KAN-157 would otherwise build from scratch.
 
-| # | Task | JIRA | Effort |
-|---|------|------|--------|
-| B1 | Docker Compose: Langfuse server + Langfuse DB (port 3001/5434) | KAN-162 | ~2h |
-| B2 | `uv add langfuse` + SDK init in `main.py` lifespan (feature-flagged) | KAN-162 | ~2h |
-| B3 | Trace instrumentation: `chat/router.py` (create trace per query) | KAN-162 | ~3h |
-| B4 | Span instrumentation: `react_loop.py` + `llm_client.py` (iterations, generations, tools) | KAN-162 | ~4h |
-| B5 | Migration 017: `eval_results` + `eval_runs` tables + missing log indexes | KAN-162 | ~2h |
-| B6 | Observability API: 6 endpoints (KPIs, query list, detail, eval, Langfuse URL) | KAN-162 | ~4h |
-| B7 | OIDC SSO: Langfuse authenticates via our JWT (fallback: URL token) | KAN-162 | ~3h |
-| B8 | Golden dataset: 14 queries (10 intent + 4 reasoning) + failure variants | KAN-157 | ~3h |
-| B9 | Eval scorer: 5 dimensions (4 deterministic + Sonnet reasoning judge) | KAN-157 | ~3h |
-| B10 | CI eval job: weekly + on-demand, Langfuse dataset push | KAN-157 | ~2h |
-| B11 | Frontend: `/observability` page — KPI ticker + QueryTable (L1+L2) + Langfuse deep-link | KAN-162 | ~6h |
-| B12 | Tests + tech debt cleanup (missing indexes, shared query logic extraction) | KAN-162 | ~3h |
+| # | Task | JIRA | Effort | Status |
+|---|------|------|--------|--------|
+| B1 | Docker Compose: Langfuse server + Langfuse DB (port 3001/5434) | KAN-220 | ~2h | ✅ S69 |
+| B2 | `uv add langfuse` + SDK init in `main.py` lifespan (feature-flagged) | KAN-220 | ~2h | ✅ S69 |
+| B3 | Trace instrumentation: `chat/router.py` (create trace per query) | KAN-221 | ~3h | ✅ S69 |
+| B4 | Span instrumentation: `react_loop.py` + `llm_client.py` (iterations, generations, tools) | KAN-221 | ~4h | ✅ S69 |
+| B5 | Migration 017: `eval_results` + `eval_runs` tables + missing log indexes | KAN-222 | ~2h | ✅ S69 |
+| B6 | Observability API: 6 endpoints (KPIs, query list, detail, eval, Langfuse URL) + schemas | KAN-222 | ~4h | ✅ S69 |
+| B7 | OIDC SSO: Langfuse authenticates via our JWT (fallback: URL token) | KAN-223 | ~3h | |
+| B8 | Golden dataset: 14 queries (10 intent + 4 reasoning) + failure variants | KAN-223 | ~3h | |
+| B9 | Eval scorer: 5 dimensions (4 deterministic + Sonnet reasoning judge) | KAN-223 | ~3h | |
+| B10 | CI eval job: weekly + on-demand, Langfuse dataset push | KAN-223 | ~2h | |
+| B11 | Frontend: `/observability` page — KPI ticker + QueryTable (L1+L2) + Langfuse deep-link | KAN-224 | ~6h | |
+| B12 | Tests + tech debt cleanup (missing indexes, shared query logic extraction) | KAN-225 | ~3h | |
 
 **Key design decisions (Session 68 brainstorm):**
 - Transparency-as-a-feature: users see observability page with structured table, not just admins

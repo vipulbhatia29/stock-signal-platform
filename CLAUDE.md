@@ -71,6 +71,8 @@ Load what you need for the task at hand:
 | Postgres | `docker compose up -d postgres` | **5433** |
 | Redis | `docker compose up -d redis` | **6380** |
 | Celery worker | `uv run celery -A backend.tasks worker --loglevel=info` | — |
+| Langfuse | `docker compose up -d langfuse-db langfuse-server` | **3001** |
+| Langfuse DB | (auto with langfuse-server) | **5434** |
 | Docs | `uv run mkdocs serve` | 8000 |
 
 ## Git Branching

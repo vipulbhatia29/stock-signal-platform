@@ -1315,3 +1315,65 @@ Executed all 12 tasks from plan serially using subagents. Each task: read source
 - 1045 unit tests (+1 new: NOSCRIPT recovery) + 107 frontend = 1152 total
 - Branch: `feat/KAN-186-token-budget-redis`
 - Alembic head: `1a001d6d3535` (migration 014 — unchanged, no new migration needed)
+
+---
+
+## Session 68 — 2026-03-28 *(compact)*
+
+**Focus:** Phase B Observability — Refinement COMPLETE (brainstorm + spec + plan + JIRA backlog)
+
+6-round Socratic brainstorm. 12-section design spec. 22-task plan with implement-local scoring (13 Local, 9 Opus). Plan reviewed twice — 6 issues fixed. Tech debt audit: 8 findings. JIRA: Epic KAN-218 + 7 Stories (KAN-219-225). PR #140, #141, #142 merged (docs only). KAN-162 auto-closed by branch name — reopened. Phase G (multi-agent decision gate) added to project-plan.
+
+---
+
+## Session 69 — 2026-03-28
+
+### Focus: Phase B Implementation — KAN-220 + KAN-221 + KAN-222
+
+**Branch:** `feat/KAN-220-langfuse-infra` (11 commits)
+**Date:** 2026-03-28
+
+### KAN-220: S1 — Langfuse Infrastructure ✅
+- [x] Task 1: Docker Compose — `langfuse-db` (postgres:16-alpine, port 5434) + `langfuse-server` (port 3001) + healthchecks + volume
+- [x] Task 2: Config — 3 Langfuse settings in `backend/config.py` (feature-flagged on `LANGFUSE_SECRET_KEY`)
+- [x] Task 3: `LangfuseService` wrapper — fire-and-forget, all methods no-op when disabled. 7 methods: `create_trace`, `get_trace_ref`, `record_generation`, `create_span`, `end_span`, `flush`, `shutdown`. 11 unit tests.
+- [x] Task 4: Lifespan wiring — init after CacheService, shutdown after Redis close
+
+### KAN-221: S2 — Trace Instrumentation ✅
+- [x] Task 5: Chat router creates Langfuse trace per query (query_id, session_id, user_id, agent_type). Trace passed to `react_loop()`. ReAct loop: iteration spans (`react.iteration.{n}`), tool spans (`tool.{name}` with db/external type), synthesis span rename on final answer. All fire-and-forget.
+- [x] Task 7: LLMClient records generations via `LangfuseService.record_generation()` with model, tokens, cost_usd, tier metadata. Uses `get_trace_ref()` + ContextVar `current_query_id`.
+
+### KAN-222: S3 — Observability Data Layer ✅
+- [x] Task 8: `AssessmentRun` + `AssessmentResult` models (tables: `eval_runs`, `eval_results`). Migration 017 — both tables + 4 missing log indexes (spec §12.3).
+- [x] Task 9: `observability_queries.py` — shared service with 5 functions: `get_kpis`, `get_query_list`, `get_query_detail`, `get_latest_assessment`, `get_assessment_history`. All support `user_id` scoping.
+- [x] Task 10: 6 API endpoints at `/api/v1/observability/` — kpis, queries, queries/{id}, queries/{id}/langfuse-url, assessment/latest, assessment/history (admin only). Router mounted in main.py.
+- [x] Task 11: 8 Pydantic schemas in `backend/schemas/observability.py`.
+
+### Code Review Findings + Fixes
+| Finding | Severity | Resolution |
+|---------|----------|------------|
+| IDOR on `/queries/{id}` + `/langfuse-url` — any user could see any query | Critical | Fixed — added `user_id` param to `get_query_detail()`, wired `_user_scope()` |
+| N+1 query in `get_query_list()` — 51 queries per page | Important | Fixed — batched tool + message queries with `WHERE IN` |
+| LLMClient bypassed `LangfuseService` wrapper, accessed `._client` directly | Important | Fixed — uses `record_generation()` + new `get_trace_ref()` |
+| Missing `cost_usd` in generation recording | Important | Fixed — wired `provider._compute_cost()` |
+| Wrong import path `backend.agents.context_vars` (non-existent module) | Bug | Fixed → `backend.request_context`. Was silently failing in try-except. |
+| `_EXTERNAL_TOOLS` redefined inside loop body | Minor | Fixed — moved to module-level constant |
+| `date_from`/`date_to` params not wired in router | Minor | Fixed — wired through to service |
+| Missing tests for instrumented code paths | Important | Fixed — +8 tests (react_loop spans, LLMClient generation, query_list, user scoping) |
+
+### Key Learnings
+1. **Lazy imports defeat mock patches** — `from X import Y` inside a function body means `patch("module.Y")` fails with `AttributeError`. Must patch at the source module (`patch("X.Y")`) or use `create=True`.
+2. **Plan-prescribed code can have bugs** — the plan specified `from backend.agents.context_vars import current_query_id` but the module doesn't exist. The actual path is `backend.request_context`. Fire-and-forget try-except masked this completely. Tests are the only way to catch these.
+3. **IDOR checks easy to miss on detail endpoints** — list endpoints get user scoping naturally (they filter by user), but detail endpoints that take an ID need explicit ownership verification. Always add `user_id` scoping to any endpoint that accepts a resource ID.
+4. **N+1 in query builders** — when building paginated list responses with per-item enrichment, always batch the enrichment queries with `WHERE IN (...)`, never loop.
+
+### Files Created (10)
+`backend/services/langfuse_service.py`, `backend/services/observability_queries.py`, `backend/models/assessment.py`, `backend/schemas/observability.py`, `backend/routers/observability.py`, `backend/migrations/versions/a7b3c4d5e6f7_017_...py`, `tests/unit/services/test_langfuse_service.py`, `tests/unit/services/test_observability_queries.py`, `tests/unit/agents/test_langfuse_instrumentation.py`
+
+### Files Modified (8)
+`docker-compose.yml`, `backend/.env.example`, `backend/config.py`, `backend/main.py`, `backend/agents/react_loop.py`, `backend/routers/chat.py`, `backend/agents/llm_client.py`, `backend/models/__init__.py`
+
+### Test Counts
+- 1071 unit tests (+26 new: 11 langfuse_service + 7 observability_queries + 5 langfuse_instrumentation + 3 query_list/scoping)
+- Alembic head: `a7b3c4d5e6f7` (migration 017)
+- Branch: `feat/KAN-220-langfuse-infra`
