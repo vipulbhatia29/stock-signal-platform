@@ -854,12 +854,8 @@ Close observability gaps (cost tracking, cache_hit, agent_id, fallback_rate). Th
 
 ## Phase 9: Comparison Fan-Out + Subscriptions — RESCOPED (Session 66 audit)
 
-### 9A — Comparison Fan-Out (rescoped from Multi-Agent, ~15h)
-~~Original scope: 4 specialized agents (Stock Research, Portfolio, Orchestrator, Fan-out). Rescoped because the single ReAct agent with tool groups already handles multi-stock and portfolio queries well. Only comparison fan-out adds genuine value (latency: N×8s serial → ~8s parallel).~~
-
-- [ ] Comparison fan-out: asyncio.gather + semaphore for N-stock comparisons
-- [ ] ConcurrencyController: reads fallback_rate, adjusts semaphore (moved from 8D)
-- [ ] Stagger fan-out with random jitter for rate limit protection
+### 9A — Comparison Fan-Out + Multi-Agent (moved to SaaS Roadmap Phase F + G)
+~~Original scope: 4 specialized agents. Rescoped to comparison fan-out only (Phase F). Multi-agent architecture is now a data-driven decision gate (Phase G) — eval data from Phase B triggers specialization when evidence warrants it. See SaaS Launch Roadmap for details.~~
 
 ### 9B — Subscription & Monetization (~30h)
 - [ ] User model: `subscription_tier`, `subscription_status`, `stripe_customer_id`
@@ -923,16 +919,36 @@ Consolidated execution order. All prior phases complete. This is the critical pa
 
 **Why first:** Without this, 2+ Uvicorn workers = 2× overspend on LLM rate limits. Correctness blocker. **RESOLVED.**
 
-### Phase B: Agent Reliability (~2 days)
-> **Technical brainstorm needed** — eval framework, test cases, scoring rubric for ReAct loop.
+### Phase B: Observability + Eval Platform (~4-5 days) — MERGED KAN-162 + KAN-157
+> **Brainstorm COMPLETE (Session 68).** Spec: `docs/superpowers/specs/2026-03-28-observability-eval-platform-design.md`
 
-| # | Task | JIRA | Brainstorm? | Effort |
-|---|------|------|-------------|--------|
-| B1 | Design ReAct eval rubric (tool selection, grounding, loop termination) | KAN-157 | **Technical** | ~0.5 day |
-| B2 | Implement eval harness + golden test set (8-10 queries) | KAN-157 | No | ~1 day |
-| B3 | CI eval job (weekly scheduled, not per-PR) | KAN-157 | No | ~0.5 day |
+KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval infrastructure that KAN-157 would otherwise build from scratch.
 
-**Why second:** Must validate agent quality before exposing to real users. Needs CI_GROQ_API_KEY secret.
+| # | Task | JIRA | Effort |
+|---|------|------|--------|
+| B1 | Docker Compose: Langfuse server + Langfuse DB (port 3001/5434) | KAN-162 | ~2h |
+| B2 | `uv add langfuse` + SDK init in `main.py` lifespan (feature-flagged) | KAN-162 | ~2h |
+| B3 | Trace instrumentation: `chat/router.py` (create trace per query) | KAN-162 | ~3h |
+| B4 | Span instrumentation: `react_loop.py` + `llm_client.py` (iterations, generations, tools) | KAN-162 | ~4h |
+| B5 | Migration 017: `eval_results` + `eval_runs` tables + missing log indexes | KAN-162 | ~2h |
+| B6 | Observability API: 6 endpoints (KPIs, query list, detail, eval, Langfuse URL) | KAN-162 | ~4h |
+| B7 | OIDC SSO: Langfuse authenticates via our JWT (fallback: URL token) | KAN-162 | ~3h |
+| B8 | Golden dataset: 14 queries (10 intent + 4 reasoning) + failure variants | KAN-157 | ~3h |
+| B9 | Eval scorer: 5 dimensions (4 deterministic + Sonnet reasoning judge) | KAN-157 | ~3h |
+| B10 | CI eval job: weekly + on-demand, Langfuse dataset push | KAN-157 | ~2h |
+| B11 | Frontend: `/observability` page — KPI ticker + QueryTable (L1+L2) + Langfuse deep-link | KAN-162 | ~6h |
+| B12 | Tests + tech debt cleanup (missing indexes, shared query logic extraction) | KAN-162 | ~3h |
+
+**Key design decisions (Session 68 brainstorm):**
+- Transparency-as-a-feature: users see observability page with structured table, not just admins
+- Langfuse is parallel to existing ObservabilityCollector (not replacing)
+- Eval is periodic batch (weekly CI), NOT real-time per-query scoring
+- 5 scoring dimensions: tool_selection, grounding, termination, external_resilience (deterministic) + reasoning_coherence (Sonnet judge, reasoning queries only)
+- Multi-agent future-proofed: `agent_type` filterable throughout, schema supports N agents
+
+**Multi-agent decision gate:** After 4 weeks of eval data, review per-category scores. If any intent category consistently scores <80% deterministic or <3/5 reasoning, that category is a candidate for a specialized agent. This is a data-driven activation threshold — NOT deprecated, NOT deferred. See Phase G below.
+
+**Why second:** Must validate agent quality + give users transparency before exposing to paying users.
 
 ### Phase C: Google OAuth + User Acquisition (~3 days)
 > **Business + technical brainstorm needed** — account linking policy, PKCE flow design.
@@ -984,6 +1000,28 @@ Consolidated execution order. All prior phases complete. This is the critical pa
 | F3 | ConcurrencyController: dynamic semaphore from fallback_rate | NEW | No | ~0.5 day |
 
 **Optional:** Single ReAct agent handles comparisons already (serially). Fan-out is a latency optimization, not a blocker.
+
+### Phase G: Multi-Agent Architecture — DATA-DRIVEN DECISION GATE
+
+> **NOT deprecated. NOT deferred indefinitely.** This is an activation threshold based on eval data from Phase B.
+
+**Trigger criteria (review after 4 weeks of eval data):**
+- Any intent category (stock, portfolio, market, comparison, intelligence, forecast, recommendation) consistently scores <80% on deterministic eval checks (tool selection, grounding, termination)
+- Any intent category consistently scores <3/5 on reasoning coherence (Sonnet judge)
+- Comparison queries show >2× latency vs single-stock queries (fan-out needed)
+
+**If triggered:**
+| # | Task | Effort |
+|---|------|--------|
+| G1 | Analyze eval data: identify weak categories, root cause (prompt? tools? reasoning depth?) | ~0.5 day |
+| G2 | Design specialized agent(s) for weak categories (focused prompt, reduced tool set) | ~1 day |
+| G3 | Implement agent orchestrator: intent → agent routing | ~2 days |
+| G4 | Per-agent eval: separate golden queries per agent type | ~1 day |
+| G5 | Observability: agent_type grouping in UI, per-agent cost/latency breakdown | ~1 day |
+
+**If NOT triggered:** Single ReAct agent stays. Re-evaluate every 4 weeks as tool count grows or new intent categories are added. The eval data is the arbiter.
+
+**Original design (Session 60):** 4 agents — Stock Research, Portfolio, Orchestrator, Fan-out. Rescoped to single ReAct in Session 63 because tool filtering was sufficient. This gate ensures we revisit with evidence, not assumptions.
 
 ### Parking Lot (low priority, pick up when needed)
 - Schwab CSV import
