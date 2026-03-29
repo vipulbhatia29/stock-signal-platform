@@ -26,6 +26,10 @@ export interface TokenResponse {
   expires_in: number;
 }
 
+export interface TokenRefreshRequest {
+  refresh_token: string;
+}
+
 // ── Stock ─────────────────────────────────────────────────────────────────────
 
 export interface StockResponse {
@@ -466,6 +470,42 @@ export interface FeedbackRequest {
   feedback: "up" | "down";
 }
 
+export interface ChatRequest {
+  message: string;
+  session_id?: string;
+  agent_type?: "stock" | "general";
+}
+
+export interface AdminChatSessionSummary {
+  id: string;
+  agent_type: string;
+  title: string | null;
+  is_active: boolean;
+  decline_count: number;
+  user_email: string;
+  message_count: number;
+  created_at: string;
+  last_active_at: string;
+}
+
+export interface AdminChatSessionListResponse {
+  total: number;
+  sessions: AdminChatSessionSummary[];
+}
+
+export interface AdminChatTranscriptResponse {
+  session: AdminChatSessionSummary;
+  messages: ChatMessage[];
+}
+
+export interface AdminChatStatsResponse {
+  total_sessions: number;
+  total_messages: number;
+  active_sessions: number;
+  feedback_up: number;
+  feedback_down: number;
+}
+
 // ── Sectors ──────────────────────────────────────────────────────────────────
 
 export type SectorScope = "portfolio" | "watchlist" | "all";
@@ -580,4 +620,305 @@ export interface AlertResponse {
 
 export interface UnreadAlertCount {
   unread_count: number;
+}
+
+export interface AlertListResponse {
+  alerts: AlertResponse[];
+  total: number;
+  unread_count: number;
+}
+
+export interface BatchReadRequest {
+  alert_ids: string[];
+}
+
+export interface BatchReadResponse {
+  updated: number;
+}
+
+export interface UnreadCountResponse {
+  unread_count: number;
+}
+
+// ── Intelligence ──────────────────────────────────────────────────────────────
+
+export interface NewsItem {
+  title: string;
+  link: string;
+  publisher: string | null;
+  published: string | null;
+  source: string;
+}
+
+export interface StockNewsResponse {
+  ticker: string;
+  articles: NewsItem[];
+  fetched_at: string;
+}
+
+export interface UpgradeDowngrade {
+  firm: string;
+  to_grade: string;
+  from_grade: string | null;
+  action: string;
+  date: string;
+}
+
+export interface InsiderTransaction {
+  insider_name: string;
+  relation: string | null;
+  transaction_type: string;
+  shares: number;
+  value: number | null;
+  date: string;
+}
+
+export interface ShortInterest {
+  short_percent_of_float: number;
+  short_ratio: number | null;
+  shares_short: number | null;
+}
+
+export interface StockIntelligenceResponse {
+  ticker: string;
+  upgrades_downgrades: UpgradeDowngrade[];
+  insider_transactions: InsiderTransaction[];
+  next_earnings_date: string | null;
+  eps_revisions: Record<string, unknown> | null;
+  short_interest: ShortInterest | null;
+  fetched_at: string;
+}
+
+// ── Portfolio Health ──────────────────────────────────────────────────────────
+
+export interface HealthComponent {
+  name: string;
+  score: number;
+  weight: number;
+  detail: string;
+}
+
+export interface PositionHealth {
+  ticker: string;
+  weight_pct: number;
+  signal_score: number | null;
+  sector: string | null;
+  contribution: "strength" | "drag";
+}
+
+export interface PortfolioHealthResult {
+  health_score: number;
+  grade: string;
+  components: HealthComponent[];
+  metrics: Record<string, unknown>;
+  top_concerns: string[];
+  top_strengths: string[];
+  position_details: PositionHealth[];
+}
+
+export interface PortfolioHealthSnapshotResponse {
+  snapshot_date: string;
+  health_score: number;
+  grade: string;
+  diversification_score: number;
+  signal_quality_score: number;
+  risk_score: number;
+  income_score: number;
+  sector_balance_score: number;
+  hhi: number;
+  weighted_beta: number | null;
+  weighted_sharpe: number | null;
+  weighted_yield: number | null;
+  position_count: number;
+}
+
+// ── Market ────────────────────────────────────────────────────────────────────
+
+export interface IndexPerformance {
+  name: string;
+  ticker: string;
+  price: number;
+  change_pct: number;
+}
+
+export interface SectorPerformance {
+  sector: string;
+  etf: string;
+  change_pct: number;
+}
+
+export interface MarketBriefingResult {
+  indexes: IndexPerformance[];
+  sector_performance: SectorPerformance[];
+  portfolio_news: Record<string, unknown>[];
+  upcoming_earnings: Record<string, unknown>[];
+  top_movers: Record<string, unknown>;
+  briefing_date: string;
+}
+
+// ── Health ─────────────────────────────────────────────────────────────────────
+
+export interface MCPToolsStatus {
+  enabled: boolean;
+  mode: "stdio" | "fallback_direct" | "direct" | "disabled";
+  healthy: boolean;
+  tool_count: number;
+  restarts: number;
+  uptime_seconds: number | null;
+  last_error: string | null;
+  fallback_since: string | null;
+}
+
+export interface DependencyStatus {
+  healthy: boolean;
+  latency_ms: number | null;
+  error: string | null;
+}
+
+export interface HealthResponse {
+  status: "ok" | "degraded";
+  version: string;
+  redis: DependencyStatus;
+  database: DependencyStatus;
+  mcp_tools: MCPToolsStatus;
+}
+
+// ── LLM Config ────────────────────────────────────────────────────────────────
+
+export interface LLMModelConfigResponse {
+  id: number;
+  provider: string;
+  model_name: string;
+  tier: string;
+  priority: number;
+  is_enabled: boolean;
+  tpm_limit: number | null;
+  rpm_limit: number | null;
+  tpd_limit: number | null;
+  rpd_limit: number | null;
+  cost_per_1k_input: number;
+  cost_per_1k_output: number;
+  notes: string | null;
+}
+
+export interface LLMModelConfigUpdate {
+  priority?: number;
+  is_enabled?: boolean;
+  tpm_limit?: number | null;
+  rpm_limit?: number | null;
+  tpd_limit?: number | null;
+  rpd_limit?: number | null;
+  cost_per_1k_input?: number;
+  cost_per_1k_output?: number;
+  notes?: string | null;
+}
+
+export interface TierToggleRequest {
+  model: string;
+  enabled: boolean;
+}
+
+// ── Observability ─────────────────────────────────────────────────────────────
+
+export interface KPIResponse {
+  queries_today: number;
+  avg_latency_ms: number;
+  avg_cost_per_query: number;
+  pass_rate: number | null;
+  fallback_rate_pct: number;
+}
+
+export interface QueryRow {
+  query_id: string;
+  timestamp: string;
+  query_text: string;
+  agent_type: string;
+  tools_used: string[];
+  llm_calls: number;
+  llm_models: string[];
+  db_calls: number;
+  external_calls: number;
+  external_sources: string[];
+  total_cost_usd: number;
+  duration_ms: number;
+  score: number | null;
+  status: string;
+}
+
+export interface QueryListResponse {
+  items: QueryRow[];
+  total: number;
+  page: number;
+  size: number;
+}
+
+export interface StepDetail {
+  step_number: number;
+  action: string;
+  type_tag: string;
+  model_name: string | null;
+  input_summary: string | null;
+  output_summary: string | null;
+  latency_ms: number | null;
+  cost_usd: number | null;
+  cache_hit: boolean;
+}
+
+export interface QueryDetailResponse {
+  query_id: string;
+  query_text: string;
+  steps: StepDetail[];
+  langfuse_trace_url: string | null;
+}
+
+export interface LangfuseURLResponse {
+  url: string | null;
+}
+
+export interface AssessmentRunSummary {
+  id: string;
+  trigger: string;
+  total_queries: number;
+  passed_queries: number;
+  pass_rate: number;
+  total_cost_usd: number;
+  started_at: string;
+  completed_at: string;
+}
+
+export interface AssessmentHistoryResponse {
+  items: AssessmentRunSummary[];
+}
+
+// ── Recommendations (extended) ────────────────────────────────────────────────
+
+export interface StockCandidate {
+  ticker: string;
+  name: string;
+  sector: string | null;
+  recommendation_score: number;
+  sources: string[];
+  rationale: string[];
+  signal_score: number | null;
+  forward_pe: number | null;
+  dividend_yield: number | null;
+}
+
+export interface RecommendationResult {
+  candidates: StockCandidate[];
+  portfolio_context: Record<string, unknown>;
+}
+
+// ── Stock (extended) ──────────────────────────────────────────────────────────
+
+export interface OHLCResponse {
+  ticker: string;
+  period: string;
+  count: number;
+  timestamps: string[];
+  open: number[];
+  high: number[];
+  low: number[];
+  close: number[];
+  volume: number[];
 }
