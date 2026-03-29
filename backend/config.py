@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     ALPHA_VANTAGE_API_KEY: str = ""
     FINNHUB_API_KEY: str = ""
 
+    # --- OIDC (Langfuse SSO) ---
+    OIDC_CLIENT_ID: str = "langfuse"
+    OIDC_CLIENT_SECRET: str = "change-me-in-production"
+
     # --- Agent ---
     MCP_TOOLS: bool = True  # MCP stdio transport for agent tool calls (kill switch: set False)
     MAX_TOOL_RESULT_CHARS: int = 3000  # Truncate tool results before synthesis
