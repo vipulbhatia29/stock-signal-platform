@@ -247,13 +247,51 @@ Eval Runner (Python script / CI job)
 | 13 | Portfolio + market synthesis | "How exposed am I to a tech sector downturn?" | portfolio_health, get_portfolio_exposure, market_briefing | portfolio | Synthesizes sector overlap between portfolio and market sectors. |
 | 14 | Contradictory signals | "NVDA has great fundamentals but bearish technicals — what should I do?" | analyze_stock, get_fundamentals | stock | Acknowledges tension, weighs both sides. analyze_stock returns signal data. |
 
+#### Cross-Domain Tool Access (3 queries — validates tool group fixes)
+
+| # | Category | Query | Expected Tools | Route | Verification |
+|---|----------|-------|---------------|-------|-------------|
+| 15 | Dividend deep-dive | "Is AAPL's dividend sustainable long term?" | dividend_sustainability, get_fundamentals | stock | Uses dividend_sustainability (added to stock group by Task 12b) |
+| 16 | Portfolio forecast | "What's the forecast for my biggest holding?" | get_portfolio_exposure, get_forecast, get_fundamentals | portfolio | Uses get_forecast (added to portfolio group by Task 12b) |
+| 17 | Scorecard request | "Give me the full recommendation scorecard for TSLA" | get_recommendation_scorecard, analyze_stock, get_fundamentals | stock | Uses get_recommendation_scorecard (added to stock group by Task 12b) |
+
 #### Tool Group Fixes Required (implementation prerequisite)
 
-The following tool group gaps must be fixed in `backend/agents/tool_groups.py` before the assessment framework can run correctly:
+Full audit of 24 tools against 5 intent groups (Session 68). These gaps cause degraded user experience — the tools and data exist but the agent can't reach them for certain intents.
 
-1. **Add `dividend_sustainability` to `stock` group** — query 9 needs it for dividend follow-up on a specific ticker
-2. **Add `market_briefing` to `portfolio` group** — query 13 needs cross-domain portfolio+market synthesis
-3. **Add `compute_signals` to `stock` group** — not strictly needed (analyze_stock calls it internally) but useful if the agent wants signals without full analysis
+**Must fix (blocks golden queries):**
+1. **Add `dividend_sustainability` to `stock` group** — "What about its dividends?" routes to stock, tool unreachable
+2. **Add `market_briefing` to `portfolio` group** — "How exposed am I to a tech downturn?" needs cross-domain data
+
+**Should fix (broader UX):**
+3. **Add `get_forecast` to `portfolio` group** — "What's the forecast for my holdings?" routes to portfolio, can't get per-stock forecasts
+4. **Add `get_recommendation_scorecard` to `stock` and `portfolio` groups** — "Show me the scorecard for AAPL" falls to general, wastes tokens
+5. **Add `compute_signals` to `stock` group** — optional (analyze_stock wraps it) but useful for targeted signal queries
+
+**Intentionally excluded from non-general groups (correct):**
+- `search_stocks`, `ingest_stock` — admin/utility, not analysis
+- `web_search`, `get_geopolitical_events` — used internally by other tools
+- `get_recommendations` — legacy, superseded by `recommend_stocks`
+
+#### ReAct System Prompt — Few-Shot Examples (implementation prerequisite)
+
+The ReAct system prompt (`backend/agents/prompts/react_system.md`) has **zero** few-shot examples. The old planner prompt had 22. The ReAct agent relies entirely on the LLM's general reasoning to decide tool selection and termination.
+
+**Required:** Add few-shot examples to `react_system.md` covering:
+1. **Single-tool lookup** — "What's AAPL's price?" → call analyze_stock, done
+2. **Multi-tool stock analysis** — "Analyze NVDA" → analyze_stock + get_fundamentals + get_analyst_targets
+3. **Portfolio query** — "How's my portfolio?" → portfolio_health + get_portfolio_exposure
+4. **Cross-domain** — "How exposed am I to a tech downturn?" → portfolio_health + market_briefing
+5. **Comparison** — "Compare AAPL and MSFT" → analyze_stock ×2 + compare_stocks
+6. **Pronoun resolution** — "What about its dividends?" → resolve to AAPL, call dividend_sustainability
+7. **When to stop** — after 2-3 tools, synthesize; don't call every tool available
+8. **Graceful decline** — out-of-scope query → polite redirect to financial topics
+9. **Forecast with context** — "Where will AAPL be?" → get_forecast + get_fundamentals for grounding
+10. **Multi-step reasoning** — "Is AAPL overvalued?" → analyze_stock + get_fundamentals + get_forecast, then REASON across all three
+
+Format: ReAct-style (not plan JSON). Show the thought → action → observation → thought → final answer flow.
+
+**Source:** Adapt from old planner few-shots in `backend/agents/prompts/planner.md` (22 examples exist, need ReAct format conversion).
 
 #### Failure Variants (external API resilience)
 
@@ -435,7 +473,7 @@ CREATE TABLE eval_runs (
 - [ ] SSO: user clicks "View in Langfuse" and lands on trace without separate login
 - [ ] `/observability` page renders KPI ticker + structured table (L1 + L2)
 - [ ] Deep link from L2 to Langfuse trace works with correct `trace_id`
-- [ ] 14 golden queries defined with expected tools and grounding checks
+- [ ] 17 golden queries defined with expected tools and grounding checks
 - [ ] Eval runner scores all 5 dimensions, outputs JSON + Langfuse dataset run
 - [ ] CI eval job runs weekly (or on-demand), fails on deterministic score violations
 - [ ] Scores visible on observability page (KPI ticker + per-query column)

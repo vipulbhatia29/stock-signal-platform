@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship Langfuse integration, user-facing observability page, and periodic agent quality assessment framework with 14 golden queries.
+**Goal:** Ship Langfuse integration, user-facing observability page, and periodic agent quality assessment framework with 17 golden queries.
 
 **Architecture:** Langfuse runs as a parallel trace system alongside existing ObservabilityCollector. All SDK calls are fire-and-forget behind a feature flag. Frontend adds a new `/observability` route with KPI ticker + expandable query table. Quality assessment is batch-only (weekly CI + on-demand).
 
@@ -1004,15 +1004,63 @@ git commit -m "feat(auth): add OIDC endpoints for Langfuse SSO"
 
 - [ ] **Step 1: Add missing tools to groups**
 
-In `TOOL_GROUPS` dict:
-- Add `"dividend_sustainability"` to `"stock"` list (query 9 needs it for dividend follow-ups)
-- Add `"market_briefing"` to `"portfolio"` list (query 13 needs cross-domain portfolio+market synthesis)
+In `TOOL_GROUPS` dict in `backend/agents/tool_groups.py`:
 
-- [ ] **Step 2: Commit**
+**stock group** (currently 8 → becomes 10):
+- Add `"dividend_sustainability"` — dividend follow-up queries
+- Add `"get_recommendation_scorecard"` — "show me AAPL's scorecard"
+
+**portfolio group** (currently 8 → becomes 11):
+- Add `"market_briefing"` — cross-domain portfolio+market synthesis
+- Add `"get_forecast"` — "what's the forecast for my holdings?"
+- Add `"get_recommendation_scorecard"` — "show me my portfolio scorecard"
+
+- [ ] **Step 2: Run existing intent classifier tests**
+
+Run: `uv run pytest tests/unit/agents/ -v -k "intent" --no-header`
+Expected: all pass (tool groups don't affect classifier tests)
+
+- [ ] **Step 3: Commit**
 
 ```bash
 git add backend/agents/tool_groups.py
-git commit -m "fix(agent): add dividend_sustainability to stock group, market_briefing to portfolio group"
+git commit -m "fix(agent): expand stock and portfolio tool groups — 5 tools were unreachable for valid intents"
+```
+
+---
+
+## Task 12c: ReAct System Prompt — Add Few-Shot Examples
+
+**Score:** 9 (context_span=3, convention_density=3, ambiguity=3) → **Opus**
+
+**Files:**
+- Modify: `backend/agents/prompts/react_system.md`
+
+**Context:** The ReAct system prompt currently has ZERO few-shot examples. The old planner had 22 (in `planner.md`). The agent relies entirely on the LLM's general reasoning for tool selection and termination. Adding few-shots will dramatically improve:
+- Tool selection accuracy (which tools for which query type)
+- Termination decisions (when to stop calling tools and synthesize)
+- Cross-domain reasoning (portfolio + market queries)
+- Pronoun resolution patterns
+
+- [ ] **Step 1: Add 10 ReAct-format few-shot examples to react_system.md**
+
+Adapt from the old planner examples but use ReAct format (thought → action → observation → thought → final answer). Cover all 10 categories listed in spec §5.2. Each example shows the FULL reasoning chain, not just tool names.
+
+- [ ] **Step 2: Verify react_loop still renders the prompt correctly**
+
+Run: `uv run python -c "from backend.agents.react_loop import _render_system_prompt; print(len(_render_system_prompt({'positions': []}, None)))"`
+Expected: longer prompt (was ~300 chars, should be ~3000+ with few-shots)
+
+- [ ] **Step 3: Run existing react loop tests**
+
+Run: `uv run pytest tests/unit/agents/test_react_loop.py -v --no-header`
+Expected: all pass
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add backend/agents/prompts/react_system.md
+git commit -m "feat(agent): add 10 ReAct few-shot examples for tool selection and multi-step reasoning"
 ```
 
 ---
@@ -1040,7 +1088,7 @@ All 14 queries from spec §5.2 (REVISED after Session 68 routing audit) plus 3 f
 
 ```bash
 git add backend/tasks/golden_dataset.py
-git commit -m "feat(assessment): define 14 golden queries with expected tools and grounding checks"
+git commit -m "feat(assessment): define 17 golden queries with expected tools and grounding checks"
 ```
 
 ---
@@ -1306,7 +1354,7 @@ Add:
 
 Add:
 - FR-9: Observability page (KPI ticker, query table L1/L2/L3, filters, Langfuse deep-link)
-- FR-10: Assessment framework (14 golden queries, 5 scoring dimensions, weekly CI)
+- FR-10: Assessment framework (17 golden queries, 5 scoring dimensions, weekly CI)
 
 - [ ] **Step 3: Mark Phase B complete in project-plan.md**
 
