@@ -189,11 +189,13 @@ class LLMClient:
         retry_policy: RetryPolicy | None = None,
         tier_config: dict[str, list[LLMProvider]] | None = None,
         collector: Any = None,  # ObservabilityCollector | None
+        langfuse_service: Any | None = None,
     ) -> None:
         self._providers = providers
         self._retry_policy = retry_policy or RetryPolicy()
         self._tier_config = tier_config
         self._collector = collector
+        self._langfuse = langfuse_service
 
     def get_active_chat_model(self) -> Any:
         """Return the LangChain chat model from the first healthy provider."""
@@ -235,6 +237,33 @@ class LLMClient:
             try:
                 response = await self._call_with_retry(provider, messages, tools, stream)
                 provider.health.consecutive_failures = 0
+
+                # Langfuse: record generation (fire-and-forget)
+                if self._langfuse and self._langfuse.enabled:
+                    try:
+                        from backend.agents.context_vars import current_query_id
+
+                        qid = current_query_id.get(None)
+                        if qid and self._langfuse._client:
+                            trace = self._langfuse._client.trace(id=str(qid))
+                            trace.generation(
+                                name=f"llm.{provider.name}.{response.model}",
+                                model=response.model,
+                                input=messages[-1:],
+                                output=response.content or "",
+                                usage={
+                                    "prompt_tokens": response.prompt_tokens,
+                                    "completion_tokens": response.completion_tokens,
+                                },
+                                metadata={
+                                    "type": "llm",
+                                    "tier": tier or "",
+                                    "provider": provider.name,
+                                },
+                            )
+                    except Exception:
+                        logger.debug("langfuse_generation_failed")
+
                 return response
             except Exception as e:
                 provider.health.consecutive_failures += 1

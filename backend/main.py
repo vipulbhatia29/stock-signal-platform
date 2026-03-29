@@ -162,7 +162,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         provider.collector = collector
         provider.pricing = pricing
 
-    llm_client = LLMClient(providers=providers, collector=collector)
+    llm_client = LLMClient(
+        providers=providers, collector=collector, langfuse_service=langfuse_service
+    )
 
     app.state.config_loader = config_loader
     app.state.token_budget = token_budget
