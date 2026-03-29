@@ -1470,3 +1470,41 @@ Executed all 12 tasks from plan serially using subagents. Each task: read source
 - 1087 unit tests (+16 new scoring engine tests)
 - 16 API tests for OIDC (new)
 - Branch: `feat/KAN-223-assessment-framework`
+
+---
+
+## Session 71 — Full-Stack Integration Audit + Phase B.5 Planning
+
+**Date:** 2026-03-29 | **Branch:** `develop` (clean) | **Tests:** unchanged (audit + planning only)
+
+### What was done (NO CODE — audit + JIRA only)
+
+**Full-Stack Integration Audit:**
+- Inventoried all 82 backend API endpoints vs 43 frontend API calls
+- Found 30+ backend endpoints with zero frontend wiring (added Sessions 47-70)
+- Found 3 broken alert hooks calling non-existent endpoints (`GET /alerts`, `GET /alerts/unread-count`, `PATCH /alerts/read`)
+- Found 15-20 schema mismatches in `types/api.ts` (fields added/removed/renamed since Session 47)
+- Found `AlertResponse` critically broken (FE expects `severity`, `title`, `ticker` — BE has different fields)
+- Found observability backend has 6 spec-vs-impl gaps (missing sort/filter/group params, hardcoded None summaries)
+- Audited design system — fully documented, will be preserved unchanged
+
+**Product Insight:**
+- Observability is THE SaaS differentiator — users see how their subscription money works
+- No other stock analysis SaaS offers AI transparency. This is the competitive moat.
+- Admin dashboard (BU-7) NOT deferred — required for launch
+
+**JIRA Structure Created:**
+- Epic KAN-226: [Phase B.5] Frontend Catch-Up + Observability Readiness
+- KAN-227: BU-1 Schema Alignment + Alerts Redesign (FOUNDATION)
+- KAN-228: BU-2 Stock Detail Enrichment (4 unwired endpoints)
+- KAN-229: BU-3 Dashboard + Market Enrichment (5 unwired endpoints)
+- KAN-230: BU-4 Chat System Improvements (metadata, tools, cost display)
+- KAN-231: BU-5 Observability Backend Gaps (sort/filter/summaries)
+- KAN-232: BU-6 Observability Frontend (supersedes KAN-224/225)
+- KAN-233: BU-7 Admin Dashboard (11 admin endpoints)
+
+**Dependency order:** BU-1 → BU-2/3/4 (parallel) → BU-5 → BU-6 → BU-7
+
+### Next session
+1. Brainstorm KAN-227 (BU-1: Schema Alignment + Alerts Redesign)
+2. Spec → Plan → Implement for BU-1

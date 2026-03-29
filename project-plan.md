@@ -937,8 +937,8 @@ KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval inf
 | B9 | Eval scorer: 5 dimensions (4 deterministic + Sonnet reasoning judge) | KAN-223 | ~3h | ✅ S70 |
 | B10 | CI eval job: weekly + on-demand, artifact upload | KAN-223 | ~2h | ✅ S70 |
 | B10b | Tool group fixes (5 tools) + 10 ReAct few-shots | KAN-223 | ~3h | ✅ S70 |
-| B11 | Frontend: `/observability` page — KPI ticker + QueryTable (L1+L2) + Langfuse deep-link | KAN-224 | ~6h | |
-| B12 | Tests + docs + deferred review items (see KAN-225 comment) | KAN-225 | ~6h | |
+| B11 | Frontend: `/observability` page — KPI ticker + QueryTable (L1+L2) + Langfuse deep-link | ~~KAN-224~~ → KAN-232 | ~6h | **Superseded by Phase B.5 BU-6** |
+| B12 | Tests + docs + deferred review items (see KAN-225 comment) | ~~KAN-225~~ → KAN-232 | ~6h | **Superseded by Phase B.5 BU-6** |
 
 **Key design decisions (Session 68 brainstorm):**
 - Transparency-as-a-feature: users see observability page with structured table, not just admins
@@ -959,6 +959,25 @@ KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval inf
 - [ ] Add 2 missing few-shot examples (graceful decline, when to stop)
 - [ ] Deduplicate Q7/Q20 dividend queries
 - [ ] Add `LANGFUSE_PUBLIC_KEY` + `LANGFUSE_BASEURL` to CI assessment workflow
+
+### Phase B.5: Frontend Catch-Up + Observability Readiness (~7-9 sessions)
+> **Full-stack audit (Session 71) revealed 30+ unwired endpoints, broken alerts, schema drift.** Must fix before building observability UI.
+
+**Epic:** KAN-226 | **Product vision:** Observability is THE SaaS differentiator — users see how subscription money works.
+
+| # | Story | JIRA | Scope | Effort | Status |
+|---|-------|------|-------|--------|--------|
+| BU-1 | Schema Alignment + Alerts Redesign | KAN-227 | Fix types/api.ts drift (15-20 mismatches), fix 3 broken alert hooks, redesign alerts system | ~1 session | |
+| BU-2 | Stock Detail Enrichment | KAN-228 | Wire intelligence, news, benchmark, candlestick (4 endpoints) | ~1 session | |
+| BU-3 | Dashboard + Market Enrichment | KAN-229 | Wire portfolio health, market briefing, sector forecasts (5 endpoints) | ~1 session | |
+| BU-4 | Chat System Improvements | KAN-230 | Surface agent metadata, update tool pinning (7→24), cost-per-response, trace links | ~0.5-1 session | |
+| BU-5 | Observability Backend Gaps | KAN-231 | Add sort/filter/group params, input/output summaries, eval score join | ~1.5 sessions | |
+| BU-6 | Observability Frontend | KAN-232 | Build /observability page, KPI ticker, QueryTable, step detail, Langfuse links. Supersedes KAN-224/225 | ~1-2 sessions | |
+| BU-7 | Admin Dashboard | KAN-233 | 11 admin endpoints → LLM management, tier health, cost analytics, chat audit UI | ~1-2 sessions | |
+
+**Dependency order:** BU-1 → BU-2/3/4 (parallel) → BU-5 → BU-6 → BU-7
+
+**Design system constraint:** Navy dark theme, Sora/JetBrains Mono fonts, cyan accent, CSS variable system — ALL preserved unchanged.
 
 ### Phase C: Google OAuth + User Acquisition (~3 days)
 > **Business + technical brainstorm needed** — account linking policy, PKCE flow design.
