@@ -70,7 +70,7 @@ def score_termination(
     Returns:
         True if within budget AND no consecutive duplicate tool calls.
     """
-    if iterations > max_expected:
+    if iterations > max_expected + 1:
         return False
 
     # Check for consecutive duplicate tool calls

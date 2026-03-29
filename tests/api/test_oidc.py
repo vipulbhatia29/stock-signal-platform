@@ -34,8 +34,8 @@ _fake_redis = _FakeRedis()
 
 
 @pytest.fixture(autouse=True)
-def _mock_oidc_redis(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Replace the OIDC Redis connection with an in-memory fake."""
+def _mock_oidc_deps(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Replace OIDC Redis and configure test OIDC settings."""
     _fake_redis._store.clear()
 
     async def _get_fake_redis():  # noqa: ANN202
@@ -44,6 +44,14 @@ def _mock_oidc_redis(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "backend.services.oidc_provider._get_async_redis",
         _get_fake_redis,
+    )
+    # Enable OIDC for tests and whitelist test redirect URI
+    monkeypatch.setattr(settings, "OIDC_CLIENT_SECRET", "test-secret")
+    monkeypatch.setattr(settings, "OIDC_CLIENT_ID", "stock-signal-langfuse")
+    monkeypatch.setattr(
+        settings,
+        "OIDC_REDIRECT_URIS",
+        "http://localhost:3001/callback",
     )
 
 

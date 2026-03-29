@@ -81,7 +81,7 @@ def build_discovery_document(base_url: str) -> dict:
     """
     auth_prefix = f"{base_url}/api/v1/auth"
     return {
-        "issuer": base_url,
+        "issuer": f"{base_url}/api/v1/auth",
         "authorization_endpoint": f"{auth_prefix}/authorize",
         "token_endpoint": f"{auth_prefix}/token",
         "userinfo_endpoint": f"{auth_prefix}/userinfo",

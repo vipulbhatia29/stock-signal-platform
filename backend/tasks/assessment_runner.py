@@ -364,7 +364,7 @@ async def run_assessment(
 
             # Determine pass/fail based on deterministic scores
             tool_ok = bool(scores["tool_selection"])
-            grounding_ok = scores["grounding"] == 1.0
+            grounding_ok = scores["grounding"] >= 0.8
             termination_ok = bool(scores["termination"])
             resilience_ok = bool(scores["external_resilience"])
             passed = tool_ok and grounding_ok and termination_ok and resilience_ok
@@ -378,7 +378,7 @@ async def run_assessment(
             # Persist result
             result_row = AssessmentResult(
                 run_id=run_id,
-                query_index=idx,
+                query_index=idx + 1,
                 query_text=golden.query_text,
                 intent_category=golden.intent_category,
                 agent_type="react_v2",

@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     FINNHUB_API_KEY: str = ""
 
     # --- OIDC (Langfuse SSO) ---
-    OIDC_CLIENT_ID: str = "langfuse"
+    OIDC_CLIENT_ID: str = "stock-signal-langfuse"
     OIDC_CLIENT_SECRET: str = ""  # Empty = OIDC disabled; set in .env
     # Comma-separated whitelist of allowed OIDC redirect URIs
     OIDC_REDIRECT_URIS: str = "http://localhost:3001/api/auth/callback/custom"
