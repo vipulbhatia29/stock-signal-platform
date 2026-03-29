@@ -142,38 +142,52 @@ async def get_query_list(
     rows_stmt = base.order_by(text("timestamp DESC")).limit(size).offset(offset)
     rows = (await db.execute(rows_stmt)).all()
 
-    items = []
-    for row in rows:
-        qid = row.query_id
+    qids = [row.query_id for row in rows]
 
-        # Get tool calls for this query
+    # Batch: tool calls for all query_ids on this page
+    tool_by_qid: dict[uuid.UUID, list] = {qid: [] for qid in qids}
+    if qids:
         tool_stmt = (
             select(
+                ToolExecutionLog.query_id,
                 ToolExecutionLog.tool_name,
                 func.count().label("cnt"),
                 func.sum(ToolExecutionLog.latency_ms).label("total_latency"),
             )
-            .where(ToolExecutionLog.query_id == qid)
-            .group_by(ToolExecutionLog.tool_name)
+            .where(ToolExecutionLog.query_id.in_(qids))
+            .group_by(ToolExecutionLog.query_id, ToolExecutionLog.tool_name)
         )
-        tool_rows = (await db.execute(tool_stmt)).all()
+        for t in (await db.execute(tool_stmt)).all():
+            tool_by_qid[t.query_id].append(t)
+
+    # Batch: query text for all query_ids on this page
+    # Use a subquery to get latest user message per session
+    text_by_qid: dict[uuid.UUID, str] = {}
+    if qids:
+        msg_stmt = (
+            select(
+                LLMCallLog.query_id,
+                func.max(ChatMessage.content).label("content"),
+            )
+            .join(ChatSession, LLMCallLog.session_id == ChatSession.id)
+            .join(ChatMessage, ChatMessage.session_id == ChatSession.id)
+            .where(LLMCallLog.query_id.in_(qids), ChatMessage.role == "user")
+            .group_by(LLMCallLog.query_id)
+        )
+        for m in (await db.execute(msg_stmt)).all():
+            text_by_qid[m.query_id] = m.content or ""
+
+    items = []
+    for row in rows:
+        qid = row.query_id
+        tool_rows = tool_by_qid.get(qid, [])
 
         tools_used = [t.tool_name for t in tool_rows]
         db_calls = sum(t.cnt for t in tool_rows if t.tool_name not in _EXTERNAL_TOOLS)
         external_calls = sum(t.cnt for t in tool_rows if t.tool_name in _EXTERNAL_TOOLS)
         external_sources = [t.tool_name for t in tool_rows if t.tool_name in _EXTERNAL_TOOLS]
         tool_latency = sum(t.total_latency or 0 for t in tool_rows)
-
-        # Get query text from chat_messages
-        msg_stmt = (
-            select(ChatMessage.content)
-            .join(ChatSession, ChatMessage.session_id == ChatSession.id)
-            .join(LLMCallLog, LLMCallLog.session_id == ChatSession.id)
-            .where(LLMCallLog.query_id == qid, ChatMessage.role == "user")
-            .order_by(ChatMessage.created_at.desc())
-            .limit(1)
-        )
-        query_text = (await db.execute(msg_stmt)).scalar() or ""
+        query_text = text_by_qid.get(qid, "")
 
         items.append(
             {
@@ -200,28 +214,34 @@ async def get_query_list(
 async def get_query_detail(
     db: AsyncSession,
     query_id: uuid.UUID,
+    user_id: uuid.UUID | None = None,
 ) -> dict | None:
     """Return step-by-step detail for a single query.
 
     Args:
         db: Async database session.
         query_id: The query UUID.
+        user_id: If set, verify query belongs to this user. None = admin (no filter).
 
     Returns:
         Dict with query_id, query_text, steps, langfuse_trace_url, or None if not found.
     """
     # LLM calls
-    llm_stmt = (
-        select(LLMCallLog).where(LLMCallLog.query_id == query_id).order_by(LLMCallLog.created_at)
-    )
+    llm_stmt = select(LLMCallLog).where(LLMCallLog.query_id == query_id)
+    if user_id:
+        llm_stmt = llm_stmt.join(ChatSession, LLMCallLog.session_id == ChatSession.id).where(
+            ChatSession.user_id == user_id
+        )
+    llm_stmt = llm_stmt.order_by(LLMCallLog.created_at)
     llm_rows = (await db.execute(llm_stmt)).scalars().all()
 
     # Tool calls
-    tool_stmt = (
-        select(ToolExecutionLog)
-        .where(ToolExecutionLog.query_id == query_id)
-        .order_by(ToolExecutionLog.created_at)
-    )
+    tool_stmt = select(ToolExecutionLog).where(ToolExecutionLog.query_id == query_id)
+    if user_id:
+        tool_stmt = tool_stmt.join(
+            ChatSession, ToolExecutionLog.session_id == ChatSession.id
+        ).where(ChatSession.user_id == user_id)
+    tool_stmt = tool_stmt.order_by(ToolExecutionLog.created_at)
     tool_rows = (await db.execute(tool_stmt)).scalars().all()
 
     if not llm_rows and not tool_rows:

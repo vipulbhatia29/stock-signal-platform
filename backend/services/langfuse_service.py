@@ -58,6 +58,16 @@ class LangfuseService:
             logger.warning("Langfuse trace creation failed", exc_info=True)
             return None
 
+    def get_trace_ref(self, trace_id: uuid.UUID) -> Any | None:
+        """Get a reference to an existing trace by ID. Used by LLMClient."""
+        if not self._client:
+            return None
+        try:
+            return self._client.trace(id=str(trace_id))
+        except Exception:
+            logger.warning("Langfuse trace ref lookup failed", exc_info=True)
+            return None
+
     def record_generation(
         self,
         trace: Any | None,

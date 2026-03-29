@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.dependencies import get_current_user
 from backend.config import settings
 from backend.database import get_async_session
+from backend.dependencies import get_current_user
 from backend.models.user import User, UserRole
 from backend.schemas.observability import (
     AssessmentHistoryResponse,
@@ -63,12 +64,20 @@ async def queries(
     page: int = Query(1, ge=1),
     size: int = Query(25, ge=1, le=100),
     agent_type: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> QueryListResponse:
     """Return paginated query list."""
     result = await get_query_list(
-        db, user_id=_user_scope(user), page=page, size=size, agent_type=agent_type
+        db,
+        user_id=_user_scope(user),
+        page=page,
+        size=size,
+        agent_type=agent_type,
+        date_from=date_from,
+        date_to=date_to,
     )
     return QueryListResponse(**result)
 
@@ -86,7 +95,7 @@ async def query_detail(
     db: AsyncSession = Depends(get_async_session),
 ) -> QueryDetailResponse:
     """Return step-by-step detail for a single query."""
-    result = await get_query_detail(db, query_id)
+    result = await get_query_detail(db, query_id, user_id=_user_scope(user))
     if result is None:
         raise HTTPException(status_code=404, detail="No data found for this query")
     return QueryDetailResponse(**result)
@@ -101,12 +110,16 @@ async def query_detail(
 async def langfuse_url(
     query_id: uuid.UUID,
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
 ) -> LangfuseURLResponse:
     """Return deep link to Langfuse trace for this query."""
-    base_url = settings.LANGFUSE_BASEURL
     if not settings.LANGFUSE_SECRET_KEY:
         return LangfuseURLResponse(url=None)
-    url = f"{base_url}/trace/{query_id}"
+    # Verify ownership — non-admins can only see their own queries
+    result = await get_query_detail(db, query_id, user_id=_user_scope(user))
+    if result is None:
+        raise HTTPException(status_code=404, detail="No data found for this query")
+    url = f"{settings.LANGFUSE_BASEURL}/trace/{query_id}"
     return LangfuseURLResponse(url=url)
 
 

@@ -29,6 +29,7 @@ MAX_PARALLEL_TOOLS = 4
 MAX_TOOL_CALLS = 12
 WALL_CLOCK_TIMEOUT = 45
 CIRCUIT_BREAKER = 3
+_EXTERNAL_TOOLS = {"web_search", "get_geopolitical_events"}
 
 
 # --- System prompt ---
@@ -435,7 +436,6 @@ async def react_loop(
         )
 
         # Langfuse: record tool execution spans
-        _EXTERNAL_TOOLS = {"web_search", "get_geopolitical_events"}
         if iter_span:
             for tc_span, result_span in zip(tool_calls, results):
                 try:

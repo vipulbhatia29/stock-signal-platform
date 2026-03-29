@@ -241,20 +241,25 @@ class LLMClient:
                 # Langfuse: record generation (fire-and-forget)
                 if self._langfuse and self._langfuse.enabled:
                     try:
-                        from backend.agents.context_vars import current_query_id
+                        from backend.request_context import current_query_id
 
                         qid = current_query_id.get(None)
-                        if qid and self._langfuse._client:
-                            trace = self._langfuse._client.trace(id=str(qid))
-                            trace.generation(
+                        if qid:
+                            trace = self._langfuse.get_trace_ref(qid)
+                            cost = provider._compute_cost(
+                                response.model,
+                                response.prompt_tokens or 0,
+                                response.completion_tokens or 0,
+                            )
+                            self._langfuse.record_generation(
+                                trace=trace,
                                 name=f"llm.{provider.name}.{response.model}",
                                 model=response.model,
-                                input=messages[-1:],
+                                input_messages=messages[-1:],
                                 output=response.content or "",
-                                usage={
-                                    "prompt_tokens": response.prompt_tokens,
-                                    "completion_tokens": response.completion_tokens,
-                                },
+                                prompt_tokens=response.prompt_tokens or 0,
+                                completion_tokens=response.completion_tokens or 0,
+                                cost_usd=cost,
                                 metadata={
                                     "type": "llm",
                                     "tier": tier or "",
