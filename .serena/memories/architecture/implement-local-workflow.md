@@ -15,6 +15,14 @@ MCP bridge server (`tools/lmstudio-bridge/server.py`) is a thin HTTP pipe.
 - ≤8 → local LLM, 9-11 → warn (allow --force), 12+ → Opus only
 - Thresholds are adaptive based on observability data
 
+## MANDATORY TRIAGE (Session 70 feedback)
+- EVERY implementation task must be scored BEFORE starting — no exceptions
+- If score ≤ 8: MUST present "This scores X/15 — delegate to local LLM?" and WAIT for answer
+- Applies to subagent-dispatched tasks too — ask BEFORE dispatching the subagent
+- "Speed" and "parallel execution" are NOT valid reasons to skip
+- User is evaluating local LLM quality — skipping = lost evaluation data
+- Session 70 violation: 4 tasks (12b/13/15/16) scored ≤8 but went to Opus subagents without asking
+
 ## Key Design Choices
 - MCP server catches `httpx.HTTPError` (covers ConnectError via inheritance)
 - 300s timeout on generate (16B model on M4 Pro needs 60-120s for 8K tokens)

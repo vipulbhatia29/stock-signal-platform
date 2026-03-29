@@ -1,36 +1,44 @@
 ---
 scope: project
 category: project
-updated_by: session-69
+updated_by: session-71
 ---
 
 # Project State
 
 ## Current Phase
-- SaaS Launch Roadmap Phase B: Implementation IN PROGRESS
-- Epic KAN-218: KAN-220 Done, KAN-221 Done, KAN-222 Done. KAN-223-225 To Do.
-- Branch: `feat/KAN-220-langfuse-infra` (11 commits, not yet PR'd)
+- **Phase B.5: Frontend Catch-Up + Observability Readiness** — Epic KAN-226 created
+- Phase B (KAN-218): KAN-220/221/222/223 Done (PR #143, #144 merged). KAN-224/225 superseded by KAN-232.
+- 7 Stories (KAN-227–233) ready for brainstorming. BU-1 (KAN-227) is foundation, goes first.
 
 ## Resume Point
-- Next: Push branch, open PR for KAN-220+221+222 to develop
-- Then: KAN-223 (S4: SSO + Assessment Framework — Tasks 12-16, mixed Local/Opus)
-- Plan: docs/superpowers/plans/2026-03-28-observability-eval-platform.md
+- Next: Brainstorm KAN-227 (BU-1: Schema Alignment + Alerts Redesign)
+- Then: BU-2/3/4 (parallel), BU-5→6→7 (sequential)
+- Full gap analysis completed Session 71 — 30+ unwired endpoints, broken alerts, 15-20 schema mismatches
 
-## Session 69 Accomplishments
-- KAN-220: Docker Compose (langfuse-db + langfuse-server), config settings, LangfuseService wrapper (7 methods, fire-and-forget), lifespan wiring
-- KAN-221: Chat trace creation, ReAct loop spans (iteration/tool/synthesis), LLMClient generation recording with cost
-- KAN-222: AssessmentRun + AssessmentResult models, migration 017 (eval tables + 4 log indexes), shared observability query service (5 functions), 6 API endpoints, 8 Pydantic schemas
-- Code review fixes: 2 Critical IDOR, N+1 batch fix, LLMClient wrapper refactor, wrong import path bug, 8 new tests
-- Key bug found: `backend.agents.context_vars` import in LLMClient was non-existent module — silently swallowed by try-except. Fixed to `backend.request_context`.
+## Session 71 Accomplishments (Audit + Planning Only, No Code)
+- Full-stack integration audit: 82 backend endpoints vs 43 frontend API calls
+- Discovered 30+ unwired backend endpoints, 3 broken alert hooks, 15-20 schema mismatches
+- AlertResponse critically broken (FE expects fields BE doesn't have)
+- Alert hooks call 3 endpoints that don't exist
+- Observability backend has 6 spec-vs-impl gaps (missing sort/filter/group/summaries)
+- Created Epic KAN-226 + 7 Stories (KAN-227–233) with full brainstorm context
+- Product insight: observability is THE SaaS differentiator (transparency as a feature)
+- Design system fully audited and documented — will be preserved unchanged
 
 ## Test Counts
-- 1071 unit + ~180 API + 7 e2e + 24 integration + 107 frontend = ~1178 total
+- 1087 unit + ~196 API + 7 e2e + 24 integration + 107 frontend = ~1210 total
 - Alembic head: a7b3c4d5e6f7 (migration 017)
 
 ## Branch
-- feat/KAN-220-langfuse-infra — awaiting PR to develop
+- develop (clean, up to date)
 
-## Key Learnings
-- Lazy imports inside try-except defeat mock patches AND mask real import errors. Always write tests for fire-and-forget code paths.
-- IDOR checks needed on every detail endpoint that takes a resource ID — list endpoints get scoping naturally, detail endpoints don't.
-- N+1 in paginated list builders: always batch enrichment with WHERE IN, never loop.
+## Key JIRA Tickets
+- KAN-226: Epic — Frontend Catch-Up + Observability Readiness
+- KAN-227: BU-1 Schema Alignment + Alerts (FOUNDATION — do first)
+- KAN-228: BU-2 Stock Detail Enrichment
+- KAN-229: BU-3 Dashboard + Market Enrichment
+- KAN-230: BU-4 Chat System Improvements
+- KAN-231: BU-5 Observability Backend Gaps
+- KAN-232: BU-6 Observability Frontend (supersedes KAN-224/225)
+- KAN-233: BU-7 Admin Dashboard
