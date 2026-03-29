@@ -24,7 +24,9 @@ TOOL_GROUPS: dict[str, list[str] | None] = {
         "get_company_profile",
         "get_analyst_targets",
         "risk_narrative",
-    ],  # 8 tools
+        "dividend_sustainability",
+        "get_recommendation_scorecard",
+    ],  # 10 tools
     "portfolio": [
         "get_portfolio_exposure",
         "portfolio_health",
@@ -34,7 +36,10 @@ TOOL_GROUPS: dict[str, list[str] | None] = {
         "risk_narrative",
         "analyze_stock",  # for drill-down into holdings
         "get_fundamentals",
-    ],  # 8 tools
+        "market_briefing",
+        "get_forecast",
+        "get_recommendation_scorecard",
+    ],  # 11 tools
     "market": [
         "market_briefing",
         "get_sector_forecast",
