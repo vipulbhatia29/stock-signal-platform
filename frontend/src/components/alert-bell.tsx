@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -105,7 +105,7 @@ export function AlertBell() {
   const markRead = useMarkAlertsRead();
   const [pendingMarkAll, setPendingMarkAll] = useState<string[] | null>(null);
 
-  const alerts = data?.alerts ?? [];
+  const alerts = useMemo(() => data?.alerts ?? [], [data?.alerts]);
   const unreadCount = data?.unreadCount ?? 0;
 
   useEffect(() => {
