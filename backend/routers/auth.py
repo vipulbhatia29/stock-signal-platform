@@ -274,6 +274,16 @@ async def oidc_discovery(request: Request) -> JSONResponse:
     return JSONResponse(content=build_discovery_document(base_url))
 
 
+def _oidc_enabled() -> bool:
+    """Check if OIDC is configured (client secret is set)."""
+    return bool(settings.OIDC_CLIENT_SECRET)
+
+
+def _allowed_redirect_uris() -> set[str]:
+    """Parse the comma-separated redirect URI whitelist from settings."""
+    return {u.strip() for u in settings.OIDC_REDIRECT_URIS.split(",") if u.strip()}
+
+
 @router.get("/authorize")
 async def oidc_authorize(
     request: Request,
@@ -293,13 +303,19 @@ async def oidc_authorize(
         request: The incoming request.
         response_type: Must be "code".
         client_id: OIDC client ID (must match settings).
-        redirect_uri: Where to redirect after authorization.
+        redirect_uri: Where to redirect after authorization (must be whitelisted).
         state: Opaque state parameter passed through to the redirect.
         user: The authenticated user (injected by dependency).
 
     Returns:
         A redirect to the callback URI with the auth code.
     """
+    if not _oidc_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OIDC is not configured",
+        )
+
     if response_type != "code":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -316,6 +332,12 @@ async def oidc_authorize(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="redirect_uri is required",
+        )
+
+    if redirect_uri not in _allowed_redirect_uris():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="redirect_uri is not registered",
         )
 
     code = await store_auth_code(user.id)
@@ -341,6 +363,12 @@ async def oidc_token(
     Returns:
         JSON with access_token, token_type, and expires_in.
     """
+    if not _oidc_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OIDC is not configured",
+        )
+
     form = await request.form()
     grant_type = form.get("grant_type", "")
     code = form.get("code", "")

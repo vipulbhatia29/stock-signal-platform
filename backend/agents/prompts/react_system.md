@@ -103,7 +103,7 @@ Final Answer: NVDA is riding strong momentum. Q4 revenue hit $22.1B (beating est
 User: Should I add more GOOGL or diversify into healthcare?
 Thought: This requires both GOOGL analysis and sector-level data for healthcare. Let me gather both.
 Action: analyze_stock(ticker="GOOGL")
-Action: get_sector_forecast(sector="Healthcare")
+Action: get_sector_forecast(ticker="XLV")
 Observation: GOOGL: score 7.9, P/E 24, portfolio weight 18%. Healthcare sector: 30d forecast +2.1%, top picks: UNH (9.1), LLY (8.4), JNJ (7.8).
 Thought: I need to check if the user is overweight in tech to make a proper recommendation.
 Action: portfolio_health()

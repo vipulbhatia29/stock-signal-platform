@@ -1,6 +1,6 @@
 """Golden dataset for agent quality assessment.
 
-Defines 17 canonical queries (10 intent-based + 4 reasoning + 3 failure variants)
+Defines 20 canonical queries (10 intent + 4 reasoning + 3 failure + 2 behavioral + 1 cross-domain)
 used by the assessment runner to evaluate agent accuracy, tool selection, routing,
 and error handling. Each query specifies the expected route, tools, grounding
 checks, and iteration budget so the scoring engine can compute pass/fail metrics.
@@ -212,6 +212,38 @@ _Q17_FORECAST_FAIL = GoldenQuery(
     mock_failures={"get_forecast": "No forecast available"},
 )
 
+# ── Behavioral queries (spec Q8, Q9) ────────────────────────────────────────
+
+_Q18_OUT_OF_SCOPE = GoldenQuery(
+    query_text="Write me a poem about stocks",
+    intent_category="out_of_scope",
+    expected_tools=frozenset(),  # zero tool calls — decline path
+    expected_route="general",
+    grounding_checks=("can't", "sorry", "unable", "don't"),
+    max_iterations=0,
+)
+
+_Q19_PRONOUN_FOLLOWUP = GoldenQuery(
+    query_text="What about its dividends?",
+    intent_category="dividend",
+    expected_tools=frozenset({"dividend_sustainability"}),
+    expected_route="stock",
+    grounding_checks=("dividend",),
+    max_iterations=2,
+)
+
+# ── Cross-domain queries (spec Q15, Q16) ────────────────────────────────────
+
+_Q20_DIVIDEND_DEEP_DIVE = GoldenQuery(
+    query_text="Is AAPL's dividend sustainable long term?",
+    intent_category="dividend",
+    expected_tools=frozenset({"dividend_sustainability", "get_fundamentals"}),
+    expected_route="stock",
+    grounding_checks=("AAPL", "dividend"),
+    max_iterations=3,
+    is_reasoning=True,
+)
+
 # ── Immutable dataset ────────────────────────────────────────────────────────
 
 GOLDEN_DATASET: tuple[GoldenQuery, ...] = (
@@ -232,4 +264,7 @@ GOLDEN_DATASET: tuple[GoldenQuery, ...] = (
     _Q15_ANALYZE_FAIL,
     _Q16_BRIEFING_FAIL,
     _Q17_FORECAST_FAIL,
+    _Q18_OUT_OF_SCOPE,
+    _Q19_PRONOUN_FOLLOWUP,
+    _Q20_DIVIDEND_DEEP_DIVE,
 )

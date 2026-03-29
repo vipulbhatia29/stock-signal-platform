@@ -53,7 +53,9 @@ class Settings(BaseSettings):
 
     # --- OIDC (Langfuse SSO) ---
     OIDC_CLIENT_ID: str = "langfuse"
-    OIDC_CLIENT_SECRET: str = "change-me-in-production"
+    OIDC_CLIENT_SECRET: str = ""  # Empty = OIDC disabled; set in .env
+    # Comma-separated whitelist of allowed OIDC redirect URIs
+    OIDC_REDIRECT_URIS: str = "http://localhost:3001/api/auth/callback/custom"
 
     # --- Agent ---
     MCP_TOOLS: bool = True  # MCP stdio transport for agent tool calls (kill switch: set False)
