@@ -316,6 +316,7 @@ async def react_loop(
     cache: Any | None = None,
     session_id: str | None = None,
     max_iterations: int = MAX_ITERATIONS,
+    langfuse_trace: Any | None = None,
 ) -> AsyncGenerator[StreamEvent, None]:
     """Core ReAct loop — reason and act in alternating steps.
 
@@ -358,6 +359,17 @@ async def react_loop(
             yield StreamEvent(type="done", usage={})
             return
 
+        # Langfuse: start iteration span
+        iter_span = None
+        if langfuse_trace:
+            try:
+                iter_span = langfuse_trace.span(
+                    name=f"react.iteration.{i + 1}",
+                    metadata={"iteration": i + 1},
+                )
+            except Exception:
+                logger.debug("langfuse_iteration_span_failed", extra={"iteration": i})
+
         # 2. Tool budget check — if exhausted, force summarization
         tools_for_call = tools
         if total_tool_calls >= MAX_TOOL_CALLS:
@@ -398,6 +410,13 @@ async def react_loop(
 
         # 6. If no tool calls → finish
         if not response.has_tool_calls:
+            # Langfuse: rename iteration span to "synthesis" — this is the final answer
+            if iter_span:
+                try:
+                    iter_span.update(name="synthesis")
+                    iter_span.end()
+                except Exception:
+                    logger.debug("langfuse_synthesis_span_failed")
             final_content = response.content or ""
             yield StreamEvent(type="token", content=final_content + DISCLAIMER)
             yield StreamEvent(type="done", usage=response.usage_dict())
@@ -414,6 +433,25 @@ async def react_loop(
         results = await _execute_tools(
             tool_calls, tool_executor, collector, cache, session_id, loop_step=i
         )
+
+        # Langfuse: record tool execution spans
+        _EXTERNAL_TOOLS = {"web_search", "get_geopolitical_events"}
+        if iter_span:
+            for tc_span, result_span in zip(tool_calls, results):
+                try:
+                    tool_type = "external" if tc_span["name"] in _EXTERNAL_TOOLS else "db"
+                    tool_span = iter_span.span(
+                        name=f"tool.{tc_span['name']}",
+                        metadata={
+                            "type": tool_type,
+                            "source": tc_span["name"],
+                            "cache_hit": getattr(result_span, "cache_hit", False),
+                            "status": result_span.status,
+                        },
+                    )
+                    tool_span.end()
+                except Exception:
+                    logger.debug("langfuse_tool_span_failed", extra={"tool": tc_span["name"]})
 
         # 10. Update total
         total_tool_calls += len(tool_calls)
@@ -451,6 +489,13 @@ async def react_loop(
 
         # 14. Truncate old tool results
         _truncate_old_results(scratchpad)
+
+        # Langfuse: end iteration span
+        if iter_span:
+            try:
+                iter_span.end()
+            except Exception:
+                logger.debug("langfuse_iter_end_failed", extra={"iteration": i})
 
         # 15. Circuit breaker
         if all_failed:
