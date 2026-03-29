@@ -138,6 +138,7 @@ export interface Recommendation {
   reasoning: Record<string, unknown> | null;
   generated_at: string;
   is_actionable: boolean;
+  suggested_amount: number | null;
 }
 
 export interface PaginatedRecommendations {
@@ -421,6 +422,10 @@ export interface ChatMessage {
   tool_calls: Record<string, unknown> | null;
   model_used: string | null;
   tokens_used: number | null;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+  latency_ms: number | null;
+  feedback: string | null;
   created_at: string;
 }
 
@@ -564,7 +569,7 @@ export interface ScorecardResponse {
 export interface AlertResponse {
   id: string;
   alert_type: string;
-  severity: string;
+  severity: "critical" | "warning" | "info";
   title: string;
   message: string;
   ticker: string | null;
