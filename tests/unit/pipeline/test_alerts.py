@@ -143,12 +143,18 @@ class TestAlertSchemas:
         alert = AlertResponse(
             id=uuid.uuid4(),
             alert_type="signal_change",
+            severity="info",
+            title="Score Upgrade",
+            ticker="AAPL",
             message="AAPL BUY signal",
             metadata={"ticker": "AAPL"},
             is_read=False,
             created_at=datetime.now(timezone.utc),
         )
         assert alert.alert_type == "signal_change"
+        assert alert.severity == "info"
+        assert alert.title == "Score Upgrade"
+        assert alert.ticker == "AAPL"
         assert alert.is_read is False
 
     def test_alert_list_response(self) -> None:

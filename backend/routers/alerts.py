@@ -75,6 +75,9 @@ async def get_alerts(
             AlertResponse(
                 id=a.id,
                 alert_type=a.alert_type,
+                severity=a.severity,
+                title=a.title,
+                ticker=a.ticker,
                 message=a.message,
                 metadata=a.metadata_,
                 is_read=a.is_read,
