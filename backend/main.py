@@ -106,6 +106,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.cache = cache_service
     logger.info("CacheService initialized")
 
+    # Langfuse tracing — parallel to ObservabilityCollector (fire-and-forget)
+    from backend.services.langfuse_service import LangfuseService
+
+    langfuse_service = LangfuseService(
+        secret_key=settings.LANGFUSE_SECRET_KEY,
+        public_key=settings.LANGFUSE_PUBLIC_KEY,
+        base_url=settings.LANGFUSE_BASEURL,
+    )
+    app.state.langfuse = langfuse_service
+
     # Cache warmup — pre-load indexes
     try:
         from backend.services.cache import CacheTier
@@ -255,6 +265,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if mcp_manager:
         await mcp_manager.stop()
     await close_redis()  # closes shared pool (cache + blocklist)
+    if hasattr(app.state, "langfuse"):
+        app.state.langfuse.shutdown()
     logger.info("Application shutting down")
 
 
