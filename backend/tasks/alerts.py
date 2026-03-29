@@ -5,7 +5,7 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import async_session_factory
@@ -124,6 +124,7 @@ async def _generate_alerts_async(
     async with async_session_factory() as db:
         alerts_created += await _alert_new_buy_recommendations(db)
         alerts_created += await _alert_signal_flips(db)
+        alerts_created += await _alert_divestment_rules(db)
 
         degraded = ctx.get("degraded", [])
         for ticker in degraded:
@@ -175,8 +176,17 @@ async def _generate_alerts_async(
 
         await db.commit()
 
-    logger.info("Alert generation complete: %d alerts created", alerts_created)
-    return {"alerts_created": alerts_created}
+    # Retention cleanup (separate session — after commit so new alerts aren't affected)
+    async with async_session_factory() as cleanup_db:
+        deleted = await _cleanup_old_read_alerts(cleanup_db)
+        await cleanup_db.commit()
+
+    logger.info(
+        "Alert generation complete: %d created, %d old read alerts cleaned",
+        alerts_created,
+        deleted,
+    )
+    return {"alerts_created": alerts_created, "alerts_cleaned": deleted}
 
 
 async def _alert_new_buy_recommendations(db: AsyncSession) -> int:
@@ -283,6 +293,150 @@ async def _alert_signal_flips(db: AsyncSession) -> int:
             created += 1
 
     return created
+
+
+async def _alert_divestment_rules(db: AsyncSession) -> int:
+    """Generate alerts from divestment rule checks for all users with portfolios.
+
+    Uses get_positions_with_pnl() for enriched positions (Position model has
+    no current_price/sector — they come from JOINed Stock and StockPrice).
+
+    Returns:
+        Number of alerts created.
+    """
+    from backend.models.portfolio import Portfolio, Position
+    from backend.models.signal import SignalSnapshot
+    from backend.models.user import UserPreference
+    from backend.services.portfolio import get_positions_with_pnl
+    from backend.tools.divestment import check_divestment_rules
+
+    TITLE_MAP = {
+        "stop_loss": "Stop-Loss Triggered",
+        "position_concentration": "Concentration Risk",
+        "sector_concentration": "Sector Overweight",
+        "weak_fundamentals": "Weak Fundamentals",
+    }
+
+    count = 0
+
+    # Fetch all users who have at least one portfolio with positions
+    user_result = await db.execute(
+        select(Portfolio.user_id)
+        .join(Position, Position.portfolio_id == Portfolio.id)
+        .where(Position.closed_at.is_(None))
+        .distinct()
+    )
+    user_ids = [row[0] for row in user_result.fetchall()]
+
+    for uid in user_ids:
+        # Fetch portfolio
+        port_result = await db.execute(select(Portfolio).where(Portfolio.user_id == uid).limit(1))
+        portfolio = port_result.scalar_one_or_none()
+        if not portfolio:
+            continue
+
+        # Use the same service function the portfolio router uses
+        positions = await get_positions_with_pnl(portfolio.id, db)
+        if not positions:
+            continue
+
+        # Fetch preferences
+        pref_result = await db.execute(select(UserPreference).where(UserPreference.user_id == uid))
+        prefs = pref_result.scalar_one_or_none()
+        if not prefs:
+            continue
+
+        # Build sector allocations (same logic as portfolio router)
+        total_value = sum(p.market_value or 0 for p in positions)
+        sector_buckets: dict[str, float] = {}
+        for p in positions:
+            sector = p.sector or "Unknown"
+            sector_buckets[sector] = sector_buckets.get(sector, 0.0) + (p.market_value or 0)
+        sector_allocations = [
+            {
+                "sector": s,
+                "pct": round(v / total_value * 100, 2) if total_value > 0 else 0.0,
+            }
+            for s, v in sector_buckets.items()
+        ]
+
+        # Batch-fetch latest signals for all tickers (avoid N+1)
+        tickers = [p.ticker for p in positions]
+        subq = (
+            select(
+                SignalSnapshot.ticker,
+                func.max(SignalSnapshot.computed_at).label("latest"),
+            )
+            .where(SignalSnapshot.ticker.in_(tickers))
+            .group_by(SignalSnapshot.ticker)
+            .subquery()
+        )
+        signal_result = await db.execute(
+            select(
+                SignalSnapshot.ticker,
+                SignalSnapshot.composite_score,
+            ).join(
+                subq,
+                (SignalSnapshot.ticker == subq.c.ticker)
+                & (SignalSnapshot.computed_at == subq.c.latest),
+            )
+        )
+        signal_map = {row.ticker: row.composite_score for row in signal_result}
+
+        # Check each position
+        for p in positions:
+            pos_dict = {
+                "ticker": p.ticker,
+                "unrealized_pnl_pct": p.unrealized_pnl_pct,
+                "allocation_pct": p.allocation_pct,
+                "sector": p.sector,
+            }
+            signal = (
+                {"composite_score": signal_map.get(p.ticker)} if p.ticker in signal_map else None
+            )
+
+            alerts = check_divestment_rules(pos_dict, sector_allocations, signal, prefs)
+            for a in alerts:
+                rule = a["rule"]
+                if await _create_alert(
+                    db,
+                    alert_type="divestment",
+                    message=a["message"],
+                    metadata_={
+                        "rule": rule,
+                        "value": a["value"],
+                        "threshold": a["threshold"],
+                        "route": f"/stocks/{p.ticker}",
+                    },
+                    user_id=uid,
+                    severity=a["severity"],
+                    title=TITLE_MAP.get(rule, rule.replace("_", " ").title()),
+                    ticker=p.ticker,
+                    dedup_key=f"divestment:{rule}:{p.ticker}",
+                ):
+                    count += 1
+
+    return count
+
+
+async def _cleanup_old_read_alerts(db: AsyncSession) -> int:
+    """Delete read alerts older than 90 days.
+
+    Only deletes read alerts — unread alerts older than 90 days are
+    preserved so users who haven't logged in still see critical
+    notifications when they return.
+
+    Returns:
+        Number of alerts deleted.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    result = await db.execute(
+        delete(InAppAlert).where(
+            InAppAlert.is_read.is_(True),
+            InAppAlert.created_at < cutoff,
+        )
+    )
+    return result.rowcount or 0
 
 
 @celery_app.task(name="backend.tasks.alerts.generate_alerts_task")

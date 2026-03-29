@@ -25,6 +25,8 @@ class TestAlertGeneration:
     """Tests for _generate_alerts_async."""
 
     @pytest.mark.asyncio
+    @patch("backend.tasks.alerts._cleanup_old_read_alerts", new_callable=AsyncMock, return_value=0)
+    @patch("backend.tasks.alerts._alert_divestment_rules", new_callable=AsyncMock, return_value=0)
     @patch("backend.tasks.alerts._alert_signal_flips", new_callable=AsyncMock, return_value=0)
     @patch(
         "backend.tasks.alerts._alert_new_buy_recommendations",
@@ -32,7 +34,9 @@ class TestAlertGeneration:
         return_value=2,
     )
     @patch("backend.tasks.alerts.async_session_factory")
-    async def test_creates_alerts_for_buys(self, mock_factory, mock_buys, mock_flips) -> None:
+    async def test_creates_alerts_for_buys(
+        self, mock_factory, mock_buys, mock_flips, mock_divest, mock_cleanup
+    ) -> None:
         """Should create alerts for new BUY recommendations."""
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
@@ -46,6 +50,8 @@ class TestAlertGeneration:
         mock_buys.assert_called_once()
 
     @pytest.mark.asyncio
+    @patch("backend.tasks.alerts._cleanup_old_read_alerts", new_callable=AsyncMock, return_value=0)
+    @patch("backend.tasks.alerts._alert_divestment_rules", new_callable=AsyncMock, return_value=0)
     @patch("backend.tasks.alerts._alert_signal_flips", new_callable=AsyncMock, return_value=0)
     @patch(
         "backend.tasks.alerts._alert_new_buy_recommendations",
@@ -53,7 +59,9 @@ class TestAlertGeneration:
         return_value=0,
     )
     @patch("backend.tasks.alerts.async_session_factory")
-    async def test_drift_alerts_from_context(self, mock_factory, mock_buys, mock_flips) -> None:
+    async def test_drift_alerts_from_context(
+        self, mock_factory, mock_buys, mock_flips, mock_divest, mock_cleanup
+    ) -> None:
         """Should create drift alerts from pipeline context."""
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
@@ -61,12 +69,14 @@ class TestAlertGeneration:
         mock_cm.__aexit__ = AsyncMock(return_value=False)
         mock_factory.return_value = mock_cm
 
-        with patch("backend.tasks.alerts._create_alert", new_callable=AsyncMock):
+        with patch("backend.tasks.alerts._create_alert", new_callable=AsyncMock, return_value=True):
             result = await _generate_alerts_async({"degraded": ["AAPL", "TSLA"]})
 
         assert result["alerts_created"] == 2
 
     @pytest.mark.asyncio
+    @patch("backend.tasks.alerts._cleanup_old_read_alerts", new_callable=AsyncMock, return_value=0)
+    @patch("backend.tasks.alerts._alert_divestment_rules", new_callable=AsyncMock, return_value=0)
     @patch("backend.tasks.alerts._alert_signal_flips", new_callable=AsyncMock, return_value=0)
     @patch(
         "backend.tasks.alerts._alert_new_buy_recommendations",
@@ -74,7 +84,9 @@ class TestAlertGeneration:
         return_value=0,
     )
     @patch("backend.tasks.alerts.async_session_factory")
-    async def test_pipeline_failure_alert(self, mock_factory, mock_buys, mock_flips) -> None:
+    async def test_pipeline_failure_alert(
+        self, mock_factory, mock_buys, mock_flips, mock_divest, mock_cleanup
+    ) -> None:
         """Should create alert for pipeline partial failures."""
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
@@ -82,7 +94,7 @@ class TestAlertGeneration:
         mock_cm.__aexit__ = AsyncMock(return_value=False)
         mock_factory.return_value = mock_cm
 
-        with patch("backend.tasks.alerts._create_alert", new_callable=AsyncMock):
+        with patch("backend.tasks.alerts._create_alert", new_callable=AsyncMock, return_value=True):
             result = await _generate_alerts_async({"price_refresh": {"status": "partial"}})
 
         assert result["alerts_created"] == 1
