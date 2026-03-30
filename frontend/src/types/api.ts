@@ -646,18 +646,6 @@ export interface MarketBriefingResult {
   general_news?: NewsArticle[];
 }
 
-// ── Portfolio Health ─────────────────────────────────────────
-
-export interface PortfolioHealthResult {
-  overall_grade: string;
-  score: number;
-  diversification_score: number;
-  risk_score: number;
-  sector_concentration: Record<string, number>;
-  position_count: number;
-  top_holdings_pct: number;
-}
-
 // ── Dashboard News ───────────────────────────────────────────
 
 export interface DashboardNewsResponse {
@@ -789,29 +777,7 @@ export interface PortfolioHealthSnapshotResponse {
   position_count: number;
 }
 
-// ── Market ────────────────────────────────────────────────────────────────────
-
-export interface IndexPerformance {
-  name: string;
-  ticker: string;
-  price: number;
-  change_pct: number;
-}
-
-export interface SectorPerformance {
-  sector: string;
-  etf: string;
-  change_pct: number;
-}
-
-export interface MarketBriefingResult {
-  indexes: IndexPerformance[];
-  sector_performance: SectorPerformance[];
-  portfolio_news: Record<string, unknown>[];
-  upcoming_earnings: Record<string, unknown>[];
-  top_movers: Record<string, unknown>;
-  briefing_date: string;
-}
+// IndexPerformance, SectorPerformance, MarketBriefingResult defined above
 
 // ── Health ─────────────────────────────────────────────────────────────────────
 
