@@ -15,6 +15,7 @@ Key testing strategy:
 
 import numpy as np
 import pandas as pd
+import pytest
 
 from backend.tools.signals import (
     BBSignal,
@@ -24,6 +25,7 @@ from backend.tools.signals import (
     compute_bollinger,
     compute_composite_score,
     compute_macd,
+    compute_price_change,
     compute_risk_return,
     compute_rsi,
     compute_signals,
@@ -566,3 +568,55 @@ class TestComputeSignalsEndToEnd:
 
         # Should produce identical scores
         assert result_default.composite_score == result_explicit_none.composite_score
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# compute_price_change tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def test_compute_price_change():
+    """Positive daily price change is computed correctly."""
+    df = pd.DataFrame({"adj_close": [100.0, 102.0]})
+    change_pct, current_price = compute_price_change(df)
+    assert change_pct == pytest.approx(2.0)
+    assert current_price == pytest.approx(102.0)
+
+
+def test_compute_price_change_negative():
+    """Negative daily price change is computed correctly."""
+    df = pd.DataFrame({"adj_close": [100.0, 97.0]})
+    change_pct, current_price = compute_price_change(df)
+    assert change_pct == pytest.approx(-3.0)
+    assert current_price == pytest.approx(97.0)
+
+
+def test_compute_price_change_insufficient_data():
+    """Returns None when fewer than 2 data points."""
+    df = pd.DataFrame({"adj_close": [100.0]})
+    change_pct, current_price = compute_price_change(df)
+    assert change_pct is None
+    assert current_price is None
+
+
+def test_compute_price_change_zero_previous():
+    """Returns None for change_pct when previous close is zero (division guard)."""
+    df = pd.DataFrame({"adj_close": [0.0, 5.0]})
+    change_pct, current_price = compute_price_change(df)
+    assert change_pct is None
+    assert current_price == pytest.approx(5.0)
+
+
+def test_compute_price_change_capital_close_column():
+    """Recognises capital-C 'Close' column name from yfinance."""
+    df = pd.DataFrame({"Close": [100.0, 105.0]})
+    change_pct, current_price = compute_price_change(df)
+    assert change_pct == pytest.approx(5.0)
+    assert current_price == pytest.approx(105.0)
+
+
+def test_compute_price_change_none_dataframe():
+    """Returns (None, None) when DataFrame is None."""
+    change_pct, current_price = compute_price_change(None)
+    assert change_pct is None
+    assert current_price is None

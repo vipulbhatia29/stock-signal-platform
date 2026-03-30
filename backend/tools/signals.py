@@ -141,9 +141,40 @@ class SignalResult:
     volatility: float | None  # Annualized volatility (e.g., 0.20 = 20%)
     sharpe_ratio: float | None  # Risk-adjusted return
 
+    # Price change
+    change_pct: float | None = None  # daily price change percentage
+    current_price: float | None = None  # latest close price
+
     # Composite score (0-10 scale)
-    composite_score: float | None
-    composite_weights: dict | None  # Records which weights were used
+    composite_score: float | None = None
+    composite_weights: dict | None = None  # Records which weights were used
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Price change helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def compute_price_change(df: pd.DataFrame | None) -> tuple[float | None, float | None]:
+    """Compute daily price change percentage and current price from OHLC DataFrame.
+
+    Returns:
+        A tuple of (change_pct, current_price).
+    """
+    if df is None or len(df) < 2:
+        return None, None
+    for col in ("adj_close", "Adj Close", "close", "Close"):
+        if col in df.columns:
+            closes = df[col]
+            break
+    else:
+        return None, None
+    current = float(closes.iloc[-1])
+    previous = float(closes.iloc[-2])
+    if previous == 0:
+        return None, current
+    change = ((current - previous) / previous) * 100
+    return round(change, 2), round(current, 2)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -214,6 +245,9 @@ def compute_signals(
     bb_up, bb_low, bb_pos = compute_bollinger(closes)
     ann_ret, vol, sharpe = compute_risk_return(closes, risk_free_rate)
 
+    # ── Compute price change ─────────────────────────────────────────
+    change_pct, current_price = compute_price_change(df)
+
     # ── Compute composite score ──────────────────────────────────────
     score, weights = compute_composite_score(
         rsi_val,
@@ -241,6 +275,8 @@ def compute_signals(
         annual_return=ann_ret,
         volatility=vol,
         sharpe_ratio=sharpe,
+        change_pct=change_pct,
+        current_price=current_price,
         composite_score=score,
         composite_weights=weights,
     )
@@ -747,6 +783,8 @@ async def store_signal_snapshot(
         "annual_return": result.annual_return,
         "volatility": result.volatility,
         "sharpe_ratio": result.sharpe_ratio,
+        "change_pct": result.change_pct,
+        "current_price": result.current_price,
         "composite_score": result.composite_score,
         "composite_weights": result.composite_weights,
     }
