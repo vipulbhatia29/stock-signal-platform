@@ -1505,6 +1505,39 @@ Executed all 12 tasks from plan serially using subagents. Each task: read source
 
 **Dependency order:** BU-1 → BU-2/3/4 (parallel) → BU-5 → BU-6 → BU-7
 
+### Session 72: KAN-227 — Schema Alignment + Alerts Redesign (2026-03-29)
+**Branch:** `feat/KAN-227-schema-alerts-redesign` | **Phase B.5 BU-1 COMPLETE**
+
+**Backend (4 tasks):**
+- Migration 018: `severity`, `title`, `ticker`, `dedup_key` columns + 2 indexes on `in_app_alerts`
+- `AlertResponse` schema: severity as `Literal["critical","warning","info"]`, title, ticker fields
+- Router: manual constructor updated with new fields
+- Alert producers: `_alert_exists_recently()` dedup helper (24h window), `_is_downgrade()` rank helper, all 4 existing producers updated with severity/title/ticker/dedup_key
+- New `_alert_divestment_rules()` producer: batch-fetches users with portfolios, reuses `get_positions_with_pnl()`, batch signal lookup, creates alerts per triggered rule with dedup
+- New `_cleanup_old_read_alerts()`: deletes read alerts >90 days (preserves unread)
+
+**Frontend (4 tasks):**
+- Schema sync: 3 type mismatches fixed (AlertResponse severity union, ChatMessage +4 fields, Recommendation +suggested_amount)
+- 39 new TypeScript types added (105 total exported types in `types/api.ts`)
+- `useAlerts()` hook: fetches `AlertListResponse`, `select` transform → `{alerts, total, unreadCount}`. Removed `useUnreadAlertCount` (redundant).
+- Alert bell popover redesign: severity-colored titles, blue/hollow dot unread/read, loading skeleton, delayed mark-all-read with 5s undo toast, click→navigate to `/stocks/{ticker}`, title fallback for legacy alerts
+
+**Testing:**
+- 16 new unit tests (schema validation, _is_downgrade, dedup key format)
+- 6 new API tests (GET /alerts with new fields, pagination, 401, mark-as-read, IDOR, unread count)
+- 107 frontend tests pass (existing), `tsc --noEmit` clean
+
+**Local LLM delegation (training data):**
+- 5 tasks delegated to deepseek-coder-v2-lite-instruct (T1-T3, T5, T8)
+- 100% pass rate, avg 14 reviewer lines changed
+- Key learnings: line length >100, duplicate function defs, lost system-wide logic, missing imports
+- MCP bridge fix: `json.dumps()` for return type compliance (was returning dict, Pydantic rejected)
+
+**Spec + Plan:** `docs/superpowers/specs/2026-03-29-schema-alignment-alerts-redesign.md`, `docs/superpowers/plans/2026-03-29-schema-alignment-alerts-redesign.md`
+
+**Test counts:** 1103 unit + ~202 API + 7 e2e + 24 integration + 107 frontend = ~1443 total
+**Alembic head:** `b8f9d0e1f2a3` (migration 018)
+
 ### Next session
-1. Brainstorm KAN-227 (BU-1: Schema Alignment + Alerts Redesign)
-2. Spec → Plan → Implement for BU-1
+1. Push + PR for KAN-227 to develop
+2. Next: KAN-228 (BU-2: Stock Detail Enrichment) or KAN-229 (BU-3: Dashboard Enrichment)

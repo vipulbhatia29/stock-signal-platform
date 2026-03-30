@@ -1,63 +1,26 @@
 "use client";
 
-import { useState } from "react";
-import { Bell, CheckCheck } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Bell } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { useAlerts, useUnreadAlertCount, useMarkAlertsRead } from "@/hooks/use-alerts";
+import { useAlerts, useMarkAlertsRead } from "@/hooks/use-alerts";
 import {
   Popover,
   PopoverTrigger,
   PopoverContent,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import type { AlertResponse } from "@/types/api";
 
-const SEVERITY_COLORS = {
+const SEVERITY_COLORS: Record<string, string> = {
   critical: "text-loss",
   warning: "text-warning",
   info: "text-cyan",
-} as const;
+};
 
-function AlertItem({ alert }: { alert: AlertResponse }) {
-  const severity = alert.severity as keyof typeof SEVERITY_COLORS;
-  const color = SEVERITY_COLORS[severity] ?? "text-subtle";
-  const timeAgo = getTimeAgo(alert.created_at);
-
-  return (
-    <div
-      className={cn(
-        "flex gap-2 px-3 py-2.5 border-b border-border last:border-0",
-        !alert.is_read && "bg-card2"
-      )}
-    >
-      <div className={cn("mt-0.5 shrink-0", color)}>
-        {!alert.is_read && (
-          <span className="inline-block h-1.5 w-1.5 rounded-full bg-cyan" />
-        )}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="text-xs font-medium text-foreground truncate">
-          {alert.title}
-        </div>
-        <div className="text-[10px] text-subtle mt-0.5 line-clamp-2">
-          {alert.message}
-        </div>
-        <div className="flex items-center gap-2 mt-1">
-          {alert.ticker && (
-            <span className="font-mono text-[9px] text-cyan">{alert.ticker}</span>
-          )}
-          <span className="text-[9px] text-subtle">{timeAgo}</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function getTimeAgo(dateStr: string): string {
-  const now = Date.now();
-  const then = new Date(dateStr).getTime();
-  const diffMs = now - then;
-  const mins = Math.floor(diffMs / 60000);
+function formatTimeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
   if (mins < 60) return `${mins}m ago`;
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h ago`;
@@ -65,30 +28,125 @@ function getTimeAgo(dateStr: string): string {
   return `${days}d ago`;
 }
 
-export function AlertBell() {
-  const [open, setOpen] = useState(false);
-  const { data: alerts } = useAlerts();
-  const { data: unreadData } = useUnreadAlertCount();
-  const markRead = useMarkAlertsRead();
+function formatTitle(alert: AlertResponse): string {
+  if (alert.title) return alert.title;
+  return alert.alert_type
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
-  const unreadCount = unreadData?.unread_count ?? 0;
+function AlertSkeleton() {
+  return (
+    <div className="space-y-3 p-4">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="flex gap-3 animate-pulse">
+          <div className="w-2 h-2 rounded-full bg-muted mt-2 shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-3 bg-muted rounded w-2/3" />
+            <div className="h-3 bg-muted rounded w-full" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
-  function handleMarkAllRead() {
-    if (!alerts) return;
-    const unreadIds = alerts.filter((a) => !a.is_read).map((a) => a.id);
-    if (unreadIds.length > 0) {
-      markRead.mutate(unreadIds);
-    }
-  }
+function AlertItem({
+  alert,
+  onClick,
+}: {
+  alert: AlertResponse;
+  onClick: (alert: AlertResponse) => void;
+}) {
+  const severity = alert.severity as keyof typeof SEVERITY_COLORS;
+  const color = SEVERITY_COLORS[severity] ?? "text-subtle";
+  const title = formatTitle(alert);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <button
+      onClick={() => onClick(alert)}
+      className={cn(
+        "flex gap-3 px-4 py-3 w-full text-left border-b border-border/50",
+        "hover:bg-muted/30 transition-colors",
+        alert.is_read && "opacity-60",
+      )}
+    >
+      <div className="flex-shrink-0 mt-1.5">
+        {alert.is_read ? (
+          <div className="w-2 h-2 rounded-full border border-muted-foreground/30" />
+        ) : (
+          <div className="w-2 h-2 rounded-full bg-blue-500" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex justify-between items-baseline gap-2">
+          <span className={cn("font-semibold text-xs", color)}>{title}</span>
+          <span className="text-muted-foreground text-[11px] whitespace-nowrap">
+            {formatTimeAgo(alert.created_at)}
+          </span>
+        </div>
+        <p className="text-muted-foreground text-xs mt-0.5 line-clamp-2">
+          {alert.message}
+        </p>
+        {alert.ticker && (
+          <span className="text-muted-foreground text-[11px] bg-muted/50 px-2 py-0.5 rounded mt-1.5 inline-block">
+            {alert.ticker} →
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+export function AlertBell() {
+  const router = useRouter();
+  const { data, isLoading } = useAlerts();
+  const markRead = useMarkAlertsRead();
+  const [pendingMarkAll, setPendingMarkAll] = useState<string[] | null>(null);
+
+  const alerts = useMemo(() => data?.alerts ?? [], [data?.alerts]);
+  const unreadCount = data?.unreadCount ?? 0;
+
+  useEffect(() => {
+    if (!pendingMarkAll) return;
+    const timer = setTimeout(() => {
+      markRead.mutate(pendingMarkAll);
+      setPendingMarkAll(null);
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [pendingMarkAll, markRead]);
+
+  const handleAlertClick = useCallback(
+    (alert: AlertResponse) => {
+      if (!alert.is_read) {
+        markRead.mutate([alert.id]);
+      }
+      if (alert.ticker) {
+        router.push(`/stocks/${alert.ticker}`);
+      }
+    },
+    [markRead, router],
+  );
+
+  const handleMarkAllRead = useCallback(() => {
+    const unreadIds = alerts.filter((a) => !a.is_read).map((a) => a.id);
+    if (unreadIds.length === 0) return;
+    setPendingMarkAll(unreadIds);
+  }, [alerts]);
+
+  const handleUndo = useCallback(() => {
+    setPendingMarkAll(null);
+  }, []);
+
+  return (
+    <Popover>
       <PopoverTrigger
         render={
-          <button className="relative flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-hov hover:text-foreground transition-colors">
-            <Bell size={16} />
+          <button className="relative p-2 rounded-md hover:bg-muted/50 transition-colors">
+            <Bell className="h-5 w-5 text-muted-foreground" />
             {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-loss px-1 text-[9px] font-bold text-white">
+              <span className="absolute -top-0.5 -right-0.5 bg-loss text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}
@@ -97,38 +155,54 @@ export function AlertBell() {
       />
       <PopoverContent
         align="end"
-        className="w-80 p-0 border border-border bg-card shadow-xl"
+        className="w-[380px] p-0 max-h-[400px] flex flex-col"
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-          <span className="text-xs font-semibold text-foreground">
-            Notifications
-          </span>
-          {unreadCount > 0 && (
-            <Button
-              variant="ghost"
-              size="sm"
+        <div className="flex justify-between items-center px-4 py-3 border-b border-border">
+          <span className="font-semibold text-sm">Notifications</span>
+          {unreadCount > 0 && !pendingMarkAll && (
+            <button
               onClick={handleMarkAllRead}
-              className="h-6 px-2 text-[10px] text-subtle hover:text-foreground"
+              className="text-cyan text-xs hover:underline"
             >
-              <CheckCheck size={12} className="mr-1" />
               Mark all read
-            </Button>
+            </button>
           )}
         </div>
 
-        {/* Alert list */}
-        <div className="max-h-80 overflow-y-auto">
-          {alerts && alerts.length > 0 ? (
-            alerts.slice(0, 20).map((alert) => (
-              <AlertItem key={alert.id} alert={alert} />
-            ))
-          ) : (
-            <div className="py-8 text-center text-xs text-subtle">
+        {pendingMarkAll && (
+          <div className="flex justify-between items-center px-4 py-2 bg-muted/50 border-b border-border text-xs">
+            <span className="text-muted-foreground">Marked all read.</span>
+            <button onClick={handleUndo} className="text-cyan hover:underline">
+              Undo
+            </button>
+          </div>
+        )}
+
+        <div className="overflow-y-auto flex-1">
+          {isLoading ? (
+            <AlertSkeleton />
+          ) : alerts.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
               No notifications
             </div>
+          ) : (
+            alerts.map((alert) => (
+              <AlertItem
+                key={alert.id}
+                alert={alert}
+                onClick={handleAlertClick}
+              />
+            ))
           )}
         </div>
+
+        {alerts.length > 0 && (
+          <div className="px-4 py-2.5 border-t border-border text-center">
+            <span className="text-cyan text-xs cursor-pointer hover:underline">
+              View all notifications →
+            </span>
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

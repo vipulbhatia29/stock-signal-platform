@@ -22,6 +22,10 @@ class InAppAlert(UUIDPrimaryKeyMixin, Base):
     )
     message: Mapped[str] = mapped_column(String(500), nullable=False)
     alert_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    severity: Mapped[str] = mapped_column(String(30), server_default="info", nullable=False)
+    title: Mapped[str] = mapped_column(String(200), server_default="", nullable=False)
+    ticker: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    dedup_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
     metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

@@ -586,11 +586,14 @@ GET /api/v1/recommendations/scorecard
   Auth:     Required
 ```
 
-### 3.12 Alert Endpoints (Phase 5) ✅ IMPLEMENTED
+### 3.12 Alert Endpoints (Phase 5 + Phase B.5 BU-1) ✅ IMPLEMENTED
+
+Phase B.5 BU-1 (Session 72) added: `severity` (Literal: critical/warning/info), `title`, `ticker`, `dedup_key` columns. Alert producers now set these fields with 24h dedup via `dedup_key`. Divestment alerts generated nightly alongside existing buy/flip/drift/pipeline producers. Read alerts older than 90 days auto-cleaned by retention job.
 
 ```
-GET /api/v1/alerts
-  Response: AlertResponse[] { id, alert_type, severity, title, message, ticker, is_read, created_at, metadata }
+GET /api/v1/alerts?limit=20&offset=0
+  Response: AlertListResponse { alerts: AlertResponse[], total, unread_count }
+  AlertResponse: { id, alert_type, severity, title, ticker, message, metadata, is_read, created_at }
   Auth:     Required
 
 GET /api/v1/alerts/unread-count

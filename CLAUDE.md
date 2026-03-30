@@ -49,7 +49,7 @@ Load what you need for the task at hand:
 | `serena/tool-usage` | Serena MCP prefix, tool priority rules |
 | `serena/memory-map` | Full taxonomy — use when adding new modules |
 
-## 9 Hard Rules
+## 10 Hard Rules
 
 1. **uv only** — `uv run`, `uv add`. Never `pip install` or bare `python`.
 2. **Test everything** — unit test every public function; endpoint tests: auth + happy + error.

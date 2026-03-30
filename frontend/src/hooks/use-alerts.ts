@@ -2,23 +2,19 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { get, patch } from "@/lib/api";
-import type { AlertResponse, UnreadAlertCount } from "@/types/api";
+import type { AlertListResponse } from "@/types/api";
 
 /** Fetch all alerts for the current user. */
 export function useAlerts() {
   return useQuery({
     queryKey: ["alerts"],
-    queryFn: () => get<AlertResponse[]>("/alerts"),
-    staleTime: 60 * 1000, // 1 min
-  });
-}
-
-/** Fetch unread alert count. */
-export function useUnreadAlertCount() {
-  return useQuery({
-    queryKey: ["alerts", "unread-count"],
-    queryFn: () => get<UnreadAlertCount>("/alerts/unread-count"),
-    staleTime: 30 * 1000, // 30 sec — for badge updates
+    queryFn: () => get<AlertListResponse>("/alerts"),
+    staleTime: 60 * 1000,
+    select: (data) => ({
+      alerts: data.alerts,
+      total: data.total,
+      unreadCount: data.unread_count,
+    }),
   });
 }
 

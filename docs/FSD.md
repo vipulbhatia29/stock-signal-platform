@@ -539,13 +539,23 @@ Users can override weights via UserPreference.composite_weights.
 - Fundamental deterioration: Piotroski drops below 4
 - Signal flip: stock's composite action changes (e.g., HOLD → SELL)
 
-**FR-9.2: Alert Deduplication**
-- Same alert rule + same ticker cannot fire more than once per 24 hours
-- Acknowledged alerts don't re-fire until condition clears and re-triggers
+**FR-9.2: Alert Deduplication** ✅ IMPLEMENTED (Session 72)
+- `dedup_key` column on `in_app_alerts` — composite key like `"divestment:stop_loss:TSLA"`
+- Same dedup_key + same user cannot fire more than once per 24 hours
+- Indexed: `ix_in_app_alerts_dedup` on `(user_id, dedup_key, created_at)`
 
-**FR-9.3: Notification Channels**
-- **In-app only** (current) — alerts stored in `in_app_alerts` table, displayed via AlertBell component
-- Telegram integration: **NOT IMPLEMENTED — deferred.** Morning briefing, quiet hours, and real-time push are future backlog items.
+**FR-9.3: Alert Retention** ✅ IMPLEMENTED (Session 72)
+- Read alerts older than 90 days auto-deleted by nightly pipeline
+- Unread alerts preserved indefinitely (user may return after absence)
+- Indexed: `ix_in_app_alerts_cleanup` on `(is_read, created_at)`
+
+**FR-9.4: Notification Channels**
+- **In-app only** (current) — alerts stored in `in_app_alerts` table, displayed via AlertBell popover
+- AlertBell: severity-colored titles, loading skeleton, delayed mark-all-read with 5s undo, click→stock detail navigation
+- Telegram integration: **NOT IMPLEMENTED — deferred.**
+
+**FR-9.5: Schema Alignment** ✅ IMPLEMENTED (Session 72)
+- `types/api.ts` fully synced: 3 type mismatches fixed, 39 missing types added (105 total exported types)
 
 ### FR-10: Recommendation Evaluation (Phase 5) ✅ IMPLEMENTED
 

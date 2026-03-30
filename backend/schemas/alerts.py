@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -13,6 +14,9 @@ class AlertResponse(BaseModel):
 
     id: uuid.UUID
     alert_type: str
+    severity: Literal["critical", "warning", "info"]
+    title: str
+    ticker: str | None
     message: str
     metadata: dict | None = None
     is_read: bool

@@ -967,7 +967,7 @@ KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval inf
 
 | # | Story | JIRA | Scope | Effort | Status |
 |---|-------|------|-------|--------|--------|
-| BU-1 | Schema Alignment + Alerts Redesign | KAN-227 | Fix types/api.ts drift (15-20 mismatches), fix 3 broken alert hooks, redesign alerts system | ~1 session | |
+| BU-1 | Schema Alignment + Alerts Redesign | KAN-227 | Fix types/api.ts drift (15-20 mismatches), fix 3 broken alert hooks, redesign alerts system | ~1 session | ✅ Session 72 |
 | BU-2 | Stock Detail Enrichment | KAN-228 | Wire intelligence, news, benchmark, candlestick (4 endpoints) | ~1 session | |
 | BU-3 | Dashboard + Market Enrichment | KAN-229 | Wire portfolio health, market briefing, sector forecasts (5 endpoints) | ~1 session | |
 | BU-4 | Chat System Improvements | KAN-230 | Surface agent metadata, update tool pinning (7→24), cost-per-response, trace links | ~0.5-1 session | |
