@@ -9,12 +9,20 @@ updated_by: session-73
 ## Current Phase
 - **Phase B.5: Frontend Catch-Up + Observability Readiness** — Epic KAN-226
 - BU-1 (KAN-227): DONE (Session 72, PR #146)
-- BU-2 (KAN-228): DONE (Session 73). Stock detail enrichment — 4 endpoints wired, 5 new components.
-- BU-3 through BU-7: To Do. BU-3/4 parallelizable, then BU-5→6→7 sequential.
+- BU-2 (KAN-228): DONE (Session 73, PR #147)
+- BU-3 (KAN-229): SPEC + PLAN COMPLETE (Session 74). 31-task plan, 3 expert reviews.
+- BU-4 (KAN-230): SPEC + PLAN COMPLETE (Session 74). 3 tasks scoped under KAN-274.
+- BU-5 through BU-7: To Do.
 
 ## Resume Point
-- Next: KAN-229 (BU-3: Dashboard + Market Enrichment) or KAN-230 (BU-4: Chat System Improvements).
-- Portfolio Analytics Epic KAN-246 created (QuantStats, PyPortfolioOpt, pandas-ta) — independent, can be done anytime.
+- Next: Execute BU-3/BU-4 plan. Branch: `feat/KAN-229-bu3-bu4-dashboard-redesign`.
+- Plan: `docs/superpowers/plans/2026-03-30-bu3-bu4-dashboard-chat.md`
+- Spec: `docs/superpowers/specs/2026-03-30-bu3-bu4-dashboard-chat-design.md`
+- Mockup: `docs/mockups/dashboard-bulletin-v3.html`
+- Execution: Subagent-driven recommended. 7 chunks, ~3-4 sessions.
+- JIRA subtasks: KAN-260-274 (15 subtasks covering 31 plan tasks).
+- Chunk 1 (backend T1-T7) and Chunk 2 (frontend utils T8-T11) can run in parallel.
+- Portfolio Analytics Epic KAN-246 created — independent, can be done anytime.
 
 ## Session 73 Accomplishments
 - KAN-228: 5 new components, 4 hooks, PriceChart toggle, SectionNav, 35 new tests
