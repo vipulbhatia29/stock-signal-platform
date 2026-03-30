@@ -1538,6 +1538,39 @@ Executed all 12 tasks from plan serially using subagents. Each task: read source
 **Test counts:** 1103 unit + ~202 API + 7 e2e + 24 integration + 107 frontend = ~1443 total
 **Alembic head:** `b8f9d0e1f2a3` (migration 018)
 
+---
+
+## Session 73 — KAN-228: Stock Detail Page Enrichment
+
+**Date:** 2026-03-29
+**Branch:** `feat/KAN-228-stock-detail-enrichment`
+
+**What was done:**
+
+KAN-227 → Done (already merged PR #146). KAN-228 brainstorm → spec → plan → implement → review → ship.
+
+**JIRA:** Epic KAN-246 (Portfolio Analytics Upgrade) created with 3 stories (KAN-247-249). KAN-228 subtasks KAN-250-259 created and tracked.
+
+**Frontend (11 tasks, 12 commits):**
+- `npm install lightweight-charts` (TradingView OSS candlestick library)
+- 2 new types: `BenchmarkSeries`, `BenchmarkComparisonResponse`
+- `formatPctChange()` utility in `lib/format.ts`
+- 4 new hooks: `useStockNews`, `useStockIntelligence`, `useBenchmark` (with `select` transform for Recharts), `useOHLC` — all with progressive `enabled: !!signals` gating
+- 5 new components: `NewsCard`, `IntelligenceCard` (collapsible sub-sections), `BenchmarkChart` (Recharts multi-line %), `CandlestickChart` (lightweight-charts + `useLightweightChartTheme`), `SectionNav` (sticky scroll pills)
+- `PriceChart` updated: Line/Candle toggle with `next/dynamic({ ssr: false })` lazy loading
+- `stock-detail-client.tsx` rewired with all new components + section `id` attributes
+- Code review: 3 Important fixes (next/dynamic SSR, theme lifecycle split, useMemo), 2 Suggestion fixes (error message, seriesNames memo)
+
+**Testing:**
+- 35 new frontend tests (5 NewsCard + 6 IntelligenceCard + 5 BenchmarkChart + 3 CandlestickChart + 2 PriceChart + 2 SectionNav + 12 integration)
+- 142 frontend tests pass (was 107), `tsc --noEmit` clean, `npm run lint` clean, `npm run build` passes
+- 1101 backend unit tests pass (no regression)
+
+**Spec + Plan:** `docs/superpowers/specs/2026-03-29-stock-detail-enrichment.md`, `docs/superpowers/plans/2026-03-29-stock-detail-enrichment.md`
+
+**Local LLM:** T1 (types/dep) and T2 (hooks) delegated to qwen3-coder-30b. T1 passed clean. T2 had 2 bugs caught in review (wrong field name `pctChanges` → `pct_change`, wrong match field `name` → `ticker`).
+
+**Test counts:** 1101 unit + ~202 API + 7 e2e + 24 integration + 142 frontend = ~1476 total
+
 ### Next session
-1. Push + PR for KAN-227 to develop
-2. Next: KAN-228 (BU-2: Stock Detail Enrichment) or KAN-229 (BU-3: Dashboard Enrichment)
+1. KAN-229 (BU-3: Dashboard + Market Enrichment) or KAN-230 (BU-4: Chat System Improvements)
