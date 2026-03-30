@@ -40,7 +40,7 @@ class TestGroqProviderObservability:
         writer.assert_called()
         call_data = writer.call_args[0][1]
         assert call_data["model"] == "model-a"
-        assert call_data["error"] is None
+        assert call_data["status"] == "completed"
 
     @pytest.mark.asyncio
     async def test_cascade_records_event(self) -> None:
