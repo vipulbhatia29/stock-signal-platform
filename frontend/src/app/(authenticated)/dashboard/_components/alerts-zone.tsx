@@ -17,9 +17,10 @@ const SEVERITY_STYLES: Record<string, { bg: string; text: string; icon: typeof A
 
 /** Zone 4 — Recent alerts grid. */
 export function AlertsZone() {
-  const { data: alerts, isLoading, isError } = useAlerts();
+  const { data, isLoading, isError } = useAlerts();
 
-  const recentAlerts = alerts?.slice(0, 6) ?? [];
+  const recentAlerts = data?.alerts?.slice(0, 6) ?? [];
+  const unreadCount = data?.unreadCount ?? 0;
 
   if (isError) {
     return (
@@ -38,7 +39,7 @@ export function AlertsZone() {
           Alerts
           {recentAlerts.length > 0 && (
             <span className="ml-1 rounded-full bg-loss/10 px-1.5 py-0.5 text-[9px] font-bold text-loss">
-              {alerts?.filter((a) => !a.is_read).length ?? 0}
+              {unreadCount}
             </span>
           )}
         </span>

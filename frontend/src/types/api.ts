@@ -429,12 +429,8 @@ export interface ChatMessage {
   prompt_tokens: number | null;
   completion_tokens: number | null;
   latency_ms: number | null;
-  feedback: string | null;
+  feedback: "positive" | "negative" | null;
   created_at: string;
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  latency_ms?: number;
-  feedback?: "positive" | "negative" | null;
   trace_id?: string;
 }
 
