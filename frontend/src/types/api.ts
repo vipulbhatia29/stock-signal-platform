@@ -604,6 +604,67 @@ export interface ScorecardResponse {
   by_horizon: ScorecardHorizonBreakdown[];
 }
 
+// ── Market Briefing ──────────────────────────────────────────
+
+export interface IndexPerformance {
+  name: string;
+  ticker: string;
+  price: number;
+  change_pct: number;
+}
+
+export interface SectorPerformance {
+  sector: string;
+  etf: string;
+  change_pct: number;
+}
+
+export interface TopMover {
+  ticker: string;
+  current_price: number | null;
+  change_pct: number;
+  macd_signal_label: string | null;
+  composite_score: number | null;
+}
+
+export interface NewsArticle {
+  title: string;
+  link: string;
+  publisher: string | null;
+  published: string | null;
+  source: string;
+  portfolio_ticker?: string | null;
+}
+
+export interface MarketBriefingResult {
+  indexes: IndexPerformance[];
+  sector_performance: SectorPerformance[];
+  portfolio_news: NewsArticle[];
+  upcoming_earnings: { ticker: string; date: string }[];
+  top_movers: { gainers: TopMover[]; losers: TopMover[] };
+  briefing_date: string;
+  general_news?: NewsArticle[];
+}
+
+// ── Portfolio Health ─────────────────────────────────────────
+
+export interface PortfolioHealthResult {
+  overall_grade: string;
+  score: number;
+  diversification_score: number;
+  risk_score: number;
+  sector_concentration: Record<string, number>;
+  position_count: number;
+  top_holdings_pct: number;
+}
+
+// ── Dashboard News ───────────────────────────────────────────
+
+export interface DashboardNewsResponse {
+  articles: NewsArticle[];
+  ticker_count: number;
+}
+
 // ── Alert Types ───────────────────────────────────────────────
 
 export interface AlertResponse {
