@@ -21,4 +21,8 @@ describe("classifyNewsSentiment", () => {
   it("is case-insensitive", () => {
     expect(classifyNewsSentiment("STOCK SURGES AFTER EARNINGS")).toBe("bullish");
   });
+
+  it("returns neutral for conflicting keywords", () => {
+    expect(classifyNewsSentiment("Stock surges despite analyst cuts")).toBe("neutral");
+  });
 });

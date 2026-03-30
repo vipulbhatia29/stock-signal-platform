@@ -32,6 +32,20 @@ class TestDashboardNewsAuth:
         assert data["ticker_count"] == 0
 
 
+class TestDashboardNewsResponseShape:
+    """Response structure tests for GET /api/v1/news/dashboard."""
+
+    async def test_dashboard_news_response_shape(self, authenticated_client):
+        """Response matches DashboardNewsResponse schema."""
+        resp = await authenticated_client.get("/api/v1/news/dashboard")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "articles" in data
+        assert "ticker_count" in data
+        assert isinstance(data["articles"], list)
+        assert isinstance(data["ticker_count"], int)
+
+
 class TestDashboardNewsEmpty:
     """Tests for users with no portfolio and no recommendations."""
 

@@ -209,6 +209,79 @@ describe("AlertsZone", () => {
   });
 });
 
+// ── SignalsZone with populated data ──────────────────────────────────────────
+
+describe("SignalsZone — populated data", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("renders signal cards when recommendations and bulk signals exist", () => {
+    mockUseRecommendations.mockReturnValue({
+      data: [
+        { ticker: "AAPL", action: "BUY", composite_score: 9.2, name: "Apple" },
+      ],
+      isLoading: false,
+      isError: false,
+    } as any);
+    mockUseBulkSignalsByTickers.mockReturnValue({
+      data: {
+        items: [
+          { ticker: "AAPL", name: "Apple Inc.", rsi_value: 42, rsi_signal: "neutral", macd_signal: "bullish_crossover", sharpe_ratio: 1.2, sma_signal: "above", composite_score: 9.2 },
+        ],
+      },
+      isLoading: false,
+    } as any);
+    renderWithQuery(<SignalsZone />);
+    expect(screen.getByText("AAPL")).toBeInTheDocument();
+    expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+  });
+});
+
+// ── AlertsZone with populated data ──────────────────────────────────────────
+
+describe("AlertsZone — populated data", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("renders alert content with severity and ticker", () => {
+    mockUseAlerts.mockReturnValue({
+      data: {
+        alerts: [
+          { id: "1", title: "Score dropped", message: "INTC score fell below threshold", severity: "critical", ticker: "INTC", is_read: false, created_at: "2026-03-30T10:00:00Z", alert_type: "signal", metadata: {} },
+        ],
+        total: 1,
+        unreadCount: 1,
+      },
+      isLoading: false,
+      isError: false,
+    } as any);
+    renderWithQuery(<AlertsZone />);
+    expect(screen.getByText("Score dropped")).toBeInTheDocument();
+    expect(screen.getByText("CRITICAL")).toBeInTheDocument();
+    expect(screen.getByText("INTC")).toBeInTheDocument();
+  });
+});
+
+// ── NewsZone with populated data ────────────────────────────────────────────
+
+describe("NewsZone — populated data", () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it("renders article titles from dashboard news", () => {
+    mockUseUserDashboardNews.mockReturnValue({
+      data: {
+        articles: [
+          { title: "Apple earnings beat", link: "https://example.com", publisher: "Reuters", published: "1h ago", source: "news", portfolio_ticker: "AAPL" },
+        ],
+        ticker_count: 1,
+      },
+      isLoading: false,
+    } as any);
+    renderWithQuery(<NewsZone />);
+    expect(screen.getByText("Apple earnings beat")).toBeInTheDocument();
+    expect(screen.getByText("Reuters")).toBeInTheDocument();
+    expect(screen.getByText("AAPL")).toBeInTheDocument();
+  });
+});
+
 // ── NewsZone ────────────────────────────────────────────────────────────────
 
 describe("NewsZone", () => {
