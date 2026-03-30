@@ -3,12 +3,12 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-const mockUseBulkSignals = jest.fn(() => ({ data: undefined, isLoading: false }));
-const mockUseWatchlist = jest.fn(() => ({ data: undefined, isLoading: false }));
-const mockUseIndexes = jest.fn(() => ({ data: [], isLoading: false }));
+const mockUseBulkSignals = jest.fn((): any => ({ data: undefined, isLoading: false }));
+const mockUseWatchlist = jest.fn((): any => ({ data: undefined, isLoading: false }));
+const mockUseIndexes = jest.fn((): any => ({ data: [], isLoading: false }));
 
 jest.mock("@/hooks/use-stocks", () => ({
-  useBulkSignals: (params: any) => mockUseBulkSignals(params),
+  useBulkSignals: () => mockUseBulkSignals(),
   useWatchlist: () => mockUseWatchlist(),
   useIndexes: () => mockUseIndexes(),
 }));
