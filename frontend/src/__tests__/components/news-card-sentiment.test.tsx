@@ -1,6 +1,6 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
-import { NewsCard } from "@/components/news-card";
+import { NewsArticleCard as NewsCard } from "@/components/news-article-card";
 
 test("renders title, publisher, and ticker", () => {
   render(
