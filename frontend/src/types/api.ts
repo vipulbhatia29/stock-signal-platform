@@ -431,6 +431,11 @@ export interface ChatMessage {
   latency_ms: number | null;
   feedback: string | null;
   created_at: string;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  latency_ms?: number;
+  feedback?: "positive" | "negative" | null;
+  trace_id?: string;
 }
 
 export type StreamEventType =

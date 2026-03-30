@@ -23,6 +23,7 @@ export interface ChatMessageUI {
   plan?: { steps: string[]; reasoning: string };
   evidence?: EvidenceItem[];
   isDecline?: boolean;
+  feedback?: "positive" | "negative" | null;
 }
 
 export interface ChatState {
