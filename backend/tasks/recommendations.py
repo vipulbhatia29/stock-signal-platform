@@ -102,6 +102,8 @@ async def _generate_recommendations_async() -> dict:
                         annual_return=snapshot.annual_return,
                         volatility=snapshot.volatility,
                         sharpe_ratio=snapshot.sharpe_ratio,
+                        change_pct=snapshot.change_pct,
+                        current_price=snapshot.current_price,
                         composite_score=snapshot.composite_score,
                         composite_weights=snapshot.composite_weights,
                     )
