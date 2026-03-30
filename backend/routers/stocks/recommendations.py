@@ -161,9 +161,7 @@ async def get_bulk_signals(
     Results are paginated and sortable.
     """
     tickers_list = (
-        [t.strip().upper() for t in tickers.split(",") if t.strip()][:200]
-        if tickers
-        else None
+        [t.strip().upper() for t in tickers.split(",") if t.strip()][:200] if tickers else None
     )
 
     total, rows = await get_bulk_signals_svc(

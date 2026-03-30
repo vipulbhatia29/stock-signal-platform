@@ -3,8 +3,6 @@ import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ── Mock hooks ──────────────────────────────────────────────────────────────
-
-/* eslint-disable @typescript-eslint/no-explicit-any */
 const mockUseMarketBriefing = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
 const mockUseRecommendations = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
 const mockUseBulkSignalsByTickers = jest.fn(() => ({ data: undefined, isLoading: false }));
@@ -44,7 +42,6 @@ jest.mock("@/contexts/chat-context", () => ({
 jest.mock("sonner", () => ({
   toast: { error: jest.fn(), success: jest.fn(), info: jest.fn() },
 }));
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // ── Zone components ─────────────────────────────────────────────────────────
 
@@ -105,7 +102,7 @@ describe("SignalsZone", () => {
   });
 
   it("shows empty state when no recommendations", () => {
-    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false, isError: false } as any);
+    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false, isError: false } as never);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByText("No signals yet")).toBeInTheDocument();
   });
@@ -118,7 +115,7 @@ describe("SignalsZone", () => {
   });
 
   it("has aria-label on sections", () => {
-    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false, isError: false } as any);
+    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false, isError: false } as never);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByLabelText("Your Signals")).toBeInTheDocument();
     expect(screen.getByLabelText("Top Movers")).toBeInTheDocument();
@@ -136,7 +133,7 @@ describe("PortfolioZone", () => {
   });
 
   it("shows empty state when no portfolio", () => {
-    mockUsePortfolioSummary.mockReturnValue({ data: { position_count: 0, total_value: 0, total_cost_basis: 0, unrealized_pnl: 0, unrealized_pnl_pct: 0, sectors: [] }, isLoading: false } as any);
+    mockUsePortfolioSummary.mockReturnValue({ data: { position_count: 0, total_value: 0, total_cost_basis: 0, unrealized_pnl: 0, unrealized_pnl_pct: 0, sectors: [] }, isLoading: false } as never);
     renderWithQuery(<PortfolioZone />);
     expect(screen.getByText("No portfolio yet")).toBeInTheDocument();
   });
@@ -161,13 +158,13 @@ describe("AlertsZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("renders Alerts heading", () => {
-    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as any);
+    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as never);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByText("Alerts")).toBeInTheDocument();
   });
 
   it("shows empty state when no alerts", () => {
-    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as any);
+    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as never);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByText("No alerts")).toBeInTheDocument();
   });
@@ -196,14 +193,14 @@ describe("AlertsZone", () => {
       },
       isLoading: false,
       isError: false,
-    } as any);
+    } as never);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByText("Price Drop")).toBeInTheDocument();
     expect(screen.getByText("AAPL")).toBeInTheDocument();
   });
 
   it("has aria-label on section", () => {
-    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as any);
+    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as never);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByLabelText("Alerts")).toBeInTheDocument();
   });
@@ -221,7 +218,7 @@ describe("SignalsZone — populated data", () => {
       ],
       isLoading: false,
       isError: false,
-    } as any);
+    } as never);
     mockUseBulkSignalsByTickers.mockReturnValue({
       data: {
         items: [
@@ -229,7 +226,7 @@ describe("SignalsZone — populated data", () => {
         ],
       },
       isLoading: false,
-    } as any);
+    } as never);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByText("AAPL")).toBeInTheDocument();
     expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
@@ -252,7 +249,7 @@ describe("AlertsZone — populated data", () => {
       },
       isLoading: false,
       isError: false,
-    } as any);
+    } as never);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByText("Score dropped")).toBeInTheDocument();
     expect(screen.getByText("CRITICAL")).toBeInTheDocument();
@@ -274,7 +271,7 @@ describe("NewsZone — populated data", () => {
         ticker_count: 1,
       },
       isLoading: false,
-    } as any);
+    } as never);
     renderWithQuery(<NewsZone />);
     expect(screen.getByText("Apple earnings beat")).toBeInTheDocument();
     expect(screen.getByText("Reuters")).toBeInTheDocument();
@@ -293,7 +290,7 @@ describe("NewsZone", () => {
   });
 
   it("shows empty state when no articles", () => {
-    mockUseUserDashboardNews.mockReturnValue({ data: { articles: [], ticker_count: 0 }, isLoading: false } as any);
+    mockUseUserDashboardNews.mockReturnValue({ data: { articles: [], ticker_count: 0 }, isLoading: false } as never);
     renderWithQuery(<NewsZone />);
     expect(screen.getByText("No news yet")).toBeInTheDocument();
   });
@@ -315,7 +312,7 @@ describe("NewsZone", () => {
         ticker_count: 2,
       },
       isLoading: false,
-    } as any);
+    } as never);
     renderWithQuery(<NewsZone />);
     expect(screen.getByText("AAPL beats earnings")).toBeInTheDocument();
     expect(screen.getByText("MSFT cloud growth")).toBeInTheDocument();
