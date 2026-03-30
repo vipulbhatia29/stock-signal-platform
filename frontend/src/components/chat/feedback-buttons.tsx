@@ -6,10 +6,13 @@ import { patch } from "@/lib/api";
 interface FeedbackButtonsProps {
   sessionId: string;
   messageId: string;
+  initialFeedback?: "positive" | "negative" | null;
 }
 
-export function FeedbackButtons({ sessionId, messageId }: FeedbackButtonsProps) {
-  const [selected, setSelected] = useState<"up" | "down" | null>(null);
+export function FeedbackButtons({ sessionId, messageId, initialFeedback }: FeedbackButtonsProps) {
+  const [selected, setSelected] = useState<"up" | "down" | null>(
+    initialFeedback === "positive" ? "up" : initialFeedback === "negative" ? "down" : null
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleFeedback = async (feedback: "up" | "down") => {
