@@ -61,6 +61,9 @@ class AssessmentResult(Base):
         default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
+    query_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, index=True
+    )
 
     def __repr__(self) -> str:
         """Return string representation."""
