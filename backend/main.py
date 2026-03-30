@@ -19,6 +19,7 @@ from backend.routers import (
     chat,
     forecasts,
     indexes,
+    news,
     portfolio,
     preferences,
     sectors,
@@ -231,3 +232,4 @@ app.include_router(preferences.router, prefix="/api/v1")
 app.include_router(chat.router, prefix="/api/v1")
 app.include_router(forecasts.router, prefix="/api/v1")
 app.include_router(alerts.router, prefix="/api/v1")
+app.include_router(news.router, prefix="/api/v1")
