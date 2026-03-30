@@ -1,7 +1,7 @@
 """020 — Observability API gaps: status, langfuse_trace_id, summaries, eval query_id.
 
 Revision ID: c2d3e4f5a6b7
-Revises: b8f9d0e1f2a3
+Revises: b1fe4c734142
 Create Date: 2026-03-30
 """
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "c2d3e4f5a6b7"
-down_revision = "b8f9d0e1f2a3"
+down_revision = "b1fe4c734142"
 branch_labels = None
 depends_on = None
 
