@@ -19,6 +19,7 @@ export function CandlestickChart({ data }: CandlestickChartProps) {
   const chartRef = useRef<IChartApi | null>(null);
   const { theme, candleColors } = useLightweightChartTheme();
 
+  // Create chart and set data when data changes
   useEffect(() => {
     if (!containerRef.current || !data || data.count === 0) return;
 
@@ -67,7 +68,6 @@ export function CandlestickChart({ data }: CandlestickChartProps) {
 
     chart.timeScale().fitContent();
 
-    // Resize observer
     const ro = new ResizeObserver(() => {
       if (containerRef.current) {
         chart.resize(containerRef.current.clientWidth, 400);
@@ -80,7 +80,15 @@ export function CandlestickChart({ data }: CandlestickChartProps) {
       chart.remove();
       chartRef.current = null;
     };
-  }, [data, theme, candleColors]);
+    // Only recreate chart when data changes — theme updates handled separately
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  // Update theme without recreating the chart
+  useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.applyOptions(theme);
+  }, [theme]);
 
   if (!data) return null;
 

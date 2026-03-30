@@ -34,7 +34,7 @@ export function NewsCard({ news, isLoading, isError, onRetry }: NewsCardProps) {
     return (
       <div className="space-y-4">
         <SectionHeading>News</SectionHeading>
-        <ErrorState onRetry={onRetry} />
+        <ErrorState error="Failed to load news" onRetry={onRetry} />
       </div>
     );
   }

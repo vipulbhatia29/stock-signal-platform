@@ -56,6 +56,6 @@ test("renders empty state when no articles", () => {
 test("renders error state with retry", () => {
   const onRetry = jest.fn();
   render(<NewsCard news={undefined} isLoading={false} isError={true} onRetry={onRetry} />);
-  expect(screen.getByText(/something went wrong/i)).toBeInTheDocument();
+  expect(screen.getByText(/failed to load news/i)).toBeInTheDocument();
   expect(screen.getByText(/try again/i)).toBeInTheDocument();
 });

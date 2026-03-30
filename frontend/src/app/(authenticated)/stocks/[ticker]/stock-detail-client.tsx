@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { BarChart3Icon } from "lucide-react";
 import {
   useSignals,
@@ -74,9 +74,13 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
   } = useBenchmark(ticker, period, hasSignals);
 
   // Extract series names for BenchmarkChart legend
-  const benchmarkSeriesNames = benchmarkData?.length
-    ? Object.keys(benchmarkData[0]).filter((k) => k !== "date")
-    : [];
+  const benchmarkSeriesNames = useMemo(
+    () =>
+      benchmarkData?.length
+        ? Object.keys(benchmarkData[0]).filter((k) => k !== "date")
+        : [],
+    [benchmarkData]
+  );
 
   function handleToggleWatchlist() {
     if (isInWatchlist) {

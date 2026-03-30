@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, Suspense, lazy } from "react";
+import { useState } from "react";
+import dynamic from "next/dynamic";
 import {
   ComposedChart,
   Area,
@@ -21,10 +22,10 @@ import { formatCurrency, formatVolume, formatChartDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PricePeriod } from "@/types/api";
 
-const LazyCandlestick = lazy(() =>
-  import("@/components/candlestick-chart").then((m) => ({
-    default: m.CandlestickChart,
-  }))
+const DynamicCandlestick = dynamic(
+  () =>
+    import("@/components/candlestick-chart").then((m) => m.CandlestickChart),
+  { ssr: false, loading: () => <Skeleton className="h-[400px] w-full" /> }
 );
 
 type ChartMode = "line" | "candle";
@@ -111,9 +112,7 @@ export function PriceChart({ ticker, period, onPeriodChange }: PriceChartProps) 
       {isLoading ? (
         <Skeleton className="h-[250px] w-full sm:h-[400px]" />
       ) : chartMode === "candle" ? (
-        <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
-          <LazyCandlestick data={ohlc} />
-        </Suspense>
+        <DynamicCandlestick data={ohlc} />
       ) : (
         <ResponsiveContainer width="100%" height="100%" minHeight={250} className="sm:min-h-[400px]">
           <ComposedChart
