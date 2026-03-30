@@ -11,10 +11,7 @@ global.ResizeObserver = class {
 // Mock lightweight-charts — it requires a real DOM canvas
 jest.mock("lightweight-charts", () => ({
   createChart: jest.fn(() => ({
-    addCandlestickSeries: jest.fn(() => ({
-      setData: jest.fn(),
-    })),
-    addHistogramSeries: jest.fn(() => ({
+    addSeries: jest.fn(() => ({
       setData: jest.fn(),
     })),
     applyOptions: jest.fn(),
@@ -27,6 +24,8 @@ jest.mock("lightweight-charts", () => ({
     remove: jest.fn(),
     resize: jest.fn(),
   })),
+  CandlestickSeries: Symbol("CandlestickSeries"),
+  HistogramSeries: Symbol("HistogramSeries"),
 }));
 
 // Mock the theme hook
@@ -37,6 +36,7 @@ jest.mock("@/lib/lightweight-chart-theme", () => ({
   }),
 }));
 
+import { createChart } from "lightweight-charts";
 import { CandlestickChart } from "@/components/candlestick-chart";
 import type { OHLCResponse } from "@/types/api";
 
@@ -58,7 +58,6 @@ test("renders chart container", () => {
 });
 
 test("calls createChart on mount", () => {
-  const { createChart } = require("lightweight-charts");
   render(<CandlestickChart data={mockOHLC} />);
   expect(createChart).toHaveBeenCalled();
 });

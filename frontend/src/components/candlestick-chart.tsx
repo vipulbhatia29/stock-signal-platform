@@ -1,7 +1,11 @@
 "use client";
 
 import { useRef, useEffect } from "react";
-import { createChart } from "lightweight-charts";
+import {
+  createChart,
+  CandlestickSeries,
+  HistogramSeries,
+} from "lightweight-charts";
 import type { IChartApi } from "lightweight-charts";
 import { useLightweightChartTheme } from "@/lib/lightweight-chart-theme";
 import type { OHLCResponse } from "@/types/api";
@@ -26,7 +30,7 @@ export function CandlestickChart({ data }: CandlestickChartProps) {
     });
     chartRef.current = chart;
 
-    const candleSeries = chart.addCandlestickSeries({
+    const candleSeries = chart.addSeries(CandlestickSeries, {
       upColor: candleColors.up,
       downColor: candleColors.down,
       borderUpColor: candleColors.up,
@@ -44,7 +48,7 @@ export function CandlestickChart({ data }: CandlestickChartProps) {
     }));
     candleSeries.setData(candles);
 
-    const volumeSeries = chart.addHistogramSeries({
+    const volumeSeries = chart.addSeries(HistogramSeries, {
       priceFormat: { type: "volume" },
       priceScaleId: "volume",
     });
