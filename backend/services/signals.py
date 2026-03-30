@@ -651,6 +651,7 @@ async def get_bulk_signals(
     db: AsyncSession,
     *,
     index_id: str | None = None,
+    tickers: list[str] | None = None,
     rsi_state: str | None = None,
     macd_state: str | None = None,
     sector: str | None = None,
@@ -670,6 +671,7 @@ async def get_bulk_signals(
     Args:
         db: Async database session.
         index_id: Optional index ID filter (e.g. "sp500").
+        tickers: Optional list of tickers to filter by.
         rsi_state: Optional RSI signal filter (e.g. "OVERSOLD").
         macd_state: Optional MACD signal filter (e.g. "BULLISH").
         sector: Optional sector filter.
@@ -697,6 +699,10 @@ async def get_bulk_signals(
         )
         .label("rn"),
     ).join(Stock, SignalSnapshot.ticker == Stock.ticker)
+
+    # Apply ticker filter before subquery
+    if tickers:
+        latest = latest.where(SignalSnapshot.ticker.in_(tickers))
 
     # Apply index filter via join
     if index_id is not None:
