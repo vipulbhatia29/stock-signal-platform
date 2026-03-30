@@ -252,6 +252,8 @@ class SignalSnapshotFactory(factory.Factory):
     annual_return = 0.15
     volatility = 0.22
     sharpe_ratio = 0.48
+    change_pct = 1.5
+    current_price = 150.0
     composite_score = 6.5
     composite_weights = {"rsi": 1.0, "macd": 1.5, "sma": 1.5, "sharpe": 0.5, "total": 4.5}
 

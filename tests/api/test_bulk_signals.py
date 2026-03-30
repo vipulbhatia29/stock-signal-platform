@@ -245,3 +245,54 @@ class TestBulkSignals:
         assert response2.status_code == 200
         returned2 = [item["ticker"] for item in response2.json()["items"]]
         assert "SH3" in returned2
+
+    async def test_bulk_signals_filter_by_tickers(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """Tickers query param filters results to specified tickers only."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            for ticker in ["TF01", "TF02", "TF03"]:
+                stock = StockFactory.build(ticker=ticker, name=f"Ticker Filter {ticker}")
+                session.add(stock)
+                await session.flush()
+                signal = SignalSnapshotFactory.build(ticker=ticker, composite_score=5.0)
+                session.add(signal)
+            await session.commit()
+        await engine.dispose()
+
+        # Filter to only TF01 and TF02
+        response = await authenticated_client.get(
+            "/api/v1/stocks/signals/bulk",
+            params={"tickers": "TF01,TF02"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        returned = {item["ticker"] for item in data["items"]}
+        assert returned.issubset({"TF01", "TF02"})
+        assert "TF03" not in returned
+
+    async def test_bulk_signals_tickers_case_insensitive(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """Tickers param is case-insensitive — lowercase input still matches."""
+        engine = create_async_engine(db_url, echo=False)
+        factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async with factory_() as session:
+            stock = StockFactory.build(ticker="TC01", name="Case Test")
+            session.add(stock)
+            await session.flush()
+            signal = SignalSnapshotFactory.build(ticker="TC01", composite_score=6.0)
+            session.add(signal)
+            await session.commit()
+        await engine.dispose()
+
+        response = await authenticated_client.get(
+            "/api/v1/stocks/signals/bulk",
+            params={"tickers": "tc01"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        returned = {item["ticker"] for item in data["items"]}
+        assert "TC01" in returned

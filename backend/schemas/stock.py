@@ -234,6 +234,7 @@ class RecommendationResponse(BaseModel):
     """
 
     ticker: str
+    name: str | None = None  # Stock name from stocks table (JOIN)
     action: str  # BUY, WATCH, AVOID, HOLD, SELL
     confidence: str  # HIGH, MEDIUM, LOW
     composite_score: float

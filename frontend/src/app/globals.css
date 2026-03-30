@@ -158,6 +158,11 @@
   code, [class*="font-mono"] {
     font-family: var(--font-jetbrains-mono), ui-monospace, monospace;
   }
+  /* Focus-visible for keyboard users */
+  *:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
 }
 
 /* ── Entry animations ───────────────────────────────────────────────────── */

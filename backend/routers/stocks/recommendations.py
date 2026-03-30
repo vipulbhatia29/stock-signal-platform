@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import get_async_session
 from backend.dependencies import get_current_user
 from backend.models.recommendation import RecommendationSnapshot
+from backend.models.stock import Stock
 from backend.models.user import User
 from backend.routers.stocks._helpers import require_stock
 from backend.schemas.stock import (
@@ -76,29 +77,52 @@ async def get_recommendations(
         if cached:
             return RecommendationListResponse.model_validate_json(cached)
 
-    query = select(RecommendationSnapshot).where(RecommendationSnapshot.user_id == current_user.id)
+    base_filter = select(RecommendationSnapshot).where(
+        RecommendationSnapshot.user_id == current_user.id
+    )
+
+    if action is not None:
+        base_filter = base_filter.where(RecommendationSnapshot.action == action.upper())
+
+    if confidence is not None:
+        base_filter = base_filter.where(RecommendationSnapshot.confidence == confidence.upper())
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+    base_filter = base_filter.where(RecommendationSnapshot.generated_at >= cutoff)
+
+    # Count total before pagination
+    count_result = await db.execute(select(func.count()).select_from(base_filter.subquery()))
+    total = count_result.scalar_one()
+
+    # Main query with JOIN to get stock name
+    query = (
+        select(RecommendationSnapshot, Stock.name)
+        .join(Stock, RecommendationSnapshot.ticker == Stock.ticker, isouter=True)
+        .where(RecommendationSnapshot.user_id == current_user.id)
+    )
 
     if action is not None:
         query = query.where(RecommendationSnapshot.action == action.upper())
-
     if confidence is not None:
         query = query.where(RecommendationSnapshot.confidence == confidence.upper())
-
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     query = query.where(RecommendationSnapshot.generated_at >= cutoff)
-
-    # Count total before pagination
-    count_result = await db.execute(select(func.count()).select_from(query.subquery()))
-    total = count_result.scalar_one()
 
     query = query.order_by(RecommendationSnapshot.composite_score.desc())
     query = query.limit(limit).offset(offset)
 
     result = await db.execute(query)
-    recs = list(result.scalars().all())
+    rows = result.all()
+
+    recommendations = []
+    for row in rows:
+        snapshot = row[0]
+        stock_name = row[1]
+        rec_dict = {c.key: getattr(snapshot, c.key) for c in snapshot.__table__.columns}
+        rec_dict["name"] = stock_name
+        recommendations.append(RecommendationResponse.model_validate(rec_dict))
 
     response = RecommendationListResponse(
-        recommendations=[RecommendationResponse.model_validate(r) for r in recs],
+        recommendations=recommendations,
         total=total,
     )
     if cache:
@@ -116,6 +140,7 @@ async def get_recommendations(
 @router.get("/signals/bulk", response_model=BulkSignalsResponse)
 async def get_bulk_signals(
     index_id: str | None = Query(default=None, description="Filter by index ID"),
+    tickers: str | None = Query(default=None, description="Comma-separated ticker list"),
     rsi_state: RsiStateQuery = None,
     macd_state: MacdStateQuery = None,
     sector: SectorQuery = None,
@@ -132,12 +157,17 @@ async def get_bulk_signals(
     """Get latest signals for multiple stocks (screener endpoint).
 
     Returns the most recent signal snapshot per ticker, with filtering
-    by index, RSI state, MACD state, sector, and composite score range.
+    by index, tickers, RSI state, MACD state, sector, and composite score range.
     Results are paginated and sortable.
     """
+    tickers_list = (
+        [t.strip().upper() for t in tickers.split(",") if t.strip()][:200] if tickers else None
+    )
+
     total, rows = await get_bulk_signals_svc(
         db,
         index_id=index_id,
+        tickers=tickers_list,
         rsi_state=rsi_state,
         macd_state=macd_state,
         sector=sector,

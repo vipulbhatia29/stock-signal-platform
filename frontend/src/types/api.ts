@@ -429,8 +429,9 @@ export interface ChatMessage {
   prompt_tokens: number | null;
   completion_tokens: number | null;
   latency_ms: number | null;
-  feedback: string | null;
+  feedback: "positive" | "negative" | null;
   created_at: string;
+  trace_id?: string;
 }
 
 export type StreamEventType =
@@ -604,6 +605,55 @@ export interface ScorecardResponse {
   by_horizon: ScorecardHorizonBreakdown[];
 }
 
+// ── Market Briefing ──────────────────────────────────────────
+
+export interface IndexPerformance {
+  name: string;
+  ticker: string;
+  price: number;
+  change_pct: number;
+}
+
+export interface SectorPerformance {
+  sector: string;
+  etf: string;
+  change_pct: number;
+}
+
+export interface TopMover {
+  ticker: string;
+  current_price: number | null;
+  change_pct: number;
+  macd_signal_label: string | null;
+  composite_score: number | null;
+}
+
+export interface NewsArticle {
+  title: string;
+  link: string;
+  publisher: string | null;
+  published: string | null;
+  source: string;
+  portfolio_ticker?: string | null;
+}
+
+export interface MarketBriefingResult {
+  indexes: IndexPerformance[];
+  sector_performance: SectorPerformance[];
+  portfolio_news: NewsArticle[];
+  upcoming_earnings: { ticker: string; date: string }[];
+  top_movers: { gainers: TopMover[]; losers: TopMover[] };
+  briefing_date: string;
+  general_news?: NewsArticle[];
+}
+
+// ── Dashboard News ───────────────────────────────────────────
+
+export interface DashboardNewsResponse {
+  articles: NewsArticle[];
+  ticker_count: number;
+}
+
 // ── Alert Types ───────────────────────────────────────────────
 
 export interface AlertResponse {
@@ -728,29 +778,7 @@ export interface PortfolioHealthSnapshotResponse {
   position_count: number;
 }
 
-// ── Market ────────────────────────────────────────────────────────────────────
-
-export interface IndexPerformance {
-  name: string;
-  ticker: string;
-  price: number;
-  change_pct: number;
-}
-
-export interface SectorPerformance {
-  sector: string;
-  etf: string;
-  change_pct: number;
-}
-
-export interface MarketBriefingResult {
-  indexes: IndexPerformance[];
-  sector_performance: SectorPerformance[];
-  portfolio_news: Record<string, unknown>[];
-  upcoming_earnings: Record<string, unknown>[];
-  top_movers: Record<string, unknown>;
-  briefing_date: string;
-}
+// IndexPerformance, SectorPerformance, MarketBriefingResult defined above
 
 // ── Health ─────────────────────────────────────────────────────────────────────
 

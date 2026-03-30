@@ -6,7 +6,7 @@ describe("shouldPin", () => {
   it("returns true for screen_stocks", () => expect(shouldPin("screen_stocks")).toBe(true));
   it("returns false for web_search", () => expect(shouldPin("web_search")).toBe(false));
   it("returns false for geopolitical", () => expect(shouldPin("geopolitical")).toBe(false));
-  it("returns true for recommendations", () => expect(shouldPin("recommendations")).toBe(true));
+  it("returns true for get_recommendations", () => expect(shouldPin("get_recommendations")).toBe(true));
 });
 
 test("renders artifact with dismiss button", () => {

@@ -4,7 +4,7 @@
 
 **Version:** 2.0
 **Date:** March 2026
-**Status:** Living Document — Phases 1-8 complete. ReAct agent loop shipped (Session 63).
+**Status:** Living Document — Phases 1-8 complete. Phase B.5 BU-1-4 shipped (Sessions 72-75). Dashboard redesigned as 5-zone Daily Intelligence Briefing.
 **Prerequisite reading:** docs/PRD.md
 
 ---

@@ -53,6 +53,10 @@ class SignalSnapshot(Base):
     volatility: Mapped[float | None] = mapped_column(Float, nullable=True)
     sharpe_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
 
+    # Price
+    change_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Composite
     composite_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     composite_weights: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

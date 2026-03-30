@@ -127,6 +127,37 @@ class SignalResult:
     composite_score: float | None
     composite_weights: dict | None  # Records which weights were used
 
+    # Price change (daily)
+    change_pct: float | None = None  # daily price change percentage
+    current_price: float | None = None  # latest close price
+
+
+def compute_price_change(
+    df: pd.DataFrame | None,
+) -> tuple[float | None, float | None]:
+    """Compute daily price change percentage and current price.
+
+    Returns (change_pct, current_price).
+    """
+    import math
+
+    if df is None or len(df) < 2:
+        return None, None
+    for col in ("adj_close", "Adj Close", "close", "Close"):
+        if col in df.columns:
+            closes = df[col]
+            break
+    else:
+        return None, None
+    current = float(closes.iloc[-1])
+    previous = float(closes.iloc[-2])
+    if not math.isfinite(current) or not math.isfinite(previous):
+        return None, None
+    if previous == 0:
+        return None, current
+    change = ((current - previous) / previous) * 100
+    return round(change, 2), round(current, 2)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main entry point — compute all signals for a ticker
@@ -201,6 +232,8 @@ def compute_signals(
         piotroski_score=piotroski_score,
     )
 
+    change_pct, current_price = compute_price_change(df)
+
     return SignalResult(
         ticker=ticker,
         rsi_value=rsi_val,
@@ -219,6 +252,8 @@ def compute_signals(
         sharpe_ratio=sharpe,
         composite_score=score,
         composite_weights=weights,
+        change_pct=change_pct,
+        current_price=current_price,
     )
 
 
@@ -577,6 +612,8 @@ async def store_signal_snapshot(
         "sharpe_ratio": result.sharpe_ratio,
         "composite_score": result.composite_score,
         "composite_weights": result.composite_weights,
+        "change_pct": result.change_pct,
+        "current_price": result.current_price,
     }
 
     stmt = pg_insert(SignalSnapshot).values(values)
@@ -651,6 +688,7 @@ async def get_bulk_signals(
     db: AsyncSession,
     *,
     index_id: str | None = None,
+    tickers: list[str] | None = None,
     rsi_state: str | None = None,
     macd_state: str | None = None,
     sector: str | None = None,
@@ -670,6 +708,7 @@ async def get_bulk_signals(
     Args:
         db: Async database session.
         index_id: Optional index ID filter (e.g. "sp500").
+        tickers: Optional list of tickers to filter by.
         rsi_state: Optional RSI signal filter (e.g. "OVERSOLD").
         macd_state: Optional MACD signal filter (e.g. "BULLISH").
         sector: Optional sector filter.
@@ -697,6 +736,10 @@ async def get_bulk_signals(
         )
         .label("rn"),
     ).join(Stock, SignalSnapshot.ticker == Stock.ticker)
+
+    # Apply ticker filter before subquery
+    if tickers:
+        latest = latest.where(SignalSnapshot.ticker.in_(tickers))
 
     # Apply index filter via join
     if index_id is not None:

@@ -67,6 +67,9 @@ from backend.services.signals import (
     compute_macd as compute_macd,
 )
 from backend.services.signals import (
+    compute_price_change as compute_price_change,
+)
+from backend.services.signals import (
     compute_risk_return as compute_risk_return,
 )
 from backend.services.signals import (
@@ -103,6 +106,7 @@ __all__ = [
     "compute_bollinger",
     "compute_composite_score",
     "compute_macd",
+    "compute_price_change",
     "compute_risk_return",
     "compute_rsi",
     "compute_signals",
