@@ -22,6 +22,9 @@ import type {
   PortfolioSummary,
   PortfolioSnapshot,
   Recommendation,
+  MarketBriefingResult,
+  PortfolioHealthResult,
+  DashboardNewsResponse,
 } from "@/types/api";
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -303,5 +306,62 @@ export function useRecommendations() {
     queryKey: ["recommendations"],
     queryFn: () => get<Recommendation[]>("/stocks/recommendations"),
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ── Market Briefing ──────────────────────────────────────────────────────────
+
+export function useMarketBriefing() {
+  return useQuery<MarketBriefingResult>({
+    queryKey: ["market-briefing"],
+    queryFn: () => get<MarketBriefingResult>("/market/briefing"),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ── Portfolio Health ─────────────────────────────────────────────────────────
+
+export function usePortfolioHealth() {
+  return useQuery<PortfolioHealthResult>({
+    queryKey: ["portfolio-health"],
+    queryFn: () => get<PortfolioHealthResult>("/portfolio/health"),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function usePortfolioHealthHistory(days: number = 7) {
+  return useQuery<PortfolioHealthResult[]>({
+    queryKey: ["portfolio-health-history", days],
+    queryFn: () =>
+      get<PortfolioHealthResult[]>(`/portfolio/health/history?days=${days}`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ── Dashboard News ───────────────────────────────────────────────────────────
+
+export function useUserDashboardNews(enabled: boolean = true) {
+  return useQuery<DashboardNewsResponse>({
+    queryKey: ["dashboard-news"],
+    queryFn: () => get<DashboardNewsResponse>("/news/dashboard"),
+    staleTime: 5 * 60 * 1000,
+    enabled,
+  });
+}
+
+// ── Bulk Signals by Tickers ──────────────────────────────────────────────────
+
+export function useBulkSignalsByTickers(
+  tickers: string[],
+  enabled: boolean = true
+) {
+  return useQuery<BulkSignalsResponse>({
+    queryKey: ["bulk-signals-by-ticker", tickers],
+    queryFn: () =>
+      get<BulkSignalsResponse>(
+        `/stocks/signals/bulk?tickers=${tickers.join(",")}&limit=${tickers.length}`
+      ),
+    enabled: enabled && tickers.length > 0,
+    staleTime: 60 * 1000,
   });
 }
