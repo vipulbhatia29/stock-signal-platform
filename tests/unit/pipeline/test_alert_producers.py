@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import ValidationError
 
 from backend.schemas.alerts import AlertResponse
-from backend.tasks.alerts import _is_downgrade
+from backend.tasks.alerts import _create_alert, _is_downgrade
 
 # ---------------------------------------------------------------------------
 # AlertResponse schema validation
@@ -122,36 +123,67 @@ class TestIsDowngrade:
 # ---------------------------------------------------------------------------
 
 
-class TestDedupKeyFormat:
-    """Tests for dedup key format conventions."""
+class TestCreateAlertDedupKeys:
+    """Tests that _create_alert sets correct dedup_key on InAppAlert."""
 
-    def test_divestment_key(self) -> None:
-        """Divestment dedup key follows 'divestment:{rule}:{ticker}'."""
-        key = "divestment:stop_loss:TSLA"
-        parts = key.split(":")
-        assert parts[0] == "divestment"
-        assert parts[1] == "stop_loss"
-        assert parts[2] == "TSLA"
+    @pytest.mark.asyncio
+    async def test_create_alert_sets_dedup_key(self) -> None:
+        """_create_alert should pass dedup_key to InAppAlert."""
+        from unittest.mock import MagicMock
 
-    def test_signal_flip_key(self) -> None:
-        """Signal flip dedup key follows 'signal_flip:{direction}:{ticker}'."""
-        key = "signal_flip:downgrade:AAPL"
-        parts = key.split(":")
-        assert parts[0] == "signal_flip"
-        assert parts[1] in ("downgrade", "upgrade")
-        assert parts[2] == "AAPL"
+        db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=mock_result)
+        uid = uuid.uuid4()
+        result = await _create_alert(
+            db,
+            alert_type="divestment",
+            message="Down 18%",
+            user_id=uid,
+            severity="critical",
+            title="Stop-Loss Triggered",
+            ticker="TSLA",
+            dedup_key="divestment:stop_loss:TSLA",
+        )
+        assert result is True
+        added_alert = db.add.call_args[0][0]
+        assert added_alert.dedup_key == "divestment:stop_loss:TSLA"
+        assert added_alert.severity == "critical"
+        assert added_alert.title == "Stop-Loss Triggered"
+        assert added_alert.ticker == "TSLA"
 
-    def test_buy_key(self) -> None:
-        """Buy dedup key follows 'buy:{ticker}'."""
-        key = "buy:MSFT"
-        assert key.startswith("buy:")
+    @pytest.mark.asyncio
+    async def test_create_alert_without_dedup_key(self) -> None:
+        """_create_alert without dedup_key should still create alert."""
+        db = AsyncMock()
+        uid = uuid.uuid4()
+        result = await _create_alert(
+            db,
+            alert_type="test",
+            message="Test",
+            user_id=uid,
+        )
+        assert result is True
+        added_alert = db.add.call_args[0][0]
+        assert added_alert.dedup_key is None
+        assert added_alert.severity == "info"
 
-    def test_drift_key(self) -> None:
-        """Drift dedup key follows 'drift:{ticker}'."""
-        key = "drift:NVDA"
-        assert key.startswith("drift:")
+    @pytest.mark.asyncio
+    async def test_create_alert_skips_if_dedup_exists(self) -> None:
+        """_create_alert should return False if dedup match found."""
+        db = AsyncMock()
+        uid = uuid.uuid4()
+        mock_result = AsyncMock()
+        mock_result.scalar_one_or_none.return_value = uid
+        db.execute = AsyncMock(return_value=mock_result)
 
-    def test_pipeline_key(self) -> None:
-        """Pipeline dedup keys are fixed strings."""
-        assert "pipeline:partial" == "pipeline:partial"
-        assert "pipeline:total" == "pipeline:total"
+        result = await _create_alert(
+            db,
+            alert_type="divestment",
+            message="Down 18%",
+            user_id=uid,
+            dedup_key="divestment:stop_loss:TSLA",
+        )
+        assert result is False
+        db.add.assert_not_called()

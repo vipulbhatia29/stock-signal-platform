@@ -212,7 +212,7 @@ async def _alert_new_buy_recommendations(db: AsyncSession) -> int:
         if await _create_alert(
             db,
             user_id=rec.user_id,
-            alert_type="signal_change",
+            alert_type="recommendation",
             message=(
                 f"New BUY signal for {rec.ticker} — composite score {rec.composite_score:.1f}/10"
             ),

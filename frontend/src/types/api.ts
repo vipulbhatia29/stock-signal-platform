@@ -618,10 +618,6 @@ export interface AlertResponse {
   metadata: Record<string, unknown>;
 }
 
-export interface UnreadAlertCount {
-  unread_count: number;
-}
-
 export interface AlertListResponse {
   alerts: AlertResponse[];
   total: number;
