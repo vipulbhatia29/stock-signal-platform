@@ -10,11 +10,11 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
-from backend.dependencies import get_current_user
+from backend.dependencies import get_current_user, require_admin
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.llm_config import LLMModelConfig
 from backend.models.logs import LLMCallLog, ToolExecutionLog
-from backend.models.user import User, UserRole
+from backend.models.user import User
 from backend.schemas.chat import (
     AdminChatSessionListResponse,
     AdminChatSessionSummary,
@@ -33,13 +33,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
-def _require_admin(user: User) -> User:
-    """Raise 403 if user is not an admin."""
-    if user.role != UserRole.ADMIN:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    return user
-
-
 @router.get(
     "/llm-models",
     response_model=list[LLMModelConfigResponse],
@@ -52,7 +45,7 @@ async def list_llm_models(
     db: AsyncSession = Depends(get_async_session),
 ) -> list[LLMModelConfigResponse]:
     """List all LLM model cascade configurations."""
-    _require_admin(user)
+    require_admin(user)
     result = await db.execute(
         select(LLMModelConfig).order_by(LLMModelConfig.tier, LLMModelConfig.priority)
     )
@@ -77,7 +70,7 @@ async def update_llm_model(
     db: AsyncSession = Depends(get_async_session),
 ) -> LLMModelConfigResponse:
     """Update an LLM model config by ID."""
-    _require_admin(user)
+    require_admin(user)
     result = await db.execute(select(LLMModelConfig).where(LLMModelConfig.id == model_id))
     config = result.scalar_one_or_none()
     if config is None:
@@ -109,7 +102,7 @@ async def reload_llm_models(
     db: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Reload model configs from DB into running app state."""
-    _require_admin(user)
+    require_admin(user)
 
     from backend.agents.model_config import ModelConfigLoader
 
@@ -132,7 +125,7 @@ async def get_llm_metrics(
     db: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Get LLM metrics from the llm_call_log table."""
-    _require_admin(user)
+    require_admin(user)
     collector = getattr(request.app.state, "collector", None)
     if collector is None:
         return {
@@ -160,7 +153,7 @@ async def get_tier_health(
     db: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Get per-model health classification from the DB."""
-    _require_admin(user)
+    require_admin(user)
     collector = getattr(request.app.state, "collector", None)
     if collector is None:
         return {
@@ -182,7 +175,7 @@ async def tier_toggle(
     user: User = Depends(get_current_user),
 ) -> dict:
     """Toggle a model on/off at runtime."""
-    _require_admin(user)
+    require_admin(user)
     collector = getattr(request.app.state, "collector", None)
     if collector is None:
         raise HTTPException(status_code=503, detail="Observability not initialized")
@@ -202,7 +195,7 @@ async def get_llm_usage(
     db: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Get 30-day LLM usage from llm_call_log table."""
-    _require_admin(user)
+    require_admin(user)
 
     cutoff = text("now() - interval '30 days'")
 
@@ -279,7 +272,7 @@ async def get_query_cost(
     db: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Get per-query cost breakdown with LLM and tool call details."""
-    _require_admin(user)
+    require_admin(user)
 
     try:
         qid = uuid_mod.UUID(query_id)
@@ -368,7 +361,7 @@ async def list_chat_sessions(
     offset: int = Query(default=0, ge=0, description="Page offset"),
 ) -> AdminChatSessionListResponse:
     """List all chat sessions with user email and message count."""
-    _require_admin(user)
+    require_admin(user)
 
     # Base query with join to users for email and subquery for message count
     msg_count_sq = (
@@ -439,7 +432,7 @@ async def get_chat_transcript(
     db: AsyncSession = Depends(get_async_session),
 ) -> AdminChatTranscriptResponse:
     """Get the full transcript of a chat session."""
-    _require_admin(user)
+    require_admin(user)
 
     # Fetch session with user email and message count
     msg_count_sq = (
@@ -506,7 +499,7 @@ async def get_chat_stats(
     db: AsyncSession = Depends(get_async_session),
 ) -> AdminChatStatsResponse:
     """Get aggregate chat statistics."""
-    _require_admin(user)
+    require_admin(user)
 
     total_sessions = (await db.execute(select(func.count(ChatSession.id)))).scalar() or 0
     total_messages = (await db.execute(select(func.count(ChatMessage.id)))).scalar() or 0

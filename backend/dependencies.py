@@ -231,3 +231,20 @@ async def get_current_user(
         await _set_cached_user(cache, user)
 
     return user
+
+
+def require_admin(user: User | CachedUser) -> User | CachedUser:
+    """Raise 403 if user is not an admin.
+
+    Args:
+        user: The authenticated user.
+
+    Returns:
+        The user if admin.
+
+    Raises:
+        HTTPException: 403 if not admin.
+    """
+    if user.role != UserRole.ADMIN:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
