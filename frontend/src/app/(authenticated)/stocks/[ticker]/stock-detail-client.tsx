@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { BarChart3Icon } from "lucide-react";
 import {
   useSignals,
@@ -11,16 +11,23 @@ import {
   useStockMeta,
   useFundamentals,
   useDividends,
+  useStockNews,
+  useStockIntelligence,
+  useBenchmark,
 } from "@/hooks/use-stocks";
 import { useForecast } from "@/hooks/use-forecasts";
 import { StockHeader } from "@/components/stock-header";
+import { SectionNav } from "@/components/section-nav";
 import { PriceChart } from "@/components/price-chart";
+import { BenchmarkChart } from "@/components/benchmark-chart";
 import { SignalCards } from "@/components/signal-cards";
 import { SignalHistoryChart } from "@/components/signal-history-chart";
 import { RiskReturnCard } from "@/components/risk-return-card";
 import { FundamentalsCard } from "@/components/fundamentals-card";
 import { DividendCard } from "@/components/dividend-card";
 import { ForecastCard } from "@/components/forecast-card";
+import { IntelligenceCard } from "@/components/intelligence-card";
+import { NewsCard } from "@/components/news-card";
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeading } from "@/components/section-heading";
 import { Button } from "@/components/ui/button";
@@ -44,6 +51,36 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
   const { data: fundamentals, isLoading: fundLoading } = useFundamentals(ticker);
   const { data: dividends, isLoading: divLoading } = useDividends(ticker);
   const { data: forecast, isLoading: forecastLoading } = useForecast(ticker);
+
+  // Progressive loading — wait for signals before fetching secondary data
+  const hasSignals = !!signals;
+  const {
+    data: news,
+    isLoading: newsLoading,
+    isError: newsError,
+    refetch: refetchNews,
+  } = useStockNews(ticker, hasSignals);
+  const {
+    data: intelligence,
+    isLoading: intelLoading,
+    isError: intelError,
+    refetch: refetchIntel,
+  } = useStockIntelligence(ticker, hasSignals);
+  const {
+    data: benchmarkData,
+    isLoading: benchmarkLoading,
+    isError: benchmarkError,
+    refetch: refetchBenchmark,
+  } = useBenchmark(ticker, period, hasSignals);
+
+  // Extract series names for BenchmarkChart legend
+  const benchmarkSeriesNames = useMemo(
+    () =>
+      benchmarkData?.length
+        ? Object.keys(benchmarkData[0]).filter((k) => k !== "date")
+        : [],
+    [benchmarkData]
+  );
 
   function handleToggleWatchlist() {
     if (isInWatchlist) {
@@ -107,29 +144,41 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
         />
       )}
 
-      <section>
+      <SectionNav />
+
+      <section id="sec-price">
         <PriceChart ticker={ticker} period={period} onPeriodChange={setPeriod} />
       </section>
 
-      <section>
+      <section id="sec-signals">
         <SectionHeading>Signal Breakdown</SectionHeading>
         <SignalCards signals={signals} isLoading={signalsLoading} />
       </section>
 
-      <section>
+      <section id="sec-history">
         <SectionHeading>Signal History (90 days)</SectionHeading>
         <SignalHistoryChart ticker={ticker} />
       </section>
 
-      <section>
+      <section id="sec-benchmark">
+        <BenchmarkChart
+          data={benchmarkData}
+          isLoading={benchmarkLoading}
+          isError={benchmarkError}
+          onRetry={refetchBenchmark}
+          seriesNames={benchmarkSeriesNames}
+        />
+      </section>
+
+      <section id="sec-risk">
         <RiskReturnCard returns={signals?.returns} />
       </section>
 
-      <section>
+      <section id="sec-fundamentals">
         <FundamentalsCard fundamentals={fundamentals} isLoading={fundLoading} />
       </section>
 
-      <section>
+      <section id="sec-forecast">
         <ForecastCard
           horizons={forecast?.horizons}
           isLoading={forecastLoading}
@@ -137,7 +186,25 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
         />
       </section>
 
-      <section>
+      <section id="sec-intelligence">
+        <IntelligenceCard
+          intelligence={intelligence}
+          isLoading={intelLoading}
+          isError={intelError}
+          onRetry={refetchIntel}
+        />
+      </section>
+
+      <section id="sec-news">
+        <NewsCard
+          news={news}
+          isLoading={newsLoading}
+          isError={newsError}
+          onRetry={refetchNews}
+        />
+      </section>
+
+      <section id="sec-dividends">
         <DividendCard dividends={dividends} isLoading={divLoading} />
       </section>
     </PageTransition>

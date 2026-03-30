@@ -918,3 +918,18 @@ export interface OHLCResponse {
   close: number[];
   volume: number[];
 }
+
+// ── Benchmark ────��────────────────────────────────────────────────────────────
+
+export interface BenchmarkSeries {
+  ticker: string;
+  name: string;
+  dates: string[];
+  pct_change: number[];
+}
+
+export interface BenchmarkComparisonResponse {
+  ticker: string;
+  period: string;
+  series: BenchmarkSeries[];
+}

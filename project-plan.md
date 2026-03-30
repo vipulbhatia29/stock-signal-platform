@@ -1052,9 +1052,18 @@ KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval inf
 
 **Original design (Session 60):** 4 agents — Stock Research, Portfolio, Orchestrator, Fan-out. Rescoped to single ReAct in Session 63 because tool filtering was sufficient. This gate ensures we revisit with evidence, not assumptions.
 
+### Phase 8.5: Portfolio Analytics Upgrade (Epic KAN-246)
+
+> Replace hand-rolled portfolio calculations with battle-tested financial libraries.
+
+| # | Story | Description | JIRA |
+|---|-------|-------------|------|
+| 1 | QuantStats integration | Sortino, max drawdown, Calmar, alpha/beta. Replace hand-rolled risk metrics in `portfolio_health.py` + `signals.py` | KAN-247 |
+| 2 | PyPortfolioOpt integration | Efficient frontier rebalancing (max Sharpe, min vol, risk parity). Replace naive equal-weight in `get_rebalancing()` | KAN-248 |
+| 3 | pandas-ta signals | Replace custom RSI/MACD/SMA/Bollinger with pandas-ta. Add Stochastic RSI, ADX, OBV. Lower priority | KAN-249 |
+
+**Estimated effort:** ~2-3 sessions. No frontend dependency — can be done independently.
+
 ### Parking Lot (low priority, pick up when needed)
 - Schwab CSV import
-- Earnings card on stock detail (frontend, data exists)
-- Candlestick toggle (frontend, backend done)
-- Benchmark chart (frontend, backend done)
 - Admin LLM dashboard (frontend, data exists via admin endpoints)
