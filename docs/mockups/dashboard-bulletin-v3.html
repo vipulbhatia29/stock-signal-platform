@@ -1,0 +1,692 @@
+<style>
+  :root {
+    --navy-900: #0a0e1a;
+    --navy-800: #111827;
+    --navy-700: #1e293b;
+    --navy-600: #334155;
+    --cyan-400: #22d3ee;
+    --green-400: #4ade80;
+    --green-500: #22c55e;
+    --green-glow: 0 0 12px rgba(74, 222, 128, 0.3);
+    --orange-400: #fb923c;
+    --orange-glow: 0 0 12px rgba(251, 146, 39, 0.3);
+    --red-400: #f87171;
+    --red-glow: 0 0 12px rgba(248, 113, 113, 0.3);
+    --glass: rgba(30, 41, 59, 0.6);
+    --glass-border: rgba(148, 163, 184, 0.12);
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--navy-900); color: var(--text-primary); font-family: 'Inter', -apple-system, system-ui, sans-serif; }
+
+  .dashboard { max-width: 1400px; margin: 0 auto; padding: 24px; display: flex; flex-direction: column; gap: 18px; }
+
+  .glass-card {
+    background: var(--glass);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .glass-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+  }
+
+  .section-label {
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 14px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .dot.live { background: var(--green-400); box-shadow: var(--green-glow); }
+  .zone-annotation {
+    position: absolute; top: 8px; right: 12px;
+    font-size: 10px; font-weight: 600; color: var(--cyan-400);
+    text-transform: uppercase; letter-spacing: 0.1em; opacity: 0.5;
+  }
+  .green { color: var(--green-400); }
+  .red { color: var(--red-400); }
+  .orange { color: var(--orange-400); }
+
+  /* ── ZONE 1: Market Pulse ── */
+  .market-pulse { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .indexes-row { display: flex; gap: 10px; }
+  .index-chip {
+    flex: 1; background: rgba(15, 23, 42, 0.7);
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    padding: 12px 14px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .index-chip .name { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .index-chip .value { font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+  .index-chip .change { font-size: 12px; font-weight: 500; }
+  .index-chip.up { border-left: 3px solid var(--green-400); }
+  .index-chip.up .change { color: var(--green-400); }
+  .index-chip.down { border-left: 3px solid var(--red-400); }
+  .index-chip.down .change { color: var(--red-400); }
+
+  .movers-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mover-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 12px; background: rgba(15, 23, 42, 0.5); border-radius: 8px;
+  }
+  .mover-row.gainer { border-left: 3px solid var(--green-400); }
+  .mover-row.loser { border-left: 3px solid var(--red-400); }
+  .mover-left { display: flex; align-items: center; gap: 8px; }
+  .mover-ticker { font-size: 13px; font-weight: 600; }
+  .mover-price { font-size: 11px; color: var(--text-muted); }
+  .mover-right { display: flex; align-items: center; gap: 8px; text-align: right; }
+  .mover-change { font-size: 13px; font-weight: 600; }
+  .mover-macd {
+    font-size: 9px; font-weight: 600; padding: 2px 5px;
+    border-radius: 4px; text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .mover-macd.bull { background: rgba(74, 222, 128, 0.12); color: var(--green-400); }
+  .mover-macd.bear { background: rgba(248, 113, 113, 0.12); color: var(--red-400); }
+
+  /* ── ZONE 2: Signals ── */
+  .signals-zone { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .stock-list { display: flex; flex-direction: column; gap: 10px; }
+
+  .stock-card {
+    display: flex; flex-direction: column; gap: 8px; padding: 14px;
+    background: rgba(15, 23, 42, 0.5); border-radius: 10px; cursor: pointer; transition: all 0.2s;
+  }
+  .stock-card.buy-card { border: 1px solid rgba(74, 222, 128, 0.15); }
+  .stock-card.buy-card:hover { border-color: rgba(74, 222, 128, 0.35); box-shadow: var(--green-glow); }
+  .stock-card.sell-card { border: 1px solid rgba(248, 113, 113, 0.2); }
+  .stock-card.sell-card:hover { border-color: rgba(248, 113, 113, 0.4); box-shadow: var(--red-glow); }
+  .stock-card.watch-card { border: 1px solid rgba(251, 146, 39, 0.15); }
+  .stock-card.watch-card:hover { border-color: rgba(251, 146, 39, 0.35); box-shadow: var(--orange-glow); }
+
+  .stock-header { display: flex; align-items: center; justify-content: space-between; }
+  .stock-left { display: flex; align-items: center; gap: 10px; }
+  .score-ring {
+    width: 40px; height: 40px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; flex-shrink: 0;
+  }
+  .score-ring.buy { background: rgba(74, 222, 128, 0.12); color: var(--green-400); border: 2px solid rgba(74, 222, 128, 0.3); }
+  .score-ring.sell { background: rgba(248, 113, 113, 0.12); color: var(--red-400); border: 2px solid rgba(248, 113, 113, 0.3); }
+  .score-ring.watch { background: rgba(251, 146, 39, 0.12); color: var(--orange-400); border: 2px solid rgba(251, 146, 39, 0.3); }
+  .stock-identity .ticker { font-size: 14px; font-weight: 600; }
+  .stock-identity .name-small { font-size: 11px; color: var(--text-muted); }
+
+  .action-badge {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 6px; letter-spacing: 0.05em;
+  }
+  .badge-buy { background: rgba(74, 222, 128, 0.15); color: var(--green-400); }
+  .badge-sell { background: rgba(248, 113, 113, 0.15); color: var(--red-400); }
+  .badge-watch { background: rgba(251, 146, 39, 0.15); color: var(--orange-400); }
+
+  .metrics-strip { display: flex; gap: 2px; flex-wrap: wrap; }
+  .metric-chip {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px; background: rgba(15, 23, 42, 0.6);
+    border-radius: 6px; font-size: 11px;
+  }
+  .metric-label { color: var(--text-muted); font-weight: 500; }
+  .metric-value { font-weight: 600; }
+  .dot-signal { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .stock-reason { font-size: 11px; color: var(--text-secondary); line-height: 1.4; }
+
+  /* ── ZONE 3: Portfolio KPIs + Sectors ── */
+
+  /* KPI Tiles Row */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .kpi-tile {
+    background: rgba(15, 23, 42, 0.7);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-tile::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .kpi-tile.green-accent::after { background: linear-gradient(90deg, var(--green-400), transparent); }
+  .kpi-tile.cyan-accent::after { background: linear-gradient(90deg, var(--cyan-400), transparent); }
+  .kpi-tile.orange-accent::after { background: linear-gradient(90deg, var(--orange-400), transparent); }
+
+  .kpi-tile .kpi-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--text-muted);
+  }
+  .kpi-tile .kpi-main {
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .kpi-tile .kpi-value {
+    font-size: 22px; font-weight: 700; letter-spacing: -0.02em;
+  }
+  .kpi-tile .kpi-unit {
+    font-size: 12px; font-weight: 500; color: var(--text-secondary);
+  }
+  .kpi-tile .kpi-sub {
+    font-size: 11px; color: var(--text-muted);
+  }
+
+  /* Health Grade Badge */
+  .health-grade {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .grade-badge {
+    width: 44px; height: 44px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  .grade-badge.good {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--green-400);
+    border: 1px solid rgba(74, 222, 128, 0.25);
+  }
+  .grade-score {
+    display: flex; flex-direction: column; gap: 1px;
+  }
+
+  .portfolio-zone { display: grid; grid-template-columns: 240px 1fr; gap: 16px; }
+  .donut-area { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .donut-placeholder {
+    width: 160px; height: 160px; border-radius: 50%;
+    position: relative; display: flex; align-items: center; justify-content: center;
+  }
+  .donut-placeholder .ring {
+    position: absolute; width: 100%; height: 100%; border-radius: 50%;
+    background: conic-gradient(
+      var(--green-400) 0deg 108deg, var(--cyan-400) 108deg 180deg,
+      var(--orange-400) 180deg 234deg, #a78bfa 234deg 288deg,
+      var(--text-muted) 288deg 360deg
+    );
+    mask: radial-gradient(circle at center, transparent 60%, black 61%);
+    -webkit-mask: radial-gradient(circle at center, transparent 60%, black 61%);
+  }
+  .donut-center { text-align: center; z-index: 1; }
+  .donut-center .value { font-size: 18px; font-weight: 700; }
+  .donut-center .label-sm { font-size: 10px; color: var(--text-muted); }
+  .donut-legend { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-secondary); }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .sector-bars { display: flex; flex-direction: column; gap: 5px; }
+  .sector-bar-row {
+    display: grid; grid-template-columns: 95px 1fr 55px 48px;
+    align-items: center; gap: 10px; padding: 7px 12px;
+    background: rgba(15, 23, 42, 0.4); border-radius: 8px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .sector-bar-row:hover { background: rgba(15, 23, 42, 0.7); }
+  .sector-name { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+  .bar-track { height: 6px; background: rgba(100, 116, 139, 0.2); border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; }
+  .bar-fill.positive { background: linear-gradient(90deg, var(--green-500), var(--green-400)); }
+  .bar-fill.negative { background: linear-gradient(90deg, var(--red-400), var(--red-500)); }
+  .bar-fill.neutral { background: linear-gradient(90deg, var(--orange-400), var(--orange-500)); }
+  .sector-return { font-size: 13px; font-weight: 600; text-align: right; }
+  .sector-score { font-size: 12px; color: var(--text-muted); text-align: right; }
+
+  /* ── ZONE 4: Alerts ── */
+  .alerts-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .alert-tile {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 10px 12px; background: rgba(15, 23, 42, 0.5);
+    border-radius: 10px; border: 1px solid var(--glass-border);
+    font-size: 12px; color: var(--text-secondary); line-height: 1.4;
+    cursor: pointer; transition: border-color 0.2s;
+  }
+  .alert-tile:hover { border-color: rgba(148, 163, 184, 0.3); }
+  .alert-severity { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 4px; }
+  .alert-severity.critical { background: var(--red-400); animation: pulse-red 2s infinite; }
+  .alert-severity.warning { background: var(--orange-400); }
+  .alert-severity.info { background: var(--cyan-400); }
+  .alert-tile strong { color: var(--text-primary); }
+  .alert-time { font-size: 10px; color: var(--text-muted); display: block; margin-top: 2px; }
+  @keyframes pulse-red {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.4); }
+    50% { box-shadow: 0 0 0 4px rgba(248, 113, 113, 0); }
+  }
+
+  /* ── ZONE 5: News ── */
+  .news-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .news-card {
+    padding: 14px; background: rgba(15, 23, 42, 0.5); border-radius: 10px;
+    border: 1px solid var(--glass-border); display: flex; flex-direction: column;
+    gap: 8px; cursor: pointer; transition: all 0.2s;
+  }
+  .news-card:hover { border-color: rgba(148, 163, 184, 0.25); background: rgba(15, 23, 42, 0.7); }
+  .news-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .news-tag {
+    font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .news-tag.bullish { background: rgba(74, 222, 128, 0.12); color: var(--green-400); }
+  .news-tag.bearish { background: rgba(248, 113, 113, 0.12); color: var(--red-400); }
+  .news-tag.neutral { background: rgba(148, 163, 184, 0.12); color: var(--text-secondary); }
+  .news-tag.ticker-tag { background: rgba(34, 211, 238, 0.12); color: var(--cyan-400); }
+  .news-tag.sector-tag { background: rgba(167, 139, 250, 0.12); color: #a78bfa; }
+  .news-headline { font-size: 13px; font-weight: 600; color: var(--text-primary); line-height: 1.35; }
+  .news-meta { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+</style>
+
+<h2>Dashboard v3: Portfolio KPIs + Mover Metrics</h2>
+<p class="subtitle">Added: 5 portfolio KPI tiles with health grade, mover MACD + price</p>
+
+<div class="dashboard">
+
+  <!-- ZONE 1: MARKET PULSE (with mover metrics) -->
+  <div class="glass-card">
+    <div class="zone-annotation">Zone 1 — Market Context</div>
+    <div class="section-label"><span class="dot live"></span> Market Pulse</div>
+    <div class="market-pulse">
+      <div>
+        <div class="indexes-row">
+          <div class="index-chip up">
+            <span class="name">S&P 500</span>
+            <span class="value">5,667</span>
+            <span class="change">+0.82%</span>
+          </div>
+          <div class="index-chip up">
+            <span class="name">NASDAQ</span>
+            <span class="value">17,784</span>
+            <span class="change">+1.14%</span>
+          </div>
+          <div class="index-chip down">
+            <span class="name">DOW 30</span>
+            <span class="value">41,985</span>
+            <span class="change">−0.23%</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="movers-grid">
+          <div class="mover-row gainer">
+            <div class="mover-left">
+              <div><div class="mover-ticker">NVDA</div><div class="mover-price">$924.80</div></div>
+            </div>
+            <div class="mover-right">
+              <span class="mover-macd bull">MACD ↑</span>
+              <span class="mover-change green">+4.2%</span>
+            </div>
+          </div>
+          <div class="mover-row loser">
+            <div class="mover-left">
+              <div><div class="mover-ticker">PFE</div><div class="mover-price">$26.40</div></div>
+            </div>
+            <div class="mover-right">
+              <span class="mover-macd bear">MACD ↓</span>
+              <span class="mover-change red">−3.1%</span>
+            </div>
+          </div>
+          <div class="mover-row gainer">
+            <div class="mover-left">
+              <div><div class="mover-ticker">META</div><div class="mover-price">$512.30</div></div>
+            </div>
+            <div class="mover-right">
+              <span class="mover-macd bull">MACD ↑</span>
+              <span class="mover-change green">+2.8%</span>
+            </div>
+          </div>
+          <div class="mover-row loser">
+            <div class="mover-left">
+              <div><div class="mover-ticker">BA</div><div class="mover-price">$178.60</div></div>
+            </div>
+            <div class="mover-right">
+              <span class="mover-macd bear">MACD ↓</span>
+              <span class="mover-change red">−2.4%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONE 2: SIGNALS -->
+  <div class="signals-zone">
+    <div class="glass-card">
+      <div class="zone-annotation">Zone 2a — Buy Signals</div>
+      <div class="section-label"><span class="dot" style="background:var(--green-400)"></span> Opportunities</div>
+      <div class="stock-list">
+        <div class="stock-card buy-card">
+          <div class="stock-header">
+            <div class="stock-left">
+              <div class="score-ring buy">9.2</div>
+              <div class="stock-identity"><div class="ticker">MSFT</div><div class="name-small">Microsoft Corp</div></div>
+            </div>
+            <span class="action-badge badge-buy">Strong Buy</span>
+          </div>
+          <div class="metrics-strip">
+            <div class="metric-chip"><span class="metric-label">Price</span> <span class="metric-value green">$428.50</span></div>
+            <div class="metric-chip"><span class="metric-label">Chg</span> <span class="metric-value green">+2.1%</span></div>
+            <div class="metric-chip"><span class="dot-signal" style="background:var(--green-400)"></span><span class="metric-label">MACD</span> <span class="metric-value green">Bullish ×over</span></div>
+            <div class="metric-chip"><span class="metric-label">RSI</span> <span class="metric-value orange">34</span></div>
+            <div class="metric-chip"><span class="metric-label">P/E</span> <span class="metric-value">31.2</span></div>
+            <div class="metric-chip"><span class="metric-label">Piotroski</span> <span class="metric-value green">8/9</span></div>
+          </div>
+          <div class="stock-reason">RSI oversold reversal + strong fundamentals + 3 analyst upgrades this week</div>
+        </div>
+        <div class="stock-card buy-card">
+          <div class="stock-header">
+            <div class="stock-left">
+              <div class="score-ring buy">8.7</div>
+              <div class="stock-identity"><div class="ticker">AMZN</div><div class="name-small">Amazon.com Inc</div></div>
+            </div>
+            <span class="action-badge badge-buy">Strong Buy</span>
+          </div>
+          <div class="metrics-strip">
+            <div class="metric-chip"><span class="metric-label">Price</span> <span class="metric-value green">$189.20</span></div>
+            <div class="metric-chip"><span class="metric-label">Chg</span> <span class="metric-value green">+1.4%</span></div>
+            <div class="metric-chip"><span class="dot-signal" style="background:var(--green-400)"></span><span class="metric-label">MACD</span> <span class="metric-value green">Bullish</span></div>
+            <div class="metric-chip"><span class="metric-label">RSI</span> <span class="metric-value">52</span></div>
+            <div class="metric-chip"><span class="metric-label">FCF Yield</span> <span class="metric-value green">4.2%</span></div>
+            <div class="metric-chip"><span class="metric-label">Piotroski</span> <span class="metric-value green">7/9</span></div>
+          </div>
+          <div class="stock-reason">MACD crossover confirmed + healthy free cash flow + sector rotation into tech</div>
+        </div>
+        <div class="stock-card buy-card">
+          <div class="stock-header">
+            <div class="stock-left">
+              <div class="score-ring buy">8.4</div>
+              <div class="stock-identity"><div class="ticker">GOOGL</div><div class="name-small">Alphabet Inc</div></div>
+            </div>
+            <span class="action-badge badge-buy">Buy</span>
+          </div>
+          <div class="metrics-strip">
+            <div class="metric-chip"><span class="metric-label">Price</span> <span class="metric-value green">$174.80</span></div>
+            <div class="metric-chip"><span class="metric-label">Chg</span> <span class="metric-value green">+0.9%</span></div>
+            <div class="metric-chip"><span class="dot-signal" style="background:var(--green-400)"></span><span class="metric-label">MACD</span> <span class="metric-value green">Bullish</span></div>
+            <div class="metric-chip"><span class="metric-label">RSI</span> <span class="metric-value">48</span></div>
+            <div class="metric-chip"><span class="metric-label">P/E</span> <span class="metric-value green">22.8</span></div>
+            <div class="metric-chip"><span class="metric-label">SMA</span> <span class="metric-value green">Golden ×</span></div>
+          </div>
+          <div class="stock-reason">SMA 50/200 golden cross + P/E 15% below sector average</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-card">
+      <div class="zone-annotation">Zone 2b — Dump / Watch</div>
+      <div class="section-label"><span class="dot" style="background:var(--red-400)"></span> Action Required</div>
+      <div class="stock-list">
+        <div class="stock-card sell-card">
+          <div class="stock-header">
+            <div class="stock-left">
+              <div class="score-ring sell">2.1</div>
+              <div class="stock-identity"><div class="ticker">INTC</div><div class="name-small">Intel Corp</div></div>
+            </div>
+            <span class="action-badge badge-sell">Sell</span>
+          </div>
+          <div class="metrics-strip">
+            <div class="metric-chip"><span class="metric-label">Price</span> <span class="metric-value red">$21.30</span></div>
+            <div class="metric-chip"><span class="metric-label">Chg</span> <span class="metric-value red">−1.8%</span></div>
+            <div class="metric-chip"><span class="dot-signal" style="background:var(--red-400)"></span><span class="metric-label">MACD</span> <span class="metric-value red">Bearish</span></div>
+            <div class="metric-chip"><span class="metric-label">RSI</span> <span class="metric-value red">28</span></div>
+            <div class="metric-chip"><span class="metric-label">P/E</span> <span class="metric-value red">N/A</span></div>
+            <div class="metric-chip"><span class="metric-label">Piotroski</span> <span class="metric-value red">2/9</span></div>
+          </div>
+          <div class="stock-reason">Negative FCF + below all SMAs + divestment rule triggered (score &lt; 3.0 for 5 days)</div>
+        </div>
+        <div class="stock-card watch-card">
+          <div class="stock-header">
+            <div class="stock-left">
+              <div class="score-ring watch">4.8</div>
+              <div class="stock-identity"><div class="ticker">DIS</div><div class="name-small">Walt Disney Co</div></div>
+            </div>
+            <span class="action-badge badge-watch">Watch</span>
+          </div>
+          <div class="metrics-strip">
+            <div class="metric-chip"><span class="metric-label">Price</span> <span class="metric-value orange">$112.60</span></div>
+            <div class="metric-chip"><span class="metric-label">Chg</span> <span class="metric-value red">−0.6%</span></div>
+            <div class="metric-chip"><span class="dot-signal" style="background:var(--orange-400)"></span><span class="metric-label">MACD</span> <span class="metric-value orange">Weakening</span></div>
+            <div class="metric-chip"><span class="metric-label">RSI</span> <span class="metric-value orange">42</span></div>
+            <div class="metric-chip"><span class="metric-label">P/E</span> <span class="metric-value">38.5</span></div>
+            <div class="metric-chip"><span class="metric-label">Yield</span> <span class="metric-value orange">0.8%</span></div>
+          </div>
+          <div class="stock-reason">RSI trending down + dividend cut risk flagged + Communication Services sector drag</div>
+        </div>
+        <div class="stock-card watch-card">
+          <div class="stock-header">
+            <div class="stock-left">
+              <div class="score-ring watch">4.5</div>
+              <div class="stock-identity"><div class="ticker">PYPL</div><div class="name-small">PayPal Holdings</div></div>
+            </div>
+            <span class="action-badge badge-watch">Watch</span>
+          </div>
+          <div class="metrics-strip">
+            <div class="metric-chip"><span class="metric-label">Price</span> <span class="metric-value red">$68.40</span></div>
+            <div class="metric-chip"><span class="metric-label">Chg</span> <span class="metric-value red">−1.2%</span></div>
+            <div class="metric-chip"><span class="dot-signal" style="background:var(--red-400)"></span><span class="metric-label">MACD</span> <span class="metric-value red">Bearish ×over</span></div>
+            <div class="metric-chip"><span class="metric-label">RSI</span> <span class="metric-value orange">38</span></div>
+            <div class="metric-chip"><span class="metric-label">P/E</span> <span class="metric-value">17.2</span></div>
+            <div class="metric-chip"><span class="metric-label">Insider</span> <span class="metric-value red">Selling</span></div>
+          </div>
+          <div class="stock-reason">MACD bearish divergence + 3 insider sells in past 30 days</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONE 3: Portfolio KPIs + Donut + Sectors -->
+  <div class="glass-card">
+    <div class="zone-annotation">Zone 3 — Portfolio Position</div>
+    <div class="section-label"><span class="dot" style="background:var(--cyan-400)"></span> Your Portfolio</div>
+
+    <!-- KPI Tiles Row -->
+    <div class="kpi-row">
+      <!-- Health Grade -->
+      <div class="kpi-tile green-accent">
+        <div class="kpi-label">Portfolio Health</div>
+        <div class="health-grade">
+          <div class="grade-badge good">B+</div>
+          <div class="grade-score">
+            <span class="kpi-value" style="font-size:18px;">7.8<span style="font-size:12px;color:var(--text-muted)">/10</span></span>
+            <span class="kpi-sub green">↑ 0.3 this week</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Unrealized P&L -->
+      <div class="kpi-tile green-accent">
+        <div class="kpi-label">Unrealized P&L</div>
+        <div class="kpi-main">
+          <span class="kpi-value green">+$8,240</span>
+        </div>
+        <div class="kpi-sub green">+6.9% all time</div>
+      </div>
+
+      <!-- 90-day Forecast -->
+      <div class="kpi-tile cyan-accent">
+        <div class="kpi-label">90-Day Forecast</div>
+        <div class="kpi-main">
+          <span class="kpi-value" style="color:var(--cyan-400)">+4.2%</span>
+        </div>
+        <div class="kpi-sub">Range: +1.8% to +6.1%</div>
+      </div>
+
+      <!-- Hit Rate -->
+      <div class="kpi-tile green-accent">
+        <div class="kpi-label">Signal Accuracy</div>
+        <div class="kpi-main">
+          <span class="kpi-value green">73%</span>
+          <span class="kpi-unit">hit rate</span>
+        </div>
+        <div class="kpi-sub">142 recommendations tracked</div>
+      </div>
+
+      <!-- Sharpe -->
+      <div class="kpi-tile cyan-accent">
+        <div class="kpi-label">Risk-Adjusted Return</div>
+        <div class="kpi-main">
+          <span class="kpi-value" style="color:var(--cyan-400)">1.34</span>
+          <span class="kpi-unit">Sharpe</span>
+        </div>
+        <div class="kpi-sub">Above market avg (1.0)</div>
+      </div>
+    </div>
+
+    <!-- Donut + Sector Bars -->
+    <div class="portfolio-zone">
+      <div class="donut-area">
+        <div class="donut-placeholder">
+          <div class="ring"></div>
+          <div class="donut-center">
+            <div class="value">$127.4K</div>
+            <div class="label-sm">12 positions</div>
+          </div>
+        </div>
+        <div class="donut-legend">
+          <span class="legend-item"><span class="legend-dot" style="background:var(--green-400)"></span> Tech 30%</span>
+          <span class="legend-item"><span class="legend-dot" style="background:var(--cyan-400)"></span> Health 20%</span>
+          <span class="legend-item"><span class="legend-dot" style="background:var(--orange-400)"></span> Finance 15%</span>
+          <span class="legend-item"><span class="legend-dot" style="background:#a78bfa"></span> Energy 15%</span>
+          <span class="legend-item"><span class="legend-dot" style="background:var(--text-muted)"></span> Other 20%</span>
+        </div>
+      </div>
+      <div class="sector-bars">
+        <div class="sector-bar-row">
+          <span class="sector-name">Technology</span>
+          <div class="bar-track"><div class="bar-fill positive" style="width:72%"></div></div>
+          <span class="sector-return green">+8.4%</span>
+          <span class="sector-score">8.1</span>
+        </div>
+        <div class="sector-bar-row">
+          <span class="sector-name">Healthcare</span>
+          <div class="bar-track"><div class="bar-fill positive" style="width:55%"></div></div>
+          <span class="sector-return green">+4.2%</span>
+          <span class="sector-score">7.3</span>
+        </div>
+        <div class="sector-bar-row">
+          <span class="sector-name">Financials</span>
+          <div class="bar-track"><div class="bar-fill neutral" style="width:30%"></div></div>
+          <span class="sector-return orange">+1.1%</span>
+          <span class="sector-score">5.8</span>
+        </div>
+        <div class="sector-bar-row">
+          <span class="sector-name">Energy</span>
+          <div class="bar-track"><div class="bar-fill negative" style="width:40%"></div></div>
+          <span class="sector-return red">−2.6%</span>
+          <span class="sector-score">3.9</span>
+        </div>
+        <div class="sector-bar-row">
+          <span class="sector-name">Consumer</span>
+          <div class="bar-track"><div class="bar-fill positive" style="width:45%"></div></div>
+          <span class="sector-return green">+3.0%</span>
+          <span class="sector-score">6.4</span>
+        </div>
+        <div class="sector-bar-row">
+          <span class="sector-name">Industrials</span>
+          <div class="bar-track"><div class="bar-fill neutral" style="width:20%"></div></div>
+          <span class="sector-return orange">+0.4%</span>
+          <span class="sector-score">5.1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONE 4: Alerts -->
+  <div class="glass-card">
+    <div class="zone-annotation">Zone 4 — Alerts</div>
+    <div class="section-label"><span class="dot" style="background:var(--orange-400)"></span> Recent Alerts</div>
+    <div class="alerts-grid">
+      <div class="alert-tile">
+        <span class="alert-severity critical"></span>
+        <div><strong>INTC</strong> — Divestment rule triggered (score &lt; 3.0 for 5 days)<span class="alert-time">2h ago</span></div>
+      </div>
+      <div class="alert-tile">
+        <span class="alert-severity warning"></span>
+        <div><strong>DIS</strong> — Score dropped below WATCH threshold (4.8)<span class="alert-time">4h ago</span></div>
+      </div>
+      <div class="alert-tile">
+        <span class="alert-severity warning"></span>
+        <div><strong>Portfolio</strong> — Tech allocation at 30% limit<span class="alert-time">6h ago</span></div>
+      </div>
+      <div class="alert-tile">
+        <span class="alert-severity info"></span>
+        <div><strong>AAPL</strong> — Earnings report in 3 days<span class="alert-time">1d ago</span></div>
+      </div>
+      <div class="alert-tile">
+        <span class="alert-severity info"></span>
+        <div><strong>MSFT</strong> — New BUY signal detected (score → 9.2)<span class="alert-time">1d ago</span></div>
+      </div>
+      <div class="alert-tile">
+        <span class="alert-severity info"></span>
+        <div><strong>NVDA</strong> — Entered watchlist top 5 trending<span class="alert-time">2d ago</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ZONE 5: News -->
+  <div class="glass-card">
+    <div class="zone-annotation">Zone 5 — News</div>
+    <div class="section-label"><span class="dot" style="background:var(--cyan-400)"></span> Market News</div>
+    <div class="news-grid">
+      <div class="news-card">
+        <div class="news-tags">
+          <span class="news-tag bullish">Bullish</span>
+          <span class="news-tag ticker-tag">MSFT</span>
+          <span class="news-tag sector-tag">Tech</span>
+        </div>
+        <div class="news-headline">Microsoft Azure revenue beats estimates by 12%, cloud growth accelerates</div>
+        <div class="news-meta"><span>Reuters</span><span>·</span><span>2h ago</span></div>
+      </div>
+      <div class="news-card">
+        <div class="news-tags">
+          <span class="news-tag bearish">Bearish</span>
+          <span class="news-tag ticker-tag">INTC</span>
+        </div>
+        <div class="news-headline">Intel delays next-gen chip production, analysts cut price targets</div>
+        <div class="news-meta"><span>Bloomberg</span><span>·</span><span>5h ago</span></div>
+      </div>
+      <div class="news-card">
+        <div class="news-tags">
+          <span class="news-tag neutral">Neutral</span>
+          <span class="news-tag sector-tag">Energy</span>
+        </div>
+        <div class="news-headline">OPEC+ agrees to gradual production increase starting Q3</div>
+        <div class="news-meta"><span>CNBC</span><span>·</span><span>8h ago</span></div>
+      </div>
+      <div class="news-card">
+        <div class="news-tags">
+          <span class="news-tag bullish">Bullish</span>
+          <span class="news-tag ticker-tag">AMZN</span>
+        </div>
+        <div class="news-headline">Amazon Prime membership hits 250M globally, ad revenue surges 24%</div>
+        <div class="news-meta"><span>WSJ</span><span>·</span><span>1d ago</span></div>
+      </div>
+      <div class="news-card">
+        <div class="news-tags">
+          <span class="news-tag bearish">Bearish</span>
+          <span class="news-tag sector-tag">Healthcare</span>
+        </div>
+        <div class="news-headline">FDA rejects fast-track approval for two major biotech candidates</div>
+        <div class="news-meta"><span>FiercePharma</span><span>·</span><span>1d ago</span></div>
+      </div>
+      <div class="news-card">
+        <div class="news-tags">
+          <span class="news-tag neutral">Neutral</span>
+          <span class="news-tag ticker-tag">PYPL</span>
+        </div>
+        <div class="news-headline">PayPal CEO hints at crypto wallet expansion amid insider selling concerns</div>
+        <div class="news-meta"><span>CoinDesk</span><span>·</span><span>2d ago</span></div>
+      </div>
+    </div>
+  </div>
+
+</div>
