@@ -17,6 +17,7 @@ from backend.request_context import (
     current_query_id,
     current_session_id,
 )
+from backend.utils.sanitize import sanitize_summary
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,8 @@ async def write_event(event_type: str, data: dict) -> None:
                     agent_type=agent_type,
                     agent_instance_id=agent_instance_id,
                     loop_step=data.get("loop_step"),
+                    status=data.get("status", "completed"),
+                    langfuse_trace_id=data.get("langfuse_trace_id"),
                 )
             elif event_type == "tool_execution":
                 row = ToolExecutionLog(
@@ -65,6 +68,8 @@ async def write_event(event_type: str, data: dict) -> None:
                     agent_type=agent_type,
                     agent_instance_id=agent_instance_id,
                     loop_step=data.get("loop_step"),
+                    input_summary=sanitize_summary(data.get("params", {})),
+                    output_summary=sanitize_summary(data.get("result", "")),
                 )
             else:
                 logger.warning("Unknown event type: %s", event_type)
