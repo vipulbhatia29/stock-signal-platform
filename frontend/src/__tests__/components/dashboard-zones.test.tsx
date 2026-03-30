@@ -4,18 +4,31 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ── Mock hooks ──────────────────────────────────────────────────────────────
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const mockUseMarketBriefing = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
+const mockUseRecommendations = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
+const mockUseBulkSignalsByTickers = jest.fn(() => ({ data: undefined, isLoading: false }));
+const mockUsePortfolioSummary = jest.fn(() => ({ data: undefined, isLoading: false }));
+const mockUsePortfolioHealth = jest.fn(() => ({ data: undefined, isLoading: false }));
+const mockUseUserDashboardNews = jest.fn(() => ({ data: undefined, isLoading: false }));
+
 jest.mock("@/hooks/use-stocks", () => ({
-  useIndexes: jest.fn(() => ({ data: undefined, isLoading: false, isError: false })),
-  useRecommendations: jest.fn(() => ({ data: undefined, isLoading: false, isError: false })),
-  usePositions: jest.fn(() => ({ data: undefined, isLoading: false, isError: false })),
-  usePortfolioSummary: jest.fn(() => ({ data: undefined, isLoading: false, isError: false })),
-  useTrendingStocks: jest.fn(() => ({ data: undefined, isLoading: false, isError: false })),
-  useWatchlist: jest.fn(() => ({ data: undefined, isLoading: false, isError: false })),
-  useAddToWatchlist: jest.fn(() => ({ mutate: jest.fn() })),
+  useMarketBriefing: () => mockUseMarketBriefing(),
+  useRecommendations: () => mockUseRecommendations(),
+  useBulkSignalsByTickers: () => mockUseBulkSignalsByTickers(),
+  usePortfolioSummary: () => mockUsePortfolioSummary(),
+  usePortfolioHealth: () => mockUsePortfolioHealth(),
+  useUserDashboardNews: () => mockUseUserDashboardNews(),
 }));
 
+const mockUseAlerts = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
+
 jest.mock("@/hooks/use-alerts", () => ({
-  useAlerts: jest.fn(() => ({ data: undefined, isLoading: false, isError: false })),
+  useAlerts: () => mockUseAlerts(),
+}));
+
+jest.mock("@/lib/market-hours", () => ({
+  isMarketOpen: jest.fn(() => false),
 }));
 
 jest.mock("next/navigation", () => ({
@@ -24,37 +37,14 @@ jest.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
 }));
 
-jest.mock("next/link", () => {
-  return function MockLink({ children, href, ...rest }: { children: React.ReactNode; href: string; [k: string]: unknown }) {
-    return <a href={href} {...rest}>{children}</a>;
-  };
-});
-
 jest.mock("@/contexts/chat-context", () => ({
   useChat: jest.fn(() => ({ chatOpen: false })),
 }));
 
 jest.mock("sonner", () => ({
-  toast: { error: jest.fn(), success: jest.fn() },
+  toast: { error: jest.fn(), success: jest.fn(), info: jest.fn() },
 }));
-
-jest.mock("@/lib/api", () => ({
-  get: jest.fn(),
-  post: jest.fn(),
-  patch: jest.fn(),
-}));
-
-// Import hooks after mocking
-import { useIndexes, useRecommendations, usePositions, usePortfolioSummary, useTrendingStocks, useWatchlist } from "@/hooks/use-stocks";
-import { useAlerts } from "@/hooks/use-alerts";
-
-const mockUseIndexes = useIndexes as jest.MockedFunction<typeof useIndexes>;
-const mockUseRecommendations = useRecommendations as jest.MockedFunction<typeof useRecommendations>;
-const mockUsePositions = usePositions as jest.MockedFunction<typeof usePositions>;
-const mockUsePortfolioSummary = usePortfolioSummary as jest.MockedFunction<typeof usePortfolioSummary>;
-const mockUseTrendingStocks = useTrendingStocks as jest.MockedFunction<typeof useTrendingStocks>;
-const mockUseWatchlist = useWatchlist as jest.MockedFunction<typeof useWatchlist>;
-const mockUseAlerts = useAlerts as jest.MockedFunction<typeof useAlerts>;
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // ── Zone components ─────────────────────────────────────────────────────────
 
@@ -75,41 +65,30 @@ describe("MarketPulseZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("renders Market Pulse heading", () => {
-    mockUseIndexes.mockReturnValue({ data: [], isLoading: false, isError: false } as unknown as ReturnType<typeof useIndexes>);
     renderWithQuery(<MarketPulseZone />);
     expect(screen.getByText("Market Pulse")).toBeInTheDocument();
   });
 
   it("shows market status badge", () => {
-    mockUseIndexes.mockReturnValue({ data: [], isLoading: false, isError: false } as unknown as ReturnType<typeof useIndexes>);
     renderWithQuery(<MarketPulseZone />);
-    // Should show either Market Open or Market Closed
     const badge = screen.getByText(/Market (Open|Closed)/);
     expect(badge).toBeInTheDocument();
   });
 
   it("shows loading skeletons when isLoading", () => {
-    mockUseIndexes.mockReturnValue({ data: undefined, isLoading: true, isError: false } as unknown as ReturnType<typeof useIndexes>);
+    mockUseMarketBriefing.mockReturnValue({ data: undefined, isLoading: true, isError: false });
     const { container } = renderWithQuery(<MarketPulseZone />);
-    // Skeleton elements have animate-pulse class
     const skeletons = container.querySelectorAll("[class*='animate-pulse']");
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it("shows error message when isError", () => {
-    mockUseIndexes.mockReturnValue({ data: undefined, isLoading: false, isError: true } as unknown as ReturnType<typeof useIndexes>);
+    mockUseMarketBriefing.mockReturnValue({ data: undefined, isLoading: false, isError: true });
     renderWithQuery(<MarketPulseZone />);
     expect(screen.getByText("Unable to load market data.")).toBeInTheDocument();
   });
 
-  it("shows empty message when no indexes", () => {
-    mockUseIndexes.mockReturnValue({ data: [], isLoading: false, isError: false } as unknown as ReturnType<typeof useIndexes>);
-    renderWithQuery(<MarketPulseZone />);
-    expect(screen.getByText("No index data available yet.")).toBeInTheDocument();
-  });
-
   it("has aria-label on section", () => {
-    mockUseIndexes.mockReturnValue({ data: [], isLoading: false, isError: false } as unknown as ReturnType<typeof useIndexes>);
     renderWithQuery(<MarketPulseZone />);
     expect(screen.getByLabelText("Market Pulse")).toBeInTheDocument();
   });
@@ -121,34 +100,25 @@ describe("SignalsZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("renders Your Signals heading", () => {
-    mockUseRecommendations.mockReturnValue({ data: undefined, isLoading: false } as unknown as ReturnType<typeof useRecommendations>);
-    mockUsePositions.mockReturnValue({ data: undefined, isLoading: false } as unknown as ReturnType<typeof usePositions>);
-    mockUseTrendingStocks.mockReturnValue({ data: undefined, isLoading: false } as unknown as ReturnType<typeof useTrendingStocks>);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByText("Your Signals")).toBeInTheDocument();
   });
 
   it("shows empty state when no recommendations", () => {
-    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof useRecommendations>);
-    mockUsePositions.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof usePositions>);
-    mockUseTrendingStocks.mockReturnValue({ data: { items: [] }, isLoading: false } as unknown as ReturnType<typeof useTrendingStocks>);
+    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false, isError: false } as any);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByText("No signals yet")).toBeInTheDocument();
   });
 
   it("shows loading skeletons when loading", () => {
-    mockUseRecommendations.mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof useRecommendations>);
-    mockUsePositions.mockReturnValue({ data: undefined, isLoading: false } as unknown as ReturnType<typeof usePositions>);
-    mockUseTrendingStocks.mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof useTrendingStocks>);
+    mockUseRecommendations.mockReturnValue({ data: undefined, isLoading: true, isError: false });
     const { container } = renderWithQuery(<SignalsZone />);
     const skeletons = container.querySelectorAll("[class*='bg-card2']");
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it("has aria-label on sections", () => {
-    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof useRecommendations>);
-    mockUsePositions.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof usePositions>);
-    mockUseTrendingStocks.mockReturnValue({ data: { items: [] }, isLoading: false } as unknown as ReturnType<typeof useTrendingStocks>);
+    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false, isError: false } as any);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByLabelText("Your Signals")).toBeInTheDocument();
     expect(screen.getByLabelText("Top Movers")).toBeInTheDocument();
@@ -161,30 +131,25 @@ describe("PortfolioZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("renders Portfolio Overview heading", () => {
-    mockUsePortfolioSummary.mockReturnValue({ data: undefined, isLoading: false } as unknown as ReturnType<typeof usePortfolioSummary>);
-    mockUsePositions.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof usePositions>);
     renderWithQuery(<PortfolioZone />);
     expect(screen.getByText("Portfolio Overview")).toBeInTheDocument();
   });
 
-  it("shows empty state when no positions", () => {
-    mockUsePortfolioSummary.mockReturnValue({ data: undefined, isLoading: false } as unknown as ReturnType<typeof usePortfolioSummary>);
-    mockUsePositions.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof usePositions>);
+  it("shows empty state when no portfolio", () => {
+    mockUsePortfolioSummary.mockReturnValue({ data: { position_count: 0, total_value: 0, total_cost_basis: 0, unrealized_pnl: 0, unrealized_pnl_pct: 0, sectors: [] }, isLoading: false } as any);
     renderWithQuery(<PortfolioZone />);
     expect(screen.getByText("No portfolio yet")).toBeInTheDocument();
   });
 
   it("shows loading skeletons when loading", () => {
-    mockUsePortfolioSummary.mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof usePortfolioSummary>);
-    mockUsePositions.mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof usePositions>);
+    mockUsePortfolioSummary.mockReturnValue({ data: undefined, isLoading: true });
+    mockUsePortfolioHealth.mockReturnValue({ data: undefined, isLoading: true });
     const { container } = renderWithQuery(<PortfolioZone />);
     const skeletons = container.querySelectorAll("[class*='bg-card2']");
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it("has aria-label on section", () => {
-    mockUsePortfolioSummary.mockReturnValue({ data: undefined, isLoading: false } as unknown as ReturnType<typeof usePortfolioSummary>);
-    mockUsePositions.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof usePositions>);
     renderWithQuery(<PortfolioZone />);
     expect(screen.getByLabelText("Portfolio Overview")).toBeInTheDocument();
   });
@@ -196,26 +161,26 @@ describe("AlertsZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("renders Alerts heading", () => {
-    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as unknown as ReturnType<typeof useAlerts>);
+    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as any);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByText("Alerts")).toBeInTheDocument();
   });
 
   it("shows empty state when no alerts", () => {
-    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as unknown as ReturnType<typeof useAlerts>);
+    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as any);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByText("No alerts")).toBeInTheDocument();
   });
 
   it("shows loading skeletons when loading", () => {
-    mockUseAlerts.mockReturnValue({ data: undefined, isLoading: true, isError: false } as unknown as ReturnType<typeof useAlerts>);
+    mockUseAlerts.mockReturnValue({ data: undefined, isLoading: true, isError: false });
     const { container } = renderWithQuery(<AlertsZone />);
     const skeletons = container.querySelectorAll("[class*='bg-card2']");
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it("shows error message when isError", () => {
-    mockUseAlerts.mockReturnValue({ data: undefined, isLoading: false, isError: true } as unknown as ReturnType<typeof useAlerts>);
+    mockUseAlerts.mockReturnValue({ data: undefined, isLoading: false, isError: true });
     renderWithQuery(<AlertsZone />);
     expect(screen.getByText("Unable to load alerts.")).toBeInTheDocument();
   });
@@ -224,21 +189,21 @@ describe("AlertsZone", () => {
     mockUseAlerts.mockReturnValue({
       data: {
         alerts: [
-          { id: "1", title: "Price Drop", message: "AAPL dropped 5%", severity: "warning", ticker: "AAPL", is_read: false, created_at: "2026-03-30T10:00:00Z" },
+          { id: "1", title: "Price Drop", message: "AAPL dropped 5%", severity: "warning", ticker: "AAPL", is_read: false, created_at: "2026-03-30T10:00:00Z", alert_type: "price", metadata: {} },
         ],
         total: 1,
         unreadCount: 1,
       },
       isLoading: false,
       isError: false,
-    } as unknown as ReturnType<typeof useAlerts>);
+    } as any);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByText("Price Drop")).toBeInTheDocument();
     expect(screen.getByText("AAPL")).toBeInTheDocument();
   });
 
   it("has aria-label on section", () => {
-    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as unknown as ReturnType<typeof useAlerts>);
+    mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as any);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByLabelText("Alerts")).toBeInTheDocument();
   });
@@ -250,39 +215,40 @@ describe("NewsZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("renders News & Intelligence heading", () => {
-    mockUseWatchlist.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof useWatchlist>);
     renderWithQuery(<NewsZone />);
     expect(screen.getByText(/News/)).toBeInTheDocument();
   });
 
-  it("shows empty state when no watchlist data", () => {
-    mockUseWatchlist.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof useWatchlist>);
+  it("shows empty state when no articles", () => {
+    mockUseUserDashboardNews.mockReturnValue({ data: { articles: [], ticker_count: 0 }, isLoading: false } as any);
     renderWithQuery(<NewsZone />);
     expect(screen.getByText("No news yet")).toBeInTheDocument();
   });
 
   it("shows loading skeletons when loading", () => {
-    mockUseWatchlist.mockReturnValue({ data: undefined, isLoading: true } as unknown as ReturnType<typeof useWatchlist>);
+    mockUseUserDashboardNews.mockReturnValue({ data: undefined, isLoading: true });
     const { container } = renderWithQuery(<NewsZone />);
     const skeletons = container.querySelectorAll("[class*='bg-card2']");
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
-  it("renders ticker links when watchlist has data", () => {
-    mockUseWatchlist.mockReturnValue({
-      data: [
-        { ticker: "AAPL", name: "Apple Inc" },
-        { ticker: "MSFT", name: "Microsoft" },
-      ],
+  it("renders articles when data available", () => {
+    mockUseUserDashboardNews.mockReturnValue({
+      data: {
+        articles: [
+          { title: "AAPL beats earnings", link: "https://example.com/1", publisher: "Reuters", published: "2h ago", source: "news", portfolio_ticker: "AAPL" },
+          { title: "MSFT cloud growth", link: "https://example.com/2", publisher: "Bloomberg", published: "3h ago", source: "news", portfolio_ticker: "MSFT" },
+        ],
+        ticker_count: 2,
+      },
       isLoading: false,
-    } as unknown as ReturnType<typeof useWatchlist>);
+    } as any);
     renderWithQuery(<NewsZone />);
-    expect(screen.getByText("AAPL")).toBeInTheDocument();
-    expect(screen.getByText("MSFT")).toBeInTheDocument();
+    expect(screen.getByText("AAPL beats earnings")).toBeInTheDocument();
+    expect(screen.getByText("MSFT cloud growth")).toBeInTheDocument();
   });
 
   it("has aria-label on section", () => {
-    mockUseWatchlist.mockReturnValue({ data: [], isLoading: false } as unknown as ReturnType<typeof useWatchlist>);
     renderWithQuery(<NewsZone />);
     expect(screen.getByLabelText("News and Intelligence")).toBeInTheDocument();
   });

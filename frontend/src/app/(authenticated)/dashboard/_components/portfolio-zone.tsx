@@ -1,55 +1,22 @@
 "use client";
 
-import { useMemo, useState } from "react";
 import { Briefcase } from "lucide-react";
 import { SectionHeading } from "@/components/section-heading";
-import { StatTile } from "@/components/stat-tile";
-import { ChangeIndicator } from "@/components/change-indicator";
-import { AllocationDonut, DONUT_COLORS } from "@/components/allocation-donut";
-import { PortfolioDrawer } from "@/components/portfolio-drawer";
+import { PortfolioKPITile } from "@/components/portfolio-kpi-tile";
+import { HealthGradeBadge } from "@/components/health-grade-badge";
+import { SectorPerformanceBars } from "@/components/sector-performance-bars";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePortfolioSummary, usePositions } from "@/hooks/use-stocks";
+import { usePortfolioSummary, usePortfolioHealth, useMarketBriefing } from "@/hooks/use-stocks";
 import { formatCurrency } from "@/lib/format";
-import { StaggerGroup, StaggerItem } from "@/components/motion-primitives";
 
-/** Zone 3 — Portfolio KPIs, allocation, and health overview. */
+/** Zone 3 — Portfolio KPIs + health grade + sector performance. */
 export function PortfolioZone() {
   const { data: summary, isLoading: summaryLoading } = usePortfolioSummary();
-  const { data: positions, isLoading: positionsLoading } = usePositions();
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const { data: health, isLoading: healthLoading } = usePortfolioHealth();
+  const { data: briefing } = useMarketBriefing();
 
-  const isLoading = summaryLoading || positionsLoading;
-
-  const allocations = useMemo(() => {
-    if (!positions) return [];
-    const sectorTotals: Record<string, number> = {};
-    let total = 0;
-    positions.forEach((p) => {
-      const sector = p.sector ?? "Other";
-      sectorTotals[sector] =
-        (sectorTotals[sector] ?? 0) + (p.market_value ?? 0);
-      total += p.market_value ?? 0;
-    });
-    return Object.entries(sectorTotals).map(([sector, value], i) => ({
-      sector,
-      pct: total > 0 ? (value / total) * 100 : 0,
-      color: DONUT_COLORS[i % DONUT_COLORS.length],
-    }));
-  }, [positions]);
-
-  // Sector performance bars from allocation data
-  const sectorBars = useMemo(() => {
-    if (!summary?.sectors) return [];
-    return summary.sectors
-      .sort((a, b) => b.pct - a.pct)
-      .slice(0, 6)
-      .map((s) => ({
-        sector: s.sector,
-        pct: s.pct,
-        overLimit: s.over_limit,
-      }));
-  }, [summary]);
+  const isLoading = summaryLoading || healthLoading;
 
   if (isLoading) {
     return (
@@ -64,112 +31,50 @@ export function PortfolioZone() {
     );
   }
 
-  if (!positions?.length) {
+  if (!summary || summary.position_count === 0) {
     return (
       <section aria-label="Portfolio Overview">
         <SectionHeading>Portfolio Overview</SectionHeading>
-        <EmptyState
-          icon={Briefcase}
-          title="No portfolio yet"
-          description="Log your first transaction to see portfolio analytics here"
-        />
+        <EmptyState icon={Briefcase} title="No portfolio yet" description="Log your first transaction to see portfolio analytics here" />
       </section>
     );
   }
+
+  const pnlAccent = summary.unrealized_pnl >= 0 ? "gain" as const : "loss" as const;
+  const pnlPctStr = summary.unrealized_pnl_pct != null ? `${summary.unrealized_pnl_pct >= 0 ? "+" : ""}${summary.unrealized_pnl_pct.toFixed(1)}%` : undefined;
+
+  const sectorBars = briefing?.sector_performance.map((s) => ({
+    sector: s.sector,
+    changePct: s.change_pct,
+  })) ?? [];
 
   return (
     <section aria-label="Portfolio Overview">
       <SectionHeading>Portfolio Overview</SectionHeading>
 
-      <StaggerGroup className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {/* Total Value */}
-        <StaggerItem>
-          <StatTile
-            label="Total Value"
-            value={summary ? formatCurrency(summary.total_value) : "—"}
-            sub={
-              <span className="text-[9px] text-subtle">
-                {summary?.position_count ?? 0} positions
-              </span>
-            }
-            accentColor="cyan"
-            onClick={() => setDrawerOpen(true)}
-          />
-        </StaggerItem>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {/* Health Grade */}
+        <div className="flex flex-col items-start gap-2">
+          <PortfolioKPITile label="Health Grade" value={health?.grade ?? "—"} accent="neutral" />
+          {health && <HealthGradeBadge grade={health.grade} score={health.health_score} />}
+        </div>
 
         {/* Unrealized P&L */}
-        <StaggerItem>
-          <StatTile
-            label="Unrealized P&L"
-            value={summary ? formatCurrency(summary.unrealized_pnl) : "—"}
-            sub={
-              summary?.unrealized_pnl_pct != null ? (
-                <ChangeIndicator
-                  value={summary.unrealized_pnl_pct}
-                  format="percent"
-                  size="sm"
-                  showIcon={false}
-                />
-              ) : undefined
-            }
-            accentColor={
-              (summary?.unrealized_pnl ?? 0) >= 0 ? "gain" : "loss"
-            }
-          />
-        </StaggerItem>
+        <PortfolioKPITile label="Unrealized P&L" value={formatCurrency(summary.unrealized_pnl)} subtext={pnlPctStr} accent={pnlAccent} />
+
+        {/* Total Value */}
+        <PortfolioKPITile label="Total Value" value={formatCurrency(summary.total_value)} subtext={`${summary.position_count} positions`} accent="neutral" />
 
         {/* Cost Basis */}
-        <StaggerItem>
-          <StatTile
-            label="Cost Basis"
-            value={summary ? formatCurrency(summary.total_cost_basis) : "—"}
-            accentColor="cyan"
-          />
-        </StaggerItem>
+        <PortfolioKPITile label="Cost Basis" value={formatCurrency(summary.total_cost_basis)} accent="neutral" />
+      </div>
 
-        {/* Sector Allocation */}
-        <StaggerItem>
-          <StatTile label="Allocation" accentColor="cyan">
-            <AllocationDonut
-              allocations={allocations}
-              stockCount={positions?.length}
-              showSectorLink
-            />
-          </StatTile>
-        </StaggerItem>
-      </StaggerGroup>
-
-      {/* Sector bars */}
       {sectorBars.length > 0 && (
-        <div className="mt-3 rounded-lg border border-border bg-card p-3">
-          <div className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-subtle">
-            Sector Allocation
-          </div>
-          <div className="space-y-1.5">
-            {sectorBars.map((s) => (
-              <div key={s.sector} className="flex items-center gap-2" aria-label={`${s.sector}: ${s.pct.toFixed(1)}%${s.overLimit ? " — over limit" : ""}`}>
-                <span className="w-28 truncate text-[10px] text-muted-foreground">
-                  {s.sector}
-                </span>
-                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
-                  <div
-                    className={`h-full rounded-full ${s.overLimit ? "bg-loss" : "bg-cyan"}`}
-                    style={{ width: `${Math.min(s.pct, 100)}%` }}
-                  />
-                </div>
-                <span className="w-10 text-right font-mono text-[10px] text-muted-foreground">
-                  {s.pct.toFixed(1)}%
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="mt-3">
+          <div className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Sector Performance</div>
+          <SectorPerformanceBars sectors={sectorBars} />
         </div>
       )}
-
-      <PortfolioDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-      />
     </section>
   );
 }
