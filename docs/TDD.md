@@ -4,7 +4,7 @@
 
 **Version:** 2.0
 **Date:** March 2026
-**Status:** Living Document — Phases 1-8 complete. Phase 8A (observability), 8C (intent classifier), 8B (ReAct loop) all shipped (Session 63).
+**Status:** Living Document — Phases 1-8 complete. Phase B.5 BU-1-4 shipped (Sessions 72-75).
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -721,6 +721,12 @@ GET  /api/v1/portfolio/rebalancing        # Rebalancing suggestions based on tar
 GET  /api/v1/portfolio/health             # Real-time health score with component breakdown (HHI, Sharpe, beta)
 GET  /api/v1/portfolio/health/history     # Portfolio health score trend (hypertable)
 ```
+
+**News router (`/news`) — Phase B.5 BU-3, Session 75:**
+```
+GET  /api/v1/news/dashboard              # Per-user news: portfolio + recommendation tickers, Redis cached
+```
+Response: `DashboardNewsResponse { articles: DashboardNewsArticle[], ticker_count: int }`
 
 **Chat router (`/chat`):**
 ```

@@ -1609,6 +1609,53 @@ Full refinement cycle for KAN-229 (BU-3) + KAN-230 (BU-4). No code — spec + pl
 
 **Test counts:** No change (no code written). 1101 unit + ~202 API + 7 e2e + 24 integration + 142 frontend = ~1476 total
 
-### Next session
-1. Execute BU-3/BU-4 plan — start with Chunk 1 (backend T1-T7) + Chunk 2 (frontend utils T8-T11) in parallel
-2. Subagent-driven execution recommended
+---
+
+## Session 75 — BU-3/BU-4: Dashboard Redesign Implementation
+
+**Date:** 2026-03-30
+**Branch:** `feat/KAN-229-bu3-bu4-dashboard-redesign`
+
+**What was done:**
+
+Full implementation of KAN-229 (BU-3) + KAN-230 (BU-4). All 31 plan tasks executed via subagent-driven development in 7 waves. 3 expert reviews + 1 architecture audit.
+
+### Backend (7 tasks — Chunk 1)
+- `backend/utils/sectors.py` — sector name normalization (11 canonical sectors, ETF alias mapping)
+- Migration 019 — `change_pct` + `current_price` on `signal_snapshots`
+- `compute_price_change()` with NaN/Infinity guard, wired into both `services/` and `tools/` paths
+- Bulk signals `tickers` query param (comma-separated, case-insensitive, capped at 200)
+- Recommendations `name` field via outer JOIN with stocks table
+- `_fetch_top_movers()` — gainers/losers from latest signal snapshots
+- Parallelized `_fetch_sector_etf_performance()` with `asyncio.gather`, added XLC, general market news
+- `GET /api/v1/news/dashboard` — per-user news endpoint with Pydantic response model + Redis cache
+
+### Frontend Utilities (4 tasks — Chunk 2)
+- `sectors.ts` — frontend mirror of sector normalization
+- `market-hours.ts` — `isMarketOpen()` with FINRA 2026 holidays, proper ET timezone
+- `news-sentiment.ts` — keyword heuristic (bullish/bearish/neutral)
+- `signal-reason.ts` — human-readable signal explanations (3-factor limit)
+
+### Frontend Hooks (4 tasks — Chunk 3)
+- `useMarketBriefing`, `usePortfolioHealth`, `usePortfolioHealthHistory`, `useUserDashboardNews`, `useBulkSignalsByTickers`
+
+### Frontend Components (8 tasks — Chunks 4+5)
+- Zone 1+2: ScoreRing, ActionBadge, MetricsStrip, SignalStockCard, MoverRow
+- Zone 3-5: PortfolioKPITile, HealthGradeBadge, SectorPerformanceBars, AlertTile, NewsArticleCard
+
+### Dashboard Page Rewrite (Chunk 6)
+- 5-zone Daily Intelligence Briefing: Market Pulse, Signals, Portfolio, Alerts, News
+- Each zone as sub-component with loading/empty/error states
+- Screener watchlist tab with badge count + URL deep-linking
+- MigrationToast for watchlist relocation notice
+- Chat BU-4: PINNABLE_TOOLS 7→22, feedback visual persistence, ChatMessage type sync
+
+### Code Reviews + Architecture Fixes
+- 3 expert reviews found: dashboard zones used OLD components (critical), Alembic wrong down_revision, SignalResult duplication, NaN guard missing, dead code
+- All fixed: zones rewritten with new library, `tools/signals.py` restored as re-export shim, `store_signal_snapshot` wired with new fields, tickers param capped at 200
+
+### Test Counts
+- Backend: 1119 unit (+18 new)
+- Frontend: 231 tests in 49 suites (+73 new)
+- Total: ~1583 (+107)
+- Alembic head: b1fe4c734142 (migration 019)
