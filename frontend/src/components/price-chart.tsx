@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, Suspense, lazy } from "react";
 import {
   ComposedChart,
   Area,
@@ -10,7 +11,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { usePrices } from "@/hooks/use-stocks";
+import { usePrices, useOHLC } from "@/hooks/use-stocks";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SectionHeading } from "@/components/section-heading";
@@ -19,6 +20,14 @@ import { useChartColors, CHART_STYLE } from "@/lib/chart-theme";
 import { formatCurrency, formatVolume, formatChartDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { PricePeriod } from "@/types/api";
+
+const LazyCandlestick = lazy(() =>
+  import("@/components/candlestick-chart").then((m) => ({
+    default: m.CandlestickChart,
+  }))
+);
+
+type ChartMode = "line" | "candle";
 
 const PERIODS: { value: PricePeriod; label: string }[] = [
   { value: "1mo", label: "1M" },
@@ -35,7 +44,13 @@ interface PriceChartProps {
 }
 
 export function PriceChart({ ticker, period, onPeriodChange }: PriceChartProps) {
-  const { data: prices, isLoading } = usePrices(ticker, period);
+  const [chartMode, setChartMode] = useState<ChartMode>("line");
+  const { data: prices, isLoading: pricesLoading } = usePrices(ticker, period);
+  const { data: ohlc, isLoading: ohlcLoading } = useOHLC(
+    ticker,
+    period,
+    chartMode === "candle"
+  );
   const colors = useChartColors();
 
   const trendColor =
@@ -46,6 +61,22 @@ export function PriceChart({ ticker, period, onPeriodChange }: PriceChartProps) 
           ? colors.loss
           : colors.price
       : colors.price;
+
+  const modeToggle = (
+    <div className="flex gap-1">
+      {(["line", "candle"] as const).map((mode) => (
+        <Button
+          key={mode}
+          variant={chartMode === mode ? "secondary" : "ghost"}
+          size="sm"
+          className="h-7 px-2.5 text-xs capitalize"
+          onClick={() => setChartMode(mode)}
+        >
+          {mode}
+        </Button>
+      ))}
+    </div>
+  );
 
   const periodSelector = (
     <div className="flex gap-1">
@@ -63,12 +94,26 @@ export function PriceChart({ ticker, period, onPeriodChange }: PriceChartProps) 
     </div>
   );
 
+  const actions = (
+    <div className="flex items-center gap-3">
+      {modeToggle}
+      <div className="h-4 w-px bg-border" />
+      {periodSelector}
+    </div>
+  );
+
+  const isLoading = chartMode === "line" ? pricesLoading : ohlcLoading;
+
   return (
     <div>
-      <SectionHeading action={periodSelector}>Price History</SectionHeading>
+      <SectionHeading action={actions}>Price History</SectionHeading>
 
       {isLoading ? (
         <Skeleton className="h-[250px] w-full sm:h-[400px]" />
+      ) : chartMode === "candle" ? (
+        <Suspense fallback={<Skeleton className="h-[400px] w-full" />}>
+          <LazyCandlestick data={ohlc} />
+        </Suspense>
       ) : (
         <ResponsiveContainer width="100%" height="100%" minHeight={250} className="sm:min-h-[400px]">
           <ComposedChart
