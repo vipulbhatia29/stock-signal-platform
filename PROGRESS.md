@@ -1574,3 +1574,41 @@ KAN-227 → Done (already merged PR #146). KAN-228 brainstorm → spec → plan 
 
 ### Next session
 1. KAN-229 (BU-3: Dashboard + Market Enrichment) or KAN-230 (BU-4: Chat System Improvements)
+
+---
+
+## Session 74 — BU-3/BU-4: Dashboard Redesign Spec + Plan
+
+**Date:** 2026-03-30
+**Branch:** `feat/KAN-229-bu3-bu4-dashboard-redesign`
+
+**What was done:**
+
+Full refinement cycle for KAN-229 (BU-3) + KAN-230 (BU-4). No code — spec + plan + mockup only.
+
+**Brainstorm (visual companion):**
+- Dashboard = "Daily Intelligence Briefing" — 5-zone bulletin board for passive investors
+- Zones: Market Pulse → Signals (Buy/Dump split) → Portfolio KPIs + Sectors → Alerts grid → News
+- Visual: glassmorphism, green/orange/red glow system, metric chips per stock
+- Watchlist relocated to Screener page as tab. Chat = pure business (no tokens/cost).
+- Product decision: observability data (tokens, cost, traces) on observability page ONLY, never in chat
+- Interactive HTML mockup created: `docs/mockups/dashboard-bulletin-v3.html`
+
+**Codebase audit:** Backend (9 endpoints audited, 7 gaps found) + Frontend (all components/hooks/pages mapped). Field-level data mapping for all 13 dashboard components.
+
+**Spec:** `docs/superpowers/specs/2026-03-30-bu3-bu4-dashboard-chat-design.md` — 17 sections + appendix. Key decisions: two-tier cache split (global briefing + per-user news), `change_pct` materialization on SignalSnapshot, sector name normalization, bulk signals `tickers` param.
+
+**Expert reviews (3 rounds):**
+1. UX Architect: 2 Critical (empty states, color-only a11y) + 8 Important → all resolved
+2. Backend Architect: 4 Critical (cache scale, sector names, change_pct, briefing bottleneck) + 4 Important → all resolved
+3. QA/Testing: 8 Critical (division-by-zero, factory update, parallelized ETF untested, cache paths, holidays, NewsCard breaking change, mock skeleton, no a11y tests) + 22 Important → 8 criticals + 2 important resolved
+
+**Plan:** `docs/superpowers/plans/2026-03-30-bu3-bu4-dashboard-chat.md` — 31 tasks, 7 chunks. Backend-first (migration, endpoints, briefing) → frontend utils → hooks → components → page assembly → chat cleanup → a11y/tests.
+
+**JIRA:** 15 subtasks created (KAN-260-274). 7 under KAN-229 (backend), 7 under KAN-229 (frontend), 1 under KAN-230 (chat). KAN-228 subtasks (KAN-250-255) transitioned to Done.
+
+**Test counts:** No change (no code written). 1101 unit + ~202 API + 7 e2e + 24 integration + 142 frontend = ~1476 total
+
+### Next session
+1. Execute BU-3/BU-4 plan — start with Chunk 1 (backend T1-T7) + Chunk 2 (frontend utils T8-T11) in parallel
+2. Subagent-driven execution recommended
