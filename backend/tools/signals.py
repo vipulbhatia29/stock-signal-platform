@@ -169,8 +169,12 @@ def compute_price_change(df: pd.DataFrame | None) -> tuple[float | None, float |
             break
     else:
         return None, None
+    import math
+
     current = float(closes.iloc[-1])
     previous = float(closes.iloc[-2])
+    if not math.isfinite(current) or not math.isfinite(previous):
+        return None, None
     if previous == 0:
         return None, current
     change = ((current - previous) / previous) * 100

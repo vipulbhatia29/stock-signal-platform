@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,12 +20,31 @@ from backend.tools.news import fetch_google_news_rss, merge_and_deduplicate
 
 logger = logging.getLogger(__name__)
 
+
+class DashboardNewsArticle(BaseModel):
+    """A single news article for the dashboard."""
+
+    title: str
+    link: str
+    publisher: str | None = None
+    published: str | None = None
+    source: str = "google_news"
+    portfolio_ticker: str | None = None
+
+
+class DashboardNewsResponse(BaseModel):
+    """Response from the dashboard news endpoint."""
+
+    articles: list[DashboardNewsArticle]
+    ticker_count: int
+
+
 router = APIRouter(prefix="/news", tags=["news"])
 
 
 async def _get_portfolio_tickers(
     db: AsyncSession,
-    user_id: object,
+    user_id: int,
     limit: int = 3,
 ) -> list[str]:
     """Return top portfolio tickers ordered by share count (descending).
@@ -57,7 +76,7 @@ async def _get_portfolio_tickers(
 
 async def _get_recommendation_tickers(
     db: AsyncSession,
-    user_id: object,
+    user_id: int,
     limit: int = 3,
 ) -> list[str]:
     """Return top recent BUY/STRONG_BUY recommendation tickers.
@@ -102,12 +121,12 @@ async def _fetch_for_ticker(ticker: str) -> list[dict]:
         return []
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", response_model=DashboardNewsResponse)
 async def get_dashboard_news(
     request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
-) -> dict:
+) -> DashboardNewsResponse:
     """Aggregated news for user's portfolio + recommendation tickers.
 
     Returns the 15 most recent articles across portfolio and
@@ -120,7 +139,7 @@ async def get_dashboard_news(
     if cache:
         cached = await cache.get(cache_key)
         if cached:
-            return json.loads(cached)
+            return DashboardNewsResponse.model_validate_json(cached)
 
     # --- Gather tickers from portfolio + recommendations ---
     portfolio_tickers = await _get_portfolio_tickers(db, current_user.id)
@@ -130,7 +149,7 @@ async def get_dashboard_news(
     all_tickers = list(dict.fromkeys(portfolio_tickers + rec_tickers))[:6]
 
     if not all_tickers:
-        return {"articles": [], "ticker_count": 0}
+        return DashboardNewsResponse(articles=[], ticker_count=0)
 
     # --- Fetch news in parallel ---
     results = await asyncio.gather(*[_fetch_for_ticker(t) for t in all_tickers])
@@ -139,14 +158,17 @@ async def get_dashboard_news(
     # Deduplicate + sort by date, limit to 15
     all_articles = merge_and_deduplicate(all_articles, max_results=15)
 
-    response = {"articles": all_articles, "ticker_count": len(all_tickers)}
+    response = DashboardNewsResponse(
+        articles=[DashboardNewsArticle(**a) for a in all_articles],
+        ticker_count=len(all_tickers),
+    )
 
     # --- Cache result ---
     if cache:
         try:
             from backend.services.cache import CacheTier
 
-            await cache.set(cache_key, json.dumps(response, default=str), CacheTier.VOLATILE)
+            await cache.set(cache_key, response.model_dump_json(), CacheTier.VOLATILE)
         except Exception:
             logger.warning("Failed to cache dashboard news for user %s", current_user.id)
 

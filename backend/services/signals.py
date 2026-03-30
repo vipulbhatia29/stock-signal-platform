@@ -127,6 +127,37 @@ class SignalResult:
     composite_score: float | None
     composite_weights: dict | None  # Records which weights were used
 
+    # Price change (daily)
+    change_pct: float | None = None  # daily price change percentage
+    current_price: float | None = None  # latest close price
+
+
+def compute_price_change(
+    df: pd.DataFrame | None,
+) -> tuple[float | None, float | None]:
+    """Compute daily price change percentage and current price.
+
+    Returns (change_pct, current_price).
+    """
+    import math
+
+    if df is None or len(df) < 2:
+        return None, None
+    for col in ("adj_close", "Adj Close", "close", "Close"):
+        if col in df.columns:
+            closes = df[col]
+            break
+    else:
+        return None, None
+    current = float(closes.iloc[-1])
+    previous = float(closes.iloc[-2])
+    if not math.isfinite(current) or not math.isfinite(previous):
+        return None, None
+    if previous == 0:
+        return None, current
+    change = ((current - previous) / previous) * 100
+    return round(change, 2), round(current, 2)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Main entry point — compute all signals for a ticker
@@ -201,6 +232,8 @@ def compute_signals(
         piotroski_score=piotroski_score,
     )
 
+    change_pct, current_price = compute_price_change(df)
+
     return SignalResult(
         ticker=ticker,
         rsi_value=rsi_val,
@@ -219,6 +252,8 @@ def compute_signals(
         sharpe_ratio=sharpe,
         composite_score=score,
         composite_weights=weights,
+        change_pct=change_pct,
+        current_price=current_price,
     )
 
 
