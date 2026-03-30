@@ -23,6 +23,10 @@ import type {
   PortfolioSnapshot,
   Recommendation,
   PaginatedRecommendations,
+  StockNewsResponse,
+  StockIntelligenceResponse,
+  BenchmarkComparisonResponse,
+  OHLCResponse,
 } from "@/types/api";
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -236,6 +240,100 @@ export function useDividends(ticker: string) {
     queryFn: () => get<DividendSummary>(`/portfolio/dividends/${ticker}`),
     staleTime: 30 * 60 * 1000, // Dividends change infrequently — cache 30 min
     retry: 0, // 404 for unheld tickers is expected — don't retry
+  });
+}
+
+// ── Stock News ──────────────────────────────────────────────────────────────
+
+export function useStockNews(ticker: string, enabled = true) {
+  return useQuery({
+    queryKey: ["stock-news", ticker],
+    queryFn: () => get<StockNewsResponse>(`/stocks/${ticker}/news`),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+    enabled,
+  });
+}
+
+// ── Stock Intelligence ──────────────────────────────────────────────────────
+
+export function useStockIntelligence(ticker: string, enabled = true) {
+  return useQuery({
+    queryKey: ["stock-intelligence", ticker],
+    queryFn: () =>
+      get<StockIntelligenceResponse>(`/stocks/${ticker}/intelligence`),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+    enabled,
+  });
+}
+
+// ── Benchmark Comparison ────────────────────────────────────────────────────
+
+export interface BenchmarkDataPoint {
+  date: string;
+  [seriesName: string]: string | number;
+}
+
+export function useBenchmark(
+  ticker: string,
+  period: PricePeriod,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ["benchmark", ticker, period],
+    queryFn: () =>
+      get<BenchmarkComparisonResponse>(
+        `/stocks/${ticker}/benchmark?period=${period}`
+      ),
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+    enabled,
+    select: (data): BenchmarkDataPoint[] => {
+      if (!data.series.length) return [];
+
+      const stockSeries = data.series.find(
+        (s) => s.ticker.toUpperCase() === ticker.toUpperCase()
+      );
+      if (!stockSeries) return [];
+
+      const seriesMaps = data.series.map((s) => {
+        const map = new Map<string, number>();
+        s.dates.forEach((d, i) => {
+          const dateKey = d.split("T")[0];
+          map.set(dateKey, s.pct_change[i]);
+        });
+        return { name: s.name, map };
+      });
+
+      return stockSeries.dates.map((d) => {
+        const dateKey = d.split("T")[0];
+        const point: BenchmarkDataPoint = { date: dateKey };
+        for (const { name, map } of seriesMaps) {
+          const val = map.get(dateKey);
+          if (val !== undefined) point[name] = val;
+        }
+        return point;
+      });
+    },
+  });
+}
+
+// ── OHLC (Candlestick) ─────────────────────────────────────────────────────
+
+export function useOHLC(
+  ticker: string,
+  period: PricePeriod,
+  enabled = true
+) {
+  return useQuery({
+    queryKey: ["ohlc", ticker, period],
+    queryFn: () =>
+      get<OHLCResponse>(
+        `/stocks/${ticker}/prices?period=${period}&format=ohlc`
+      ),
+    staleTime: 5 * 60 * 1000,
+    enabled,
   });
 }
 
