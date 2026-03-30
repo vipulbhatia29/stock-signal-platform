@@ -2,9 +2,9 @@
 
 ## Stock Signal Platform
 
-**Version:** 2.0
+**Version:** 1.1
 **Date:** March 2026
-**Status:** Living Document — Phases 1-8 complete. Phase B.5 BU-1-4 shipped (Sessions 72-75).
+**Status:** Living Document — Phase 1-5 complete, Phase 5.5/6 planned
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -37,47 +37,28 @@ graph TB
             R_Auth["/auth"]
             R_Stocks["/stocks"]
             R_Portfolio["/portfolio"]
-            R_Market["/market"]
-            R_Chat["/chat"]
+            R_Chat["/chat/stream"]
             R_Forecast["/forecasts"]
             R_Alerts["/alerts"]
-            R_Sectors["/sectors"]
-            R_Admin["/admin"]
-            R_Indexes["/indexes"]
-            R_Health["/health"]
-            R_Prefs["/preferences"]
-            R_Tasks["/tasks"]
+            R_MCP["/mcp"]
         end
 
-        subgraph Services["Service Layer (backend/services/)"]
-            S_Data["stock_data"]
-            S_Signals["signals"]
-            S_Recs["recommendations"]
-            S_Watch["watchlist"]
-            S_Port["portfolio"]
-            S_Pipe["pipelines"]
-        end
-
-        subgraph Tools["Tool Layer (24 tools — thin wrappers)"]
+        subgraph Tools["Tool Layer (20 internal tools)"]
+            T_Market["market_data"]
+            T_Signals["signals"]
+            T_Fund["fundamentals"]
             T_Forecast["forecasting"]
+            T_Portfolio["portfolio"]
+            T_Recs["recommendations"]
             T_Divs["dividends"]
             T_Risk["risk_narrative"]
-            T_Intel["news + intelligence"]
-            T_Health["portfolio_health"]
-        end
-
-        subgraph Guards["Guardrails"]
-            G_Input["Input Guard<br/>PII | Injection | Length"]
-            G_Output["Output Guard<br/>Disclaimer | Validation"]
         end
 
         subgraph Agents["Agent Layer"]
-            IC["IntentClassifier<br/>Rule-based routing"]
-            TG["ToolGroups<br/>Intent→tool filtering"]
-            RL["ReAct Loop<br/>Reason⇄Act generator"]
             TR["ToolRegistry"]
+            AG_V2["Agent V2<br/>Plan→Execute→Synthesize"]
             ER["EntityRegistry"]
-            LLM["LLMClient<br/>Groq→Claude→OpenAI"]
+            LLM["LLMClient<br/>Groq→Claude→Local"]
         end
     end
 
@@ -100,12 +81,11 @@ graph TB
     NextJS -->|HTTP/SSE| MW
     MCP_Client -->|Streamable HTTP| R_MCP
     MW --> Routers
-    Routers --> Services
+    Routers --> Tools
     Routers --> Agents
     Agents --> TR --> Tools
-    Tools --> Services
     Agents --> LLM --> Groq
-    Services --> PG
+    Tools --> PG
     Tools --> YF
     Tools --> FRED
     CB -->|schedule| CW
@@ -129,7 +109,6 @@ erDiagram
     portfolios ||--o{ positions : contains
     portfolios ||--o{ transactions : records
     portfolios ||--o{ portfolio_snapshots : tracked
-    portfolios ||--o{ portfolio_health_snapshots : health_tracked
 
     stocks ||--o{ stock_prices : has
     stocks ||--o{ signal_snapshots : computed
@@ -146,50 +125,6 @@ erDiagram
 
     chat_session ||--o{ chat_message : contains
 
-    llm_model_config {
-        uuid id PK
-        string tier
-        string provider
-        string model_name
-        boolean is_active
-    }
-
-    llm_call_log {
-        uuid id PK
-        uuid user_id FK
-        string tier
-        string model
-        int input_tokens
-        int output_tokens
-    }
-
-    tool_execution_log {
-        uuid id PK
-        string tool_name
-        string status
-        int duration_ms
-    }
-
-    pipeline_runs {
-        uuid id PK
-        string pipeline_name
-        string status
-        timestamp started_at
-    }
-
-    pipeline_watermarks {
-        string pipeline_name PK
-        timestamp last_success_at
-    }
-
-    portfolio_health_snapshots {
-        uuid portfolio_id FK
-        timestamp snapshot_time
-        float health_score
-        float hhi
-        float sharpe
-    }
-
     users {
         uuid id PK
         string email UK
@@ -204,9 +139,6 @@ erDiagram
         boolean is_etf
         float market_cap
         float revenue_growth
-        float beta
-        float dividend_yield
-        float forward_pe
     }
 
     stock_prices {
@@ -262,7 +194,7 @@ erDiagram
     }
 ```
 
-> 27 tables total. Hypertables: `stock_prices`, `signal_snapshots`, `portfolio_snapshots`, `portfolio_health_snapshots`. Full schema in `docs/data-architecture.md`.
+> 25 tables total. Hypertables: `stock_prices`, `signal_snapshots`, `portfolio_snapshots`. Full schema in `docs/data-architecture.md`.
 
 ### 2.2 Layer Responsibilities
 
@@ -293,22 +225,6 @@ erDiagram
 - Base: `/api/v1/`
 - Versioning: URL-based. If breaking changes needed, create `/api/v2/` routers.
   Old version stays active for 3 months (migration period).
-
-### 3.1.1 Centralized Input Validation (KAN-154) ✅ IMPLEMENTED
-
-All API path and query parameters use centralized types from `backend/validation.py`:
-
-| Type | Usage | Constraint |
-|------|-------|-----------|
-| `TickerPath` | All `{ticker}` path params | `^[A-Za-z0-9.\-\^]{1,10}$`, enforced by FastAPI |
-| `UUIDPath` | `{session_id}`, `{transaction_id}` | UUID format enforced by Pydantic |
-| `RsiState` | `?rsi_state=` screener filter | Enum: `OVERSOLD`, `NEUTRAL`, `OVERBOUGHT` |
-| `MacdState` | `?macd_state=` screener filter | Enum: `BULLISH`, `BEARISH`, `NEUTRAL` |
-| `SignalAction` | `?action=` recommendation filter | Enum: `BUY`, `WATCH`, `AVOID`, `HOLD`, `SELL` |
-| `ConfidenceLevel` | `?confidence=` recommendation filter | Enum: `HIGH`, `MEDIUM`, `LOW` |
-| `SectorQuery` | `?sector=` filter | `max_length=100` |
-
-`TICKER_RE` regex is shared between `validation.py` and `agents/guards.py` (tool param validation) — single source of truth.
 
 ### 3.2 Authentication Endpoints
 
@@ -353,11 +269,9 @@ GET /api/v1/stocks/{ticker}/signals
               composite_score, is_stale }
   Errors:   404 (ticker not found)
 
-GET /api/v1/stocks/{ticker}/prices?period={1mo|3mo|6mo|1y|2y|5y|10y}&format={list|ohlc}
-  Response (format=list, default): [{ time, open, high, low, close, volume }]
-  Response (format=ohlc): { ticker, period, count, timestamps[], open[], high[], low[], close[], volume[] }
-  Note:     format=ohlc returns parallel arrays optimized for candlestick charts (KAN-150)
-  Errors:   404 (ticker not found), 422 (invalid ticker/period/format)
+GET /api/v1/stocks/{ticker}/prices?period={1mo|3mo|6mo|1y|2y|5y|10y}
+  Response: [{ time, open, high, low, close, volume }]
+  Errors:   404 (ticker not found)
 
 GET /api/v1/stocks/{ticker}/signals/history?period={1m|3m|6m|1y}
   Response: [{ computed_at, composite_score, rsi_value, macd_value }]
@@ -457,9 +371,8 @@ POST /api/v1/chat/stream
   Request:  { message: string, session_id?: uuid, agent_type: "general"|"stock" }
   Response: NDJSON stream of events (see §3.6.1)
   Auth:     Required (httpOnly cookie)
-  Behavior: Uses ReAct loop (§5.5) when REACT_AGENT=true (default).
-            Intent classifier routes: simple_lookup → fast path (0 LLM), out_of_scope → decline,
-            complex → ReAct loop with filtered tool group.
+  Behavior: When AGENT_V2=true, uses Plan→Execute→Synthesize graph (§5.5).
+            When AGENT_V2=false, uses V1 ReAct graph (§5.3).
             User context (portfolio, preferences, watchlist) injected automatically.
             query_id (UUID) generated per request for trace correlation.
 ```
@@ -467,21 +380,23 @@ POST /api/v1/chat/stream
 ### 3.6.1 NDJSON Stream Events (Phase 4C + 4D)
 
 ```
-Stream Events (ReAct loop, REACT_AGENT=true):
-  { type: "thinking", content: "Let me check AAPL's fundamentals..." }  # Per-iteration reasoning
+V1 Events (ReAct graph):
+  { type: "thinking", content: "Analyzing your question..." }
   { type: "tool_start", tool: "analyze_stock", params: {...} }
-  { type: "tool_result", tool: "...", status: "ok", data: {...} }
-  { type: "tool_error", tool: "...", error: "API timeout" }
-  { type: "decline", content: "I focus on financial analysis..." }      # Out-of-scope
-  { type: "token", content: "..." }                                     # Final answer
+  { type: "tool_result", tool: "analyze_stock", status: "ok", data: {...} }
+  { type: "token", content: "..." }                           # Streamed text
   { type: "done", usage: {...} }
+  { type: "error", error: "..." }
+  { type: "provider_fallback", content: "Switching to..." }
 
-Stream Events (old Plan→Execute→Synthesize, REACT_AGENT=false):
+V2 Events (Plan→Execute→Synthesize graph, AGENT_V2=true):
   { type: "thinking", content: "Planning research approach..." }
   { type: "plan", content: "reasoning...", data: { steps: ["tool1", "tool2"] } }
   { type: "tool_result", tool: "...", status: "ok", data: {...} }
+  { type: "tool_error", tool: "...", error: "API timeout" }
   { type: "evidence", data: [{ claim, source_tool, value, timestamp }] }
-  { type: "token", content: "..." }
+  { type: "decline", content: "I focus on financial analysis..." }
+  { type: "token", content: "..." }                           # Synthesis text
   { type: "done", usage: {...} }
 ```
 
@@ -586,14 +501,11 @@ GET /api/v1/recommendations/scorecard
   Auth:     Required
 ```
 
-### 3.12 Alert Endpoints (Phase 5 + Phase B.5 BU-1) ✅ IMPLEMENTED
-
-Phase B.5 BU-1 (Session 72) added: `severity` (Literal: critical/warning/info), `title`, `ticker`, `dedup_key` columns. Alert producers now set these fields with 24h dedup via `dedup_key`. Divestment alerts generated nightly alongside existing buy/flip/drift/pipeline producers. Read alerts older than 90 days auto-cleaned by retention job.
+### 3.12 Alert Endpoints (Phase 5) ✅ IMPLEMENTED
 
 ```
-GET /api/v1/alerts?limit=20&offset=0
-  Response: AlertListResponse { alerts: AlertResponse[], total, unread_count }
-  AlertResponse: { id, alert_type, severity, title, ticker, message, metadata, is_read, created_at }
+GET /api/v1/alerts
+  Response: AlertResponse[] { id, alert_type, severity, title, message, ticker, is_read, created_at, metadata }
   Auth:     Required
 
 GET /api/v1/alerts/unread-count
@@ -606,224 +518,72 @@ PATCH /api/v1/alerts/read
   Auth:     Required
 ```
 
-### 3.13 Admin Endpoints (Phase 6A) ✅ IMPLEMENTED
+### 3.13 News Endpoints (Phase B.5 BU-3) ✅ IMPLEMENTED
 
-Superuser-only endpoints for managing LLM model cascade configuration.
-
-```
-GET /api/v1/admin/llm-models
-  Response: LLMModelConfigResponse[] { id, provider, model_name, tier, priority, is_enabled, tpm_limit, rpm_limit, tpd_limit, rpd_limit, cost_per_1k_input, cost_per_1k_output, notes }
-  Auth:     Required (role=ADMIN)
-  Errors:   401 (unauthenticated), 403 (not admin)
-
-PATCH /api/v1/admin/llm-models/{model_id}
-  Body:     LLMModelConfigUpdate { priority?, is_enabled?, tpm_limit?, rpm_limit?, tpd_limit?, rpd_limit?, cost_per_1k_input?, cost_per_1k_output?, notes? }
-  Response: LLMModelConfigResponse
-  Auth:     Required (role=ADMIN)
-  Errors:   401, 403, 404 (model not found)
-
-POST /api/v1/admin/llm-models/reload
-  Response: { status: "ok", tiers: int, models: int }
-  Auth:     Required (role=ADMIN)
-  Errors:   401, 403
-  Notes:    Force-reloads model configs from DB into running cascade. Takes effect immediately.
-```
-
-### 3.14 Admin Observability Endpoints (Phase 6B) ✅ IMPLEMENTED
+**Router:** `backend/routers/news.py` — Session 75, PR #149
 
 ```
-GET /api/v1/admin/llm-metrics
-  Response: { requests_by_model, cascade_count, cascades_by_model, rpm_by_model, cascade_log }
-  Auth:     Required (role=ADMIN)
-  Notes:    DB-backed metrics from llm_call_log table (cross-worker ground truth). Includes `fallback_rate_60s`. Migrated from in-memory to DB reads in Session 67 (KAN-186).
-
-GET /api/v1/admin/tier-health
-  Response: { tiers: [{ model, status, failures_5m, successes_5m, cascade_count, latency: { avg_ms, p95_ms } }], summary: { total, healthy, degraded, down, disabled } }
-  Auth:     Required (role=ADMIN)
-  Notes:    Per-model health classification (healthy/degraded/down/disabled). DB-backed reads (Session 67).
-
-POST /api/v1/admin/tier-toggle
-  Body:     { model: string, enabled: boolean }
-  Response: { status: "ok", model, enabled }
-  Auth:     Required (role=ADMIN)
-  Notes:    Runtime enable/disable of a model without redeploy.
-
-GET /api/v1/admin/llm-usage
-  Response: { total_requests, total_cost_usd, avg_latency_ms, models: [{ model, provider, request_count, cost_usd }], escalation_rate }
-  Auth:     Required (role=ADMIN)
-  Notes:    30-day aggregated usage from llm_call_log table. Escalation rate = Anthropic calls / total.
-
-GET /api/v1/admin/observability/query/{query_id}/cost
-  Response: { query_id, total_cost_usd, total_prompt_tokens, total_completion_tokens, llm_calls: [{ model, provider, cost_usd, ... }], tool_calls: { total, cache_hits, cache_hit_rate, by_tool } }
-  Auth:     Required (role=ADMIN)
-  Notes:    Per-query cost breakdown with LLM and tool call stats. Added Session 62 (KAN-190).
+GET  /api/v1/news/dashboard    # Per-user news aggregation
 ```
 
-### 3.15 Sectors Endpoints (Phase 4F) ✅ IMPLEMENTED
+Aggregates news for user's top 3 portfolio tickers + top 3 BUY/STRONG_BUY recommendation tickers. Google RSS fetch in parallel via `asyncio.gather`. Per-user Redis cache with `CacheTier.VOLATILE` (5-min TTL). Returns max 15 articles sorted by date.
 
-```
-GET /api/v1/sectors
-  Response: [{ sector, stock_count, avg_composite_score, top_ticker, market_cap_sum }]
-  Auth:     Required
-  Notes:    Aggregated sector summary across all tracked stocks.
-
-GET /api/v1/sectors/{sector}/stocks
-  Response: [{ ticker, name, composite_score, market_cap, beta }]
-  Auth:     Required
-  Notes:    All stocks in a given sector with key metrics.
-
-GET /api/v1/sectors/{sector}/correlation
-  Response: { tickers: [...], matrix: [[...]] }
-  Auth:     Required
-  Notes:    Price correlation matrix for top stocks in sector.
-```
-
-### 3.16 Market Endpoint (Phase 7) ✅ IMPLEMENTED
-
-```
-GET /api/v1/market/briefing
-  Response: { indexes: [...], portfolio_news: [...], upcoming_earnings: [...] }
-  Auth:     Required
-  Notes:    Agent tool that aggregates market data, news, and earnings for portfolio tickers.
-```
-
-### 3.17 Health Endpoint
-
-```
-GET /api/v1/health
-  Response: { status: "ok", database: "ok", redis: "ok" }
-  Auth:     None (public)
-  Notes:    System health check. Validates critical table existence on startup.
-```
-
-### 3.18 Task Status Endpoint
-
-```
-GET /api/v1/tasks/{task_id}/status
-  Response: { task_id, status: "PENDING"|"STARTED"|"SUCCESS"|"FAILURE", result? }
-  Auth:     Required
-  Notes:    Polls Celery task status. TODO: store task_id→user_id mapping in Redis for stricter isolation.
-```
-
-### 3.19 Additional Undocumented Endpoints in Existing Routers
-
-**Stocks router (`/stocks`):**
-```
-GET  /api/v1/stocks/{ticker}/news          # Yahoo Finance news feed
-GET  /api/v1/stocks/{ticker}/intelligence   # Enriched stock data (beta, yield, PE, news, earnings)
-POST /api/v1/stocks/watchlist/{ticker}/acknowledge  # Mark stale price as acknowledged
-POST /api/v1/stocks/watchlist/refresh-all   # Refresh all watchlist tickers (sequential ingest)
-```
-
-**Portfolio router (`/portfolio`):**
-```
-GET  /api/v1/portfolio/rebalancing        # Rebalancing suggestions based on target allocations
-GET  /api/v1/portfolio/health             # Real-time health score with component breakdown (HHI, Sharpe, beta)
-GET  /api/v1/portfolio/health/history     # Portfolio health score trend (hypertable)
-```
-
-**News router (`/news`) — Phase B.5 BU-3, Session 75:**
-```
-GET  /api/v1/news/dashboard              # Per-user news: portfolio + recommendation tickers, Redis cached
-```
-Response: `DashboardNewsResponse { articles: DashboardNewsArticle[], ticker_count: int }`
-
-**Chat router (`/chat`):**
-```
-GET    /api/v1/chat/sessions                       # List user's chat sessions
-GET    /api/v1/chat/sessions/{session_id}/messages  # Get messages for a session
-DELETE /api/v1/chat/sessions/{session_id}           # Delete a chat session
+**Response:** `DashboardNewsResponse`
+```json
+{
+  "articles": [
+    {
+      "title": "string",
+      "link": "string",
+      "publisher": "string | null",
+      "published": "string | null",
+      "source": "google_news",
+      "portfolio_ticker": "string | null"
+    }
+  ],
+  "ticker_count": 0
+}
 ```
 
 ---
 
 ## 4. Service Layer Design
 
-> **Implementation status:** ✅ COMPLETE (Session 61, PR #123). All business logic extracted into `backend/services/`. Routers, tools, and tasks delegate to services. Tools are thin re-export shims. Clean dependency graph: services never import from routers/tools/agents.
+> **Implementation status:** The service layer pattern described below is ASPIRATIONAL. It is planned for Phase 3+. In the current implementation (Phases 1-2), routers call tools directly (e.g., `from backend.tools.signals import compute_signals`). The Redis caching strategy is also not yet implemented.
 
-### 4.1 Service Architecture
+### 4.1 Service Pattern
 
-Two-tier service design:
-
-**Atomic services** — granular, composable functions called by tools, routers, and tasks:
-- `backend/services/stock_data.py` — price CRUD, fundamentals, ensure_stock_exists
-- `backend/services/signals.py` — signal computation, queries, SignalResult
-- `backend/services/recommendations.py` — recommendation generation, position sizing
-- `backend/services/watchlist.py` — watchlist CRUD
-- `backend/services/portfolio.py` — positions, P&L, FIFO, summary, transactions
-
-**Pipeline services** — orchestrators composing atomic services:
-- `backend/services/pipelines.py` — `ingest_ticker()` pipeline (fetch → compute → store → recommend)
-
-**Infrastructure services** (pre-existing):
-- `backend/services/cache.py` — CacheService (3-tier namespace, 4 TTL tiers)
-- `backend/services/redis_pool.py` — shared Redis connection pool
-- `backend/services/token_blocklist.py` — refresh token blocklist
-
-**Domain exceptions** (`backend/services/exceptions.py`):
-- `ServiceError` (base), `StockNotFoundError`, `PortfolioNotFoundError`, `DuplicateWatchlistError`, `IngestFailedError`
-
-### 4.1.1 Service Pattern
-
-Services are plain async functions (not classes) that receive an `AsyncSession` as parameter:
+Every service follows:
 
 ```python
-# backend/services/signals.py
-async def get_latest_signals(ticker: str, db: AsyncSession) -> SignalSnapshot | None:
-    """Get latest signal snapshot for a ticker."""
-    result = await db.execute(
-        select(SignalSnapshot).where(SignalSnapshot.ticker == ticker.upper())
-        .order_by(SignalSnapshot.computed_at.desc()).limit(1)
-    )
-    return result.scalar_one_or_none()
+class SignalService:
+    def __init__(self, db: AsyncSession, redis: Redis):
+        self.db = db
+        self.redis = redis
 
-async def compute_signals(ticker: str, db: AsyncSession, piotroski_score: int | None = None) -> SignalResult:
-    """Compute all signals for a ticker (RSI, MACD, SMA, Bollinger, composite)."""
-    ...
+    async def get_latest_signals(self, ticker: str) -> SignalResponse:
+        """Get latest signals, compute if stale."""
+        # 1. Check cache
+        cached = await self.redis.get(f"signals:{ticker}")
+        if cached:
+            return SignalResponse.model_validate_json(cached)
+
+        # 2. Query database
+        snapshot = await self._get_latest_snapshot(ticker)
+        if snapshot and not snapshot.is_stale:
+            response = SignalResponse.from_orm(snapshot)
+            await self.redis.set(f"signals:{ticker}", response.model_dump_json(), ex=3600)
+            return response
+
+        # 3. Compute fresh if stale or missing
+        prices = await market_data_tool.fetch_prices(ticker)
+        signals = signal_tool.compute_all(prices)
+        await self._store_snapshot(ticker, signals)
+
+        response = SignalResponse.from_signals(signals)
+        await self.redis.set(f"signals:{ticker}", response.model_dump_json(), ex=3600)
+        return response
 ```
-
-Callers catch domain exceptions and translate:
-```python
-# In routers:
-from backend.services.exceptions import StockNotFoundError
-try:
-    result = await add_to_watchlist(user.id, ticker, db)
-except StockNotFoundError:
-    raise HTTPException(status_code=404, detail="Stock not found")
-except DuplicateWatchlistError:
-    raise HTTPException(status_code=409, detail="Already on watchlist")
-
-# In tools:
-from backend.services.exceptions import StockNotFoundError
-try:
-    price = await get_latest_price(ticker, db)
-except StockNotFoundError:
-    return ToolResult(error="Stock not found in database")
-```
-
-### 4.1.2 Dependency Graph
-
-```
-Routers → Services → Models/Schemas/Database
-Tools   → Services → Models/Schemas/Database
-Tasks   → Services → Models/Schemas/Database
-Agents  → Services → Models/Schemas/Database
-```
-
-Services NEVER import from routers, tools, tasks, or agents. This invariant is enforced by grep in CI verification.
-
-### 4.1.3 Router Split
-
-`backend/routers/stocks.py` (1126 lines) was split into a package:
-
-| Sub-router | Endpoints |
-|------------|-----------|
-| `stocks/data.py` | `/{ticker}/prices`, `/{ticker}/signals`, `/{ticker}/fundamentals`, `/{ticker}/news`, `/{ticker}/intelligence` |
-| `stocks/watchlist.py` | `/watchlist` (GET/POST/DELETE), `/{ticker}/acknowledge`, `/refresh-all` |
-| `stocks/search.py` | `/search`, `/{ticker}/ingest` |
-| `stocks/recommendations.py` | `/recommendations`, `/signals/bulk`, `/{ticker}/signals/history` |
-
-`__init__.py` composes sub-routers. `main.py` import unchanged.
 
 ### 4.2 Dependency Injection
 
@@ -836,58 +596,44 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 # dependencies.py
+async def get_redis() -> Redis:
+    return Redis.from_url(settings.REDIS_URL)
+
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_async_session)
 ) -> User:
     # decode JWT, query user, return
     ...
+
+async def get_signal_service(
+    db: AsyncSession = Depends(get_async_session),
+    redis: Redis = Depends(get_redis)
+) -> SignalService:
+    return SignalService(db, redis)
 ```
 
-### 4.3 Caching Strategy ✅ IMPLEMENTED (Phase 7, KAN-148)
+### 4.3 Caching Strategy
 
-Redis cache-aside with 3-tier key namespace and `CacheService` (`backend/services/cache.py`). Shared Redis pool (`backend/services/redis_pool.py`) used by cache, token blocklist, and rate limiter.
-
-**Key Namespaces:**
-- `app:{entity}:{id}` — shared across all users (stock data, signals, sectors)
-- `user:{user_id}:{entity}:{id}` — per-user data (portfolio summary)
-- `session:{session_id}:tool:{name}:{hash}` — per-chat agent tool results
-
-**TTL Tiers** (`CacheTier` enum, ±10% jitter except session):
-
-| Tier | TTL | Data Types |
-|------|-----|------------|
-| VOLATILE | 5 min | prices, portfolio summary |
-| STANDARD | 30 min | signals, screener, sectors, fundamentals, forecasts |
-| STABLE | 24h | company profiles, index membership |
-| SESSION | 2h (fixed) | agent tool results |
-
-**Cached Endpoints:**
-
-| Endpoint | Cache Key | Tier | Invalidation |
-|----------|-----------|------|-------------|
-| `GET /stocks/{ticker}/signals` | `app:signals:{ticker}` | STANDARD | On ingest |
-| `GET /sectors/summary` | `app:sectors:summary` | STANDARD | Nightly batch |
-| `GET /sectors/{sector}/stocks` | `app:sectors:{sector}:stocks` | STANDARD | Nightly batch |
-| `GET /forecasts/{ticker}` | `app:forecast:{ticker}` | STANDARD | Nightly batch |
-| `GET /portfolio/summary` | `user:{uid}:portfolio:summary` | VOLATILE | On transaction |
-| Agent tool calls | `session:{sid}:tool:{name}:{hash}` | SESSION | Session close |
-
-**Invalidation:** `invalidate_ticker()` on ingest, `invalidate_user()` on portfolio writes, `delete_pattern()` in nightly pipeline.
-**Warmup:** Index data pre-loaded on startup.
-**Agent tool cache:** 10 cacheable tools (data tools). Dynamic tools (search, ingest, web_search) skip cache.
+| Data | Cache Key | TTL | Invalidation |
+|------|-----------|-----|-------------|
+| Latest signals | `signals:{ticker}` | 1 hour | On new signal computation |
+| Latest price | `price:{ticker}` | 5 minutes | On price fetch |
+| Screener results | `screener:{hash_of_filters}` | 30 minutes | On nightly batch |
+| Portfolio positions | `positions:{portfolio_id}` | 0 (no cache) | N/A (always fresh) |
+| Recommendations | `recs:{user_id}:{date}` | Until next computation | On daily batch |
 
 ---
 
 ## 5. Agent Architecture
 
-> **Implementation status:** Phase 8B ✅ ReAct loop (Session 63, PR #128) + Phase 8C ✅ Intent classifier (PR #127). Feature-flagged via `REACT_AGENT=true`. Old Plan→Execute→Synthesize still behind flag. Full spec: `docs/superpowers/specs/2026-03-27-react-agent-redesign.md`. ADRs: `docs/ADR.md` (001-008).
+> **Implementation status:** Phase 4B ✅ (V1 ReAct, PRs #12-13) + Phase 4D ✅ (V2 Plan→Execute→Synthesize, PRs #26-32). V2 behind `AGENT_V2=true` feature flag. Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`.
 
 ### 5.1 Three-Layer Architecture
 
-Layer 1: Consume external data sources (EdgarTools, Alpha Vantage, FRED, Finnhub — via API wrapper adapters, not MCP protocol)
+Layer 1: Consume external MCPs (EdgarTools, Alpha Vantage, FRED, Finnhub, GDELT)
 Layer 2: Enrich in backend (Tool Registry + caching + cross-source analysis)
-Layer 3: Expose as MCP server — Streamable HTTP at `/mcp` (JWT auth) for external clients + stdio transport (`mcp_server/tool_server.py`) for internal agent use when `MCP_TOOLS=True` (Phase 5.6 ✅)
+Layer 3: Expose as MCP server at `/mcp` (Streamable HTTP, JWT auth)
 
 ### 5.2 Tool Registry
 
@@ -904,77 +650,50 @@ class ToolRegistry:
     def health() -> dict[str, bool]
 ```
 
-Internal tools (24):
+Internal tools (20):
 - **Original (9):** `analyze_stock`, `get_portfolio_exposure`, `screen_stocks`, `get_recommendations`, `compute_signals`, `get_geopolitical_events`, `web_search`, `search_stocks`, `ingest_stock`
 - **Phase 4D (4):** `get_fundamentals`, `get_analyst_targets`, `get_earnings_history`, `get_company_profile` — read from DB, data materialized during `ingest_stock`
 - **Phase 5 (7):** `get_forecast`, `get_sector_forecast`, `get_portfolio_forecast`, `compare_stocks`, `get_recommendation_scorecard`, `dividend_sustainability`, `risk_narrative`
-- **Phase 7 (4):** `portfolio_health`, `market_briefing`, `get_stock_intelligence`, `recommend_stocks` — intelligent aggregation tools
 
 Phase 5 tools: forecast tools read pre-computed Prophet data from DB. `dividend_sustainability` is the only runtime yfinance call (payout ratio not persisted). `risk_narrative` combines signals + fundamentals + forecast + sector ETF context.
 
-Phase 7 tools: `portfolio_health` computes HHI/signal/risk/income/sector scores. `market_briefing` fetches indexes/sectors/news via yfinance. `get_stock_intelligence` wraps analyst upgrades/insider/earnings from `intelligence.py`. `recommend_stocks` ranks by multi-signal consensus (signals 35%, fundamentals 25%, momentum 20%, portfolio fit 20%). Planner outputs `response_type` to route synthesizer format.
-
-Phase 7 DB changes: Migration 013 adds `decline_count` to `chat_session` (guardrails). Migration 014 adds `beta`, `dividend_yield`, `forward_pe` to `stocks` (data enrichment).
-
-**Entity Registry** (`backend/agents/entity_registry.py`): session-scoped ticker tracking for pronoun resolution ("compare them", "what about it?"). Updated in ReAct loop after each tool execution.
+**Entity Registry** (`backend/agents/entity_registry.py`): session-scoped ticker tracking for pronoun resolution ("compare them", "what about it?"). Wired into AgentStateV2 — execute_node extracts entities from tool results, plan_node resolves pronouns.
 
 MCPAdapter proxied tools (4 adapters): EdgarAdapter (SEC filings), AlphaVantageAdapter (news), FredAdapter (macro), FinnhubAdapter (analyst/ESG)
 
-**Intent-based tool filtering** (Phase 8C): `classify_intent()` maps queries to intent categories, each with a filtered tool group:
-- stock: 8 tools | portfolio: 8 tools | market: 5 tools | comparison: 5 tools | simple_lookup: 1 tool | general: all tools
+Agent types = registry filters:
+- Stock agent: all categories (analysis, data, portfolio, macro, news, sec)
+- General agent: data + news only
 
-### 5.3 Agent Pipeline (Phase 8B+8C) ✅ IMPLEMENTED
+### 5.3 Agentic Loop (two-phase per iteration)
 
-```
-User → Guards → Intent Classifier (rule-based, 0 LLM)
-  ├─ simple_lookup → Tool → Template → User        (0 LLM calls, ~300ms)
-  ├─ out_of_scope → Decline → User                 (0 LLM calls)
-  └─ complex → ReAct Loop (N LLM calls) → User     (adaptive, filtered tools)
-       ├─ Reason (LLM sees scratchpad + tool results)
-       ├─ Act (1-4 tools in parallel via asyncio.gather)
-       └─ repeat or finish
-```
+1. Tool-calling phase: LLM called in non-streaming mode. Tool calls detected, executed with per-tool timeout (10s internal, 30s proxied). Safe execution wrapper handles timeouts/errors gracefully.
+2. Synthesis phase: when LLM responds without tool calls, stream tokens to client.
 
-**Key files:**
-- `backend/agents/intent_classifier.py` — rule-based routing (8 intents)
-- `backend/agents/tool_groups.py` — intent → filtered tool schemas
-- `backend/agents/react_loop.py` — core async generator (reason⇄act)
-- `backend/agents/prompts/react_system.md` — system prompt template
-- `backend/config.py` — `REACT_AGENT=true` feature flag
+Max 15 iterations. Few-shot prompted (prompt templates in `backend/agents/prompts/`).
 
-**Limits:** MAX_ITERATIONS=8, MAX_PARALLEL_TOOLS=4, MAX_TOOL_CALLS=12, WALL_CLOCK_TIMEOUT=45s, CIRCUIT_BREAKER=3.
+### 5.4 LLM Client
 
-**Old pipeline** (Plan→Execute→Synthesize) still available behind `REACT_AGENT=false`. Files not deleted: `graph.py`, `planner.py`, `executor.py`, `synthesizer.py`.
+Provider-agnostic abstraction. Fallback: Groq → Anthropic → Local.
+Retry policy: exponential backoff (1s, 2s, 4s) for transient errors. Immediate switch for quota exhaustion, timeouts, connection failures. Provider health tracking skips exhausted providers.
 
-### 5.4 LLM Client & Factory (Phase 6A) ✅ IMPLEMENTED
+**Tier routing (Phase 4D):** `tier_config` dict maps tier names to provider lists. `chat(tier="planner")` selects providers from tier config. Falls back to default providers if tier not found. Backward compatible — existing code works without tier param.
 
-Provider-agnostic abstraction with data-driven multi-model cascade.
+#### 5.4.1 Langfuse Integration (Phase B, Session 69) ✅ IMPLEMENTED
 
-**LLM Factory Architecture:**
-- `llm_model_config` table stores cascade configuration (provider, model, tier, priority, limits, costs)
-- `ModelConfigLoader` (`backend/agents/model_config.py`) reads DB → groups by tier → caches in memory
-- `TokenBudget` (`backend/agents/token_budget.py`) Redis-backed sliding-window rate tracker (TPM/RPM/TPD/RPD, 80% threshold, Lua scripts for atomic ops, fail-open on Redis errors). Migrated from in-memory deques in Session 67 (KAN-186).
-- `GroqProvider` (`backend/providers/groq.py`) cascades through models in priority order per tier
+**Service:** `backend/services/langfuse_service.py` — fire-and-forget wrapper around Langfuse SDK.
 
-**Cascade flow:**
-1. `LLMClient.chat(tier="planner")` → selects models for tier from `ModelConfigLoader` cache
-2. For each model in priority order: check `TokenBudget` → if under limits, attempt call
-3. On error: classify as `rate_limit`, `context_length`, `auth`, `transient`, `permanent`
-4. `auth` errors stop cascade immediately; others try next model
-5. If all models exhausted → `AllModelsExhaustedError`
+- Feature-flagged on `LANGFUSE_SECRET_KEY` — disabled when unconfigured
+- Chat trace: wraps entire `/chat/stream` request as a Langfuse trace
+- ReAct spans: each reasoning/action step logged as a Langfuse span
+- LLM generation: each provider call logged with model, tokens, cost
+- Self-hosted Langfuse at port 3001 (Docker Compose)
+- OIDC SSO for Langfuse login (4 endpoints in auth router, disabled when unconfigured)
 
-**Tier configuration (seeded in migration 012):**
-- `planner` tier: 5 cheap/fast models (Groq Llama, Gemma) — intent classification + tool planning
-- `synthesizer` tier: 4 quality models (Groq Llama 70B, DeepSeek) — response synthesis
+### 5.5 Agent V2 — Plan→Execute→Synthesize (Phase 4D) ✅ IMPLEMENTED
 
-**Tool result truncation:** `_truncate_tool_results()` in synthesizer caps each tool result at `MAX_TOOL_RESULT_CHARS` (configurable) with truncation marker.
-
-**Admin management:** Model configs changeable via `GET/PATCH/POST /admin/llm-models` without redeploy (see §3.13).
-
-### 5.5 ReAct Loop (Phase 8B) ✅ IMPLEMENTED
-
-> **Full spec:** `docs/superpowers/specs/2026-03-27-react-agent-redesign.md`
-> Replaces Plan→Execute→Synthesize (Phase 4D). Old pipeline available behind `REACT_AGENT=false` flag.
+> **Full spec:** `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
+> **Feature flag:** `AGENT_V2=true` in `backend/config.py`. When false, V1 ReAct loop (§5.3) is used.
 
 **Three-phase LangGraph StateGraph:**
 
@@ -1076,7 +795,6 @@ flowchart TB
         B1["Every 30 min: Watchlist Refresh"]
         B2["6-7 AM: Warm Data Sync"]
         B3["4:30 PM: Portfolio Snapshots"]
-        B3a["4:45 PM: Health Snapshots"]
         B4["9:30 PM: Nightly Pipeline Chain"]
         B5["Sunday 2 AM: Model Retrain"]
     end
@@ -1121,7 +839,6 @@ flowchart TB
 | 7:00 AM | `sync_fred_indicators_task` | Daily |
 | Every 30 min | `refresh_all_watchlist_tickers_task` | Intraday |
 | 4:30 PM | `snapshot_all_portfolios_task` | Daily |
-| 4:45 PM | `snapshot_health_task` | Daily |
 | 9:30 PM | `nightly_pipeline_chain_task` (8 steps) | Daily |
 
 All tasks are in `backend/tasks/`. Celery is configured in `backend/tasks/__init__.py`.
@@ -1221,6 +938,7 @@ frontend/
 │   ├── chart-theme.ts          # useChartColors() hook + CHART_STYLE constants
 │   ├── typography.ts           # Semantic type scale (PAGE_TITLE, METRIC_PRIMARY, etc.)
 │   ├── density-context.tsx     # DensityProvider + useDensity() for screener
+│   ├── storage-keys.ts         # Namespaced localStorage key registry (stocksignal: prefix)
 │   └── market-hours.ts         # Pure isNYSEOpen() — IANA America/New_York, DST-correct
 ├── types/
 │   └── api.ts                  # Shared TypeScript types
@@ -1393,11 +1111,24 @@ async def fetch_prices(ticker: str, period: str = "10y") -> pd.DataFrame:
 
 ### 8.2 FRED API Integration (Phase 5)
 
-FRED data is accessed via `FredAdapter` in `backend/tools/adapters/fred.py`, registered as an MCP adapter tool. Used by warm data sync task (`backend/tasks/warm_data.py:sync_fred_indicators_task`).
+```python
+# tools/macro.py
+FRED_SERIES = {
+    "yield_curve_10y2y": "T10Y2Y",
+    "vix": "VIXCLS",
+    "unemployment_claims": "ICSA",
+    "fed_funds_rate": "FEDFUNDS",
+}
+
+async def fetch_macro_indicators() -> dict:
+    for name, series_id in FRED_SERIES.items():
+        data = fred_client.get_series(series_id, limit=1)
+        store_macro_snapshot(name, data)
+```
 
 ### 8.3 Telegram Integration
 
-> **Status: NOT IMPLEMENTED — deferred.** Notification channels are in-app only (`in_app_alerts` table). Telegram integration is a future backlog item.
+**Status:** DEFERRED — removed from active roadmap. In-app alerts cover notification needs. May revisit post-launch.
 
 ---
 
@@ -1557,7 +1288,6 @@ async def get_signals(ticker: str, request: Request):
 - **Traces:** Correlation ID on every request (X-Request-ID header)
 - **Alerts:** Azure Monitor alerts on error rate > 5%, P95 latency > 5s
 - **Job health:** TaskLog table queried by dashboard widget
-- **LLM Observability (Phase 6B):** `ObservabilityCollector` singleton tracks in-memory RPM, cascade events, per-model health (healthy/degraded/down/disabled), latency percentiles. Every LLM call and tool execution writes to `llm_call_log` / `tool_execution_log` TimescaleDB hypertables (fire-and-forget async). Admin endpoints: `GET /admin/llm-metrics`, `GET /admin/tier-health`, `POST /admin/tier-toggle`, `GET /admin/llm-usage`. ContextVars (`current_session_id`, `current_query_id`) flow request context without signature changes.
 
 ---
 
@@ -1621,92 +1351,38 @@ def stock_factory(db_session):
 
 ---
 
-## 12. MCP Architecture — Transport Evolution (Phase 4B → 5.6 → 6)
+## 12. MCP Server Design (Phase 4B — pulled forward from Phase 6)
 
-> **History:** MCP server pulled forward from Phase 6 to Phase 4B (same Tool Registry abstraction). Phase 5.6 refactors the agent to consume tools via MCP protocol (stdio). Phase 6 swaps transport to Streamable HTTP for cloud deployment.
+> **Phase change:** Originally Phase 6. Pulled forward to Phase 4B because the Tool Registry is the same abstraction the MCP server exposes — minimal incremental effort. Full design: `docs/superpowers/specs/2026-03-17-phase-4b-ai-chatbot-design.md` §10.
 
-### 12.1 Single MCP Tool Server
+### 12.1 Single MCP Server
 
-One server exposes ALL Tool Registry tools (not one server per tool group):
+One MCP server exposes ALL Tool Registry tools (not one server per tool group):
 
 ```python
 # backend/mcp_server/server.py
 from fastmcp import FastMCP
 
-mcp = FastMCP("StockSignal Intelligence Platform")
+mcp = FastMCP("stock-signal-platform")
 
 # Tools auto-registered from ToolRegistry — not hardcoded here
-for tool_info in registry.discover():
-    tool = registry.get(tool_info.name)
-    _register_tool(mcp, tool_info.name, tool_info.description, tool)
+for tool in registry.discover():
+    mcp.register_tool(tool.name, tool.description, tool.parameters, tool.execute)
 ```
 
-### 12.1.1 Parameter Passing Convention
+### 12.2 Transport
 
-FastMCP dispatches tool call arguments as keyword arguments to handler functions. Since our tools use a single `params: dict` interface, the MCP client wraps parameters before sending:
-
-```python
-# MCPToolClient.call_tool() wraps params for FastMCP dispatch:
-wrapped = {"params": params} if params else {}
-await session.call_tool(name, wrapped)
-
-# Tool server handler receives the wrapped dict:
-@mcp.tool(name=name, description=description)
-async def _handler(params: dict = {}, _tool=tool) -> str:
-    result = await _tool.execute(params)
-    return result.to_json()
-```
-
-This convention ensures tools receive identical `dict` arguments whether called via MCP stdio, MCP HTTP (Phase 6), or direct `registry.execute()`.
-
-### 12.2 Transport Strategy
-
-**Phase 5.6 — stdio (local, zero latency):**
-- MCP Tool Server runs as subprocess, spawned by FastAPI lifespan
-- Agent executor calls tools via MCP client over stdio pipes
-- Celery tasks stay direct (no MCP overhead for batch jobs)
-- `/mcp` endpoint remains for external clients (Claude Code, Cursor)
+**Streamable HTTP** — mounted on FastAPI at `/mcp`:
+- Single endpoint supports request-response AND SSE streaming
+- Authenticated via JWT (same as REST API)
+- Clients: Claude Code, Cursor, future mobile/Slack bots
 
 ```
 FastAPI (port 8181)
   ├── /api/v1/...          ← REST API
   ├── /api/v1/chat/stream  ← chatbot (NDJSON)
-  ├── /mcp                 ← MCP server (Streamable HTTP, external clients)
-  └── spawns: MCP Tool Server (stdio subprocess, internal agent use)
+  └── /mcp                 ← MCP server (Streamable HTTP)
 ```
-
-**Phase 6 — Streamable HTTP (cloud, multi-client):**
-- MCP Tool Server runs as separate container on :8282
-- Agent, Celery, and all clients connect via Streamable HTTP
-- Single config change (transport URL), no tool/schema changes
-
-```
-MCP Tool Server (:8282)         ← separate container
-  └── 20+ tools, own DB pool, JWT auth
-
-FastAPI (:8181)                  ← API + agent container
-  ├── /api/v1/...
-  ├── /api/v1/chat/stream
-  └── Agent → MCP Client → HTTP → :8282
-
-External clients (Claude Code, Telegram, mobile)
-  └── MCP Client → HTTP → :8282
-```
-
-### 12.3 Current State (Phase 5.6 ✅)
-
-**Two MCP transport modes:**
-1. **Streamable HTTP** (`/mcp`) — for external MCP clients (Claude Code, Cursor). JWT auth via `MCPAuthMiddleware`.
-2. **stdio** (`mcp_server/tool_server.py`) — spawned as subprocess by FastAPI lifespan. Agent uses this when `MCP_TOOLS=True` (default). No auth (same-machine IPC).
-
-The agent calls tools through `MCPToolClient` (`mcp_server/tool_client.py`) which wraps params as `{"params": {...}}` for FastMCP dispatch. 20+ integration tests in `tests/integration/`.
-
-### 12.4 Authentication
-
-- JWT-based (same tokens as REST API)
-- `MCPAuthMiddleware` in `backend/mcp_server/auth.py` validates Bearer token
-- stdio transport (Phase 5.6): no auth needed (same-machine subprocess)
-- Streamable HTTP (Phase 6): JWT required for all clients
 
 ---
 
