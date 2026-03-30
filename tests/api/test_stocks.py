@@ -560,3 +560,20 @@ class TestRecommendations:
         # Old recommendation should be excluded
         data = response.json()
         assert all(r["ticker"] != "OLD2" for r in data["recommendations"])
+
+    @pytest.mark.asyncio
+    async def test_recommendation_includes_stock_name(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """Recommendation response should include the stock name from a JOIN."""
+        user = authenticated_client._test_user  # type: ignore[attr-defined]
+        await _insert_stock_with_signals(db_url, "MSFT", user_id=user.id)
+
+        response = await authenticated_client.get("/api/v1/stocks/recommendations")
+        assert response.status_code == 200
+
+        data = response.json()
+        recs = data["recommendations"]
+        msft_recs = [r for r in recs if r["ticker"] == "MSFT"]
+        assert len(msft_recs) >= 1
+        assert msft_recs[0]["name"] == "MSFT Inc"
