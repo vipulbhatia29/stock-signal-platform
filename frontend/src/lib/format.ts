@@ -57,3 +57,9 @@ export function formatChartDate(dateStr: string): string {
     day: "numeric",
   });
 }
+
+export function formatPctChange(value: number | null | undefined): string {
+  if (value == null) return "—";
+  const sign = value >= 0 ? "+" : "";
+  return `${sign}${value.toFixed(1)}%`;
+}
