@@ -4,7 +4,7 @@
 
 **Version:** 1.1
 **Date:** March 2026
-**Status:** Living Document — Phase 1-5 complete, Phase 5.5/6 planned
+**Status:** Living Document — Phases 1-8 complete. Phase B.5 BU-1-4 shipped (Sessions 72-75). Dashboard redesigned as 5-zone Daily Intelligence Briefing.
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -536,7 +536,7 @@ Users can override weights via UserPreference.composite_weights.
 - Acknowledged alerts don't re-fire until condition clears and re-triggers
 
 **FR-9.3: Notification Channels**
-- Telegram: real-time alerts + daily morning briefing
+- Telegram integration: **REMOVED from roadmap.** In-app alerts sufficient.
 - Morning briefing contents: overnight signal changes, portfolio P&L,
   today's recommendations, any triggered alerts
 - Quiet hours: no notifications between quiet_hours_start and quiet_hours_end
@@ -668,6 +668,43 @@ flowchart TD
 **FR-11.5: Agent Tools for Conversational Access**
 - 7 new agent tools allow chat queries: "forecast for AAPL", "compare AAPL and MSFT", "is AAPL's dividend safe?", "what are the risks?", "how accurate are your calls?"
 - Entity Registry enables pronoun resolution: "compare them", "what about it?"
+
+### FR-17: Dashboard Redesign — Daily Intelligence Briefing (Phase B.5 BU-3) ✅ IMPLEMENTED
+
+**Session 75, PR #149**
+
+The dashboard is a 5-zone Daily Intelligence Briefing designed for passive investors who check once daily.
+
+**FR-17.1: Zone 1 — Market Pulse**
+- Market open/closed status badge (FINRA holidays, ET timezone)
+- Index performance cards from market briefing
+- Top movers (gainers/losers) from latest signal snapshots
+
+**FR-17.2: Zone 2 — Your Signals**
+- BUY/STRONG_BUY recommendation cards with ScoreRing (0-10), ActionBadge, MetricsStrip
+- Signal reason text from `buildSignalReason()` (MACD + RSI + Piotroski, 3-factor limit)
+- Top movers sidebar with MoverRow components
+
+**FR-17.3: Zone 3 — Portfolio Overview**
+- KPI tiles: Health Grade, Unrealized P&L, Total Value
+- HealthGradeBadge (A-F letter grade with color coding)
+- SectorPerformanceBars from market briefing
+
+**FR-17.4: Zone 4 — Alerts**
+- AlertTile grid with severity coloring (critical/high/medium/low)
+- Unread count badge
+
+**FR-17.5: Zone 5 — News Feed**
+- Per-user news from `/news/dashboard` endpoint
+- General market news from market briefing
+- NewsArticleCard with sentiment classification (bullish/bearish/neutral)
+
+**FR-17.6: Screener Watchlist Tab**
+- "All Stocks" / "Watchlist" tab switching with URL deep-linking
+- Badge count on watchlist tab
+- One-time migration toast for watchlist relocation
+
+**Components:** ScoreRing, ActionBadge, MetricsStrip, SignalStockCard, MoverRow, PortfolioKPITile, HealthGradeBadge, SectorPerformanceBars, AlertTile, NewsArticleCard, MigrationToast
 
 ---
 
@@ -827,7 +864,8 @@ flowchart TD
 | Forecasting (Prophet) | | | | | ✓ | |
 | Model versioning | | | | | ✓ | |
 | Options flow (Unusual Whales) | | | | | ✓ | |
-| Telegram notifications | | | | | ✓ | |
+| Telegram notifications | | | | | ~~REMOVED~~ | |
+| Dashboard Redesign (BU-3) | | | | | | ✅ B.5 |
 | Recommendation evaluation | | | | | ✓ | |
 | LLMOps / Gateway | | | | | | ✓ |
 | Cloud deployment | | | | | | ✓ |

@@ -518,6 +518,33 @@ PATCH /api/v1/alerts/read
   Auth:     Required
 ```
 
+### 3.13 News Endpoints (Phase B.5 BU-3) ✅ IMPLEMENTED
+
+**Router:** `backend/routers/news.py` — Session 75, PR #149
+
+```
+GET  /api/v1/news/dashboard    # Per-user news aggregation
+```
+
+Aggregates news for user's top 3 portfolio tickers + top 3 BUY/STRONG_BUY recommendation tickers. Google RSS fetch in parallel via `asyncio.gather`. Per-user Redis cache with `CacheTier.VOLATILE` (5-min TTL). Returns max 15 articles sorted by date.
+
+**Response:** `DashboardNewsResponse`
+```json
+{
+  "articles": [
+    {
+      "title": "string",
+      "link": "string",
+      "publisher": "string | null",
+      "published": "string | null",
+      "source": "google_news",
+      "portfolio_ticker": "string | null"
+    }
+  ],
+  "ticker_count": 0
+}
+```
+
 ---
 
 ## 4. Service Layer Design
@@ -651,6 +678,17 @@ Provider-agnostic abstraction. Fallback: Groq → Anthropic → Local.
 Retry policy: exponential backoff (1s, 2s, 4s) for transient errors. Immediate switch for quota exhaustion, timeouts, connection failures. Provider health tracking skips exhausted providers.
 
 **Tier routing (Phase 4D):** `tier_config` dict maps tier names to provider lists. `chat(tier="planner")` selects providers from tier config. Falls back to default providers if tier not found. Backward compatible — existing code works without tier param.
+
+#### 5.4.1 Langfuse Integration (Phase B, Session 69) ✅ IMPLEMENTED
+
+**Service:** `backend/services/langfuse_service.py` — fire-and-forget wrapper around Langfuse SDK.
+
+- Feature-flagged on `LANGFUSE_SECRET_KEY` — disabled when unconfigured
+- Chat trace: wraps entire `/chat/stream` request as a Langfuse trace
+- ReAct spans: each reasoning/action step logged as a Langfuse span
+- LLM generation: each provider call logged with model, tokens, cost
+- Self-hosted Langfuse at port 3001 (Docker Compose)
+- OIDC SSO for Langfuse login (4 endpoints in auth router, disabled when unconfigured)
 
 ### 5.5 Agent V2 — Plan→Execute→Synthesize (Phase 4D) ✅ IMPLEMENTED
 
@@ -1088,19 +1126,9 @@ async def fetch_macro_indicators() -> dict:
         store_macro_snapshot(name, data)
 ```
 
-### 8.3 Telegram Integration (Phase 5)
+### 8.3 Telegram Integration
 
-```python
-# services/notification.py
-async def send_telegram(user_id: uuid, message: str):
-    prefs = await get_user_preferences(user_id)
-    if not prefs.notify_telegram:
-        return
-    if is_quiet_hours(prefs):
-        await schedule_for_after_quiet_hours(user_id, message)
-        return
-    await telegram_bot.send_message(chat_id=prefs.telegram_chat_id, text=message)
-```
+**Status:** DEFERRED — removed from active roadmap. In-app alerts cover notification needs. May revisit post-launch.
 
 ---
 
