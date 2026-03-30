@@ -11,6 +11,7 @@ const config: Config = {
     "^react-markdown$": "<rootDir>/src/__tests__/__mocks__/react-markdown.js",
     "^rehype-highlight$": "<rootDir>/src/__tests__/__mocks__/rehype-highlight.js",
     "^remark-gfm$": "<rootDir>/src/__tests__/__mocks__/remark-gfm.js",
+    "^lightweight-charts$": "<rootDir>/src/__tests__/__mocks__/lightweight-charts.js",
   },
   testMatch: ["<rootDir>/src/**/*.test.ts", "<rootDir>/src/**/*.test.tsx"],
   transform: {
