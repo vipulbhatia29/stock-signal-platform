@@ -261,6 +261,7 @@ async def _execute_single_tool(
             error=result.error,
             cache_hit=cache_hit,
             loop_step=loop_step,
+            result=result.data,
         )
 
     # Cache write for successful results
@@ -394,6 +395,10 @@ async def react_loop(
             return
 
         # 4. Record observability
+        from backend.request_context import current_query_id
+
+        qid = current_query_id.get(None)
+
         if collector:
             await collector.record_request(
                 model=response.model,
@@ -403,6 +408,7 @@ async def react_loop(
                 prompt_tokens=response.prompt_tokens,
                 completion_tokens=response.completion_tokens,
                 loop_step=i,
+                langfuse_trace_id=qid,
             )
 
         # 5. Yield thinking event if content present

@@ -262,6 +262,7 @@ async def execute_plan(
                 params=params,
                 error=result.error if result and result.status == "error" else None,
                 cache_hit=False,
+                result=result_data,
             )
 
         # Validate result
