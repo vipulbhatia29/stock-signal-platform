@@ -30,6 +30,7 @@ export function MoverRow({
           : "border-l-[3px] border-l-[var(--loss)]",
       )}
       onClick={onClick}
+      aria-label={`${ticker}${price != null ? `, $${price.toFixed(2)}` : ""}, ${changePct >= 0 ? "+" : ""}${changePct.toFixed(1)}%`}
     >
       <div className="flex items-center gap-2">
         <span className="text-sm font-semibold">{ticker}</span>

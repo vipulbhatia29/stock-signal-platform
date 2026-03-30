@@ -62,7 +62,7 @@ export function SignalsZone() {
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
       {/* Zone 2a: Your Signals — 3 cols */}
-      <section className="lg:col-span-3">
+      <section className="lg:col-span-3" aria-label="Your Signals">
         <SectionHeading>
           <span className="inline-flex items-center gap-1.5">
             <Zap className="h-3 w-3 text-warning" />
@@ -100,7 +100,7 @@ export function SignalsZone() {
       </section>
 
       {/* Zone 2b: Top Movers — 2 cols */}
-      <section className="lg:col-span-2">
+      <section className="lg:col-span-2" aria-label="Top Movers">
         <SectionHeading>Top Movers</SectionHeading>
 
         {trendingLoading ? (
@@ -166,6 +166,7 @@ function MoverItem({
   return (
     <Link
       href={`/stocks/${ticker}`}
+      aria-label={`View ${ticker} — ${name}`}
       className={cn(
         "flex items-center justify-between rounded-lg border border-border bg-card px-3 py-2",
         "transition-colors hover:border-[var(--bhi)] hover:bg-hov"

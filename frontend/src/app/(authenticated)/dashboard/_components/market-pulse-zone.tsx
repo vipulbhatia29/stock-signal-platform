@@ -23,7 +23,7 @@ export function MarketPulseZone() {
     day >= 1 && day <= 5 && minuteOfDay >= 570 && minuteOfDay < 960;
 
   return (
-    <section>
+    <section aria-label="Market Pulse">
       <SectionHeading
         action={
           <span
@@ -33,11 +33,12 @@ export function MarketPulseZone() {
                 ? "bg-gain/10 text-gain"
                 : "bg-muted text-muted-foreground"
             )}
+            aria-label={isOpen ? "US stock market is currently open" : "US stock market is currently closed"}
           >
             {isOpen ? (
-              <Activity className="h-3 w-3 animate-pulse" />
+              <Activity className="h-3 w-3 animate-pulse" aria-hidden="true" />
             ) : (
-              <Clock className="h-3 w-3" />
+              <Clock className="h-3 w-3" aria-hidden="true" />
             )}
             {isOpen ? "Market Open" : "Market Closed"}
           </span>

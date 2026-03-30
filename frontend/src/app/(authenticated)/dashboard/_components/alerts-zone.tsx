@@ -24,7 +24,7 @@ export function AlertsZone() {
 
   if (isError) {
     return (
-      <section>
+      <section aria-label="Alerts">
         <SectionHeading>Alerts</SectionHeading>
         <p className="text-sm text-muted-foreground">Unable to load alerts.</p>
       </section>
@@ -32,7 +32,7 @@ export function AlertsZone() {
   }
 
   return (
-    <section>
+    <section aria-label="Alerts">
       <SectionHeading>
         <span className="inline-flex items-center gap-1.5">
           <Bell className="h-3 w-3" />

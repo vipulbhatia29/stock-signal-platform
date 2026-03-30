@@ -16,7 +16,7 @@ export function NewsZone() {
   const tickers = watchlist?.slice(0, 8) ?? [];
 
   return (
-    <section>
+    <section aria-label="News and Intelligence">
       <SectionHeading>
         <span className="inline-flex items-center gap-1.5">
           <Newspaper className="h-3 w-3" />

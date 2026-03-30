@@ -53,7 +53,7 @@ export function PortfolioZone() {
 
   if (isLoading) {
     return (
-      <section>
+      <section aria-label="Portfolio Overview">
         <SectionHeading>Portfolio Overview</SectionHeading>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
@@ -66,7 +66,7 @@ export function PortfolioZone() {
 
   if (!positions?.length) {
     return (
-      <section>
+      <section aria-label="Portfolio Overview">
         <SectionHeading>Portfolio Overview</SectionHeading>
         <EmptyState
           icon={Briefcase}
@@ -78,7 +78,7 @@ export function PortfolioZone() {
   }
 
   return (
-    <section>
+    <section aria-label="Portfolio Overview">
       <SectionHeading>Portfolio Overview</SectionHeading>
 
       <StaggerGroup className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -147,7 +147,7 @@ export function PortfolioZone() {
           </div>
           <div className="space-y-1.5">
             {sectorBars.map((s) => (
-              <div key={s.sector} className="flex items-center gap-2">
+              <div key={s.sector} className="flex items-center gap-2" aria-label={`${s.sector}: ${s.pct.toFixed(1)}%${s.overLimit ? " — over limit" : ""}`}>
                 <span className="w-28 truncate text-[10px] text-muted-foreground">
                   {s.sector}
                 </span>
