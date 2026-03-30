@@ -612,6 +612,8 @@ async def store_signal_snapshot(
         "sharpe_ratio": result.sharpe_ratio,
         "composite_score": result.composite_score,
         "composite_weights": result.composite_weights,
+        "change_pct": result.change_pct,
+        "current_price": result.current_price,
     }
 
     stmt = pg_insert(SignalSnapshot).values(values)

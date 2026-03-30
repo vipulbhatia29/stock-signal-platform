@@ -160,7 +160,11 @@ async def get_bulk_signals(
     by index, tickers, RSI state, MACD state, sector, and composite score range.
     Results are paginated and sortable.
     """
-    tickers_list = [t.strip().upper() for t in tickers.split(",") if t.strip()] if tickers else None
+    tickers_list = (
+        [t.strip().upper() for t in tickers.split(",") if t.strip()][:200]
+        if tickers
+        else None
+    )
 
     total, rows = await get_bulk_signals_svc(
         db,
