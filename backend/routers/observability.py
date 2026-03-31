@@ -19,6 +19,9 @@ from backend.schemas.observability import (
     LangfuseURLResponse,
     QueryDetailResponse,
     QueryListResponse,
+    SortByEnum,
+    SortOrderEnum,
+    StatusFilterEnum,
 )
 from backend.services.observability_queries import (
     get_assessment_history,
@@ -66,10 +69,18 @@ async def queries(
     agent_type: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    sort_by: SortByEnum = SortByEnum.timestamp,
+    sort_order: SortOrderEnum = SortOrderEnum.desc,
+    status: StatusFilterEnum | None = None,
+    cost_min: float | None = Query(None, ge=0),
+    cost_max: float | None = Query(None, ge=0),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> QueryListResponse:
     """Return paginated query list."""
+    if cost_min is not None and cost_max is not None and cost_min > cost_max:
+        raise HTTPException(status_code=422, detail="cost_min must be <= cost_max")
+
     result = await get_query_list(
         db,
         user_id=_user_scope(user),
@@ -78,6 +89,11 @@ async def queries(
         agent_type=agent_type,
         date_from=date_from,
         date_to=date_to,
+        sort_by=sort_by.value,
+        sort_order=sort_order.value,
+        status=status.value if status else None,
+        cost_min=cost_min,
+        cost_max=cost_max,
     )
     return QueryListResponse(**result)
 
