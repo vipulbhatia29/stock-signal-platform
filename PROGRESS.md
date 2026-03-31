@@ -1724,3 +1724,55 @@ Full implementation of KAN-232 (BU-6). Brainstorm → spec → 3-expert spec rev
 - **`Date.now()` in React render** — ESLint react-compiler flags it as impure; wrap in `useMemo`
 - **Design system purple** — no `--pdim` token exists; use `bg-card2 text-[var(--chart-3)]` for LLM type tags
 - **Falsy param checks drop valid 0/empty values** — always use `!= null` for optional URL params
+
+---
+
+## Session 78 — Command Center Brainstorm + Spec + Plan (2026-03-31)
+
+**Date:** 2026-03-31
+**Branch:** `develop` (no code changes — refinement only)
+
+**What was done:**
+
+### KAN-233 Rescoped: Admin Dashboard → Platform Operations Command Center
+
+**Brainstorm phase:**
+- Full codebase audit via 5 parallel explore agents (API layer, LLM/Agent, Pipeline, DB/Redis/MCP, Auth/Alerts/Chat)
+- Discovered: LLM/Agent observability excellent, but API traffic (zero HTTP metrics), Pipeline (models exist, no API), Cache (no hit/miss stats), Auth (no audit trail), Frontend (zero RUM) all have gaps
+- Built interactive HTML prototype (`command-center-prototype.html`) — 8-zone nuclear-reactor-style dashboard with mock data, dark navy theme, click-to-expand zones
+- User approved layout and expanded scope: full platform command center, not just LLM admin
+
+**Architecture decision:**
+- Extract scattered observability code into `backend/observability/` bounded package (Option A: move everything)
+- Split S1 into S1a (agents/ files) + S1b (services/routers/context) for reduced blast radius
+- S1 is a merge gate — PR merged before any new instrumentation
+
+**Spec written + 3-expert review:**
+- Spec: `docs/superpowers/specs/2026-03-31-command-center-design.md`
+- Expert panel: Fowler (architecture), Nygard (ops/reliability), Senior Ops TL (execution)
+- 22 findings (4 Critical, 12 Important, 6 Minor) — all incorporated:
+  - C1: Redis-backed HTTP metrics (not in-memory) — multi-worker safe
+  - C2: Per-zone circuit breakers via `asyncio.gather(return_exceptions=True)`
+  - C3: 10s server-side cache on aggregate endpoint
+  - I1: Monotonic counters for cache stats (not reset-on-read)
+  - I2: Sliding window (not periodic reset) — no false zeros
+  - I3: LoginAttempt purge Celery task specced inline
+  - MVP split: Phase 1 (4 zones: Health, API, LLM, Pipeline) → Phase 2 (Cache, Chat, Auth, Alerts)
+
+**Plan written + expert review:**
+- Plan: `docs/superpowers/plans/2026-03-31-command-center-implementation.md`
+- 12 tasks across 4 sprints, ~35h (5-6 sessions)
+- Expert review found 4 Critical + 12 Important fixes — appended to plan
+
+### Artifacts
+- `command-center-prototype.html` — visual reference (gitignored or archived after frontend build)
+- Spec: `docs/superpowers/specs/2026-03-31-command-center-design.md` (approved)
+- Plan: `docs/superpowers/plans/2026-03-31-command-center-implementation.md` (approved)
+
+### JIRA (to create next session — Atlassian MCP unavailable)
+- Rescope KAN-233 description to "Platform Operations Command Center"
+- Create 12 subtasks under KAN-233 (S1a through S10)
+- Execution: subagent-driven development, 1 sprint per session
+
+**No code changes. No tests. Refinement only.**
+**Resume point:** Create JIRA stories, then Sprint 1 (S1a + S1b package extraction).
