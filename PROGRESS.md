@@ -1816,8 +1816,23 @@ Full implementation of KAN-232 (BU-6). Brainstorm → spec → 3-expert spec rev
 - 2 subtasks created for deferred work: KAN-312 (migrations, resolved), KAN-313 (step_durations instrumentation)
 - 3 pre-existing bugs logged: KAN-314 (health endpoint auth), KAN-315 (duration_ms), KAN-316 (intent_category info leak)
 
-**Test count:** 1258 (was 1182 → +76 new tests)
+**Test count:** 1258 backend (was 1182 → +76 new)
 **Alembic head:** `2146d203aa47` (migration 021)
-**6 commits on branch**, all reviewed.
+**PR #154 merged** (backend, 8 commits squashed).
 
-**Resume point:** Sprint 4 (frontend — S9 L1 panels + S10 L2 drill-downs). Plan: `docs/superpowers/plans/2026-03-31-command-center-implementation.md` lines 1636-1817.
+### Sprint 4: Frontend L1 + L2 (S9-S10)
+- **S9:** 4-zone command center page: TypeScript types (16 interfaces), `useCommandCenter` hook (15s polling), 5 shared primitives (StatusDot, GaugeBar, MetricCard, LastRefreshed, DegradedBadge), 4 zone panels (SystemHealth, ApiTraffic, LlmOperations, Pipeline), admin-only page with 2x2 grid — 22 tests
+- **S10:** 3 drill-down detail sheets: DrillDownSheet (shadcn Sheet wrapper), ApiTrafficDetail (sortable endpoint table), LlmDetail (per-model cost + cascade log), PipelineDetail (run history with expandable rows) — 24 tests
+- **Review fixes:** Drill-downs wired into zone panels (View Details → fetch on open), sidebar admin-only, TierLatency optional, StatusDot accessibility (sr-only text), staleTime=0, pipeline StatusDot dedup
+
+**Frontend test count:** 322 (was 276 → +46 new)
+**PR #155 merged** (frontend, 2 commits squashed).
+
+### Session 79 Totals
+- **Backend:** +76 tests (1182→1258), +55 new files, migration 021
+- **Frontend:** +46 tests (276→322), +25 new files
+- **Combined:** +122 tests, 14 expert reviews across 4 rounds
+- **PRs:** #154 (backend) + #155 (frontend), both merged to develop
+- **JIRA:** KAN-300–316 (12 subtasks + 2 deferred subtasks + 3 bugs)
+
+**KAN-233 BU-7 Phase 1 MVP: COMPLETE.** Phase 2 (Cache/Chat/Auth/Alerts zones) is future work.

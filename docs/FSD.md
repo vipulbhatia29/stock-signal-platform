@@ -782,6 +782,50 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - Admin-only: assessment history table with trigger, pass rate, queries, cost, date
 - Coming-soon empty state when no assessment data
 
+### FR-20: Platform Operations Command Center (Phase B.5 BU-7) ✅ IMPLEMENTED
+
+> Admin-only nuclear-reactor-style dashboard. Single-pane-of-glass for the entire platform.
+
+**FR-20.1: Command Center Page**
+- `/admin/command-center` route, admin role-gated (non-admins redirected to dashboard)
+- Sidebar nav link with Monitor icon, visible only to admin users
+- 2x2 responsive grid layout (1-col on mobile), 15s auto-polling
+- Degraded zone badges when zones timeout or fail
+- "Last refreshed" indicator with color-coded staleness
+
+**FR-20.2: System Health Zone (Zone 1)**
+- Database: latency, pool active/size/overflow
+- Redis: latency, memory used/max, total keys
+- MCP: healthy/mode/tool count/restarts
+- Celery: worker count, queue depth, beat active
+- Langfuse: connected, traces today, spans today
+- Overall status: "ok" when all critical services healthy, "degraded" otherwise
+
+**FR-20.3: API Traffic Zone (Zone 2)**
+- RPS average, P50/P95/P99 latency (null when < 20 samples)
+- Error rate %, total requests/errors today
+- Top endpoints table (top 10 by count)
+- Drill-down: full endpoint breakdown
+
+**FR-20.4: LLM Operations Zone (Zone 3)**
+- Per-tier health cards (model, status, failures/successes, latency)
+- Cost comparison: today vs yesterday vs week
+- Cascade rate percentage
+- Token budget gauges per model (TPM/RPM used %)
+- Drill-down: per-model cost breakdown, cascade error log (last 50)
+
+**FR-20.5: Pipeline Zone (Zone 4)**
+- Last run: status, duration, ticker success/fail/total counts
+- Next run countdown
+- Data watermarks per pipeline with gap status
+- Drill-down: run history (7 days), expandable rows with step durations and error summaries
+
+**FR-20.6: Drill-Down Sheets**
+- Slide-out panels (right side, 640px max)
+- Manual refresh button, scrollable content
+- Each panel opened via "View Details" button on the corresponding zone
+- Data fetched on-demand (not pre-loaded)
+
 ---
 
 ## 4. Non-Functional Requirements

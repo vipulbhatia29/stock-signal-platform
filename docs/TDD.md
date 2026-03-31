@@ -1379,6 +1379,34 @@ async def get_signals(ticker: str, request: Request):
 - **Alerts:** Azure Monitor alerts on error rate > 5%, P95 latency > 5s
 - **Job health:** TaskLog table queried by dashboard widget
 
+### 10.4 Platform Operations Command Center (Phase B.5 BU-7) ✅ IMPLEMENTED
+
+Admin-only dashboard providing single-pane-of-glass observability across 4 zones.
+
+**Package:** `backend/observability/` (bounded package with re-export shims at old paths)
+
+**API Endpoints:**
+- `GET /admin/command-center` — aggregate endpoint, 4 zones assembled via `asyncio.gather` with 3s per-zone timeout circuit breakers, 10s Redis cache (skipped when degraded)
+- `GET /admin/command-center/api-traffic` — endpoint breakdown drill-down
+- `GET /admin/command-center/llm` — per-model cost, cascade log, token consumption
+- `GET /admin/command-center/pipeline` — run history with step durations
+
+**Backend Instrumentation:**
+- `HttpMetricsMiddleware` — Redis-backed HTTP request metrics (sorted sets, sliding window, path normalization)
+- `get_pool_stats()` — SQLAlchemy connection pool statistics
+- Pipeline stats query service — `get_latest_run`, `get_watermarks`, `get_next_run_time`, `get_run_history`
+- `LoginAttempt` model — fire-and-forget audit trail with 90-day Celery Beat purge
+- Health checks — Celery (worker count + queue depth), Langfuse (auth probe + trace count), TokenBudget (usage %)
+
+**Schemas:** 15 Pydantic models in `backend/schemas/command_center.py` (CommandCenterResponse, SystemHealthZone, ApiTrafficZone, LlmOperationsZone, PipelineZone, etc.)
+
+**Frontend:**
+- Page: `/admin/command-center` — 2x2 grid, admin role-gated, 15s auto-polling via TanStack Query
+- 4 zone panels + 5 shared primitives (StatusDot, GaugeBar, MetricCard, LastRefreshed, DegradedBadge)
+- 3 drill-down detail sheets (shadcn Sheet) with "View Details" buttons on panels
+
+**Migration 021:** `login_attempts` table + `pipeline_runs.step_durations` JSONB + `total_duration_seconds`
+
 ---
 
 ## 11. Testing Architecture
