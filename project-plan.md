@@ -973,7 +973,7 @@ KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval inf
 | BU-4 | Chat System Improvements | KAN-230 | PINNABLE_TOOLS 7→22, feedback visual state, ChatMessage type sync | ~0.5 session | ✅ Session 75 |
 | BU-5 | Observability Backend Gaps | KAN-231 | Migration 020, sort/filter/group params (9 dims), PII sanitizer, input/output summaries, eval score join, Langfuse deep-links, decline logging, StatusFilterEnum. 15 tasks, ~70 tests. | ~1.5 sessions | ✅ Session 76 |
 | BU-6 | Observability Frontend | KAN-232 | `/auth/me` endpoint, `/observability` page (KPI strip, query table + inline expansion, grouped charts with 9 dims, assessment section), `useCurrentUser` + `useObservability` hooks, `formatMicroCurrency`/`formatDuration` utils, role-aware rendering. 12 tasks, 7 chunks, ~44 tests. | ~1 session | ✅ Session 77 |
-| BU-7 | Platform Operations Command Center | KAN-233 | **Backend complete (Session 79).** Sprints 1-3 done: package extraction, instrumentation (HTTP metrics, DB pool, pipeline stats, login audit, health checks), aggregate endpoint + 3 drill-downs. Migration 021. Sprint 4 (frontend) remaining. | ~5-6 sessions (Phase 1) | 🔄 Backend done, frontend next |
+| BU-7 | Platform Operations Command Center | KAN-233 | **Phase 1 MVP COMPLETE (Session 79).** All 4 sprints: package extraction, instrumentation, endpoints, frontend. PRs #154+#155 merged. Migration 021. +122 tests. | 1 session | ✅ Session 79 |
 
 **Dependency order:** BU-1 → BU-2/3/4 (parallel) → BU-5 → BU-6 → BU-7
 

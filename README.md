@@ -121,13 +121,14 @@ Bell icon with unread count, severity-colored badges, and undo dismiss. Alert ca
 - Drift warning (model accuracy degrading)
 - Divestment rule triggered
 
-### Observability
+### Observability & Command Center
 
 Every AI interaction is instrumented end-to-end:
 - **Per-query cost tracking** — see exactly what each chat message costs across LLM providers
 - **Langfuse tracing** — parallel traces for chat sessions, ReAct loop spans, and LLM generations
 - **Provider cascade metrics** — fallback rates, latency percentiles, token usage by tier
 - **Assessment engine** — golden dataset of 20 queries scored across 5 dimensions for regression detection
+- **Platform Command Center** — admin-only `/admin/command-center` dashboard with 4 zones (System Health, API Traffic, LLM Operations, Pipeline) + 3 drill-down sheets, 15s auto-polling, per-zone circuit breakers
 
 ### MCP Tool Server
 
@@ -341,6 +342,8 @@ graph TB
             OC["ObservabilityCollector<br/>per-query metrics"]
             LF["Langfuse<br/>parallel tracing"]
             AE["Assessment Engine<br/>golden dataset scoring"]
+            CC["Command Center<br/>4-zone admin dashboard"]
+            HM["HTTP Metrics<br/>Redis sliding window"]
         end
 
         Cache["Cache Service<br/>Redis 3-tier namespace<br/>4 TTL tiers"]
@@ -468,7 +471,7 @@ cd frontend && npm run lint             # TypeScript/React lint
 
 ## API Endpoints
 
-46 endpoints across 10 routers. Key endpoints listed below — full interactive docs at http://localhost:8181/docs (Swagger UI).
+50 endpoints across 11 routers. Key endpoints listed below — full interactive docs at http://localhost:8181/docs (Swagger UI).
 
 <details>
 <summary><strong>Auth</strong> — 4 endpoints</summary>
@@ -561,6 +564,18 @@ cd frontend && npm run lint             # TypeScript/React lint
 | `/api/v1/preferences` | PATCH | Update preferences |
 | `/api/v1/tasks/run-nightly` | POST | Manually trigger nightly pipeline |
 | `/health` | GET | Health check |
+
+</details>
+
+<details>
+<summary><strong>Admin / Command Center</strong> — 4 endpoints</summary>
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/admin/command-center` | GET | Aggregate dashboard (4 zones, 10s cache) |
+| `/api/v1/admin/command-center/api-traffic` | GET | API traffic drill-down |
+| `/api/v1/admin/command-center/llm` | GET | LLM per-model cost + cascade log |
+| `/api/v1/admin/command-center/pipeline` | GET | Pipeline run history |
 
 </details>
 
