@@ -24,6 +24,11 @@ jest.mock("@/lib/auth", () => ({
   useAuth: () => ({ logout: jest.fn() }),
 }));
 
+// Mock useCurrentUser
+jest.mock("@/hooks/use-current-user", () => ({
+  useCurrentUser: () => ({ isAdmin: true, user: { id: 1, role: "admin" }, isLoading: false }),
+}));
+
 // Mock shadcn UI Tooltip components
 jest.mock("@/components/ui/tooltip", () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
@@ -38,6 +43,7 @@ jest.mock("lucide-react", () => ({
   Briefcase: () => <svg data-testid="icon-portfolio" />,
   PieChart: () => <svg data-testid="icon-sectors" />,
   Activity: () => <svg data-testid="icon-observability" />,
+  Monitor: () => <svg data-testid="icon-command-center" />,
   Settings: () => <svg data-testid="icon-settings" />,
   LogOut: () => <svg data-testid="icon-logout" />,
 }));

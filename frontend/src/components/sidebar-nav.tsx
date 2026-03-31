@@ -8,6 +8,7 @@ import {
   Briefcase,
   PieChart,
   Activity,
+  Monitor,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -17,21 +18,33 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/lib/auth";
+import { useCurrentUser } from "@/hooks/use-current-user";
 import { cn } from "@/lib/utils";
 import { StaggerGroup, StaggerItem } from "@/components/motion-primitives";
 
-const NAV_ITEMS = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  adminOnly?: boolean;
+}
+
+const NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/screener",  label: "Screener",  icon: Search },
   { href: "/portfolio", label: "Portfolio",  icon: Briefcase },
   { href: "/sectors",   label: "Sectors",    icon: PieChart },
   { href: "/observability", label: "Observability", icon: Activity },
-] as const;
+  { href: "/admin/command-center", label: "Command Center", icon: Monitor, adminOnly: true },
+];
 
 export function SidebarNav() {
   const pathname = usePathname();
   const router = useRouter();
   const { logout } = useAuth();
+  const { isAdmin } = useCurrentUser();
+
+  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   const handleLogout = () => {
     logout();
@@ -59,7 +72,7 @@ export function SidebarNav() {
 
       {/* Nav items */}
       <StaggerGroup className="flex flex-col items-center gap-1 flex-1 w-full" stagger={0.05}>
-        {NAV_ITEMS.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = item.href === "/dashboard"
             ? pathname === "/dashboard" || pathname === "/"
             : pathname.startsWith(item.href);
