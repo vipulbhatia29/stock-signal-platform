@@ -6,7 +6,7 @@ import pytest
 
 from backend.agents.llm_client import AllModelsExhaustedError, LLMResponse
 from backend.agents.providers.groq import GroqProvider, _classify_error
-from backend.agents.token_budget import ModelLimits, TokenBudget
+from backend.observability.token_budget import ModelLimits, TokenBudget
 
 
 class FakeRedis:

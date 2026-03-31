@@ -17,6 +17,7 @@ celery_app = Celery(
         "backend.tasks.evaluation",
         "backend.tasks.alerts",
         "backend.tasks.pipeline",
+        "backend.tasks.audit",
     ],
 )
 
@@ -63,6 +64,11 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET
     },
     # ── Biweekly model retrain (every other Sunday 2 AM ET) ──
+    # ── Audit trail purge (3 AM ET daily) ──
+    "purge-login-attempts-daily": {
+        "task": "backend.tasks.audit.purge_login_attempts_task",
+        "schedule": crontab(hour=3, minute=0),
+    },
     "model-retrain-biweekly": {
         "task": "backend.tasks.forecasting.model_retrain_all_task",
         "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET

@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.services.observability_queries import (
+from backend.observability.queries import (
     get_assessment_history,
     get_kpis,
     get_latest_assessment,
@@ -632,7 +632,7 @@ class TestGetQueryDetailSummaries:
 
         mock_db.execute = mock_execute
 
-        with patch("backend.services.observability_queries.settings") as mock_settings:
+        with patch("backend.observability.queries.settings") as mock_settings:
             mock_settings.LANGFUSE_SECRET_KEY = "sk-test-secret"
             mock_settings.LANGFUSE_BASEURL = "http://langfuse.example.com"
 
@@ -675,7 +675,7 @@ class TestGetQueryDetailSummaries:
 
         mock_db.execute = mock_execute
 
-        with patch("backend.services.observability_queries.settings") as mock_settings:
+        with patch("backend.observability.queries.settings") as mock_settings:
             mock_settings.LANGFUSE_SECRET_KEY = "sk-test-secret"
             mock_settings.LANGFUSE_BASEURL = "http://langfuse.example.com"
 
@@ -719,7 +719,7 @@ class TestGetQueryDetailSummaries:
 
         mock_db.execute = mock_execute
 
-        with patch("backend.services.observability_queries.settings") as mock_settings:
+        with patch("backend.observability.queries.settings") as mock_settings:
             mock_settings.LANGFUSE_SECRET_KEY = ""  # empty = not configured
             mock_settings.LANGFUSE_BASEURL = "http://localhost:3001"
 

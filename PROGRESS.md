@@ -1724,3 +1724,100 @@ Full implementation of KAN-232 (BU-6). Brainstorm → spec → 3-expert spec rev
 - **`Date.now()` in React render** — ESLint react-compiler flags it as impure; wrap in `useMemo`
 - **Design system purple** — no `--pdim` token exists; use `bg-card2 text-[var(--chart-3)]` for LLM type tags
 - **Falsy param checks drop valid 0/empty values** — always use `!= null` for optional URL params
+
+---
+
+## Session 78 — Command Center Brainstorm + Spec + Plan (2026-03-31)
+
+**Date:** 2026-03-31
+**Branch:** `develop` (no code changes — refinement only)
+
+**What was done:**
+
+### KAN-233 Rescoped: Admin Dashboard → Platform Operations Command Center
+
+**Brainstorm phase:**
+- Full codebase audit via 5 parallel explore agents (API layer, LLM/Agent, Pipeline, DB/Redis/MCP, Auth/Alerts/Chat)
+- Discovered: LLM/Agent observability excellent, but API traffic (zero HTTP metrics), Pipeline (models exist, no API), Cache (no hit/miss stats), Auth (no audit trail), Frontend (zero RUM) all have gaps
+- Built interactive HTML prototype (`command-center-prototype.html`) — 8-zone nuclear-reactor-style dashboard with mock data, dark navy theme, click-to-expand zones
+- User approved layout and expanded scope: full platform command center, not just LLM admin
+
+**Architecture decision:**
+- Extract scattered observability code into `backend/observability/` bounded package (Option A: move everything)
+- Split S1 into S1a (agents/ files) + S1b (services/routers/context) for reduced blast radius
+- S1 is a merge gate — PR merged before any new instrumentation
+
+**Spec written + 3-expert review:**
+- Spec: `docs/superpowers/specs/2026-03-31-command-center-design.md`
+- Expert panel: Fowler (architecture), Nygard (ops/reliability), Senior Ops TL (execution)
+- 22 findings (4 Critical, 12 Important, 6 Minor) — all incorporated:
+  - C1: Redis-backed HTTP metrics (not in-memory) — multi-worker safe
+  - C2: Per-zone circuit breakers via `asyncio.gather(return_exceptions=True)`
+  - C3: 10s server-side cache on aggregate endpoint
+  - I1: Monotonic counters for cache stats (not reset-on-read)
+  - I2: Sliding window (not periodic reset) — no false zeros
+  - I3: LoginAttempt purge Celery task specced inline
+  - MVP split: Phase 1 (4 zones: Health, API, LLM, Pipeline) → Phase 2 (Cache, Chat, Auth, Alerts)
+
+**Plan written + expert review:**
+- Plan: `docs/superpowers/plans/2026-03-31-command-center-implementation.md`
+- 12 tasks across 4 sprints, ~35h (5-6 sessions)
+- Expert review found 4 Critical + 12 Important fixes — appended to plan
+
+### Artifacts
+- `command-center-prototype.html` — visual reference (gitignored or archived after frontend build)
+- Spec: `docs/superpowers/specs/2026-03-31-command-center-design.md` (approved)
+- Plan: `docs/superpowers/plans/2026-03-31-command-center-implementation.md` (approved)
+
+### JIRA (to create next session — Atlassian MCP unavailable)
+- Rescope KAN-233 description to "Platform Operations Command Center"
+- Create 12 subtasks under KAN-233 (S1a through S10)
+- Execution: subagent-driven development, 1 sprint per session
+
+**No code changes. No tests. Refinement only.**
+
+---
+
+## Session 79 — Command Center Sprints 1-3: Backend Complete (2026-03-31)
+
+**Date:** 2026-03-31
+**Branch:** `feat/KAN-233-command-center-refinement`
+
+**What was done:**
+
+### Sprint 1: Observability Package Extraction (S1a + S1b)
+- Extracted 9 files into `backend/observability/` bounded package: collector, writer, token_budget, context, langfuse, queries, 3 routers (admin, health, user_observability)
+- Created re-export shims at all old paths for backward compatibility
+- Updated 6 production files + 10 test files to canonical import paths
+- Fixed 2 pre-existing test bugs: writer + token_budget patch targets were no-ops (shim namespace mismatch)
+
+### Sprint 2: Backend Instrumentation (S2-S6)
+- **S2:** Redis-backed HTTP request metrics middleware (sliding window, path normalization, `/api/` prefix guard) — 20 tests
+- **S3:** DB pool stats collector + pipeline stats query service (5 read-only functions) — 17 tests
+- **S4:** LoginAttempt model + fire-and-forget auth recording + 90-day purge Celery Beat task — 6 tests
+- **S5:** PipelineRun `step_durations` JSONB + `total_duration_seconds` + `record_step_duration()` atomic JSONB merge
+- **S6:** Celery, Langfuse, TokenBudget health check collectors with TTL caching — 17 tests
+
+### Sprint 3: API Endpoints (S7-S8)
+- **S7:** `GET /admin/command-center` aggregate endpoint — 4 zones via `asyncio.gather` with per-zone 3s timeout circuit breakers, 10s Redis cache (skip when degraded), admin-only. 15 Pydantic schemas. — 10 tests
+- **S8:** 3 drill-down endpoints: `/api-traffic`, `/llm` (per-model cost + cascade log), `/pipeline` (run history) — 6 tests
+- **Migration 021:** `login_attempts` table + `pipeline_runs` step_durations/total_duration columns
+
+### Expert Reviews (11 total)
+- Sprint 1+2: TL, Architect, Security, QA, PM — all Critical/Important resolved
+- Sprint 3: PM, Security, Staff Engineer, QA Lead — all Critical/Important resolved
+- Key fixes from reviews:
+  - Security: login failure_reason collapsed (no user enumeration), auth recording truly fire-and-forget with own session, LLM errors sanitized (API key redaction), degraded responses not cached
+  - Architecture: shared AsyncSession in asyncio.gather fixed (each zone gets own session), top_endpoints tuple→dict corruption fixed, percentile off-by-one corrected
+  - Plan compliance: `get_stats()` key names aligned to spec, unused `hours` param removed
+
+### JIRA Updates
+- 12 subtasks created: KAN-300–311 (S1a through S11)
+- 2 subtasks created for deferred work: KAN-312 (migrations, resolved), KAN-313 (step_durations instrumentation)
+- 3 pre-existing bugs logged: KAN-314 (health endpoint auth), KAN-315 (duration_ms), KAN-316 (intent_category info leak)
+
+**Test count:** 1258 (was 1182 → +76 new tests)
+**Alembic head:** `2146d203aa47` (migration 021)
+**6 commits on branch**, all reviewed.
+
+**Resume point:** Sprint 4 (frontend — S9 L1 panels + S10 L2 drill-downs). Plan: `docs/superpowers/plans/2026-03-31-command-center-implementation.md` lines 1636-1817.

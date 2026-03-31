@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from backend.agents.llm_client import LLMResponse
-from backend.agents.observability import ObservabilityCollector
+from backend.observability.collector import ObservabilityCollector
 
 
 class TestGroqProviderObservability:

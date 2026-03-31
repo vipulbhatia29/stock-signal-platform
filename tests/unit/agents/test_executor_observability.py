@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from backend.agents.observability import ObservabilityCollector
+from backend.observability.collector import ObservabilityCollector
 from backend.tools.base import ToolResult
 
 

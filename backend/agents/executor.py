@@ -14,8 +14,8 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from backend.agents.observability import ObservabilityCollector
 from backend.agents.result_validator import validate_tool_result
+from backend.observability.collector import ObservabilityCollector
 from backend.services.cache import CacheService, CacheTier
 from backend.tools.base import ToolResult
 

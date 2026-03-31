@@ -94,6 +94,38 @@ class PipelineRunner:
             await session.commit()
         logger.warning("Pipeline %s: %s failed — %s", run_id, ticker, error)
 
+    async def record_step_duration(
+        self, run_id: uuid.UUID, step_name: str, duration_seconds: float
+    ) -> None:
+        """Atomic JSONB merge — safe for concurrent step writes.
+
+        Args:
+            run_id: The PipelineRun UUID.
+            step_name: Name of the pipeline step (e.g., "price_refresh").
+            duration_seconds: How long the step took.
+        """
+        from sqlalchemy import text
+
+        try:
+            async with async_session_factory() as session:
+                await session.execute(
+                    text("""
+                        UPDATE pipeline_runs
+                        SET step_durations = COALESCE(step_durations, '{}'::jsonb)
+                            || :step_json::jsonb
+                        WHERE id = :run_id
+                    """),
+                    {
+                        "step_json": f'{{"{step_name}": {duration_seconds:.1f}}}',
+                        "run_id": str(run_id),
+                    },
+                )
+                await session.commit()
+        except Exception:
+            logger.warning(
+                "Failed to record step duration for %s/%s", run_id, step_name, exc_info=True
+            )
+
     async def complete_run(self, run_id: uuid.UUID) -> str:
         """Complete a pipeline run — set status based on success/failure ratio.
 
@@ -107,6 +139,10 @@ class PipelineRunner:
             result = await session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
             run = result.scalar_one()
             run.completed_at = datetime.now(timezone.utc)
+
+            # Compute total duration
+            if run.started_at:
+                run.total_duration_seconds = (run.completed_at - run.started_at).total_seconds()
 
             if run.tickers_failed == 0:
                 run.status = "success"

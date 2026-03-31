@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Integer, String
+from sqlalchemy import Date, DateTime, Float, Integer, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,6 +38,8 @@ class PipelineRun(UUIDPrimaryKeyMixin, Base):
     tickers_succeeded: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     tickers_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_summary: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    step_durations: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    total_duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     trigger: Mapped[str] = mapped_column(String(20), nullable=False, default="scheduled")
 
