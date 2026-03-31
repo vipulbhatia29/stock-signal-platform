@@ -207,6 +207,9 @@ class TestGetQueryList:
         main_row.llm_calls = 2
         main_row.total_cost_usd = Decimal("0.002")
         main_row.agent_type = "react_v2"
+        main_row.duration_ms = 300
+        main_row.status_code = 0
+        main_row.eval_score = None
 
         # Tool batch row
         tool_row = MagicMock()
@@ -247,6 +250,238 @@ class TestGetQueryList:
         assert item["query_text"] == "Tell me about AAPL"
         assert item["db_calls"] == 1
         assert item["external_calls"] == 0
+        assert item["status"] == "completed"
+        assert item["score"] is None
+
+
+def _make_query_row(
+    qid: uuid.UUID | None = None,
+    timestamp: datetime | None = None,
+    llm_calls: int = 1,
+    total_cost_usd: Decimal | None = None,
+    agent_type: str = "react_v2",
+    duration_ms: int = 100,
+    status_code: int = 0,
+    eval_score: float | None = None,
+) -> MagicMock:
+    """Helper to build a mock main query row with all required fields."""
+    row = MagicMock()
+    row.query_id = qid or uuid.uuid4()
+    row.timestamp = timestamp or datetime(2026, 3, 28, 10, 0, 0, tzinfo=timezone.utc)
+    row.llm_models = ["llama-3.3-70b"]
+    row.llm_calls = llm_calls
+    row.total_cost_usd = total_cost_usd or Decimal("0.001")
+    row.agent_type = agent_type
+    row.duration_ms = duration_ms
+    row.status_code = status_code
+    row.eval_score = eval_score
+    return row
+
+
+def _setup_query_list_mock(mock_db, rows: list, total: int | None = None):
+    """Wire up mock_db.execute for get_query_list with given main rows.
+
+    Returns the mock so callers can inspect calls if needed.
+    """
+    if total is None:
+        total = len(rows)
+
+    call_count = 0
+
+    async def mock_execute(stmt):
+        nonlocal call_count
+        call_count += 1
+        result = MagicMock()
+        if call_count == 1:  # count
+            result.scalar.return_value = total
+        elif call_count == 2:  # main rows
+            result.all.return_value = rows
+        else:  # tool batch / message batch — empty
+            result.all.return_value = []
+        return result
+
+    mock_db.execute = mock_execute
+
+
+class TestGetQueryListSort:
+    """Tests for get_query_list sorting."""
+
+    @pytest.mark.asyncio
+    async def test_sort_by_timestamp_desc(self, mock_db):
+        """Should return items sorted by timestamp descending (default)."""
+        t1 = datetime(2026, 3, 28, 9, 0, 0, tzinfo=timezone.utc)
+        t2 = datetime(2026, 3, 28, 10, 0, 0, tzinfo=timezone.utc)
+        rows = [
+            _make_query_row(timestamp=t2),
+            _make_query_row(timestamp=t1),
+        ]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db)
+        assert len(result["items"]) == 2
+        assert result["items"][0]["timestamp"] == t2
+        assert result["items"][1]["timestamp"] == t1
+
+    @pytest.mark.asyncio
+    async def test_sort_by_timestamp_asc(self, mock_db):
+        """Should return items sorted by timestamp ascending when requested."""
+        t1 = datetime(2026, 3, 28, 9, 0, 0, tzinfo=timezone.utc)
+        t2 = datetime(2026, 3, 28, 10, 0, 0, tzinfo=timezone.utc)
+        rows = [
+            _make_query_row(timestamp=t1),
+            _make_query_row(timestamp=t2),
+        ]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db, sort_by="timestamp", sort_order="asc")
+        assert len(result["items"]) == 2
+        assert result["items"][0]["timestamp"] == t1
+        assert result["items"][1]["timestamp"] == t2
+
+    @pytest.mark.asyncio
+    async def test_sort_by_total_cost_usd(self, mock_db):
+        """Should accept sort_by=total_cost_usd without error."""
+        rows = [
+            _make_query_row(total_cost_usd=Decimal("0.010")),
+            _make_query_row(total_cost_usd=Decimal("0.001")),
+        ]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db, sort_by="total_cost_usd")
+        assert len(result["items"]) == 2
+        assert result["items"][0]["total_cost_usd"] == 0.01
+
+    @pytest.mark.asyncio
+    async def test_sort_by_llm_calls(self, mock_db):
+        """Should accept sort_by=llm_calls without error."""
+        rows = [
+            _make_query_row(llm_calls=5),
+            _make_query_row(llm_calls=2),
+        ]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db, sort_by="llm_calls")
+        assert len(result["items"]) == 2
+        assert result["items"][0]["llm_calls"] == 5
+
+    @pytest.mark.asyncio
+    async def test_sort_by_score_nulls_last(self, mock_db):
+        """Should sort by eval score with NULLs after scored items."""
+        rows = [
+            _make_query_row(eval_score=0.85),
+            _make_query_row(eval_score=None),
+        ]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db, sort_by="score", sort_order="desc")
+        assert result["items"][0]["score"] == 0.85
+        assert result["items"][1]["score"] is None
+
+    @pytest.mark.asyncio
+    async def test_sort_by_duration_ms(self, mock_db):
+        """Should accept sort_by=duration_ms without error."""
+        rows = [
+            _make_query_row(duration_ms=500),
+            _make_query_row(duration_ms=100),
+        ]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db, sort_by="duration_ms")
+        assert len(result["items"]) == 2
+
+
+class TestGetQueryListStatusFilter:
+    """Tests for get_query_list status derivation and filtering."""
+
+    @pytest.mark.asyncio
+    async def test_status_filter_error(self, mock_db):
+        """Should filter to only error-status queries via HAVING."""
+        rows = [_make_query_row(status_code=3)]
+        _setup_query_list_mock(mock_db, rows, total=1)
+
+        result = await get_query_list(mock_db, status="error")
+        assert len(result["items"]) == 1
+        assert result["items"][0]["status"] == "error"
+
+    @pytest.mark.asyncio
+    async def test_status_filter_completed(self, mock_db):
+        """Should filter to only completed-status queries via HAVING."""
+        rows = [_make_query_row(status_code=0)]
+        _setup_query_list_mock(mock_db, rows, total=1)
+
+        result = await get_query_list(mock_db, status="completed")
+        assert len(result["items"]) == 1
+        assert result["items"][0]["status"] == "completed"
+
+    @pytest.mark.asyncio
+    async def test_derived_status_worst_wins(self, mock_db):
+        """Should map status_code to the worst status string."""
+        rows = [
+            _make_query_row(status_code=3),  # error
+            _make_query_row(status_code=2),  # declined
+            _make_query_row(status_code=1),  # timeout
+            _make_query_row(status_code=0),  # completed
+        ]
+        _setup_query_list_mock(mock_db, rows, total=4)
+
+        result = await get_query_list(mock_db)
+        statuses = [item["status"] for item in result["items"]]
+        assert statuses == ["error", "declined", "timeout", "completed"]
+
+
+class TestGetQueryListCostFilter:
+    """Tests for get_query_list cost filters."""
+
+    @pytest.mark.asyncio
+    async def test_cost_min_filter(self, mock_db):
+        """Should apply cost_min HAVING filter and return matching items."""
+        rows = [_make_query_row(total_cost_usd=Decimal("0.050"))]
+        _setup_query_list_mock(mock_db, rows, total=1)
+
+        result = await get_query_list(mock_db, cost_min=0.01)
+        assert result["total"] == 1
+        assert len(result["items"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_cost_max_filter(self, mock_db):
+        """Should apply cost_max HAVING filter and return matching items."""
+        rows = [_make_query_row(total_cost_usd=Decimal("0.001"))]
+        _setup_query_list_mock(mock_db, rows, total=1)
+
+        result = await get_query_list(mock_db, cost_max=0.01)
+        assert result["total"] == 1
+
+    @pytest.mark.asyncio
+    async def test_cost_min_and_max(self, mock_db):
+        """Should apply both cost_min and cost_max HAVING filters."""
+        rows = [_make_query_row(total_cost_usd=Decimal("0.005"))]
+        _setup_query_list_mock(mock_db, rows, total=1)
+
+        result = await get_query_list(mock_db, cost_min=0.001, cost_max=0.01)
+        assert result["total"] == 1
+        assert len(result["items"]) == 1
+
+
+class TestGetQueryListEvalScore:
+    """Tests for get_query_list eval score LEFT JOIN."""
+
+    @pytest.mark.asyncio
+    async def test_eval_score_present(self, mock_db):
+        """Should populate score when eval_results match the query_id."""
+        rows = [_make_query_row(eval_score=0.92)]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db)
+        assert result["items"][0]["score"] == 0.92
+
+    @pytest.mark.asyncio
+    async def test_eval_score_absent(self, mock_db):
+        """Should return None score when no eval match exists."""
+        rows = [_make_query_row(eval_score=None)]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db)
+        assert result["items"][0]["score"] is None
 
 
 class TestGetLatestAssessment:

@@ -9,12 +9,16 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, literal_column, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.assessment import AssessmentRun
+from backend.models.assessment import AssessmentResult, AssessmentRun
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.logs import LLMCallLog, ToolExecutionLog
+
+# Status derivation: worst status wins (highest code)
+STATUS_MAP = {3: "error", 2: "declined", 1: "timeout", 0: "completed"}
+STATUS_MAP_REVERSE = {v: k for k, v in STATUS_MAP.items()}
 
 _EXTERNAL_TOOLS = {"web_search", "get_geopolitical_events"}
 
@@ -95,6 +99,11 @@ async def get_query_list(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
     agent_type: str | None = None,
+    sort_by: str = "timestamp",
+    sort_order: str = "desc",
+    status: str | None = None,
+    cost_min: float | None = None,
+    cost_max: float | None = None,
 ) -> dict:
     """Return paginated list of queries grouped by query_id.
 
@@ -106,19 +115,68 @@ async def get_query_list(
         date_from: Filter from this datetime.
         date_to: Filter to this datetime.
         agent_type: Filter by agent type.
+        sort_by: Column to sort by (timestamp, total_cost_usd, llm_calls,
+            duration_ms, score).
+        sort_order: Sort direction (asc, desc).
+        status: Filter by derived worst-status (error, declined, timeout,
+            completed).
+        cost_min: Minimum total cost filter (HAVING).
+        cost_max: Maximum total cost filter (HAVING).
 
     Returns:
         Dict with items (list of QueryRow-shaped dicts), total, page, size.
     """
+    # Correlated subquery for tool duration
+    duration_sq = (
+        select(func.coalesce(func.sum(ToolExecutionLog.latency_ms), 0))
+        .where(ToolExecutionLog.query_id == LLMCallLog.query_id)
+        .correlate(LLMCallLog)
+        .scalar_subquery()
+    )
+
+    # Eval score subquery (LEFT JOIN target)
+    eval_sq = (
+        select(
+            AssessmentResult.query_id,
+            case(
+                (
+                    AssessmentResult.reasoning_coherence_score.is_not(None),
+                    (AssessmentResult.grounding_score + AssessmentResult.reasoning_coherence_score)
+                    / 2,
+                ),
+                else_=AssessmentResult.grounding_score,
+            ).label("eval_score"),
+        )
+        .where(AssessmentResult.query_id.is_not(None))
+        .subquery()
+    )
+
+    # Derived worst-status column
+    status_col = func.max(
+        case(
+            (LLMCallLog.status == "error", 3),
+            (LLMCallLog.status == "declined", 2),
+            (LLMCallLog.status == "timeout", 1),
+            else_=0,
+        )
+    ).label("status_code")
+
     # Get distinct query_ids with aggregation from llm_call_log
-    base = select(
-        LLMCallLog.query_id,
-        func.min(LLMCallLog.created_at).label("timestamp"),
-        func.array_agg(func.distinct(LLMCallLog.model)).label("llm_models"),
-        func.count().label("llm_calls"),
-        func.sum(LLMCallLog.cost_usd).label("total_cost_usd"),
-        func.max(LLMCallLog.agent_type).label("agent_type"),
-    ).where(LLMCallLog.query_id.is_not(None))
+    base = (
+        select(
+            LLMCallLog.query_id,
+            func.min(LLMCallLog.created_at).label("timestamp"),
+            func.array_agg(func.distinct(LLMCallLog.model)).label("llm_models"),
+            func.count().label("llm_calls"),
+            func.sum(LLMCallLog.cost_usd).label("total_cost_usd"),
+            func.max(LLMCallLog.agent_type).label("agent_type"),
+            duration_sq.label("duration_ms"),
+            status_col,
+            eval_sq.c.eval_score,
+        )
+        .outerjoin(eval_sq, eval_sq.c.query_id == LLMCallLog.query_id)
+        .where(LLMCallLog.query_id.is_not(None))
+    )
 
     if user_id:
         base = base.join(ChatSession, LLMCallLog.session_id == ChatSession.id).where(
@@ -131,15 +189,52 @@ async def get_query_list(
     if agent_type:
         base = base.where(LLMCallLog.agent_type == agent_type)
 
-    base = base.group_by(LLMCallLog.query_id)
+    base = base.group_by(LLMCallLog.query_id, eval_sq.c.eval_score)
 
-    # Count total
+    # HAVING filters (must be applied BEFORE count subquery)
+    if status is not None and status in STATUS_MAP_REVERSE:
+        base = base.having(
+            func.max(
+                case(
+                    (LLMCallLog.status == "error", 3),
+                    (LLMCallLog.status == "declined", 2),
+                    (LLMCallLog.status == "timeout", 1),
+                    else_=0,
+                )
+            )
+            == STATUS_MAP_REVERSE[status]
+        )
+    if cost_min is not None:
+        base = base.having(func.sum(LLMCallLog.cost_usd) >= cost_min)
+    if cost_max is not None:
+        base = base.having(func.sum(LLMCallLog.cost_usd) <= cost_max)
+
+    # Count total (after HAVING filters)
     count_stmt = select(func.count()).select_from(base.subquery())
     total = (await db.execute(count_stmt)).scalar() or 0
 
+    # Sort map — literal_column supports .asc()/.desc()/.nulls_last()
+    sort_map = {
+        "timestamp": literal_column("timestamp"),
+        "total_cost_usd": literal_column("total_cost_usd"),
+        "llm_calls": literal_column("llm_calls"),
+        "duration_ms": literal_column("duration_ms"),
+        "score": eval_sq.c.eval_score,
+    }
+    sort_col = sort_map.get(sort_by, literal_column("timestamp"))
+
+    if sort_order == "asc":
+        order_clause = sort_col.asc()
+    else:
+        order_clause = sort_col.desc()
+
+    # NULLS LAST for score sorting
+    if sort_by == "score":
+        order_clause = order_clause.nulls_last()
+
     # Paginate
     offset = (page - 1) * size
-    rows_stmt = base.order_by(text("timestamp DESC")).limit(size).offset(offset)
+    rows_stmt = base.order_by(order_clause).limit(size).offset(offset)
     rows = (await db.execute(rows_stmt)).all()
 
     qids = [row.query_id for row in rows]
@@ -189,6 +284,9 @@ async def get_query_list(
         tool_latency = sum(t.total_latency or 0 for t in tool_rows)
         query_text = text_by_qid.get(qid, "")
 
+        # Derive status string from status_code
+        derived_status = STATUS_MAP.get(row.status_code, "completed")
+
         items.append(
             {
                 "query_id": qid,
@@ -203,8 +301,8 @@ async def get_query_list(
                 "external_sources": external_sources,
                 "total_cost_usd": round(float(row.total_cost_usd or 0), 6),
                 "duration_ms": tool_latency,
-                "score": None,
-                "status": "completed",
+                "score": float(row.eval_score) if row.eval_score is not None else None,
+                "status": derived_status,
             }
         )
 
