@@ -10,11 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.database import get_async_session
-from backend.dependencies import get_current_user
+from backend.dependencies import get_current_user, require_admin
 from backend.models.user import User, UserRole
 from backend.schemas.observability import (
     AssessmentHistoryResponse,
     AssessmentRunSummary,
+    DateBucketEnum,
+    GroupByEnum,
+    GroupedResponse,
     KPIResponse,
     LangfuseURLResponse,
     QueryDetailResponse,
@@ -28,6 +31,7 @@ from backend.services.observability_queries import (
     get_kpis,
     get_latest_assessment,
     get_query_detail,
+    get_query_groups,
     get_query_list,
 )
 
@@ -96,6 +100,36 @@ async def queries(
         cost_max=cost_max,
     )
     return QueryListResponse(**result)
+
+
+@router.get(
+    "/queries/grouped",
+    response_model=GroupedResponse,
+    summary="Aggregate queries by dimension",
+    description="Returns grouped aggregation (count, cost, latency, error rate) "
+    "by the specified dimension.",
+)
+async def grouped_queries(
+    group_by: GroupByEnum = Query(..., description="Grouping dimension"),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    bucket: DateBucketEnum = DateBucketEnum.day,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> GroupedResponse:
+    """Return grouped query aggregation."""
+    if group_by == GroupByEnum.user:
+        require_admin(user)
+
+    result = await get_query_groups(
+        db,
+        group_by=group_by.value,
+        user_id=_user_scope(user) if group_by != GroupByEnum.intent_category else None,
+        date_from=date_from,
+        date_to=date_to,
+        bucket=bucket.value,
+    )
+    return GroupedResponse(**result)
 
 
 @router.get(

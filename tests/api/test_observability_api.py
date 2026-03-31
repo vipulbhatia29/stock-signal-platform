@@ -170,3 +170,71 @@ class TestQueryListParams:
                 headers=_auth_headers(user),
             )
             assert response.status_code == 200, f"status={value} should return 200"
+
+
+class TestGroupedEndpoint:
+    """Tests for GET /observability/queries/grouped."""
+
+    @pytest.mark.asyncio
+    async def test_valid_group_by_returns_200(self, client: AsyncClient, db_url: str) -> None:
+        """Valid group_by should return 200 with GroupedResponse shape."""
+        user = await _create_user(db_url)
+        response = await client.get(
+            "/api/v1/observability/queries/grouped?group_by=agent_type",
+            headers=_auth_headers(user),
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["group_by"] == "agent_type"
+        assert "groups" in data
+        assert "total_queries" in data
+
+    @pytest.mark.asyncio
+    async def test_user_group_non_admin_returns_403(self, client: AsyncClient, db_url: str) -> None:
+        """group_by=user as non-admin should return 403."""
+        user = await _create_user(db_url)
+        response = await client.get(
+            "/api/v1/observability/queries/grouped?group_by=user",
+            headers=_auth_headers(user),
+        )
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_invalid_group_by_returns_422(self, client: AsyncClient, db_url: str) -> None:
+        """Invalid group_by value should return 422."""
+        user = await _create_user(db_url)
+        response = await client.get(
+            "/api/v1/observability/queries/grouped?group_by=badvalue",
+            headers=_auth_headers(user),
+        )
+        assert response.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_date_group_accepts_bucket_param(self, client: AsyncClient, db_url: str) -> None:
+        """group_by=date with bucket=week should return 200."""
+        user = await _create_user(db_url)
+        response = await client.get(
+            "/api/v1/observability/queries/grouped?group_by=date&bucket=week",
+            headers=_auth_headers(user),
+        )
+        assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_grouped_not_shadowed_by_query_id(self, client: AsyncClient, db_url: str) -> None:
+        """GET /queries/grouped should NOT be shadowed by /queries/{query_id}."""
+        user = await _create_user(db_url)
+        response = await client.get(
+            "/api/v1/observability/queries/grouped?group_by=agent_type",
+            headers=_auth_headers(user),
+        )
+        assert response.status_code != 422  # Would be 422 if parsed as UUID
+
+    @pytest.mark.asyncio
+    async def test_intent_category_returns_200(self, client: AsyncClient, db_url: str) -> None:
+        """group_by=intent_category should return 200 (may be empty groups)."""
+        user = await _create_user(db_url)
+        response = await client.get(
+            "/api/v1/observability/queries/grouped?group_by=intent_category",
+            headers=_auth_headers(user),
+        )
+        assert response.status_code == 200
