@@ -10,6 +10,8 @@ export function DegradedBadge({ zones }: DegradedBadgeProps) {
   return (
     <span
       data-testid="degraded-badge"
+      role="status"
+      aria-live="polite"
       className="inline-flex items-center gap-1.5 rounded-md bg-yellow-400/10 border border-yellow-400/30 px-2.5 py-1 text-xs font-medium text-yellow-400"
     >
       <svg

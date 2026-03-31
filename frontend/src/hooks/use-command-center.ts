@@ -15,7 +15,7 @@ export function useCommandCenter() {
     queryFn: () => get<CommandCenterResponse>("/admin/command-center"),
     refetchInterval: 15_000,
     refetchOnWindowFocus: true,
-    staleTime: 10_000,
+    staleTime: 0,
   });
 }
 

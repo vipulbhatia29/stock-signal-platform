@@ -26,15 +26,19 @@ export function StatusDot({ status, size = "md" }: StatusDotProps) {
   const shouldPulse = pulseStatuses.has(status);
 
   return (
-    <span
-      data-testid="status-dot"
-      data-status={status}
-      className={cn(
-        "inline-block rounded-full flex-shrink-0",
-        sizeClass,
-        color,
-        shouldPulse && "animate-pulse"
-      )}
-    />
+    <>
+      <span
+        data-testid="status-dot"
+        data-status={status}
+        aria-hidden="true"
+        className={cn(
+          "inline-block rounded-full flex-shrink-0",
+          sizeClass,
+          color,
+          shouldPulse && "animate-pulse"
+        )}
+      />
+      <span className="sr-only">{status}</span>
+    </>
   );
 }

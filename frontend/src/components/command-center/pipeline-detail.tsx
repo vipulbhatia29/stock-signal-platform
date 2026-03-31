@@ -2,24 +2,13 @@
 
 import { useState } from "react";
 import type { PipelineRunEntry } from "@/types/command-center-drilldown";
+import { StatusDot } from "./status-dot";
+
+const dotStatus = (s: string): "ok" | "degraded" | "down" =>
+  s === "success" || s === "completed" ? "ok" : s === "running" ? "degraded" : "down";
 
 interface PipelineDetailProps {
   data: { runs: PipelineRunEntry[]; total: number; days: number };
-}
-
-function StatusDot({ status }: { status: string }) {
-  const color =
-    status === "success"
-      ? "bg-emerald-400"
-      : status === "running"
-        ? "bg-cyan-400 animate-pulse"
-        : "bg-red-400";
-  return (
-    <span
-      className={`inline-block h-2 w-2 rounded-full ${color}`}
-      aria-label={status}
-    />
-  );
 }
 
 function fmtDuration(seconds: number | null): string {
@@ -107,7 +96,7 @@ function PipelineRow({
         </td>
         <td className="px-3 py-1.5">
           <span className="flex items-center gap-1.5 text-xs">
-            <StatusDot status={run.status} />
+            <StatusDot status={dotStatus(run.status)} size="sm" />
             {run.status}
           </span>
         </td>
