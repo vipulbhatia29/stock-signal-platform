@@ -55,6 +55,21 @@ logger = logging.getLogger(__name__)
 _CACHE_KEY = "admin:command_center:aggregate"
 _CACHE_TTL_S = 10
 
+# Known safe error prefixes for cascade log display.
+# Raw LLM errors may contain API keys or internal paths — truncate and sanitize.
+_MAX_ERROR_LEN = 200
+
+
+def _sanitize_error(error: str | None) -> str:
+    """Truncate and sanitize LLM error strings for admin display."""
+    if not error:
+        return ""
+    # Strip potential API key patterns (sk-..., gsk_...)
+    import re
+
+    sanitized = re.sub(r"(sk-|gsk_|key-)[A-Za-z0-9]{10,}", "[REDACTED]", error)
+    return sanitized[:_MAX_ERROR_LEN]
+
 
 # ---------------------------------------------------------------------------
 # Zone collection helper
@@ -399,6 +414,7 @@ async def get_command_center(
         _collect_zone("api_traffic", _get_api_traffic(request)),
         _collect_zone("llm_operations", _get_llm_operations(request, db)),
         _collect_zone("pipeline", _get_pipeline(db)),
+        return_exceptions=True,
     )
 
     assembly_ms = round((time.monotonic() - start_ms) * 1000)
@@ -406,7 +422,11 @@ async def get_command_center(
     # --- Build response ---
     zone_data: dict[str, Any] = {}
     degraded_zones: list[str] = []
-    for name, data in results:
+    for item in results:
+        if isinstance(item, Exception):
+            logger.error("Zone collection raised: %s", item)
+            continue
+        name, data = item
         if data is None:
             degraded_zones.append(name)
         zone_data[name] = data
@@ -423,8 +443,8 @@ async def get_command_center(
         pipeline=zone_data.get("pipeline"),
     )
 
-    # --- Cache result ---
-    if cache_redis is not None:
+    # --- Cache result (skip if any zones degraded — don't cache partial data) ---
+    if cache_redis is not None and not degraded_zones:
         try:
             await cache_redis.set(
                 _CACHE_KEY,
@@ -444,11 +464,15 @@ async def get_command_center(
 
 @router.get("/api-traffic", summary="API traffic drill-down")
 async def get_api_traffic_detail(
-    hours: int = Query(24, ge=1, le=168),
+    request: Request,
     user: Any = Depends(get_current_user),
-    request: Request = None,
 ) -> dict:
-    """Full endpoint breakdown with per-endpoint counts, error rates, latencies."""
+    """Full endpoint breakdown with per-endpoint counts, error rates, latencies.
+
+    Returns the same sliding-window metrics as the aggregate endpoint but
+    with the full top-endpoints list. The window is fixed at 300s (configured
+    on the HttpMetricsCollector).
+    """
     require_admin(user)
 
     http_metrics = getattr(request.app.state, "http_metrics", None)
@@ -474,7 +498,6 @@ async def get_llm_detail(
     hours: int = Query(24, ge=1, le=168),
     user: Any = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
-    request: Request = None,
 ) -> dict:
     """Per-model cost breakdown, cascade log, token consumption."""
     require_admin(user)
@@ -525,7 +548,11 @@ async def get_llm_detail(
     )
     cascade_rows = (await db.execute(cascade_stmt)).all()
     cascades = [
-        {"model": r.model, "error": r.error, "timestamp": r.created_at.isoformat()}
+        {
+            "model": r.model,
+            "error": _sanitize_error(r.error),
+            "timestamp": r.created_at.isoformat(),
+        }
         for r in cascade_rows
     ]
 
