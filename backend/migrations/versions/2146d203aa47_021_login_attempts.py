@@ -7,8 +7,8 @@ Create Date: 2026-03-31 14:26:46.237328
 """
 from typing import Sequence, Union
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
@@ -34,10 +34,15 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id')
     )
     op.create_index(op.f('ix_login_attempts_email'), 'login_attempts', ['email'], unique=False)
-    op.create_index(op.f('ix_login_attempts_timestamp'), 'login_attempts', ['timestamp'], unique=False)
+    op.create_index(
+        op.f('ix_login_attempts_timestamp'), 'login_attempts', ['timestamp'], unique=False
+    )
 
     # --- pipeline_runs: add step_durations + total_duration_seconds ---
-    op.add_column('pipeline_runs', sa.Column('step_durations', postgresql.JSONB(astext_type=sa.Text()), nullable=True))
+    op.add_column(
+        'pipeline_runs',
+        sa.Column('step_durations', postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+    )
     op.add_column('pipeline_runs', sa.Column('total_duration_seconds', sa.Float(), nullable=True))
 
 
