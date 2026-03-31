@@ -51,6 +51,29 @@ async def _decline_stream(message: str):
     yield StreamEvent(type="done", usage={}).to_ndjson() + "\n"
 
 
+async def _log_decline(reason: str) -> None:
+    """Log a declined query to llm_call_log for observability.
+
+    Uses write_event directly — the collector requires DB writer setup
+    that is only available in the agent pipeline, not the router scope.
+    """
+    from backend.agents.observability_writer import write_event
+
+    await write_event(
+        "llm_call",
+        {
+            "provider": "none",
+            "model": "none",
+            "tier": "none",
+            "latency_ms": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "status": "declined",
+            "error": reason,
+        },
+    )
+
+
 async def _get_session(
     db: AsyncSession,
     session_id: uuid.UUID,
@@ -108,6 +131,7 @@ async def chat_stream(
 
     length_err = validate_input_length(body.message)
     if length_err:
+        await _log_decline("input_length_exceeded")
         return StreamingResponse(_decline_stream(length_err), media_type="application/x-ndjson")
 
     body.message = sanitize_input(body.message)
@@ -129,6 +153,7 @@ async def chat_stream(
 
     # Injection detection (after session is available for decline tracking)
     if detect_injection(body.message):
+        await _log_decline("injection_detected")
         logger.warning("Prompt injection detected in session %s", chat_session.id)
         chat_session.decline_count = (chat_session.decline_count or 0) + 1
         db.add(chat_session)
@@ -143,6 +168,7 @@ async def chat_stream(
 
     # Session abuse check
     if (chat_session.decline_count or 0) >= 5:
+        await _log_decline("session_abuse_limit")
         return StreamingResponse(
             _decline_stream(
                 "This session has been flagged for repeated off-topic queries. "
@@ -235,6 +261,7 @@ async def _event_generator(
         )
 
         if classified.intent == "out_of_scope":
+            await _log_decline("out_of_scope")
             decline_msg = classified.decline_message or (
                 "I can only help with financial analysis and portfolio management. "
                 "Please ask a question about stocks, markets, or your portfolio."

@@ -5,8 +5,8 @@ Revises: b1fe4c734142
 Create Date: 2026-03-30
 """
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects.postgresql import UUID
 
 revision = "c2d3e4f5a6b7"

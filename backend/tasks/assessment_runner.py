@@ -223,7 +223,7 @@ async def _run_query_live(
     golden: GoldenQuery,
     user: User,
     session: Any,
-) -> tuple[str, list[str], int]:
+) -> tuple[str, list[str], int, uuid.UUID]:
     """Run a single query through the live ReAct agent.
 
     Args:
@@ -232,8 +232,13 @@ async def _run_query_live(
         session: Async SQLAlchemy session.
 
     Returns:
-        Tuple of (response_text, tools_called, iterations).
+        Tuple of (response_text, tools_called, iterations, query_id).
     """
+    from backend.request_context import current_query_id
+
+    query_id = uuid.uuid4()
+    current_query_id.set(query_id)
+
     # Lazy imports — only needed for live runs, avoids requiring LLM keys on import
     from backend.agents.react_loop import react_loop
     from backend.tools.registry import ToolRegistry
@@ -289,7 +294,7 @@ async def _run_query_live(
                     tools_called.append(event.metadata["tool"])
 
     response_text = "".join(response_parts)
-    return response_text, tools_called, iterations
+    return response_text, tools_called, iterations, query_id
 
 
 # ── Core runner ──────────────────────────────────────────────────────────────
@@ -341,8 +346,9 @@ async def run_assessment(
             try:
                 if dry_run:
                     response_text, tools_called, iterations = _get_dry_run_response(golden)
+                    query_id = uuid.uuid4()  # dry run: generate placeholder
                 else:
-                    response_text, tools_called, iterations = await _run_query_live(
+                    response_text, tools_called, iterations, query_id = await _run_query_live(
                         golden, user, session
                     )
             except Exception:
@@ -350,6 +356,7 @@ async def run_assessment(
                 response_text = ""
                 tools_called = []
                 iterations = 0
+                query_id = uuid.uuid4()  # error fallback
 
             duration_ms = int((time.monotonic() - query_start) * 1000)
 
@@ -395,6 +402,7 @@ async def run_assessment(
                 iteration_count=iterations,
                 total_cost_usd=0.0,
                 total_duration_ms=duration_ms,
+                query_id=query_id,
             )
             session.add(result_row)
 
