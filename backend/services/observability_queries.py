@@ -181,7 +181,7 @@ async def get_query_list(
             func.max(LLMCallLog.agent_type).label("agent_type"),
             duration_sq.label("duration_ms"),
             status_col,
-            eval_sq.c.eval_score,
+            func.max(eval_sq.c.eval_score).label("eval_score"),
         )
         .outerjoin(eval_sq, eval_sq.c.query_id == LLMCallLog.query_id)
         .where(LLMCallLog.query_id.is_not(None))
@@ -228,7 +228,7 @@ async def get_query_list(
         "total_cost_usd": literal_column("total_cost_usd"),
         "llm_calls": literal_column("llm_calls"),
         "duration_ms": literal_column("duration_ms"),
-        "score": eval_sq.c.eval_score,
+        "score": literal_column("eval_score"),
     }
     sort_col = sort_map.get(sort_by, literal_column("timestamp"))
 
