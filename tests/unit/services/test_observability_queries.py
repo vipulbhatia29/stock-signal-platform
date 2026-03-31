@@ -484,6 +484,41 @@ class TestGetQueryListEvalScore:
         result = await get_query_list(mock_db)
         assert result["items"][0]["score"] is None
 
+    @pytest.mark.asyncio
+    async def test_eval_score_passthrough_decimal(self, mock_db):
+        """Score value from DB should be passed through as a float, not truncated.
+
+        The actual SQL formula ``(grounding + reasoning) / 2`` is exercised by
+        integration tests (requires a real DB). Unit tests verify only that
+        whatever value the query layer returns is forwarded unchanged.
+        """
+        rows = [_make_query_row(eval_score=0.70)]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db)
+        # 0.70 should arrive as 0.7 — not 0.0, not 1.4 (double-counted)
+        assert result["items"][0]["score"] == pytest.approx(0.70), (
+            "Score must be forwarded as-is; double-application of formula would yield 1.4"
+        )
+
+    @pytest.mark.asyncio
+    async def test_eval_score_boundary_values(self, mock_db):
+        """Score values at boundaries (0.0 and 1.0) should be passed through correctly."""
+        for boundary in (0.0, 1.0):
+            rows = [_make_query_row(eval_score=boundary)]
+            _setup_query_list_mock(mock_db, rows)
+
+            result = await get_query_list(mock_db)
+            assert result["items"][0]["score"] == pytest.approx(boundary), (
+                f"Boundary score {boundary} should not be transformed"
+            )
+
+    # Note: the arithmetic correctness of the SQL formula
+    # ``(grounding_score + reasoning_coherence_score) / 2 = 0.7``
+    # when both scores exist is verified by integration tests in
+    # tests/integration/test_observability_integration.py, not here —
+    # unit tests with a mocked DB cannot execute real SQL expressions.
+
 
 class TestGetQueryDetailSummaries:
     """Tests for input_summary/output_summary population and Langfuse URL in get_query_detail."""

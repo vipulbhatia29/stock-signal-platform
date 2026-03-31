@@ -238,3 +238,18 @@ class TestGroupedEndpoint:
             headers=_auth_headers(user),
         )
         assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    async def test_user_group_admin_returns_200(self, client: AsyncClient, db_url: str) -> None:
+        """group_by=user as admin should return 200.
+
+        Regular users get 403 for group_by=user (tested separately).
+        Admins must be allowed through — the endpoint is the cross-user
+        usage breakdown view.
+        """
+        admin = await _create_user(db_url, role=UserRole.ADMIN)
+        response = await client.get(
+            "/api/v1/observability/queries/grouped?group_by=user",
+            headers=_auth_headers(admin),
+        )
+        assert response.status_code == 200
