@@ -484,6 +484,215 @@ class TestGetQueryListEvalScore:
         assert result["items"][0]["score"] is None
 
 
+class TestGetQueryDetailSummaries:
+    """Tests for input_summary/output_summary population and Langfuse URL in get_query_detail."""
+
+    @pytest.mark.asyncio
+    async def test_query_detail_tool_summaries_populated(self, mock_db):
+        """Tool steps should carry input_summary and output_summary from DB columns."""
+        qid = uuid.uuid4()
+        t1 = datetime(2026, 3, 28, 10, 0, 0, tzinfo=timezone.utc)
+
+        tool_row = MagicMock()
+        tool_row.created_at = t1
+        tool_row.tool_name = "analyze_stock"
+        tool_row.latency_ms = 150
+        tool_row.cache_hit = False
+        tool_row.input_summary = "ticker=AAPL"
+        tool_row.output_summary = "score=8.5, signal=BUY"
+
+        call_count = 0
+
+        async def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            if call_count == 1:  # LLM rows — empty
+                result.scalars.return_value.all.return_value = []
+            elif call_count == 2:  # Tool rows
+                result.scalars.return_value.all.return_value = [tool_row]
+            return result
+
+        mock_db.execute = mock_execute
+
+        result = await get_query_detail(mock_db, qid)
+        assert result is not None
+        step = result["steps"][0]
+        assert step["input_summary"] == "ticker=AAPL"
+        assert step["output_summary"] == "score=8.5, signal=BUY"
+
+    @pytest.mark.asyncio
+    async def test_query_detail_llm_summaries_derived(self, mock_db):
+        """LLM steps should have derived input_summary and output_summary strings."""
+        qid = uuid.uuid4()
+        t1 = datetime(2026, 3, 28, 10, 0, 0, tzinfo=timezone.utc)
+
+        llm_row = MagicMock()
+        llm_row.created_at = t1
+        llm_row.provider = "anthropic"
+        llm_row.model = "claude-3-haiku"
+        llm_row.latency_ms = 800
+        llm_row.cost_usd = Decimal("0.0025")
+        llm_row.completion_tokens = 150
+        llm_row.session_id = uuid.uuid4()
+        llm_row.langfuse_trace_id = None
+
+        call_count = 0
+
+        async def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            if call_count == 1:  # LLM rows
+                result.scalars.return_value.all.return_value = [llm_row]
+            elif call_count == 2:  # Tool rows — empty
+                result.scalars.return_value.all.return_value = []
+            elif call_count == 3:  # Query text
+                result.scalar.return_value = "Analyze TSLA"
+            return result
+
+        mock_db.execute = mock_execute
+
+        result = await get_query_detail(mock_db, qid)
+        assert result is not None
+        step = result["steps"][0]
+        assert step["input_summary"] == "→ anthropic/claude-3-haiku"
+        assert "150 tokens" in step["output_summary"]
+        assert "800ms" in step["output_summary"]
+        assert "$0.0025" in step["output_summary"]
+
+    @pytest.mark.asyncio
+    async def test_query_detail_langfuse_url_constructed(self, mock_db):
+        """Should construct Langfuse deep-link URL when trace_id and secret key present."""
+        from unittest.mock import patch
+
+        qid = uuid.uuid4()
+        trace_id = "trace-abc-123"
+        t1 = datetime(2026, 3, 28, 10, 0, 0, tzinfo=timezone.utc)
+
+        llm_row = MagicMock()
+        llm_row.created_at = t1
+        llm_row.provider = "groq"
+        llm_row.model = "llama-3.3-70b"
+        llm_row.latency_ms = 500
+        llm_row.cost_usd = Decimal("0.001")
+        llm_row.completion_tokens = 100
+        llm_row.session_id = uuid.uuid4()
+        llm_row.langfuse_trace_id = trace_id
+
+        call_count = 0
+
+        async def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            if call_count == 1:
+                result.scalars.return_value.all.return_value = [llm_row]
+            elif call_count == 2:
+                result.scalars.return_value.all.return_value = []
+            elif call_count == 3:
+                result.scalar.return_value = "Tell me about TSLA"
+            return result
+
+        mock_db.execute = mock_execute
+
+        with patch("backend.services.observability_queries.settings") as mock_settings:
+            mock_settings.LANGFUSE_SECRET_KEY = "sk-test-secret"
+            mock_settings.LANGFUSE_BASEURL = "http://langfuse.example.com"
+
+            result = await get_query_detail(mock_db, qid)
+
+        assert result is not None
+        assert result["langfuse_trace_url"] == f"http://langfuse.example.com/trace/{trace_id}"
+
+    @pytest.mark.asyncio
+    async def test_query_detail_langfuse_url_none_without_trace_id(self, mock_db):
+        """Should return langfuse_trace_url=None when no LLM row has a trace_id."""
+        from unittest.mock import patch
+
+        qid = uuid.uuid4()
+        t1 = datetime(2026, 3, 28, 10, 0, 0, tzinfo=timezone.utc)
+
+        llm_row = MagicMock()
+        llm_row.created_at = t1
+        llm_row.provider = "groq"
+        llm_row.model = "llama-3.3-70b"
+        llm_row.latency_ms = 400
+        llm_row.cost_usd = Decimal("0.001")
+        llm_row.completion_tokens = 80
+        llm_row.session_id = uuid.uuid4()
+        llm_row.langfuse_trace_id = None  # no trace
+
+        call_count = 0
+
+        async def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            if call_count == 1:
+                result.scalars.return_value.all.return_value = [llm_row]
+            elif call_count == 2:
+                result.scalars.return_value.all.return_value = []
+            elif call_count == 3:
+                result.scalar.return_value = "Tell me about AAPL"
+            return result
+
+        mock_db.execute = mock_execute
+
+        with patch("backend.services.observability_queries.settings") as mock_settings:
+            mock_settings.LANGFUSE_SECRET_KEY = "sk-test-secret"
+            mock_settings.LANGFUSE_BASEURL = "http://langfuse.example.com"
+
+            result = await get_query_detail(mock_db, qid)
+
+        assert result is not None
+        assert result["langfuse_trace_url"] is None
+
+    @pytest.mark.asyncio
+    async def test_query_detail_langfuse_url_none_without_secret_key(self, mock_db):
+        """Should return langfuse_trace_url=None when LANGFUSE_SECRET_KEY is empty."""
+        from unittest.mock import patch
+
+        qid = uuid.uuid4()
+        trace_id = "trace-xyz-456"
+        t1 = datetime(2026, 3, 28, 10, 0, 0, tzinfo=timezone.utc)
+
+        llm_row = MagicMock()
+        llm_row.created_at = t1
+        llm_row.provider = "groq"
+        llm_row.model = "llama-3.3-70b"
+        llm_row.latency_ms = 400
+        llm_row.cost_usd = Decimal("0.001")
+        llm_row.completion_tokens = 80
+        llm_row.session_id = uuid.uuid4()
+        llm_row.langfuse_trace_id = trace_id
+
+        call_count = 0
+
+        async def mock_execute(stmt):
+            nonlocal call_count
+            call_count += 1
+            result = MagicMock()
+            if call_count == 1:
+                result.scalars.return_value.all.return_value = [llm_row]
+            elif call_count == 2:
+                result.scalars.return_value.all.return_value = []
+            elif call_count == 3:
+                result.scalar.return_value = "Tell me about AAPL"
+            return result
+
+        mock_db.execute = mock_execute
+
+        with patch("backend.services.observability_queries.settings") as mock_settings:
+            mock_settings.LANGFUSE_SECRET_KEY = ""  # empty = not configured
+            mock_settings.LANGFUSE_BASEURL = "http://localhost:3001"
+
+            result = await get_query_detail(mock_db, qid)
+
+        assert result is not None
+        assert result["langfuse_trace_url"] is None
+
+
 class TestGetLatestAssessment:
     """Tests for get_latest_assessment service function."""
 

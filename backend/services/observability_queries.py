@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 from sqlalchemy import case, func, literal_column, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import settings
 from backend.models.assessment import AssessmentResult, AssessmentRun
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.logs import LLMCallLog, ToolExecutionLog
@@ -371,6 +372,12 @@ async def get_query_detail(
                     "action": f"llm.{row.provider}.{row.model}",
                     "type_tag": "llm",
                     "model_name": row.model,
+                    "input_summary": f"→ {row.provider}/{row.model}",
+                    "output_summary": (
+                        f"{row.completion_tokens or 0} tokens, "
+                        f"{row.latency_ms or 0}ms, "
+                        f"${float(row.cost_usd or 0):.4f}"
+                    ),
                     "latency_ms": row.latency_ms,
                     "cost_usd": float(row.cost_usd) if row.cost_usd else None,
                     "cache_hit": False,
@@ -387,6 +394,8 @@ async def get_query_detail(
                     "action": f"tool.{row.tool_name}",
                     "type_tag": type_tag,
                     "model_name": None,
+                    "input_summary": row.input_summary,
+                    "output_summary": row.output_summary,
                     "latency_ms": row.latency_ms,
                     "cost_usd": None,
                     "cache_hit": row.cache_hit,
@@ -398,20 +407,24 @@ async def get_query_detail(
 
     steps = []
     for i, (_, event) in enumerate(events, 1):
-        steps.append(
-            {
-                "step_number": i,
-                **event,
-                "input_summary": None,
-                "output_summary": None,
-            }
-        )
+        steps.append({"step_number": i, **event})
+
+    # Langfuse deep-link URL
+    langfuse_trace_id = None
+    for row in llm_rows:
+        if row.langfuse_trace_id:
+            langfuse_trace_id = row.langfuse_trace_id
+            break
+
+    langfuse_url = None
+    if langfuse_trace_id and settings.LANGFUSE_SECRET_KEY and settings.LANGFUSE_BASEURL:
+        langfuse_url = f"{settings.LANGFUSE_BASEURL}/trace/{langfuse_trace_id}"
 
     return {
         "query_id": query_id,
         "query_text": query_text,
         "steps": steps,
-        "langfuse_trace_url": None,
+        "langfuse_trace_url": langfuse_url,
     }
 
 
