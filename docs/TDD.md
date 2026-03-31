@@ -545,6 +545,77 @@ Aggregates news for user's top 3 portfolio tickers + top 3 BUY/STRONG_BUY recomm
 }
 ```
 
+### 3.14 Observability Endpoints (Phase B.5 BU-5) ✅ IMPLEMENTED
+
+**Router:** `backend/routers/observability.py`
+
+#### Query List
+
+```
+GET /api/v1/observability/queries
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `limit` | int | 50 | Max results (1–200) |
+| `offset` | int | 0 | Pagination offset |
+| `sort_by` | enum | `timestamp` | `timestamp` \| `cost` \| `duration` \| `call_count` \| `eval_score` |
+| `sort_order` | enum | `desc` | `asc` \| `desc` |
+| `status` | enum | — | `completed` \| `error` \| `declined` \| `timeout` |
+| `cost_min` | float | — | Minimum total cost in USD |
+| `cost_max` | float | — | Maximum total cost in USD |
+| `date_from` | ISO datetime | — | Filter queries on or after this timestamp |
+| `date_to` | ISO datetime | — | Filter queries on or before this timestamp |
+
+**Auth:** Admin role required. Returns 403 for non-admin users.
+
+#### Grouped Aggregations
+
+```
+GET /api/v1/observability/queries/grouped
+```
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `group_by` | enum | Yes | `agent_type` \| `date` \| `model` \| `status` \| `provider` \| `tier` \| `tool_name` \| `user` \| `intent_category` |
+| `date_from` | ISO datetime | No | Filter start (inclusive) |
+| `date_to` | ISO datetime | No | Filter end (inclusive) |
+| `bucket` | enum | No | `day` \| `week` \| `month` (only applies when `group_by=date`) |
+
+**Security:** `group_by=user` requires admin role — returns 403 for non-admin callers.
+
+**Response:** `GroupedResponse`
+
+```json
+{
+  "group_by": "agent_type",
+  "bucket": null,
+  "groups": [
+    {
+      "key": "stock_agent",
+      "query_count": 142,
+      "total_cost_usd": 0.087,
+      "avg_cost_usd": 0.000613,
+      "avg_latency_ms": 3420,
+      "error_rate": 0.021
+    }
+  ],
+  "total_queries": 142
+}
+```
+
+#### Query Detail
+
+```
+GET /api/v1/observability/queries/{query_id}
+```
+
+**Response:** `QueryDetail` — includes all `StepDetail` records for the query.
+
+- `StepDetail.input_summary`: truncated, PII-sanitised representation of the tool input
+- `StepDetail.output_summary`: truncated, PII-sanitised representation of the tool output
+- `langfuse_trace_url`: deep-link to Langfuse trace viewer, constructed from stored `langfuse_trace_id` (null when Langfuse is not configured)
+
 ---
 
 ## 4. Service Layer Design
