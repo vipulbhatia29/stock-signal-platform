@@ -324,3 +324,9 @@ app.include_router(admin.router, prefix="/api/v1")
 app.include_router(market.router, prefix="/api/v1")
 app.include_router(news.router, prefix="/api/v1")
 app.include_router(observability.router, prefix="/api/v1")
+
+from backend.observability.routers.command_center import (  # noqa: E402
+    router as command_center_router,
+)
+
+app.include_router(command_center_router, prefix="/api/v1")
