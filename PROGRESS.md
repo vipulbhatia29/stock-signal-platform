@@ -1775,4 +1775,49 @@ Full implementation of KAN-232 (BU-6). Brainstorm → spec → 3-expert spec rev
 - Execution: subagent-driven development, 1 sprint per session
 
 **No code changes. No tests. Refinement only.**
-**Resume point:** Create JIRA stories, then Sprint 1 (S1a + S1b package extraction).
+
+---
+
+## Session 79 — Command Center Sprints 1-3: Backend Complete (2026-03-31)
+
+**Date:** 2026-03-31
+**Branch:** `feat/KAN-233-command-center-refinement`
+
+**What was done:**
+
+### Sprint 1: Observability Package Extraction (S1a + S1b)
+- Extracted 9 files into `backend/observability/` bounded package: collector, writer, token_budget, context, langfuse, queries, 3 routers (admin, health, user_observability)
+- Created re-export shims at all old paths for backward compatibility
+- Updated 6 production files + 10 test files to canonical import paths
+- Fixed 2 pre-existing test bugs: writer + token_budget patch targets were no-ops (shim namespace mismatch)
+
+### Sprint 2: Backend Instrumentation (S2-S6)
+- **S2:** Redis-backed HTTP request metrics middleware (sliding window, path normalization, `/api/` prefix guard) — 20 tests
+- **S3:** DB pool stats collector + pipeline stats query service (5 read-only functions) — 17 tests
+- **S4:** LoginAttempt model + fire-and-forget auth recording + 90-day purge Celery Beat task — 6 tests
+- **S5:** PipelineRun `step_durations` JSONB + `total_duration_seconds` + `record_step_duration()` atomic JSONB merge
+- **S6:** Celery, Langfuse, TokenBudget health check collectors with TTL caching — 17 tests
+
+### Sprint 3: API Endpoints (S7-S8)
+- **S7:** `GET /admin/command-center` aggregate endpoint — 4 zones via `asyncio.gather` with per-zone 3s timeout circuit breakers, 10s Redis cache (skip when degraded), admin-only. 15 Pydantic schemas. — 10 tests
+- **S8:** 3 drill-down endpoints: `/api-traffic`, `/llm` (per-model cost + cascade log), `/pipeline` (run history) — 6 tests
+- **Migration 021:** `login_attempts` table + `pipeline_runs` step_durations/total_duration columns
+
+### Expert Reviews (11 total)
+- Sprint 1+2: TL, Architect, Security, QA, PM — all Critical/Important resolved
+- Sprint 3: PM, Security, Staff Engineer, QA Lead — all Critical/Important resolved
+- Key fixes from reviews:
+  - Security: login failure_reason collapsed (no user enumeration), auth recording truly fire-and-forget with own session, LLM errors sanitized (API key redaction), degraded responses not cached
+  - Architecture: shared AsyncSession in asyncio.gather fixed (each zone gets own session), top_endpoints tuple→dict corruption fixed, percentile off-by-one corrected
+  - Plan compliance: `get_stats()` key names aligned to spec, unused `hours` param removed
+
+### JIRA Updates
+- 12 subtasks created: KAN-300–311 (S1a through S11)
+- 2 subtasks created for deferred work: KAN-312 (migrations, resolved), KAN-313 (step_durations instrumentation)
+- 3 pre-existing bugs logged: KAN-314 (health endpoint auth), KAN-315 (duration_ms), KAN-316 (intent_category info leak)
+
+**Test count:** 1258 (was 1182 → +76 new tests)
+**Alembic head:** `2146d203aa47` (migration 021)
+**6 commits on branch**, all reviewed.
+
+**Resume point:** Sprint 4 (frontend — S9 L1 panels + S10 L2 drill-downs). Plan: `docs/superpowers/plans/2026-03-31-command-center-implementation.md` lines 1636-1817.
