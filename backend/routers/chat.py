@@ -56,8 +56,15 @@ async def _log_decline(reason: str) -> None:
 
     Uses write_event directly — the collector requires DB writer setup
     that is only available in the agent pipeline, not the router scope.
+
+    Generates a query_id if one is not already set so the row is visible
+    in observability queries (get_query_list filters WHERE query_id IS NOT NULL).
     """
     from backend.agents.observability_writer import write_event
+
+    # Ensure query_id is set so the row is visible in observability queries
+    if current_query_id.get(None) is None:
+        current_query_id.set(uuid.uuid4())
 
     await write_event(
         "llm_call",

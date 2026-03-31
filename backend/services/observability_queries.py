@@ -136,20 +136,27 @@ async def get_query_list(
         .scalar_subquery()
     )
 
-    # Eval score subquery (LEFT JOIN target)
+    # Eval score subquery (LEFT JOIN target) — aggregated to prevent row fan-out
+    # when a query_id appears in multiple assessment runs
     eval_sq = (
         select(
             AssessmentResult.query_id,
-            case(
-                (
-                    AssessmentResult.reasoning_coherence_score.is_not(None),
-                    (AssessmentResult.grounding_score + AssessmentResult.reasoning_coherence_score)
-                    / 2,
-                ),
-                else_=AssessmentResult.grounding_score,
+            func.avg(
+                case(
+                    (
+                        AssessmentResult.reasoning_coherence_score.is_not(None),
+                        (
+                            AssessmentResult.grounding_score
+                            + AssessmentResult.reasoning_coherence_score
+                        )
+                        / 2,
+                    ),
+                    else_=AssessmentResult.grounding_score,
+                )
             ).label("eval_score"),
         )
         .where(AssessmentResult.query_id.is_not(None))
+        .group_by(AssessmentResult.query_id)
         .subquery()
     )
 
@@ -191,7 +198,7 @@ async def get_query_list(
     if agent_type:
         base = base.where(LLMCallLog.agent_type == agent_type)
 
-    base = base.group_by(LLMCallLog.query_id, eval_sq.c.eval_score)
+    base = base.group_by(LLMCallLog.query_id)
 
     # HAVING filters (must be applied BEFORE count subquery)
     if status is not None and status in STATUS_MAP_REVERSE:

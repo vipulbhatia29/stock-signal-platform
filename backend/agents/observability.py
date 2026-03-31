@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
 from collections import deque
 from typing import Any
 
@@ -59,7 +60,7 @@ class ObservabilityCollector:
         cost_usd: float | None = None,
         loop_step: int | None = None,
         status: str = "completed",
-        langfuse_trace_id: str | None = None,
+        langfuse_trace_id: uuid.UUID | str | None = None,
     ) -> None:
         """Record a successful LLM request."""
         if self._db_writer:
@@ -111,6 +112,7 @@ class ObservabilityCollector:
                         "prompt_tokens": None,
                         "completion_tokens": None,
                         "error": reason,
+                        "status": "error",
                     },
                 )
             )

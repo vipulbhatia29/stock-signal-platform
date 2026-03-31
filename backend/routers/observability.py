@@ -169,8 +169,7 @@ async def langfuse_url(
     result = await get_query_detail(db, query_id, user_id=_user_scope(user))
     if result is None:
         raise HTTPException(status_code=404, detail="No data found for this query")
-    url = f"{settings.LANGFUSE_BASEURL}/trace/{query_id}"
-    return LangfuseURLResponse(url=url)
+    return LangfuseURLResponse(url=result.get("langfuse_trace_url"))
 
 
 @router.get(
