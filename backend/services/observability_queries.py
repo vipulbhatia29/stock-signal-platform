@@ -9,13 +9,14 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import case, func, literal_column, select, text
+from sqlalchemy import Float, case, func, literal_column, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.models.assessment import AssessmentResult, AssessmentRun
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.logs import LLMCallLog, ToolExecutionLog
+from backend.models.user import User
 
 # Status derivation: worst status wins (highest code)
 STATUS_MAP = {3: "error", 2: "declined", 1: "timeout", 0: "completed"}
@@ -480,3 +481,208 @@ async def get_assessment_history(
         }
         for run in runs
     ]
+
+
+# ── Group-by dimension mapping ──────────────────────────────────────────────
+
+_LLM_GROUP_COLS = {
+    "agent_type": LLMCallLog.agent_type,
+    "model": LLMCallLog.model,
+    "status": LLMCallLog.status,
+    "provider": LLMCallLog.provider,
+    "tier": LLMCallLog.tier,
+}
+
+_VALID_BUCKETS = {"day", "week", "month"}
+
+
+async def get_query_groups(
+    db: AsyncSession,
+    group_by: str,
+    user_id: uuid.UUID | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    bucket: str = "day",
+) -> dict:
+    """Return aggregated query groups by the specified dimension.
+
+    Args:
+        db: Async database session.
+        group_by: Grouping dimension (agent_type, date, model, status,
+            provider, tier, tool_name, user, intent_category).
+        user_id: Scope to user's queries (None = admin, sees all).
+        date_from: Filter window start.
+        date_to: Filter window end.
+        bucket: Date bucketing granularity (day/week/month). Only used
+            when group_by=date.
+
+    Returns:
+        Dict with group_by, bucket (optional), groups (list of GroupRow
+        dicts), total_queries.
+    """
+    if group_by == "tool_name":
+        rows = await _groups_tool_name(db, user_id, date_from, date_to)
+    elif group_by == "user":
+        rows = await _groups_user(db, date_from, date_to)
+    elif group_by == "intent_category":
+        rows = await _groups_intent_category(db, date_from, date_to)
+    else:
+        rows = await _groups_llm(db, group_by, user_id, date_from, date_to, bucket)
+
+    groups = []
+    for row in rows:
+        key = row.key
+        if hasattr(key, "isoformat"):
+            key = key.isoformat()
+        else:
+            key = str(key) if not isinstance(key, str) else key
+
+        groups.append(
+            {
+                "key": key,
+                "query_count": row.query_count,
+                "total_cost_usd": round(float(row.total_cost or 0), 6),
+                "avg_cost_usd": round(float(row.total_cost or 0) / max(row.query_count, 1), 6),
+                "avg_latency_ms": round(float(row.avg_latency or 0), 1),
+                "error_rate": round(float(row.error_rate or 0), 4),
+            }
+        )
+
+    return {
+        "group_by": group_by,
+        "bucket": bucket if group_by == "date" else None,
+        "groups": groups,
+        "total_queries": sum(g["query_count"] for g in groups),
+    }
+
+
+async def _groups_llm(
+    db: AsyncSession,
+    group_by: str,
+    user_id: uuid.UUID | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+    bucket: str,
+) -> list:
+    """Build grouped query from llm_call_log for LLM-based dimensions."""
+    if group_by == "date":
+        safe_bucket = bucket if bucket in _VALID_BUCKETS else "day"
+        group_col = func.date_trunc(safe_bucket, LLMCallLog.created_at)
+    else:
+        group_col = _LLM_GROUP_COLS[group_by]
+
+    error_rate_col = (
+        func.sum(case((LLMCallLog.status == "error", 1), else_=0)).cast(Float) / func.count()
+    )
+
+    base = (
+        select(
+            group_col.label("key"),
+            func.count(func.distinct(LLMCallLog.query_id)).label("query_count"),
+            func.coalesce(func.sum(LLMCallLog.cost_usd), 0).label("total_cost"),
+            func.coalesce(func.avg(LLMCallLog.latency_ms), 0).label("avg_latency"),
+            error_rate_col.label("error_rate"),
+        )
+        .where(LLMCallLog.query_id.is_not(None))
+        .group_by(group_col)
+    )
+
+    if user_id:
+        base = base.join(ChatSession, LLMCallLog.session_id == ChatSession.id).where(
+            ChatSession.user_id == user_id
+        )
+    if date_from:
+        base = base.where(LLMCallLog.created_at >= date_from)
+    if date_to:
+        base = base.where(LLMCallLog.created_at <= date_to)
+
+    return (await db.execute(base)).all()
+
+
+async def _groups_tool_name(
+    db: AsyncSession,
+    user_id: uuid.UUID | None,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> list:
+    """Build grouped query from tool_execution_log by tool_name."""
+    error_rate_col = (
+        func.sum(case((ToolExecutionLog.status != "ok", 1), else_=0)).cast(Float) / func.count()
+    )
+
+    base = (
+        select(
+            ToolExecutionLog.tool_name.label("key"),
+            func.count(func.distinct(ToolExecutionLog.query_id)).label("query_count"),
+            literal_column("0").label("total_cost"),
+            func.coalesce(func.avg(ToolExecutionLog.latency_ms), 0).label("avg_latency"),
+            error_rate_col.label("error_rate"),
+        )
+        .where(ToolExecutionLog.query_id.is_not(None))
+        .group_by(ToolExecutionLog.tool_name)
+    )
+
+    if user_id:
+        base = base.join(ChatSession, ToolExecutionLog.session_id == ChatSession.id).where(
+            ChatSession.user_id == user_id
+        )
+    if date_from:
+        base = base.where(ToolExecutionLog.created_at >= date_from)
+    if date_to:
+        base = base.where(ToolExecutionLog.created_at <= date_to)
+
+    return (await db.execute(base)).all()
+
+
+async def _groups_user(
+    db: AsyncSession,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> list:
+    """Build grouped query joining llm_call_log -> chat_session -> users."""
+    error_rate_col = (
+        func.sum(case((LLMCallLog.status == "error", 1), else_=0)).cast(Float) / func.count()
+    )
+
+    base = (
+        select(
+            User.email.label("key"),
+            func.count(func.distinct(LLMCallLog.query_id)).label("query_count"),
+            func.coalesce(func.sum(LLMCallLog.cost_usd), 0).label("total_cost"),
+            func.coalesce(func.avg(LLMCallLog.latency_ms), 0).label("avg_latency"),
+            error_rate_col.label("error_rate"),
+        )
+        .join(ChatSession, LLMCallLog.session_id == ChatSession.id)
+        .join(User, ChatSession.user_id == User.id)
+        .where(LLMCallLog.query_id.is_not(None))
+        .group_by(User.email)
+    )
+
+    if date_from:
+        base = base.where(LLMCallLog.created_at >= date_from)
+    if date_to:
+        base = base.where(LLMCallLog.created_at <= date_to)
+
+    return (await db.execute(base)).all()
+
+
+async def _groups_intent_category(
+    db: AsyncSession,
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> list:
+    """Build grouped query from eval_results by intent_category."""
+    base = select(
+        AssessmentResult.intent_category.label("key"),
+        func.count().label("query_count"),
+        func.coalesce(func.sum(AssessmentResult.total_cost_usd), 0).label("total_cost"),
+        func.coalesce(func.avg(AssessmentResult.total_duration_ms), 0).label("avg_latency"),
+        literal_column("0").label("error_rate"),
+    ).group_by(AssessmentResult.intent_category)
+
+    if date_from:
+        base = base.where(AssessmentResult.created_at >= date_from)
+    if date_to:
+        base = base.where(AssessmentResult.created_at <= date_to)
+
+    return (await db.execute(base)).all()

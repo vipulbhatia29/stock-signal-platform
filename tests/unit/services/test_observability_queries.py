@@ -12,6 +12,7 @@ from backend.services.observability_queries import (
     get_kpis,
     get_latest_assessment,
     get_query_detail,
+    get_query_groups,
     get_query_list,
 )
 
@@ -741,3 +742,289 @@ class TestGetAssessmentHistory:
 
         result = await get_assessment_history(mock_db)
         assert result == []
+
+
+# ── Helpers for get_query_groups tests ──────────────────────────────────────
+
+
+def _make_group_row(
+    key: str | object = "groq",
+    query_count: int = 5,
+    total_cost: float = 0.01,
+    avg_latency: float = 250.0,
+    error_rate: float = 0.1,
+) -> MagicMock:
+    """Build a mock aggregation row for get_query_groups."""
+    row = MagicMock()
+    row.key = key
+    row.query_count = query_count
+    row.total_cost = total_cost
+    row.avg_latency = avg_latency
+    row.error_rate = error_rate
+    return row
+
+
+def _setup_groups_mock(mock_db, rows: list):
+    """Wire mock_db.execute to return the given rows for any single query."""
+    result = MagicMock()
+    result.all.return_value = rows
+    mock_db.execute = AsyncMock(return_value=result)
+
+
+class TestGetQueryGroupsLLM:
+    """Tests for get_query_groups with llm_call_log dimensions."""
+
+    @pytest.mark.asyncio
+    async def test_group_by_agent_type(self, mock_db):
+        """Should group by agent_type and return correct response shape."""
+        rows = [_make_group_row(key="react_v2", query_count=10)]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="agent_type")
+
+        assert result["group_by"] == "agent_type"
+        assert result["bucket"] is None
+        assert result["total_queries"] == 10
+        assert len(result["groups"]) == 1
+        assert result["groups"][0]["key"] == "react_v2"
+        assert result["groups"][0]["query_count"] == 10
+
+    @pytest.mark.asyncio
+    async def test_group_by_model(self, mock_db):
+        """Should group by model dimension."""
+        rows = [
+            _make_group_row(key="llama-3.3-70b", query_count=7),
+            _make_group_row(key="claude-3-haiku", query_count=3),
+        ]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="model")
+
+        assert result["group_by"] == "model"
+        assert result["total_queries"] == 10
+        assert len(result["groups"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_group_by_status(self, mock_db):
+        """Should group by status dimension."""
+        rows = [
+            _make_group_row(key="completed", query_count=8, error_rate=0.0),
+            _make_group_row(key="error", query_count=2, error_rate=1.0),
+        ]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="status")
+
+        assert result["group_by"] == "status"
+        assert result["total_queries"] == 10
+
+    @pytest.mark.asyncio
+    async def test_group_by_provider(self, mock_db):
+        """Should group by provider dimension."""
+        rows = [_make_group_row(key="groq", query_count=15)]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="provider")
+
+        assert result["group_by"] == "provider"
+        assert result["groups"][0]["key"] == "groq"
+
+    @pytest.mark.asyncio
+    async def test_group_by_tier(self, mock_db):
+        """Should group by tier dimension."""
+        rows = [
+            _make_group_row(key="planner", query_count=5),
+            _make_group_row(key="synthesizer", query_count=5),
+        ]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="tier")
+
+        assert result["group_by"] == "tier"
+        assert result["total_queries"] == 10
+
+    @pytest.mark.asyncio
+    async def test_group_by_date_day_bucket(self, mock_db):
+        """Should group by date with day bucket and set bucket in response."""
+        dt = datetime(2026, 3, 28, 0, 0, 0, tzinfo=timezone.utc)
+        rows = [_make_group_row(key=dt, query_count=12)]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="date", bucket="day")
+
+        assert result["group_by"] == "date"
+        assert result["bucket"] == "day"
+        assert result["groups"][0]["key"] == dt.isoformat()
+
+    @pytest.mark.asyncio
+    async def test_group_by_date_week_bucket(self, mock_db):
+        """Should accept week bucket for date grouping."""
+        dt = datetime(2026, 3, 23, 0, 0, 0, tzinfo=timezone.utc)
+        rows = [_make_group_row(key=dt, query_count=50)]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="date", bucket="week")
+
+        assert result["bucket"] == "week"
+        assert result["total_queries"] == 50
+
+    @pytest.mark.asyncio
+    async def test_group_by_date_month_bucket(self, mock_db):
+        """Should accept month bucket for date grouping."""
+        dt = datetime(2026, 3, 1, 0, 0, 0, tzinfo=timezone.utc)
+        rows = [_make_group_row(key=dt, query_count=200)]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="date", bucket="month")
+
+        assert result["bucket"] == "month"
+        assert result["total_queries"] == 200
+
+    @pytest.mark.asyncio
+    async def test_date_key_iso_format(self, mock_db):
+        """Should serialize date keys as ISO 8601 strings."""
+        dt = datetime(2026, 3, 28, 14, 30, 0, tzinfo=timezone.utc)
+        rows = [_make_group_row(key=dt, query_count=1)]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="date")
+
+        assert result["groups"][0]["key"] == "2026-03-28T14:30:00+00:00"
+
+
+class TestGetQueryGroupsToolName:
+    """Tests for get_query_groups with tool_name dimension."""
+
+    @pytest.mark.asyncio
+    async def test_group_by_tool_name(self, mock_db):
+        """Should group by tool_name from tool_execution_log."""
+        rows = [
+            _make_group_row(key="analyze_stock", query_count=20, total_cost=0),
+            _make_group_row(key="web_search", query_count=5, total_cost=0),
+        ]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="tool_name")
+
+        assert result["group_by"] == "tool_name"
+        assert result["total_queries"] == 25
+        assert len(result["groups"]) == 2
+        # Tools have zero cost
+        assert result["groups"][0]["total_cost_usd"] == 0.0
+        assert result["groups"][0]["avg_cost_usd"] == 0.0
+
+
+class TestGetQueryGroupsUser:
+    """Tests for get_query_groups with user dimension."""
+
+    @pytest.mark.asyncio
+    async def test_group_by_user_returns_email(self, mock_db):
+        """Should group by user and return email as key."""
+        rows = [
+            _make_group_row(key="alice@example.com", query_count=10, total_cost=0.05),
+            _make_group_row(key="bob@example.com", query_count=5, total_cost=0.02),
+        ]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="user")
+
+        assert result["group_by"] == "user"
+        assert result["groups"][0]["key"] == "alice@example.com"
+        assert result["groups"][1]["key"] == "bob@example.com"
+        assert result["total_queries"] == 15
+
+
+class TestGetQueryGroupsIntentCategory:
+    """Tests for get_query_groups with intent_category dimension."""
+
+    @pytest.mark.asyncio
+    async def test_group_by_intent_category(self, mock_db):
+        """Should group by intent_category from eval_results."""
+        rows = [
+            _make_group_row(key="stock_analysis", query_count=8, total_cost=0.04),
+            _make_group_row(key="portfolio_review", query_count=4, total_cost=0.02),
+        ]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="intent_category")
+
+        assert result["group_by"] == "intent_category"
+        assert result["total_queries"] == 12
+        assert result["groups"][0]["key"] == "stock_analysis"
+
+    @pytest.mark.asyncio
+    async def test_intent_category_empty_result(self, mock_db):
+        """Should return empty groups when no eval data exists."""
+        _setup_groups_mock(mock_db, [])
+
+        result = await get_query_groups(mock_db, group_by="intent_category")
+
+        assert result["groups"] == []
+        assert result["total_queries"] == 0
+
+
+class TestGetQueryGroupsFilters:
+    """Tests for get_query_groups date filters and user scoping."""
+
+    @pytest.mark.asyncio
+    async def test_empty_results_any_dimension(self, mock_db):
+        """Should return empty groups for any dimension when no data."""
+        _setup_groups_mock(mock_db, [])
+
+        result = await get_query_groups(mock_db, group_by="provider")
+
+        assert result["groups"] == []
+        assert result["total_queries"] == 0
+        assert result["group_by"] == "provider"
+
+    @pytest.mark.asyncio
+    async def test_date_from_to_filter_applied(self, mock_db):
+        """Should pass date_from and date_to filters without error."""
+        rows = [_make_group_row(key="groq", query_count=3)]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(
+            mock_db,
+            group_by="provider",
+            date_from=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            date_to=datetime(2026, 3, 31, tzinfo=timezone.utc),
+        )
+
+        assert result["total_queries"] == 3
+
+    @pytest.mark.asyncio
+    async def test_user_scoping_applied(self, mock_db):
+        """Should accept user_id for scoping without error."""
+        rows = [_make_group_row(key="react_v2", query_count=2)]
+        _setup_groups_mock(mock_db, rows)
+
+        uid = uuid.uuid4()
+        result = await get_query_groups(mock_db, group_by="agent_type", user_id=uid)
+
+        assert result["total_queries"] == 2
+
+
+class TestGetQueryGroupsResponseShape:
+    """Tests for response shape correctness."""
+
+    @pytest.mark.asyncio
+    async def test_cost_and_latency_rounding(self, mock_db):
+        """Should round cost to 6 decimals and latency to 1 decimal."""
+        rows = [
+            _make_group_row(
+                key="groq",
+                query_count=3,
+                total_cost=0.0123456789,
+                avg_latency=123.456789,
+                error_rate=0.12345,
+            )
+        ]
+        _setup_groups_mock(mock_db, rows)
+
+        result = await get_query_groups(mock_db, group_by="provider")
+        group = result["groups"][0]
+
+        assert group["total_cost_usd"] == round(0.0123456789, 6)
+        assert group["avg_cost_usd"] == round(0.0123456789 / 3, 6)
+        assert group["avg_latency_ms"] == round(123.456789, 1)
+        assert group["error_rate"] == round(0.12345, 4)
