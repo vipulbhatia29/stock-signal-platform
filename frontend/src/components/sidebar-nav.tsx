@@ -7,6 +7,7 @@ import {
   Search,
   Briefcase,
   PieChart,
+  Activity,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -24,6 +25,7 @@ const NAV_ITEMS = [
   { href: "/screener",  label: "Screener",  icon: Search },
   { href: "/portfolio", label: "Portfolio",  icon: Briefcase },
   { href: "/sectors",   label: "Sectors",    icon: PieChart },
+  { href: "/observability", label: "Observability", icon: Activity },
 ] as const;
 
 export function SidebarNav() {

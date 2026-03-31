@@ -1,51 +1,19 @@
 ---
 scope: project
 category: debugging
+updated_by: session-77
 ---
 
-# Frontend Debugging Gotchas
+# Frontend Gotchas
 
-## ESLint react-hooks/set-state-in-effect
-- Calling `setState()` synchronously inside `useEffect` body triggers this error.
-- Fix: use lazy `useState(() => initialValue)` for one-time reads (e.g. localStorage).
-- For reactive updates: use `MutationObserver` callback inside effect, not the effect body directly.
-
-## Recharts colors
-- CSS vars (hsl(var(--x))) do NOT resolve inside Recharts.
-- Use `useChartColors()` hook (reads via `getComputedStyle`).
-- For initial render: `useState(() => readCssVar('--color-positive'))` — reads synchronously on mount.
-
-## API double-prefix
-- `API_BASE = "/api/v1"` is already in `lib/api.ts`.
-- Hook paths: `/portfolio/positions` NOT `/api/v1/portfolio/positions`.
-
-## next/image
-- Always `<Image />` from `next/image`, never raw `<img>`.
-- Requires `width` + `height` or `fill` prop.
-
-## Worktree subagents
-- Claude Code permission model restricts Write/Bash in isolated worktrees.
-- Write files from main session; use worktrees for research/read tasks only.
-
-## JS template literals via Bash
-- Python heredoc/string replacement via Bash escapes backticks in JS template literals.
-- Use Edit tool or Write tool for JS/TS files with template literals.
-
-## base-ui/shadcn v4 triggers
-- `SheetTrigger`, `PopoverTrigger`, and ALL base-ui trigger components use `render={<Button />}`, NOT `asChild`.
-
-## TypeScript strict: `unknown` in JSX
-- Props typed as `unknown` cannot be used in JSX conditionals like `{value && <div/>}`.
-- TypeScript evaluates `unknown && ReactElement` as `unknown | ReactElement` → not assignable to `ReactNode`.
-- Fix: use `{value != null && <div/>}` — the explicit null check narrows the type.
-- ESLint doesn't catch this — only `tsc --noEmit` does. Always run both locally before pushing.
-
-## TanStack Query cache invalidation
-- After mutations that update backend data (e.g., Refresh All ingest), ALL dependent query keys must be invalidated — not just the primary one. Dashboard uses ~12 query keys; invalidating only `["watchlist"]` leaves other tiles stale.
-- Use `enabled` param on `useQuery` to skip unnecessary requests (e.g., `usePortfolioForecast(hasPositions)` — don't call `/forecasts/portfolio` when there are no positions).
-
-## ESM-only packages in Jest
-- `react-markdown` v9+, `rehype-highlight`, `remark-gfm` are ESM-only.
-- Jest runs in CJS mode and cannot import them directly.
-- Fix: add `moduleNameMapper` mocks in `jest.config.ts` pointing to CJS mock files in `__tests__/__mocks__/`.
-- Mock files use `require("react")` with `// eslint-disable-next-line @typescript-eslint/no-require-imports`.
+- ESLint `react-hooks/set-state-in-effect`: use lazy `useState(() => ...)` or inner/outer component split with `key` remount
+- Recharts needs literal color strings — use `useChartColors()`
+- localStorage: lazy initializer with SSR guard
+- base-ui/shadcn v4: `SheetTrigger`, `PopoverTrigger` use `render={<Button />}` prop, NOT `asChild`
+- **Tailwind v4 `@theme` + Next.js fonts:** use `font-family: var(--font-sora)` directly in `@layer base`
+- **composite_score scale:** API returns 0-10 (NOT 0-1). Never multiply by 10 on frontend.
+- **`Date.now()` in React render:** ESLint react-compiler flags as impure. Wrap in `useMemo(() => ..., [deps])`.
+- **Design system has no `--pdim` (purple dim) token.** For LLM type tags, use `bg-card2 text-[var(--chart-3)]`.
+- **Falsy param checks drop valid 0/empty values:** Always use `!= null` for optional URL params in hooks.
+- **Inline table expansion: each row must own its own hook call.** Shared `useQueryDetail` at table level causes stale data flash when switching rows.
+- **Frontend has no role info without `/auth/me`:** JWT doesn't embed role. Must add a profile endpoint for any role-aware rendering.

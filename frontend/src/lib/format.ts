@@ -63,3 +63,25 @@ export function formatPctChange(value: number | null | undefined): string {
   const sign = value >= 0 ? "+" : "";
   return `${sign}${value.toFixed(1)}%`;
 }
+
+export function formatMicroCurrency(value: number | null): string {
+  if (value === null) return "—";
+  if (Math.abs(value) >= 1) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+  return `$${value.toFixed(4)}`;
+}
+
+export function formatDuration(ms: number | null): string {
+  if (ms === null) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+  const mins = Math.floor(ms / 60000);
+  const secs = Math.round((ms % 60000) / 1000);
+  return `${mins}m ${secs}s`;
+}

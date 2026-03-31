@@ -17,6 +17,7 @@ from backend.dependencies import (
     COOKIE_PATH,
     COOKIE_REFRESH_TOKEN,
     COOKIE_SAMESITE,
+    CachedUser,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -30,6 +31,7 @@ from backend.schemas.auth import (
     TokenRefreshRequest,
     TokenResponse,
     UserLoginRequest,
+    UserProfileResponse,
     UserRegisterRequest,
     UserRegisterResponse,
 )
@@ -256,6 +258,23 @@ async def logout(request: Request, response: Response) -> None:
             pass
 
     _clear_auth_cookies(response)
+
+
+@router.get("/me", response_model=UserProfileResponse)
+async def get_me(
+    user: User | CachedUser = Depends(get_current_user),
+) -> UserProfileResponse:
+    """Return the current authenticated user's profile.
+
+    Returns:
+        The user's id, email, role, and active status.
+    """
+    return UserProfileResponse(
+        id=user.id,
+        email=user.email,
+        role=user.role.value,
+        is_active=user.is_active,
+    )
 
 
 # ---------------------------------------------------------------------------

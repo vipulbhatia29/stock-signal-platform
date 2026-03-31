@@ -737,6 +737,51 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - Declined queries appear in the query list and contribute to error_rate aggregations
 - Enables admin review of guard effectiveness and false-positive rates
 
+### FR-19: Observability Frontend — User-Facing Analytics (Phase B.5 BU-6)
+
+> SaaS differentiator: users see how their subscription money works. NOT internal admin tooling.
+
+**FR-19.1: Observability Page Route**
+- `/observability` page accessible from sidebar navigation (Activity icon)
+- Single route, role-aware rendering: regular users see own data, admins see additional sections
+- `GET /auth/me` endpoint provides user profile with role for conditional rendering
+
+**FR-19.2: KPI Strip**
+- 5 StatTile cards: Queries Today, Avg Latency (`formatDuration`), Avg Cost/Query (`formatMicroCurrency` — 4-decimal for sub-penny), Pass Rate (`formatPercent`), Fallback Rate
+- Color-coded accents: pass rate (gain ≥80%, warn 50-80%, loss <50%), fallback rate (gain <5%, warn 5-15%, loss ≥15%)
+- Staggered entrance animation, skeleton loading state
+
+**FR-19.3: Query History Table**
+- Paginated, sortable (5 columns), filterable (status pills + cost range min/max inputs)
+- Tool badges capped at 3 with "+N" overflow count
+- Status badges: completed (green), error (red), declined (yellow), timeout (grey)
+- Score column visible to admins only
+- URL param persistence for all filter/sort/page state
+- Inline accordion expansion: click row to see step-by-step execution trace
+- Expand affordance: chevron icon toggles on each row
+
+**FR-19.4: Query Detail Expansion**
+- Step timeline: step number badge, action name (mono font), type tag pill (llm/db/external), cache hit badge
+- Input/output summaries (PII-sanitized by backend)
+- Langfuse deep-link button when `langfuse_trace_url` is present
+- Error state when detail fetch fails
+- Each expanded row owns its own data fetch (no stale data between expansions)
+
+**FR-19.5: Grouped Analytics Charts**
+- 8 dimension tabs (6 user + 2 admin-only: By User, By Intent)
+- Date dimension: dual-axis ComposedChart (cost area + latency line)
+- Categorical dimensions: BarChart; tool_name: horizontal bar
+- Date range quick selectors: 7d / 30d / 90d
+- Bucket selector for date: day / week / month
+- All chart state persisted in URL params (dim, bucket, range)
+- Admin dimension guard: resets to "date" if non-admin selects admin-only dimension
+
+**FR-19.6: Assessment Quality Section**
+- Framed as platform quality ("We regularly test AI quality against benchmarks")
+- Latest assessment: pass rate StatTile + queries tested + cost + relative time
+- Admin-only: assessment history table with trigger, pass rate, queries, cost, date
+- Coming-soon empty state when no assessment data
+
 ---
 
 ## 4. Non-Functional Requirements

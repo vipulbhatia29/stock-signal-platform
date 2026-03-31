@@ -616,6 +616,25 @@ GET /api/v1/observability/queries/{query_id}
 - `StepDetail.output_summary`: truncated, PII-sanitised representation of the tool output
 - `langfuse_trace_url`: deep-link to Langfuse trace viewer, constructed from stored `langfuse_trace_id` (null when Langfuse is not configured)
 
+### 3.15 User Profile Endpoint (Phase B.5 BU-6)
+
+```
+GET /api/v1/auth/me
+```
+
+**Response:** `UserProfileResponse`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | UUID | User ID |
+| `email` | string | User email |
+| `role` | string | `"admin"` or `"user"` |
+| `is_active` | boolean | Account active status |
+
+**Auth:** JWT required. Returns profile of the authenticated user (no resource ID parameter — IDOR-safe by design). Cached via Redis `CachedUser` (VOLATILE tier, ~300s TTL).
+
+**Frontend usage:** `useCurrentUser()` hook calls this once on auth, caches with `staleTime: Infinity`. Provides `isAdmin` boolean for role-aware rendering (admin-only sections: assessment history, score column, user/intent chart dimensions).
+
 ---
 
 ## 4. Service Layer Design
