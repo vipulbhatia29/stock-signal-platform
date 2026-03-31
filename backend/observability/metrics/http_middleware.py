@@ -147,12 +147,14 @@ class HttpMetricsCollector:
             sample_count = len(latencies)
             rps_avg = round(sample_count / self._window, 2) if self._window else 0
 
-            # Percentiles (null when < 20 samples)
+            # Percentiles using nearest-rank method (null when < 20 samples)
             if sample_count >= 20:
+                import math
+
                 latencies.sort()
-                p50 = round(latencies[int(sample_count * 0.50)], 2)
-                p95 = round(latencies[int(sample_count * 0.95)], 2)
-                p99 = round(latencies[min(int(sample_count * 0.99), sample_count - 1)], 2)
+                p50 = round(latencies[min(math.ceil(sample_count * 0.50) - 1, sample_count - 1)], 2)
+                p95 = round(latencies[min(math.ceil(sample_count * 0.95) - 1, sample_count - 1)], 2)
+                p99 = round(latencies[min(math.ceil(sample_count * 0.99) - 1, sample_count - 1)], 2)
             else:
                 p50 = p95 = p99 = None
 

@@ -233,9 +233,6 @@ async def _get_api_traffic(request: Request) -> ApiTrafficZone:
 
     stats = await http_metrics.get_stats()
 
-    # Convert top_endpoints from list of tuples to list of dicts
-    top_endpoints = [{"endpoint": ep, "count": cnt} for ep, cnt in stats.get("top_endpoints", [])]
-
     return ApiTrafficZone(
         window_seconds=stats.get("window_seconds", 300),
         sample_count=stats.get("sample_count", 0),
@@ -246,7 +243,7 @@ async def _get_api_traffic(request: Request) -> ApiTrafficZone:
         error_rate_pct=stats.get("error_rate_pct"),
         total_requests_today=stats.get("total_requests_today", 0),
         total_errors_today=stats.get("total_errors_today", 0),
-        top_endpoints=top_endpoints,
+        top_endpoints=stats.get("top_endpoints", []),
     )
 
 
@@ -373,6 +370,35 @@ async def _get_pipeline(db: AsyncSession) -> PipelineZone:
 
 
 # ---------------------------------------------------------------------------
+# Safe wrappers — each opens its own DB session for concurrent gather
+# ---------------------------------------------------------------------------
+
+
+async def _get_system_health_safe(request: Request) -> SystemHealthZone:
+    """Wrapper that opens its own session for concurrent use in gather."""
+    from backend.database import async_session_factory
+
+    async with async_session_factory() as db:
+        return await _get_system_health(request, db)
+
+
+async def _get_llm_operations_safe(request: Request) -> LlmOperationsZone:
+    """Wrapper that opens its own session for concurrent use in gather."""
+    from backend.database import async_session_factory
+
+    async with async_session_factory() as db:
+        return await _get_llm_operations(request, db)
+
+
+async def _get_pipeline_safe() -> PipelineZone:
+    """Wrapper that opens its own session for concurrent use in gather."""
+    from backend.database import async_session_factory
+
+    async with async_session_factory() as db:
+        return await _get_pipeline(db)
+
+
+# ---------------------------------------------------------------------------
 # Aggregate endpoint
 # ---------------------------------------------------------------------------
 
@@ -385,7 +411,6 @@ async def _get_pipeline(db: AsyncSession) -> PipelineZone:
 )
 async def get_command_center(
     request: Request,
-    db: AsyncSession = Depends(get_async_session),
     user: Any = Depends(get_current_user),
 ) -> CommandCenterResponse:
     """Aggregate endpoint for the Command Center dashboard.
@@ -409,11 +434,14 @@ async def get_command_center(
     # --- Collect zones in parallel ---
     start_ms = time.monotonic()
 
+    # Each zone that queries DB gets its own session to avoid sharing
+    # a single AsyncSession across concurrent coroutines (unsafe).
+
     results = await asyncio.gather(
-        _collect_zone("system_health", _get_system_health(request, db)),
+        _collect_zone("system_health", _get_system_health_safe(request)),
         _collect_zone("api_traffic", _get_api_traffic(request)),
-        _collect_zone("llm_operations", _get_llm_operations(request, db)),
-        _collect_zone("pipeline", _get_pipeline(db)),
+        _collect_zone("llm_operations", _get_llm_operations_safe(request)),
+        _collect_zone("pipeline", _get_pipeline_safe()),
         return_exceptions=True,
     )
 

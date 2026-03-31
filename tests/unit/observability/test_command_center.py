@@ -104,7 +104,7 @@ async def test_get_api_traffic_with_collector() -> None:
         "error_rate_pct": 2.5,
         "total_requests_today": 500,
         "total_errors_today": 10,
-        "top_endpoints": [("GET:/api/v1/health", 200)],
+        "top_endpoints": [{"endpoint": "GET:/api/v1/health", "count": 200}],
     }
 
     request = MagicMock()
