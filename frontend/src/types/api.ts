@@ -844,6 +844,13 @@ export interface TierToggleRequest {
 
 // ── Observability ─────────────────────────────────────────────────────────────
 
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: "admin" | "user";
+  is_active: boolean;
+}
+
 export interface KPIResponse {
   queries_today: number;
   avg_latency_ms: number;
@@ -879,7 +886,7 @@ export interface QueryListResponse {
 export interface StepDetail {
   step_number: number;
   action: string;
-  type_tag: string;
+  type_tag: "llm" | "db" | "external";
   model_name: string | null;
   input_summary: string | null;
   output_summary: string | null;
@@ -897,6 +904,22 @@ export interface QueryDetailResponse {
 
 export interface LangfuseURLResponse {
   url: string | null;
+}
+
+export interface GroupRow {
+  key: string;
+  query_count: number;
+  total_cost_usd: number;
+  avg_cost_usd: number;
+  avg_latency_ms: number;
+  error_rate: number;
+}
+
+export interface GroupedResponse {
+  group_by: string;
+  bucket: string | null;
+  groups: GroupRow[];
+  total_queries: number;
 }
 
 export interface AssessmentRunSummary {

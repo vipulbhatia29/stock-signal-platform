@@ -1659,3 +1659,68 @@ Full implementation of KAN-229 (BU-3) + KAN-230 (BU-4). All 31 plan tasks execut
 - Frontend: 231 tests in 49 suites (+73 new)
 - Total: ~1583 (+107)
 - Alembic head: b1fe4c734142 (migration 019)
+
+---
+
+## Session 77 — BU-6: Observability Frontend (2026-03-31)
+
+**Date:** 2026-03-31
+**Branch:** `feat/KAN-232-observability-frontend`
+
+**What was done:**
+
+Full implementation of KAN-232 (BU-6). Brainstorm → spec → 3-expert spec review (11 findings) → plan (12 tasks, 7 chunks) → subagent execution (7 waves) → 4-expert code review (25 findings) → all Critical+Important fixes applied.
+
+### Backend (1 new endpoint)
+- `GET /auth/me` — returns `UserProfileResponse` (id, email, role, is_active). Enables role-aware frontend rendering. JWT-authed, Redis-cached via existing `get_current_user` dependency.
+- `UserProfileResponse` schema in `backend/schemas/auth.py`
+- 2 API tests (`test_auth_me.py`)
+
+### Frontend Foundation (Chunk 2)
+- 12 TypeScript interfaces for observability types in `types/api.ts`
+- `formatMicroCurrency()` — 4-decimal for sub-penny LLM costs ($0.0012)
+- `formatDuration()` — ms→human (350ms, 1.2s, 2m 15s)
+- `useCurrentUser()` hook — calls `/auth/me`, exposes `isAdmin` boolean, `staleTime: Infinity`
+- `useObservabilityKPIs`, `useObservabilityQueries`, `useQueryDetail`, `useObservabilityGrouped`, `useAssessmentLatest`, `useAssessmentHistory` — 7 TanStack Query hooks with `obsKeys` factory
+
+### Frontend Components (Chunks 3-7)
+- **Sidebar nav:** Activity icon added to `NAV_ITEMS`
+- **Page shell:** `/observability` route with `PageTransition`, `Suspense` boundaries, `useCurrentUser` for role
+- **KPI strip:** 5 StatTile cards (Queries Today, Avg Latency, Avg Cost, Pass Rate, Fallback Rate) with conditional accent colors and StaggerGroup animation
+- **Query table:** Sortable (5 cols), filterable (status pills + cost range inputs), paginated, URL param persistence. Fragment-keyed row pairs for inline expansion. Expand affordance chevron icon. Admin-only score column.
+- **Query row detail:** Each row owns its own `useQueryDetail` call (no stale data between expansions). Step timeline with type tag pills (llm=purple via design token, db=cyan, external=yellow), cache hit badge, Langfuse deep-link. Error state handling.
+- **Analytics charts:** 8 dimension tabs (6 user + 2 admin-only). Date: dual-axis ComposedChart (cost+latency). Categorical: BarChart. tool_name: horizontal bar. Date range selectors (7d/30d/90d). Bucket selector (day/week/month). All state in URL params. Admin dimension guard.
+- **Assessment section:** Platform quality framing. Latest pass rate + supporting metrics. Admin-only history table. Coming-soon empty state.
+
+### Code Review Fixes (25 findings across 4 expert panels)
+- C1: Stale detail data → each row owns its own hook
+- C2: "Error Rate" → "Fallback Rate" label
+- C3: Hardcoded purple → `bg-card2 text-[var(--chart-3)]`
+- C4: Falsy param checks → `!= null` in hook
+- C5: Error state added to QueryRowDetail
+- I1-I3: Date range selectors, cost filters, analytics URL state — all implemented
+- I4: `aria-sort="none"` on inactive sortable columns
+- I5: Shared `EmptyState` component used everywhere
+- I6: `bg-cdim` replaces `bg-cyan/15`
+- I7: Expand affordance chevron icon
+- I8: Dead `else` branch removed in auth/me
+- I9: Admin dimension guard (reset to "date")
+- ESLint `Date.now()` impure → `useMemo` fix
+
+### Doc Updates
+- TDD.md §3.15: `/auth/me` endpoint contract
+- FSD.md FR-19: Observability Frontend (6 sub-requirements)
+- project-plan.md: BU-5 ✅, BU-6 🔄
+
+### Test Counts
+- Backend: 2 new API tests
+- Frontend: 276 tests in 57 suites (+45 new: 9 format + 8 hook + 3 KPI + 6 query-table + 7 query-detail + 8 analytics + 4 assessment)
+- Total: ~1787 (+45 frontend, +2 backend)
+- Alembic head: c2d3e4f5a6b7 (migration 020, unchanged)
+
+### Key Learnings
+- **Frontend needs `/auth/me` for any role-aware rendering** — JWT doesn't embed role, no /me endpoint existed
+- **Inline table expansion: each row must own its hook** — shared hook causes stale data flash between expansions
+- **`Date.now()` in React render** — ESLint react-compiler flags it as impure; wrap in `useMemo`
+- **Design system purple** — no `--pdim` token exists; use `bg-card2 text-[var(--chart-3)]` for LLM type tags
+- **Falsy param checks drop valid 0/empty values** — always use `!= null` for optional URL params

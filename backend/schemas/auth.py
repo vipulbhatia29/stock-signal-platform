@@ -43,3 +43,12 @@ class TokenRefreshRequest(BaseModel):
     """Token refresh request body."""
 
     refresh_token: str
+
+
+class UserProfileResponse(BaseModel):
+    """Authenticated user's profile."""
+
+    id: uuid.UUID
+    email: str
+    role: str
+    is_active: bool

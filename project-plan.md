@@ -971,8 +971,8 @@ KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval inf
 | BU-2 | Stock Detail Enrichment | KAN-228 | Wire intelligence, news, benchmark, candlestick (4 endpoints) | ~1 session | ✅ Session 73 |
 | BU-3 | Dashboard + Market Enrichment | KAN-229 | 5-zone Daily Intelligence Briefing: sector normalize, migration 019, top movers, news endpoint, 10 components, 5 hooks | ~1 session | ✅ Session 75 |
 | BU-4 | Chat System Improvements | KAN-230 | PINNABLE_TOOLS 7→22, feedback visual state, ChatMessage type sync | ~0.5 session | ✅ Session 75 |
-| BU-5 | Observability Backend Gaps | KAN-231 | Migration 020, sort/filter/group params (9 dims), PII sanitizer, input/output summaries, eval score join, Langfuse deep-links, decline logging, StatusFilterEnum. 15 tasks, ~70 tests. | ~1.5 sessions | 🔄 Session 76 |
-| BU-6 | Observability Frontend | KAN-232 | Build /observability page, KPI ticker, QueryTable, step detail, Langfuse links. Supersedes KAN-224/225 | ~1-2 sessions | |
+| BU-5 | Observability Backend Gaps | KAN-231 | Migration 020, sort/filter/group params (9 dims), PII sanitizer, input/output summaries, eval score join, Langfuse deep-links, decline logging, StatusFilterEnum. 15 tasks, ~70 tests. | ~1.5 sessions | ✅ Session 76 |
+| BU-6 | Observability Frontend | KAN-232 | `/auth/me` endpoint, `/observability` page (KPI strip, query table + inline expansion, grouped charts with 9 dims, assessment section), `useCurrentUser` + `useObservability` hooks, `formatMicroCurrency`/`formatDuration` utils, role-aware rendering. 12 tasks, 7 chunks, ~44 tests. | ~1 session | 🔄 Session 77 |
 | BU-7 | Admin Dashboard | KAN-233 | 11 admin endpoints → LLM management, tier health, cost analytics, chat audit UI | ~1-2 sessions | |
 
 **Dependency order:** BU-1 → BU-2/3/4 (parallel) → BU-5 → BU-6 → BU-7

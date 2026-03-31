@@ -37,6 +37,7 @@ jest.mock("lucide-react", () => ({
   Search: () => <svg data-testid="icon-screener" />,
   Briefcase: () => <svg data-testid="icon-portfolio" />,
   PieChart: () => <svg data-testid="icon-sectors" />,
+  Activity: () => <svg data-testid="icon-observability" />,
   Settings: () => <svg data-testid="icon-settings" />,
   LogOut: () => <svg data-testid="icon-logout" />,
 }));
@@ -47,6 +48,7 @@ test("renders all navigation links including Sectors", () => {
   expect(screen.getByLabelText("Screener")).toBeInTheDocument();
   expect(screen.getByLabelText("Portfolio")).toBeInTheDocument();
   expect(screen.getByLabelText("Sectors")).toBeInTheDocument();
+  expect(screen.getByLabelText("Observability")).toBeInTheDocument();
 });
 
 test("Dashboard link has active styling when on /dashboard", () => {
