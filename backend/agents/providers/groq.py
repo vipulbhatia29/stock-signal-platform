@@ -12,7 +12,7 @@ from backend.agents.llm_client import (
     LLMResponse,
     ProviderHealth,
 )
-from backend.agents.token_budget import TokenBudget
+from backend.observability.token_budget import TokenBudget
 
 logger = logging.getLogger(__name__)
 

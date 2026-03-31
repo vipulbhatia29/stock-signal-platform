@@ -3,7 +3,7 @@
 import uuid
 from unittest.mock import MagicMock, patch
 
-from backend.services.langfuse_service import LangfuseService
+from backend.observability.langfuse import LangfuseService
 
 
 class TestLangfuseService:

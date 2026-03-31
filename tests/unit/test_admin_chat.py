@@ -165,7 +165,7 @@ class TestListChatSessions:
         self, admin_user: MagicMock, mock_session_row: MagicMock
     ) -> None:
         """List sessions returns paginated results."""
-        from backend.routers.admin import list_chat_sessions
+        from backend.observability.routers.admin import list_chat_sessions
 
         mock_db = AsyncMock()
         # First call: count query → returns 1
@@ -176,7 +176,7 @@ class TestListChatSessions:
         rows_result.all.return_value = [mock_session_row]
         mock_db.execute.side_effect = [count_result, rows_result]
 
-        with patch("backend.routers.admin.require_admin", return_value=admin_user):
+        with patch("backend.observability.routers.admin.require_admin", return_value=admin_user):
             result = await list_chat_sessions(
                 user=admin_user, db=mock_db, user_id=None, agent_type=None, limit=50, offset=0
             )
@@ -188,7 +188,7 @@ class TestListChatSessions:
     @pytest.mark.asyncio
     async def test_non_admin_forbidden(self, regular_user: MagicMock) -> None:
         """Non-admin user gets 403."""
-        from backend.routers.admin import list_chat_sessions
+        from backend.observability.routers.admin import list_chat_sessions
 
         mock_db = AsyncMock()
         with pytest.raises(HTTPException) as exc_info:
@@ -202,7 +202,7 @@ class TestGetChatTranscript:
     @pytest.mark.asyncio
     async def test_session_not_found(self, admin_user: MagicMock) -> None:
         """Missing session returns 404."""
-        from backend.routers.admin import get_chat_transcript
+        from backend.observability.routers.admin import get_chat_transcript
 
         mock_db = AsyncMock()
         mock_result = MagicMock()
@@ -218,7 +218,7 @@ class TestGetChatTranscript:
         self, admin_user: MagicMock, mock_session_row: MagicMock, mock_message: MagicMock
     ) -> None:
         """Returns session summary + ordered messages."""
-        from backend.routers.admin import get_chat_transcript
+        from backend.observability.routers.admin import get_chat_transcript
 
         mock_db = AsyncMock()
         # First call: session query
@@ -242,7 +242,7 @@ class TestGetChatStats:
     @pytest.mark.asyncio
     async def test_returns_counts(self, admin_user: MagicMock) -> None:
         """Stats endpoint returns aggregate counts."""
-        from backend.routers.admin import get_chat_stats
+        from backend.observability.routers.admin import get_chat_stats
 
         mock_db = AsyncMock()
         # 5 sequential scalar queries

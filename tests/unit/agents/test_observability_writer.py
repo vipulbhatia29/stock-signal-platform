@@ -12,16 +12,16 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_llm_call_log(self) -> None:
         """Should insert an LLMCallLog row."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
         with patch(patch_factory, return_value=mock_cm):
             with patch(patch_sid) as mock_sid:
                 with patch(patch_qid) as mock_qid:
@@ -46,16 +46,16 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_tool_execution_log(self) -> None:
         """Should insert a ToolExecutionLog row."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
         with patch(patch_factory, return_value=mock_cm):
             with patch(patch_sid) as mock_sid:
                 with patch(patch_qid) as mock_qid:
@@ -79,13 +79,13 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_db_error_does_not_raise(self) -> None:
         """DB write failures should be swallowed (logged, not raised)."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(side_effect=Exception("DB down"))
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
+        patch_factory = "backend.observability.writer.async_session_factory"
         with patch(patch_factory, return_value=mock_cm):
             # Should not raise
             await write_event(
@@ -104,16 +104,16 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_unknown_event_type_logs_warning(self) -> None:
         """Unknown event type should log warning and return without writing."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
         with patch(patch_factory, return_value=mock_cm):
             with patch(patch_sid) as mock_sid:
                 with patch(patch_qid) as mock_qid:
@@ -126,18 +126,18 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_cost_usd_on_llm_call(self) -> None:
         """cost_usd should be set on the LLMCallLog row when provided."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,
@@ -169,18 +169,18 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_cache_hit_on_tool_execution(self) -> None:
         """cache_hit should be set on ToolExecutionLog row."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,
@@ -211,18 +211,18 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_agent_type_from_contextvar(self) -> None:
         """agent_type should be populated from ContextVar."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,
@@ -254,18 +254,18 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_loop_step_on_llm_call(self) -> None:
         """loop_step should be set on the LLMCallLog row when provided."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,
@@ -297,18 +297,18 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_loop_step_on_tool_execution(self) -> None:
         """loop_step should be set on the ToolExecutionLog row when provided."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,
@@ -339,18 +339,18 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_status_on_llm_call(self) -> None:
         """status field should be written on LLMCallLog when provided."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,
@@ -382,18 +382,18 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_defaults_status_to_completed(self) -> None:
         """status should default to 'completed' when not present in data."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,
@@ -424,7 +424,7 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_langfuse_trace_id(self) -> None:
         """langfuse_trace_id should be written on LLMCallLog when provided."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
@@ -432,11 +432,11 @@ class TestWriteEvent:
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
         trace_id = str(uuid.uuid4())
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,
@@ -468,18 +468,18 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_input_summary_on_tool(self) -> None:
         """input_summary should be a sanitized string of params containing the ticker."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,
@@ -510,18 +510,18 @@ class TestWriteEvent:
     @pytest.mark.asyncio
     async def test_writes_output_summary_on_tool(self) -> None:
         """output_summary should be a sanitized string of result containing the score."""
-        from backend.agents.observability_writer import write_event
+        from backend.observability.writer import write_event
 
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
 
-        patch_factory = "backend.agents.observability_writer.async_session_factory"
-        patch_sid = "backend.agents.observability_writer.current_session_id"
-        patch_qid = "backend.agents.observability_writer.current_query_id"
-        patch_at = "backend.agents.observability_writer.current_agent_type"
-        patch_ai = "backend.agents.observability_writer.current_agent_instance_id"
+        patch_factory = "backend.observability.writer.async_session_factory"
+        patch_sid = "backend.observability.writer.current_session_id"
+        patch_qid = "backend.observability.writer.current_query_id"
+        patch_at = "backend.observability.writer.current_agent_type"
+        patch_ai = "backend.observability.writer.current_agent_instance_id"
         with (
             patch(patch_factory, return_value=mock_cm),
             patch(patch_sid) as m_sid,

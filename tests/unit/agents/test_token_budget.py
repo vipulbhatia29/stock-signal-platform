@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from backend.agents.token_budget import ModelLimits, TokenBudget
+from backend.observability.token_budget import ModelLimits, TokenBudget
 
 
 @pytest.fixture
@@ -187,7 +187,7 @@ class TestRecord:
         """Redis errors during record are logged but don't raise."""
         budget._redis.evalsha = AsyncMock(side_effect=ConnectionError("Redis down"))
         budget._record_sha = "fake_sha"
-        with patch("backend.agents.token_budget.logger") as mock_logger:
+        with patch("backend.observability.token_budget.logger") as mock_logger:
             await budget.record("model-a", 500)
             mock_logger.warning.assert_called_once()
 

@@ -2,6 +2,7 @@
 
 import logging
 import re
+import uuid
 from urllib.parse import urlencode
 
 import jwt
@@ -102,6 +103,64 @@ def _clear_auth_cookies(response: Response) -> None:
     response.delete_cookie(key=COOKIE_REFRESH_TOKEN, path=COOKIE_PATH)
 
 
+def _record_login_attempt_bg(
+    email: str,
+    success: bool,
+    user_id: uuid.UUID | None,
+    ip_address: str,
+    user_agent: str,
+    failure_reason: str | None = None,
+) -> None:
+    """Schedule fire-and-forget login attempt recording.
+
+    Uses its own DB session to avoid blocking the auth flow
+    or double-committing on the caller's session.
+    """
+    import asyncio
+
+    asyncio.create_task(
+        _write_login_attempt(
+            email=email,
+            success=success,
+            user_id=user_id,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            failure_reason=failure_reason,
+        )
+    )
+
+
+async def _write_login_attempt(
+    email: str,
+    success: bool,
+    user_id: uuid.UUID | None,
+    ip_address: str,
+    user_agent: str,
+    failure_reason: str | None = None,
+) -> None:
+    """Write login attempt to DB with its own session."""
+    try:
+        from datetime import datetime, timezone
+
+        from backend.database import async_session_factory
+        from backend.models.login_attempt import LoginAttempt
+
+        async with async_session_factory() as db:
+            attempt = LoginAttempt(
+                timestamp=datetime.now(timezone.utc),
+                user_id=user_id,
+                email=email,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                success=success,
+                failure_reason=failure_reason,
+            )
+            db.add(attempt)
+            await db.commit()
+    except Exception:
+        logger.debug("Failed to record login attempt", exc_info=True)
+
+
 @router.post(
     "/register",
     response_model=UserRegisterResponse,
@@ -166,12 +225,28 @@ async def login(
     user = result.scalar_one_or_none()
 
     if user is None or not verify_password(body.password, user.hashed_password):
+        _record_login_attempt_bg(
+            email=body.email,
+            success=False,
+            user_id=user.id if user else None,
+            ip_address=request.client.host if request.client else "unknown",
+            user_agent=request.headers.get("user-agent", "")[:500],
+            failure_reason="invalid_credentials",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
 
     if not user.is_active:
+        _record_login_attempt_bg(
+            email=body.email,
+            success=False,
+            user_id=user.id,
+            ip_address=request.client.host if request.client else "unknown",
+            user_agent=request.headers.get("user-agent", "")[:500],
+            failure_reason="account_disabled",
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Account is disabled",
@@ -181,6 +256,14 @@ async def login(
     refresh_token = create_refresh_token(user.id)
 
     _set_auth_cookies(response, access_token, refresh_token)
+
+    _record_login_attempt_bg(
+        email=body.email,
+        success=True,
+        user_id=user.id,
+        ip_address=request.client.host if request.client else "unknown",
+        user_agent=request.headers.get("user-agent", "")[:500],
+    )
 
     return TokenResponse(
         access_token=access_token,

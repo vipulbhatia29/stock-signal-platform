@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # 3. Load model cascade config from DB + build providers
     from backend.agents.model_config import ModelConfigLoader
-    from backend.agents.token_budget import TokenBudget
+    from backend.observability.token_budget import TokenBudget
 
     config_loader = ModelConfigLoader()
     async with async_session_factory() as config_session:
@@ -96,8 +96,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     token_budget = TokenBudget(redis=cache_redis)
 
     # Observability collector — fire-and-forget writes + DB-backed reads
-    from backend.agents.observability import ObservabilityCollector
-    from backend.agents.observability_writer import write_event
+    from backend.observability.collector import ObservabilityCollector
+    from backend.observability.writer import write_event
 
     collector = ObservabilityCollector()
     collector.set_db_writer(write_event)
@@ -106,10 +106,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Cache service — Redis cache-aside with TTL tiers
     cache_service = CacheService(cache_redis)
     app.state.cache = cache_service
+    app.state.cache_redis = cache_redis
     logger.info("CacheService initialized")
 
+    # HTTP metrics middleware — Redis-backed request tracking
+    from backend.observability.metrics.http_middleware import HttpMetricsCollector
+
+    http_metrics = HttpMetricsCollector(redis=cache_redis)
+    app.state.http_metrics = http_metrics
+
     # Langfuse tracing — parallel to ObservabilityCollector (fire-and-forget)
-    from backend.services.langfuse_service import LangfuseService
+    from backend.observability.langfuse import LangfuseService
 
     langfuse_service = LangfuseService(
         secret_key=settings.LANGFUSE_SECRET_KEY,
@@ -295,6 +302,10 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+from backend.observability.metrics.http_middleware import HttpMetricsMiddleware  # noqa: E402
+
+app.add_middleware(HttpMetricsMiddleware)
 
 
 # --- Routers ---

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.routers.health import _check_database, _check_redis, health_check
+from backend.observability.routers.health import _check_database, _check_redis, health_check
 from backend.schemas.health import DependencyStatus
 
 
@@ -75,7 +75,7 @@ async def test_check_database_healthy() -> None:
     mock_factory.__aexit__ = AsyncMock(return_value=False)
 
     with patch(
-        "backend.routers.health.async_session_factory",
+        "backend.observability.routers.health.async_session_factory",
         return_value=mock_factory,
     ):
         status = await _check_database()
@@ -89,7 +89,7 @@ async def test_check_database_healthy() -> None:
 async def test_check_database_connection_error() -> None:
     """DB connection fails — returns unhealthy."""
     with patch(
-        "backend.routers.health.async_session_factory",
+        "backend.observability.routers.health.async_session_factory",
         side_effect=ConnectionError("cannot connect"),
     ):
         status = await _check_database()
@@ -112,9 +112,9 @@ async def test_health_all_services_ok() -> None:
     db_ok = DependencyStatus(healthy=True, latency_ms=1.0)
 
     with (
-        patch("backend.routers.health._check_redis", return_value=redis_ok),
-        patch("backend.routers.health._check_database", return_value=db_ok),
-        patch("backend.routers.health.settings") as mock_settings,
+        patch("backend.observability.routers.health._check_redis", return_value=redis_ok),
+        patch("backend.observability.routers.health._check_database", return_value=db_ok),
+        patch("backend.observability.routers.health.settings") as mock_settings,
     ):
         mock_settings.MCP_TOOLS = False
         response = await health_check(request)
@@ -135,9 +135,9 @@ async def test_health_redis_down_returns_degraded() -> None:
     db_ok = DependencyStatus(healthy=True, latency_ms=1.0)
 
     with (
-        patch("backend.routers.health._check_redis", return_value=redis_down),
-        patch("backend.routers.health._check_database", return_value=db_ok),
-        patch("backend.routers.health.settings") as mock_settings,
+        patch("backend.observability.routers.health._check_redis", return_value=redis_down),
+        patch("backend.observability.routers.health._check_database", return_value=db_ok),
+        patch("backend.observability.routers.health.settings") as mock_settings,
     ):
         mock_settings.MCP_TOOLS = False
         response = await health_check(request)
@@ -157,9 +157,9 @@ async def test_health_db_down_returns_degraded() -> None:
     db_down = DependencyStatus(healthy=False, error="Database connection failed")
 
     with (
-        patch("backend.routers.health._check_redis", return_value=redis_ok),
-        patch("backend.routers.health._check_database", return_value=db_down),
-        patch("backend.routers.health.settings") as mock_settings,
+        patch("backend.observability.routers.health._check_redis", return_value=redis_ok),
+        patch("backend.observability.routers.health._check_database", return_value=db_down),
+        patch("backend.observability.routers.health.settings") as mock_settings,
     ):
         mock_settings.MCP_TOOLS = False
         response = await health_check(request)
@@ -179,9 +179,9 @@ async def test_health_both_down_returns_degraded() -> None:
     db_down = DependencyStatus(healthy=False, error="Database connection failed")
 
     with (
-        patch("backend.routers.health._check_redis", return_value=redis_down),
-        patch("backend.routers.health._check_database", return_value=db_down),
-        patch("backend.routers.health.settings") as mock_settings,
+        patch("backend.observability.routers.health._check_redis", return_value=redis_down),
+        patch("backend.observability.routers.health._check_database", return_value=db_down),
+        patch("backend.observability.routers.health.settings") as mock_settings,
     ):
         mock_settings.MCP_TOOLS = False
         response = await health_check(request)
@@ -201,9 +201,9 @@ async def test_health_response_includes_version() -> None:
     db_ok = DependencyStatus(healthy=True, latency_ms=1.0)
 
     with (
-        patch("backend.routers.health._check_redis", return_value=redis_ok),
-        patch("backend.routers.health._check_database", return_value=db_ok),
-        patch("backend.routers.health.settings") as mock_settings,
+        patch("backend.observability.routers.health._check_redis", return_value=redis_ok),
+        patch("backend.observability.routers.health._check_database", return_value=db_ok),
+        patch("backend.observability.routers.health.settings") as mock_settings,
     ):
         mock_settings.MCP_TOOLS = False
         response = await health_check(request)

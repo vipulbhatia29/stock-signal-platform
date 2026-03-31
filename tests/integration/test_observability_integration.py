@@ -20,7 +20,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from backend.services.observability_queries import get_query_groups, get_query_list
+from backend.observability.queries import get_query_groups, get_query_list
 
 # ---------------------------------------------------------------------------
 # Skip guard — requires DATABASE_URL in environment

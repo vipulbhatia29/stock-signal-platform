@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.agents.observability import ObservabilityCollector
+from backend.observability.collector import ObservabilityCollector
 
 
 @pytest.fixture

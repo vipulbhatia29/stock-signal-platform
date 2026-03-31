@@ -32,6 +32,7 @@ uv run alembic current                                 # Check migration head
 - TimescaleDB hypertables are created via raw SQL in Alembic migrations after table creation
 - Alembic head: migration 018 (alert severity, title, ticker, dedup_key + indexes)
 - New models must be imported in `backend/models/__init__.py` for Alembic discovery + test teardown
-- ContextVars (`current_query_id`, `current_session_id`, etc.) live in `backend/request_context.py` — NOT `backend/agents/`
-- `LangfuseService` in `backend/services/langfuse_service.py` — all Langfuse SDK calls go through this wrapper (fire-and-forget, feature-flagged on `LANGFUSE_SECRET_KEY`)
+- ContextVars (`current_query_id`, `current_session_id`, etc.) live in `backend/observability/context.py` (shim at `backend/request_context.py`)
+- `LangfuseService` in `backend/observability/langfuse.py` (shim at `backend/services/langfuse_service.py`) — all Langfuse SDK calls go through this wrapper (fire-and-forget, feature-flagged on `LANGFUSE_SECRET_KEY`)
+- Observability package: `backend/observability/` — collector, writer, token_budget, context, langfuse, queries, routers (admin, health, user_observability). Old paths have re-export shims.
 - Observability endpoints at `/api/v1/observability/` — user-scoped (regular users see own data, admins see all)
