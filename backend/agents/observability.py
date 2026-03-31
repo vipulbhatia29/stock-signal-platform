@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import uuid
 from collections import deque
 from typing import Any
 
@@ -58,6 +59,8 @@ class ObservabilityCollector:
         completion_tokens: int,
         cost_usd: float | None = None,
         loop_step: int | None = None,
+        status: str = "completed",
+        langfuse_trace_id: uuid.UUID | str | None = None,
     ) -> None:
         """Record a successful LLM request."""
         if self._db_writer:
@@ -72,8 +75,9 @@ class ObservabilityCollector:
                         "prompt_tokens": prompt_tokens,
                         "completion_tokens": completion_tokens,
                         "cost_usd": cost_usd,
-                        "error": None,
                         "loop_step": loop_step,
+                        "status": status,
+                        "langfuse_trace_id": langfuse_trace_id,
                     },
                 )
             )
@@ -108,6 +112,7 @@ class ObservabilityCollector:
                         "prompt_tokens": None,
                         "completion_tokens": None,
                         "error": reason,
+                        "status": "error",
                     },
                 )
             )
@@ -122,6 +127,7 @@ class ObservabilityCollector:
         error: str | None = None,
         cache_hit: bool = False,
         loop_step: int | None = None,
+        result: Any = None,
     ) -> None:
         """Record a tool execution event (fire-and-forget DB write only)."""
         if self._db_writer:
@@ -137,6 +143,7 @@ class ObservabilityCollector:
                         "error": error,
                         "cache_hit": cache_hit,
                         "loop_step": loop_step,
+                        "result": result,
                     },
                 )
             )

@@ -142,17 +142,17 @@ class TestAdminChatSchemas:
 class TestAdminGuard:
     def test_non_admin_rejected(self, regular_user: MagicMock) -> None:
         """Non-admin user gets 403."""
-        from backend.routers.admin import _require_admin
+        from backend.dependencies import require_admin
 
         with pytest.raises(HTTPException) as exc_info:
-            _require_admin(regular_user)
+            require_admin(regular_user)
         assert exc_info.value.status_code == 403
 
     def test_admin_allowed(self, admin_user: MagicMock) -> None:
         """Admin user passes through."""
-        from backend.routers.admin import _require_admin
+        from backend.dependencies import require_admin
 
-        result = _require_admin(admin_user)
+        result = require_admin(admin_user)
         assert result is admin_user
 
 
@@ -176,7 +176,7 @@ class TestListChatSessions:
         rows_result.all.return_value = [mock_session_row]
         mock_db.execute.side_effect = [count_result, rows_result]
 
-        with patch("backend.routers.admin._require_admin", return_value=admin_user):
+        with patch("backend.routers.admin.require_admin", return_value=admin_user):
             result = await list_chat_sessions(
                 user=admin_user, db=mock_db, user_id=None, agent_type=None, limit=50, offset=0
             )

@@ -45,6 +45,8 @@ class LLMCallLog(Base):
     agent_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     agent_instance_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     loop_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="completed")
+    langfuse_trace_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     def __repr__(self) -> str:
         return f"<LLMCallLog {self.provider}/{self.model} {self.created_at}>"
@@ -80,6 +82,8 @@ class ToolExecutionLog(Base):
     agent_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     agent_instance_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     loop_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    input_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    output_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     def __repr__(self) -> str:
         return f"<ToolExecutionLog {self.tool_name} {self.status} {self.created_at}>"

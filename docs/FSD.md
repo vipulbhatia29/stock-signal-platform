@@ -708,6 +708,37 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 
 ---
 
+### FR-18: Observability Dashboard — Query Analytics (Phase B.5 BU-5) ✅ IMPLEMENTED
+
+**FR-18.1: Query List Sorting & Filtering**
+- Users (admin) can sort the query list by: timestamp, cost, duration, call_count, or eval_score
+- Sort direction (asc/desc) is configurable per sort field
+- Users can filter queries by status: `completed`, `error`, `declined`, or `timeout`
+- Users can filter queries by cost range (cost_min / cost_max in USD)
+- Date range filters (date_from / date_to) allow time-bounded analysis
+
+**FR-18.2: Grouped Aggregations**
+- Users can view query aggregations grouped by 9 dimensions: agent_type, date, model, status, provider, tier, tool_name, user, intent_category
+- Each group bucket surfaces: query_count, total_cost_usd, avg_cost_usd, avg_latency_ms, error_rate
+- Date grouping supports day / week / month buckets
+- `group_by=user` dimension is restricted to admin role (403 for non-admin)
+
+**FR-18.3: Query Step Detail**
+- Query detail view shows each ReAct / tool-execution step
+- Each step includes input_summary and output_summary (truncated, PII-sanitised)
+- PII sanitisation applied before storage: email addresses, account numbers, and SSNs redacted
+
+**FR-18.4: Langfuse Deep-Link**
+- Query detail includes a `langfuse_trace_url` for one-click navigation to the full trace in Langfuse
+- Link constructed from stored `langfuse_trace_id`; null when Langfuse is not configured
+
+**FR-18.5: Declined Query Logging**
+- Queries declined by input guards (injection, PII, abuse, out-of-scope) are logged with `status=declined`
+- Declined queries appear in the query list and contribute to error_rate aggregations
+- Enables admin review of guard effectiveness and false-positive rates
+
+---
+
 ## 4. Non-Functional Requirements
 
 ### NFR-1: Performance

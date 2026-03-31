@@ -158,6 +158,12 @@ class LLMProvider(ABC):
         if not self.collector:
             return
         cost = self._compute_cost(model, prompt_tokens, completion_tokens)
+
+        # Read query_id from ContextVar — it IS the Langfuse trace ID
+        from backend.request_context import current_query_id
+
+        qid = current_query_id.get(None)
+
         await self.collector.record_request(
             model=model,
             provider=self.name,
@@ -166,6 +172,7 @@ class LLMProvider(ABC):
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             cost_usd=cost,
+            langfuse_trace_id=qid,
         )
 
     async def _record_cascade(self, from_model: str, reason: str, tier: str = "") -> None:

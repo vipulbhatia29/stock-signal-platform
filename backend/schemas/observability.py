@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from enum import Enum
 
 from pydantic import BaseModel
 
@@ -92,3 +93,71 @@ class AssessmentHistoryResponse(BaseModel):
     """List of historical assessment runs."""
 
     items: list[AssessmentRunSummary]
+
+
+class SortByEnum(str, Enum):
+    """Sortable columns for query list."""
+
+    timestamp = "timestamp"
+    total_cost_usd = "total_cost_usd"
+    duration_ms = "duration_ms"
+    llm_calls = "llm_calls"
+    score = "score"
+
+
+class SortOrderEnum(str, Enum):
+    """Sort direction."""
+
+    asc = "asc"
+    desc = "desc"
+
+
+class StatusFilterEnum(str, Enum):
+    """Query status filter values."""
+
+    completed = "completed"
+    error = "error"
+    declined = "declined"
+    timeout = "timeout"
+
+
+class GroupByEnum(str, Enum):
+    """Grouping dimensions for query aggregation."""
+
+    agent_type = "agent_type"
+    date = "date"
+    model = "model"
+    status = "status"
+    provider = "provider"
+    tier = "tier"
+    tool_name = "tool_name"
+    user = "user"
+    intent_category = "intent_category"
+
+
+class DateBucketEnum(str, Enum):
+    """Date bucketing granularity."""
+
+    day = "day"
+    week = "week"
+    month = "month"
+
+
+class GroupRow(BaseModel):
+    """Single row in a grouped aggregation result."""
+
+    key: str
+    query_count: int
+    total_cost_usd: float
+    avg_cost_usd: float
+    avg_latency_ms: float
+    error_rate: float
+
+
+class GroupedResponse(BaseModel):
+    """Response for grouped query aggregation."""
+
+    group_by: str
+    bucket: str | None = None
+    groups: list[GroupRow]
+    total_queries: int

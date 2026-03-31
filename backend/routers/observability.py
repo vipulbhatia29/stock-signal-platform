@@ -10,21 +10,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.database import get_async_session
-from backend.dependencies import get_current_user
+from backend.dependencies import get_current_user, require_admin
 from backend.models.user import User, UserRole
 from backend.schemas.observability import (
     AssessmentHistoryResponse,
     AssessmentRunSummary,
+    DateBucketEnum,
+    GroupByEnum,
+    GroupedResponse,
     KPIResponse,
     LangfuseURLResponse,
     QueryDetailResponse,
     QueryListResponse,
+    SortByEnum,
+    SortOrderEnum,
+    StatusFilterEnum,
 )
 from backend.services.observability_queries import (
     get_assessment_history,
     get_kpis,
     get_latest_assessment,
     get_query_detail,
+    get_query_groups,
     get_query_list,
 )
 
@@ -66,10 +73,18 @@ async def queries(
     agent_type: str | None = None,
     date_from: datetime | None = None,
     date_to: datetime | None = None,
+    sort_by: SortByEnum = SortByEnum.timestamp,
+    sort_order: SortOrderEnum = SortOrderEnum.desc,
+    status: StatusFilterEnum | None = None,
+    cost_min: float | None = Query(None, ge=0),
+    cost_max: float | None = Query(None, ge=0),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_async_session),
 ) -> QueryListResponse:
     """Return paginated query list."""
+    if cost_min is not None and cost_max is not None and cost_min > cost_max:
+        raise HTTPException(status_code=422, detail="cost_min must be <= cost_max")
+
     result = await get_query_list(
         db,
         user_id=_user_scope(user),
@@ -78,8 +93,43 @@ async def queries(
         agent_type=agent_type,
         date_from=date_from,
         date_to=date_to,
+        sort_by=sort_by.value,
+        sort_order=sort_order.value,
+        status=status.value if status else None,
+        cost_min=cost_min,
+        cost_max=cost_max,
     )
     return QueryListResponse(**result)
+
+
+@router.get(
+    "/queries/grouped",
+    response_model=GroupedResponse,
+    summary="Aggregate queries by dimension",
+    description="Returns grouped aggregation (count, cost, latency, error rate) "
+    "by the specified dimension.",
+)
+async def grouped_queries(
+    group_by: GroupByEnum = Query(..., description="Grouping dimension"),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    bucket: DateBucketEnum = DateBucketEnum.day,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> GroupedResponse:
+    """Return grouped query aggregation."""
+    if group_by == GroupByEnum.user:
+        require_admin(user)
+
+    result = await get_query_groups(
+        db,
+        group_by=group_by.value,
+        user_id=_user_scope(user) if group_by != GroupByEnum.intent_category else None,
+        date_from=date_from,
+        date_to=date_to,
+        bucket=bucket.value,
+    )
+    return GroupedResponse(**result)
 
 
 @router.get(
@@ -119,8 +169,7 @@ async def langfuse_url(
     result = await get_query_detail(db, query_id, user_id=_user_scope(user))
     if result is None:
         raise HTTPException(status_code=404, detail="No data found for this query")
-    url = f"{settings.LANGFUSE_BASEURL}/trace/{query_id}"
-    return LangfuseURLResponse(url=url)
+    return LangfuseURLResponse(url=result.get("langfuse_trace_url"))
 
 
 @router.get(
