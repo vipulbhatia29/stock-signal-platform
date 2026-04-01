@@ -110,9 +110,7 @@ async def seed(csv_path: str, email: str, password: str) -> None:
             logger.info("Created user %s (id=%s)", email, user.id)
 
         # 2. Check/create portfolio
-        result = await db.execute(
-            select(Portfolio).where(Portfolio.user_id == user.id)
-        )
+        result = await db.execute(select(Portfolio).where(Portfolio.user_id == user.id))
         portfolio = result.scalar_one_or_none()
         if portfolio:
             logger.info("Portfolio already exists (id=%s)", portfolio.id)
@@ -128,9 +126,7 @@ async def seed(csv_path: str, email: str, password: str) -> None:
 
         # 3. Ensure all tickers exist in stocks table
         tickers_needed = {p["ticker"] for p in positions_data}
-        result = await db.execute(
-            select(Stock.ticker).where(Stock.ticker.in_(tickers_needed))
-        )
+        result = await db.execute(select(Stock.ticker).where(Stock.ticker.in_(tickers_needed)))
         existing_tickers = {r[0] for r in result.fetchall()}
         missing_tickers = tickers_needed - existing_tickers
 
@@ -179,9 +175,7 @@ async def seed(csv_path: str, email: str, password: str) -> None:
         logger.info("Positions: %d created, %d updated", created, updated)
 
         # 5. Add all positions to watchlist
-        result = await db.execute(
-            select(Watchlist.ticker).where(Watchlist.user_id == user.id)
-        )
+        result = await db.execute(select(Watchlist.ticker).where(Watchlist.user_id == user.id))
         existing_watchlist = {r[0] for r in result.fetchall()}
         wl_added = 0
 

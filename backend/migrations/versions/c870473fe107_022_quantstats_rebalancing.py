@@ -88,8 +88,8 @@ def upgrade() -> None:
 
     # --- Ensure SPY exists for benchmark calculations ---
     op.execute(
-        "INSERT INTO stocks (ticker, name, is_active) "
-        "VALUES ('SPY', 'SPDR S&P 500 ETF Trust', true) "
+        "INSERT INTO stocks (id, ticker, name, is_active) "
+        "VALUES (gen_random_uuid(), 'SPY', 'SPDR S&P 500 ETF Trust', true) "
         "ON CONFLICT (ticker) DO NOTHING"
     )
 
