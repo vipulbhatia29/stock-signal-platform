@@ -8,14 +8,11 @@ export default function VerifyEmailPage() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
   const [status, setStatus] = useState<"loading" | "success" | "error">(
-    "loading"
+    token ? "loading" : "error"
   );
 
   useEffect(() => {
-    if (!token) {
-      setStatus("error");
-      return;
-    }
+    if (!token) return;
     verifyEmail(token)
       .then(() => setStatus("success"))
       .catch(() => setStatus("error"));
