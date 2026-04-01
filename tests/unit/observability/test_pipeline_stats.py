@@ -62,7 +62,7 @@ def _make_watermark(
     """Build a mock PipelineWatermark object."""
     wm = MagicMock()
     wm.pipeline_name = pipeline_name
-    wm.last_completed_date = date.today() - timedelta(days=days_ago)
+    wm.last_completed_date = datetime.now(tz=ET_TZ).date() - timedelta(days=days_ago)
     wm.last_completed_at = datetime.now(tz=ET_TZ) - timedelta(days=days_ago)
     wm.status = status
     return wm
