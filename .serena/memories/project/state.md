@@ -1,36 +1,31 @@
----
-scope: project
-category: project
-updated_by: session-77
----
+## Project State (Session 81)
 
-# Project State
+**Current phase:** Phase 8.5 Portfolio Analytics COMPLETE — shipped PR #158
+**Branch:** develop (docs/session-81-closeout for doc updates)
+**Resume point:** Phase C (Google OAuth, KAN-152) or Phase 8.6 (Prophet Backtesting, KAN-323) or Phase 2 Command Center.
 
-## Current Phase
-- **Phase B.5: Frontend Catch-Up + Observability Readiness** — Epic KAN-226
-- BU-1 through BU-6: ALL DONE
-- BU-7 (KAN-233): **RESCOPED to Platform Operations Command Center** (Session 78). Refinement complete — spec + plan approved. Implementation starts next session.
+### Session 81 Summary
+- Phase 8.5 all 4 stories implemented in one session: pandas-ta, QuantStats, PyPortfolioOpt, frontend
+- 4-expert review panel (PM, Staff FS, Staff Backend, Test Lead): 21 findings fixed (6C/9I/6M)
+- Pre-existing bugs found and fixed: SignalSnapshot.snapshot_date→computed_at, grade B+ dedup
+- PR #158 merged to develop, all 6 CI checks passing
+- JIRA: KAN-246 (Epic), KAN-247, KAN-248, KAN-249, KAN-318, KAN-319 → Done
 
-## Resume Point
-- **Next: Create JIRA subtasks under KAN-233, then Sprint 1 (S1a + S1b package extraction)**
-- Execution: subagent-driven development, 1 sprint per session
-- Plan: `docs/superpowers/plans/2026-03-31-command-center-implementation.md`
-- Spec: `docs/superpowers/specs/2026-03-31-command-center-design.md`
-- Prototype: `command-center-prototype.html` (visual reference)
-- Portfolio Analytics Epic KAN-246 — independent, not started.
+### Key Facts
+- Alembic head: `c870473fe107` (migration 022 — QuantStats columns + rebalancing_suggestions)
+- Backend tests: 1296 unit + API
+- Frontend tests: 329
+- Internal tools: 25 + 4 MCP adapters (PortfolioAnalyticsTool added)
+- Docker: Postgres 5433, Redis 6380, Langfuse 3001+5434
+- User: vipul@example.com / TestPass123! (97 positions, $41K portfolio value)
+- Dependencies added: pandas-ta-openbb, quantstats, pyportfolioopt (+ scipy, statsmodels, cvxpy, scikit-learn)
 
-## Phase 1 MVP Sprints (4 zones: Health, API, LLM, Pipeline)
-- Sprint 1: S1a+S1b — Package extraction (MERGE GATE) ~5.5h
-- Sprint 2: S2-S6 — Backend instrumentation (parallelizable) ~12.5h
-- Sprint 3: S7-S8 — Aggregate + drill-down endpoints ~7h
-- Sprint 4: S9-S10 — Frontend L1 + L2 ~10h
-
-## Test Counts
-- Frontend: 276 tests in 57 suites
-- Total: ~1787
-- Alembic head: c2d3e4f5a6b7 (migration 020)
-
-## Key JIRA
-- KAN-226: Epic (BU-1-6 done, BU-7 in refinement)
-- KAN-233: BU-7 rescoped to Command Center — 12 subtasks to create
-- KAN-246: Epic — Portfolio Analytics (To Do)
+### Critical Learnings (Session 81)
+- Column case matters: DataFrame has "Adj Close" not "adj_close" — passed all unit tests but silently null in production
+- `importlib.metadata` must be imported before `import pandas_ta` — pandas-ta-openbb bug, needs `noqa: F401`
+- QuantStats returns NaN/Inf for edge cases — always use `math.isfinite()` guard
+- `qs.stats.calmar()` returns inf when drawdown is 0 — must isolate in own try/except
+- PyPortfolioOpt `weight_bounds=(0, max_w)` infeasible when `max_w * n < 1` — use `max(max_w, 1/n)`
+- Raw SQL INSERT in migrations must include `id` column with `gen_random_uuid()` when no server_default
+- SPY benchmark data needs explicit refresh in pipeline — seeding stocks row alone is not enough
+- Pre-existing bugs surface when new code depends on them: `snapshot_date` was never caught because try/except swallowed the AttributeError

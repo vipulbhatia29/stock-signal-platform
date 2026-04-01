@@ -28,5 +28,9 @@ npx jest             # Unit tests (jsdom env)
 - This is a SINGLE app — no iframes, no embedded services
 - Jest needs `testEnvironment: "jsdom"` (not `"node"`)
 - Tailwind v4: use `font-family: var(--font-sora)` in `@layer base`, not `@theme`
-- `types/api.ts` has 105 exported types — single source of truth for all backend schema types
+- `types/api.ts` has ~115 exported types — single source of truth for all backend schema types
 - Popover/Trigger components use `@base-ui/react` (NOT shadcn) — use `render` prop, NOT `asChild`
+- 8 route groups: dashboard, screener, portfolio, stocks, sectors, observability, admin, chat
+- 68 components in `src/components/`, 12 hooks in `src/hooks/`
+- New hooks: `usePortfolioAnalytics()`, `useStockAnalytics()` (QuantStats data from nightly pipeline)
+- `API_BASE = "/api/v1"` in `api.ts` — hooks use `/portfolio/...` NOT `/api/v1/portfolio/...` (double-prefix bug)

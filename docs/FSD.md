@@ -4,7 +4,7 @@
 
 **Version:** 1.1
 **Date:** March 2026
-**Status:** Living Document — Phases 1-8 complete. Phase B.5 BU-1-4 shipped (Sessions 72-75). Dashboard redesigned as 5-zone Daily Intelligence Briefing.
+**Status:** Living Document — Phases 1-8.5 complete. Phase B.5 BU-1-7 shipped. Phase 8.5 Portfolio Analytics shipped (Session 81).
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -195,6 +195,14 @@ Phase 3 adds fundamental signals (see FR-5) and rebalances to 50/50 weight.
 **FR-3.3: Signal Staleness**
 - Signals older than 24 hours are flagged as STALE
 - Stale signals are flagged in API responses (`is_stale` field). **Note:** Staleness is NOT enforced in the recommendation engine — recommendations can still be generated from stale signals. Enforcement planned for Phase 3.
+
+**FR-3.4: Per-Stock Risk Analytics (Phase 8.5)** ✅ IMPLEMENTED
+- Technical indicators (RSI, MACD, SMA, Bollinger) computed via `pandas-ta-openbb` library (replaces hand-rolled)
+- Per-stock QuantStats metrics materialized to `signal_snapshots`: Sortino, max_drawdown (positive), alpha, beta (vs SPY benchmark)
+- `data_days` field tracks how many common trading days were used for computation
+- Minimum 30 days of SPY benchmark overlap required; below threshold → null with `data_days` field
+- SPY auto-refreshed at start of nightly pipeline regardless of watchlist membership
+- NaN/Inf guarded: degenerate inputs (constant prices, zero downside deviation) return null, not NaN
 - Dashboard shows "last updated" timestamp prominently
 
 ### FR-4: Recommendation Engine
@@ -357,6 +365,24 @@ Users can override weights via UserPreference.composite_weights.
 - Alert badges on positions table with severity-based coloring
 - Pure function `check_divestment_rules()` in `backend/tools/divestment.py`
 - Null safety: skips rules when dependent values are None
+
+**FR-6.7: Portfolio Analytics (Phase 8.5)** ✅ IMPLEMENTED
+- Portfolio-level QuantStats metrics materialized to `portfolio_snapshots`: Sharpe, Sortino, max_drawdown, max_drawdown_duration (days), Calmar, alpha, beta (vs SPY), VaR 95%, CAGR, data_days
+- `GET /api/v1/portfolio/analytics` — reads latest materialized row
+- Minimum 30 days of snapshots required; below threshold → all null with `data_days` count
+- Dashboard shows QuantStats KPIs (Sortino, Max Drawdown, Alpha) when `data_days >= 30`
+- Calmar ratio isolated (can be infinite when drawdown is zero) — stored as null, not inf
+- VaR stored as positive (absolute loss at 95% confidence)
+
+**FR-6.8: Optimized Rebalancing (Phase 8.5)** ✅ IMPLEMENTED
+- Replaces equal-weight with PyPortfolioOpt optimization
+- 3 strategies via `UserPreference.rebalancing_strategy`: min_volatility (default), max_sharpe, risk_parity
+- Position caps from `UserPreference.max_position_pct` applied as weight bounds (min 1/n for feasibility)
+- Materialized to `rebalancing_suggestions` table during nightly pipeline Phase 4
+- `GET /api/v1/portfolio/rebalancing` reads materialized data; falls back to equal-weight if none exists
+- Actions: BUY_MORE, HOLD, REDUCE (was: BUY_MORE, HOLD, AT_CAP)
+- Risk Parity uses Hierarchical Risk Parity (HRPOpt) — takes returns, not prices
+- Graceful degradation: < 2 positions or < 30 days of data → equal-weight fallback
 
 ### FR-7: Screener (Phase 2)
 

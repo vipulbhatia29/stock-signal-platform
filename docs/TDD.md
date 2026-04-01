@@ -4,7 +4,7 @@
 
 **Version:** 1.1
 **Date:** March 2026
-**Status:** Living Document — Phase 1-5 complete, Phase 5.5/6 planned
+**Status:** Living Document — Phase 1-8.5 complete, Phase C (Google OAuth) next
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -361,8 +361,43 @@ GET /portfolio/positions now returns alerts[] per position (divestment alerts) �
 
 **Router:** `backend/routers/preferences.py`
 - `_get_or_create_preference(user_id, db)` — idempotent fetch/create helper (shared with portfolio router)
-- `GET /api/v1/preferences` → `UserPreferenceResponse`
-- `PATCH /api/v1/preferences` → partial update via `UserPreferenceUpdate` (Field gt=0, le=100)
+- `GET /api/v1/preferences` → `UserPreferenceResponse` (includes `rebalancing_strategy`)
+- `PATCH /api/v1/preferences` → partial update via `UserPreferenceUpdate` (Field gt=0, le=100; `rebalancing_strategy` Literal["min_volatility", "max_sharpe", "risk_parity"])
+
+--- Phase 8.5 (implemented — Portfolio Analytics) ---
+
+```
+GET /api/v1/portfolio/analytics                     [200 OK]
+  Response: { sharpe?, sortino?, max_drawdown?, max_drawdown_duration?,
+              calmar?, alpha?, beta?, var_95?, cagr?, data_days? }
+  Notes:    Reads materialized QuantStats from latest portfolio_snapshots row.
+            All null when < 30 days of snapshots. data_days shows how many.
+
+GET /api/v1/portfolio/rebalancing                   [200 OK]
+  Response: RebalancingResponse (same shape as before)
+  Notes:    Now reads from materialized rebalancing_suggestions table
+            (PyPortfolioOpt). Falls back to equal-weight if no materialized data.
+            Suggestions include strategy name in reason field.
+
+GET /api/v1/stocks/{ticker}/analytics               [200 OK]
+  Response: { ticker, sortino?, max_drawdown?, alpha?, beta?, data_days? }
+  Notes:    Reads materialized per-stock QuantStats from latest signal_snapshots.
+            All null when < 30 days of SPY benchmark overlap.
+```
+
+**Service:** `backend/services/signals.py`
+- `compute_quantstats_stock(closes, spy_closes, rf)` — Sortino, max_drawdown (positive), alpha, beta vs SPY. NaN/Inf guarded. Tz-normalized.
+- Signal indicators now use `pandas-ta-openbb` (drop-in replacement for hand-rolled RSI/MACD/SMA/Bollinger). `importlib.metadata` must be imported first (package bug workaround).
+
+**Service:** `backend/services/portfolio.py`
+- `compute_quantstats_portfolio(portfolio_id, db)` — 10 metrics from portfolio snapshot history. Calmar isolated (can be inf). Uses `_safe_round()` for NaN/Inf. SPY alpha/beta in separate try/except.
+- `compute_rebalancing(portfolio_id, strategy, db, max_position_pct)` — PyPortfolioOpt with 3 strategies. Falls back to equal-weight on < 2 positions, < 30 days, or solver failure.
+- `materialize_rebalancing(portfolio_id, db)` — reads UserPreference.rebalancing_strategy, delete + insert.
+
+**Tool:** `backend/tools/portfolio_analytics.py`
+- `PortfolioAnalyticsTool` — reads materialized QuantStats from latest portfolio_snapshots row via ContextVar user_id.
+
+**Migration 022** (`c870473fe107`): signal_snapshots +5 cols, portfolio_snapshots +10 cols, user_preferences +1 col, rebalancing_suggestions table, SPY seed.
 
 ### 3.6 Chat Endpoint (Phase 4)
 
