@@ -2,207 +2,118 @@
 
 > Stock analysis SaaS for part-time investors — US equities, signal detection, portfolio tracking, AI-powered recommendations.
 
-Generated: 2026-03-30 | Session: 75
+Generated: 2026-04-01 | Session: 81 | Alembic head: `c870473fe107` (migration 022)
 
 ## Project Structure
 
 ```
-stock-signal-platform/
-├── backend/                    # FastAPI async app, 37 tools, LangGraph agents
-│   ├── main.py                 # Entry point
-│   ├── routers/                # 15 main routes + 6 stock sub-routers
-│   ├── models/                 # 19 SQLAlchemy ORM models
-│   ├── agents/                 # 22 agent components (ReAct, guards, LLM)
-│   ├── tools/                  # 37 internal tools + 6 MCP adapters
-│   ├── services/               # 14 service modules
-│   ├── tasks/                  # Celery background jobs
-│   ├── migrations/             # 20 Alembic versions
-│   └── database.py             # AsyncPG, SQLAlchemy 2.0
-├── frontend/                   # Next.js 15, React 19, TypeScript
-│   ├── src/app/                # App Router (dashboard, portfolio, screener, sectors)
-│   ├── src/components/         # 102 .tsx component files
-│   ├── src/hooks/              # 10 custom React hooks
-│   ├── src/lib/                # 16 utility modules
-│   └── package.json
-├── tests/                      # 121 unit, 30 api, 5 integration, 45 frontend
-├── docs/                       # 8 markdown files
-├── pyproject.toml              # Python deps (uv)
-└── docker-compose.yml          # Postgres + Redis + Langfuse
+backend/                    FastAPI + SQLAlchemy async + Celery
+├── agents/                 LangGraph ReAct loop, guards, planner, context
+├── migrations/versions/    22 Alembic migrations (TimescaleDB hypertables)
+├── models/ (20 files)      SQLAlchemy 2.0 ORM models
+├── observability/          Collector, writer, token_budget, langfuse, queries, routers
+├── routers/ (16 files)     API routers mounted under /api/v1/
+│   └── stocks/ (4 files)   Sub-routers: data, search, watchlist, recommendations
+├── schemas/ (13 files)     Pydantic v2 request/response models
+├── services/ (14 files)    Business logic layer (signals, portfolio, cache, etc.)
+├── tasks/ (13 files)       Celery tasks + nightly pipeline (9-step chain)
+└── tools/ (30+ files)      25 internal tools + 4 MCP adapters + registry
+frontend/                   Next.js 15 + TypeScript + Tailwind v4 + shadcn/ui
+├── src/app/(authenticated)/ 8 route groups: dashboard, screener, portfolio, stocks, sectors, observability, admin, chat
+├── src/components/ (68)    UI components (shadcn primitives + domain components)
+├── src/hooks/ (12 files)   TanStack Query hooks for all data fetching
+├── src/lib/                api.ts (fetch wrapper), auth.ts, format.ts, utils.ts
+└── src/types/api.ts        ~115 exported TypeScript interfaces (single source of truth)
+tests/                      1296 backend + 329 frontend = 1625 total
+├── unit/ (signals, services, tools, pipeline, agents, mcp, chat, guards, observability)
+├── api/ (endpoint tests with testcontainers)
+├── integration/ (MCP stdio + regression)
+└── frontend src/__tests__/ (67 test suites)
+docs/
+├── PRD.md, FSD.md, TDD.md  Product/functional/technical specs
+├── superpowers/specs/       20 design specs
+├── superpowers/plans/       20 implementation plans
+└── superpowers/archive/     Completed feature archives
 ```
 
 ## Entry Points
 
 | Entry | Path | Command |
 |-------|------|---------|
-| Backend API | backend/main.py | `uv run uvicorn backend.main:app --reload --port 8181` |
-| Frontend | frontend/ | `cd frontend && npm run dev` (port 3000) |
-| Celery Worker | backend/tasks/ | `uv run celery -A backend.tasks worker --loglevel=info` |
-| Celery Beat | backend/tasks/ | `uv run celery -A backend.tasks beat` |
-| Docs | docs/ | `uv run mkdocs serve` (port 8000) |
+| Backend API | `backend/main.py` | `uv run uvicorn backend.main:app --reload --port 8181` |
+| Frontend | `frontend/` | `cd frontend && npm run dev` (port 3000) |
+| Celery Worker | `backend/tasks/__init__.py` | `uv run celery -A backend.tasks worker` |
+| MCP Tool Server | `backend/mcp_server.py` | `uv run python -m backend.mcp_server` |
+| Nightly Pipeline | `backend/tasks/market_data.py` | Celery Beat (4-phase chain) |
+| Migrations | `backend/migrations/` | `uv run alembic upgrade head` |
+| Unit Tests | `tests/unit/` | `uv run pytest tests/unit/ -q` |
+| Frontend Tests | `frontend/` | `npx jest --no-coverage` |
 
-## Backend Architecture
+## Core Models (28)
 
-### Routers (15 main + 6 stock sub-routers)
-- `admin.py` — Admin operations
-- `alerts.py` — Alert management
-- `auth.py` — JWT authentication
-- `chat.py` — Chat sessions & agent inference
-- `forecasts.py` — Price predictions
-- `health.py` — Health check
-- `indexes.py` — Market index data
-- `market.py` — Market overview
-- `news.py` — News feed
-- `observability.py` — Langfuse metrics
-- `portfolio.py` — Portfolio management
-- `preferences.py` — User settings
-- `sectors.py` — Sector performance
-- `tasks.py` — Celery task status
-- **Stock sub-routers:**
-  - `stocks/data.py` — OHLC, metrics
-  - `stocks/recommendations.py` — AI recommendations
-  - `stocks/search.py` — Stock search
-  - `stocks/watchlist.py` — Watchlist
-  - `stocks/_helpers.py` — Shared utilities
+User, UserPreference, Stock, Watchlist, StockPrice (hypertable), SignalSnapshot (hypertable), PortfolioSnapshot (hypertable), Portfolio, Position, Transaction, RebalancingSuggestion, DividendPayment, EarningsSnapshot, ForecastResult, ModelVersion, RecommendationSnapshot, RecommendationOutcome, ChatSession, ChatMessage, InAppAlert, AssessmentResult, AssessmentRun, LLMCallLog, ToolExecutionLog, LLMModelConfig, LoginAttempt, PipelineRun, PipelineWatermark, PortfolioHealthSnapshot
 
-### Models (19 files)
-- `user.py`, `stock.py`, `price.py`, `dividend.py`, `earnings.py`
-- `forecast.py`, `signal.py`, `recommendation.py`, `alert.py`
-- `portfolio.py`, `portfolio_health.py`, `assessment.py`
-- `chat.py`, `index.py`, `logs.py`, `llm_config.py`
-- `base.py`, `pipeline.py` (mixins)
+## API Routes (16 routers)
 
-### Tools (37 files + 6 MCP adapters)
-**Core tools:** market_data, fundamentals, dividends, earnings_history, news, web_search, signals, forecast_tools, recommendations, portfolio, risk analysis, market briefing, stock intelligence, ingest/search operations
-**MCP adapters:** Alpha Vantage, Edgar, Finnhub, FRED (economic data), base adapter
+| Prefix | Router | Key Endpoints |
+|--------|--------|---------------|
+| `/auth` | auth.py | login, register, refresh, logout, me, OIDC |
+| `/stocks` | stocks/ | signals, prices, analytics, ingest, search, watchlist, fundamentals, news, intelligence, benchmark, OHLC |
+| `/portfolio` | portfolio.py | transactions, positions, summary, history, dividends, rebalancing, analytics, health |
+| `/preferences` | preferences.py | GET + PATCH user preferences (incl. rebalancing_strategy) |
+| `/recommendations` | — | list + history |
+| `/forecasts` | forecasts.py | ticker, portfolio, sectors |
+| `/indexes` | indexes.py | list + stocks per index |
+| `/chat` | chat.py | NDJSON streaming, sessions, feedback |
+| `/alerts` | alerts.py | list + dismiss |
+| `/sectors` | sectors.py | summary, stocks, correlation |
+| `/news` | news.py | dashboard news (per-user split cache) |
+| `/observability` | observability.py | KPIs, queries, query detail, grouped charts, assessments |
+| `/admin` | admin.py | LLM config, system health, command center |
+| `/health` | health.py | readiness + liveness |
 
-### Services (14 files)
-- `langfuse_service.py` — Observability telemetry
-- `cache.py` — Redis caching
-- `portfolio.py` — Portfolio calculations
-- `signals.py` — Signal computation
-- `stock_data.py` — Market data service
-- `redis_pool.py`, `token_blocklist.py`, `watchlist.py`
-- `exceptions.py`, `oidc_provider.py`, `pipelines.py`, `recommendations.py`, `observability_queries.py`
+## Agent Architecture
 
-### Agents (22 files)
-- `react_loop.py` — ReAct agent executor
-- `model_config.py` — LLM model selection (Claude, Groq)
-- `guards.py` — PII, injection, disclaimer guardrails
-- `llm_client.py` — LLM client wrapper
-- `intent_classifier.py` — User intent detection
-- `planner.py`, `executor.py` — Plan/Execute pipeline (legacy)
-- `stock_agent.py` — Stock-specific agent
-- `general_agent.py` — Chat agent
-- `observability.py`, `observability_writer.py` — Langfuse integration
-- `entity_registry.py`, `tool_groups.py`, `user_context.py`
-- `result_validator.py`, `simple_formatter.py`, `synthesizer.py`
-- `stream.py`, `token_budget.py`, `base.py`, `graph.py`
+- **ReAct loop** (`agents/react_loop.py`) — feature-flagged `REACT_AGENT=true`
+- **25 internal tools**: analyze_stock, screen_stocks, compute_signals, get_recommendations, web_search, geopolitical, search_stocks, ingest_stock, fundamentals, analyst_targets, earnings_history, company_profile, get_forecast, get_sector_forecast, get_portfolio_forecast, compare_stocks, recommendation_scorecard, dividend_sustainability, risk_narrative, portfolio_health, portfolio_analytics, portfolio_exposure, market_briefing, stock_intelligence, recommend_stocks
+- **4 MCP adapters**: Edgar (10-K), Alpha Vantage (news sentiment), FRED (economic series), Finnhub (analyst ratings)
+- **Intent classifier** (`agents/intent_classifier.py`) — 8 intents, tool group filtering
 
-## Frontend Architecture
+## Nightly Pipeline (4-phase chain)
 
-### Pages (App Router)
-- `(authenticated)/dashboard` — Main dashboard
-- `(authenticated)/portfolio` — Portfolio management
-- `(authenticated)/screener` — Stock screener
-- `(authenticated)/sectors` — Sector performance
-- `(authenticated)/stocks/[ticker]` — Stock detail
-- `login`, `register` — Auth pages
-
-### Components (102 .tsx files)
-**Charts:** `price-chart.tsx`, `candlestick-chart.tsx`, `signal-history-chart.tsx`, `portfolio-value-chart.tsx`, `correlation-heatmap.tsx`, `sector-performance-bars.tsx`
-**Cards:** `stock-card.tsx`, `dividend-card.tsx`, `forecast-card.tsx`, `fundamentals-card.tsx`, `news-article-card.tsx`, `metric-card.tsx`, `risk-return-card.tsx`
-**Sections:** `stock-header.tsx`, `stock-metrics.tsx`, `scorecard-modal.tsx`, `portfolio-kpi-tile.tsx`, `sector-accordion.tsx`, `screener-grid.tsx`, `screener-table.tsx`
-**Chat:** `chat-panel.tsx`, `chat/` subdirectory
-**UI:** `topbar.tsx`, `sidebar-nav.tsx`, `portfolio-drawer.tsx`, `pagination-controls.tsx`, `breadcrumbs.tsx`
-
-### Hooks (10 files)
-- `use-chat.ts` — Chat sessions
-- `use-stocks.ts` — Stock data fetching
-- `use-forecasts.ts` — Price forecasts
-- `use-alerts.ts` — Alert management
-- `use-sectors.ts` — Sector data
-- `use-stream-chat.ts` — Streaming chat inference
-- `use-mounted.ts`, `use-container-width.ts`
-
-### Utilities (16 lib/*.ts files)
-- `api.ts` — Fetch wrapper with JWT auto-refresh
-- `auth.ts` — Token storage & refresh logic
-- `format.ts` — Number formatting
-- `csv-export.ts` — Portfolio CSV export
-- `chart-theme.ts`, `lightweight-chart-theme.ts` — Chart styling
-- `market-hours.ts` — US market hours
-- `signals.ts`, `signal-reason.ts` — Signal utilities
-- `sectors.ts` — Sector mapping
-- `ndjson-parser.ts` — Streaming JSON
-- `design-tokens.ts`, `typography.ts`, `storage-keys.ts`, `news-sentiment.ts`
+```
+Phase 0: Cache invalidation
+Phase 1: SPY refresh → Price refresh + signal computation (QuantStats per-stock)
+Phase 2: [parallel] Forecast refresh, recommendations, forecast eval, rec eval, portfolio snapshots (+ QuantStats portfolio)
+Phase 3: Drift detection
+Phase 4: [parallel] Alerts, health snapshots, rebalancing materialization
+```
 
 ## Infrastructure
 
 | Service | Port | Notes |
 |---------|------|-------|
-| PostgreSQL + TimescaleDB | 5433 | `timescale/timescaledb:latest-pg16` |
-| Redis 7 | 6380 | Cache + Celery broker |
-| Langfuse Server | 3001 | LLM observability UI |
-| Langfuse DB | 5434 | Postgres for Langfuse |
-
-## Testing
-
-| Category | Count | Command |
-|----------|-------|---------|
-| Unit | 121 files | `uv run pytest tests/unit/ -v` |
-| API | 30 files | `uv run pytest tests/api/ -v` |
-| Integration | 5 files | `uv run pytest tests/integration/ -v` |
-| Frontend | 45 files | `cd frontend && npx jest` |
-
-## Migrations
-
-20 Alembic migrations. Latest: `ea8da8624c85` (016 observability columns)
-
-## Key Configuration
-
-| File | Purpose |
-|------|---------|
-| pyproject.toml | Python deps: FastAPI, SQLAlchemy 2.0, Celery, LangGraph, Prophet |
-| frontend/package.json | Node deps: Next.js 15, React 19, TanStack Query, Tailwind v4, shadcn/ui |
-| docker-compose.yml | Postgres, Redis, Langfuse (all dev services) |
-| alembic.ini | Database migration config |
-| .pre-commit-config.yaml | Pre-commit hooks (ruff, eslint) |
-
-## Documentation
-
-- `index.md` — Project overview
-- `ADR.md` — Architecture Decision Records
-- `FSD.md` — Front-end File Structure
-- `PRD.md` — Product Requirements
-- `TDD.md` — Test-Driven Development guide
-- `data-architecture.md` — Data model design
-- `phase2-requirements.md` — Phase 2 roadmap
-- `workflow_phase2.md` — Phase 2 workflow
+| Backend (FastAPI) | 8181 | `uv run uvicorn` |
+| Frontend (Next.js) | 3000 | `npm run dev` |
+| PostgreSQL + TimescaleDB | 5433 | Docker |
+| Redis | 6380 | Docker |
+| Langfuse | 3001 | Docker (DB on 5434) |
 
 ## Key Dependencies
 
-### Backend
-- **FastAPI** — Web framework
-- **SQLAlchemy 2.0** — ORM (async)
-- **Alembic** — Schema migrations
-- **Celery** — Background tasks
-- **LangGraph** — Agent orchestration
-- **Anthropic SDK** — Claude LLM
-- **Groq SDK** — Groq LLM
-- **Prophet** — Time series forecasting
-- **yfinance** — Market data
-- **Pydantic v2** — Validation
-- **httpx** — HTTP client
-- **defusedxml** — XML parsing
-
-### Frontend
-- **Next.js 15** — App Router, React Server Components
-- **React 19** — UI library
-- **TypeScript** — Type safety
-- **TanStack Query** — Data fetching & caching
-- **Tailwind CSS v4** — Styling
-- **shadcn/ui** — UI components
-- **Recharts** — Interactive charts
-- **lightweight-charts** — TradingView charts
-- **Framer Motion** — Animations
-- **@base-ui/react** — Headless UI (Popover/Trigger)
+| Package | Purpose |
+|---------|---------|
+| fastapi + uvicorn | API framework |
+| sqlalchemy[asyncio] + asyncpg | Async ORM + PostgreSQL |
+| celery + redis | Background tasks + Beat scheduler |
+| langgraph + langchain | Agent ReAct loop |
+| pandas-ta-openbb | Technical indicators (RSI, MACD, SMA, Bollinger) |
+| quantstats | Risk analytics (Sortino, drawdown, alpha, beta, Calmar, VaR, CAGR) |
+| pyportfolioopt | Portfolio optimization (min vol, max Sharpe, risk parity) |
+| prophet | Price forecasting |
+| yfinance | Market data source |
+| langfuse | LLM observability |
+| pyjwt | JWT authentication |
+| tanstack/react-query | Frontend data fetching |
+| recharts | Frontend charts |
+| shadcn/ui | UI component library |
