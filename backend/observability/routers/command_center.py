@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -65,8 +66,6 @@ def _sanitize_error(error: str | None) -> str:
     if not error:
         return ""
     # Strip potential API key patterns (sk-..., gsk_...)
-    import re
-
     sanitized = re.sub(r"(sk-|gsk_|key-)[A-Za-z0-9]{10,}", "[REDACTED]", error)
     return sanitized[:_MAX_ERROR_LEN]
 

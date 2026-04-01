@@ -40,10 +40,11 @@ async def get_latest_run(db: AsyncSession) -> dict | None:
             "status": run.status,
             "started_at": run.started_at.isoformat(),
             "completed_at": run.completed_at.isoformat() if run.completed_at else None,
-            "duration_seconds": duration_seconds,
+            "total_duration_seconds": duration_seconds,
             "tickers_total": run.tickers_total,
             "tickers_succeeded": run.tickers_succeeded,
             "tickers_failed": run.tickers_failed,
+            "step_durations": run.step_durations,
             "trigger": run.trigger,
             "retry_count": run.retry_count,
         }
@@ -130,10 +131,12 @@ async def get_run_history(db: AsyncSession, days: int = 7) -> list[dict]:
                     "status": run.status,
                     "started_at": run.started_at.isoformat(),
                     "completed_at": (run.completed_at.isoformat() if run.completed_at else None),
-                    "duration_seconds": duration_seconds,
+                    "total_duration_seconds": duration_seconds,
                     "tickers_total": run.tickers_total,
                     "tickers_succeeded": run.tickers_succeeded,
                     "tickers_failed": run.tickers_failed,
+                    "step_durations": run.step_durations,
+                    "error_summary": run.error_summary,
                     "trigger": run.trigger,
                 }
             )

@@ -115,7 +115,7 @@ export function PipelinePanel({ data }: PipelinePanelProps) {
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-subtle">{wm.last_date}</span>
                   <StatusDot
-                    status={wm.status === "current" ? "ok" : "degraded"}
+                    status={wm.status === "ok" ? "ok" : "degraded"}
                     size="sm"
                   />
                 </div>

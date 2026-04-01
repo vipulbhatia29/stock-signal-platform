@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
 
@@ -62,7 +62,7 @@ def _make_watermark(
     """Build a mock PipelineWatermark object."""
     wm = MagicMock()
     wm.pipeline_name = pipeline_name
-    wm.last_completed_date = date.today() - timedelta(days=days_ago)
+    wm.last_completed_date = datetime.now(tz=ET_TZ).date() - timedelta(days=days_ago)
     wm.last_completed_at = datetime.now(tz=ET_TZ) - timedelta(days=days_ago)
     wm.status = status
     return wm
@@ -118,8 +118,8 @@ class TestGetLatestRun:
         assert result["tickers_total"] == 50
         assert result["tickers_succeeded"] == 48
         assert result["tickers_failed"] == 2
-        assert result["duration_seconds"] is not None
-        assert result["duration_seconds"] > 0
+        assert result["total_duration_seconds"] is not None
+        assert result["total_duration_seconds"] > 0
         assert result["trigger"] == "scheduled"
 
     @pytest.mark.asyncio
@@ -228,7 +228,7 @@ class TestGetRunHistory:
         assert len(result) == 1
         assert result[0]["id"] == str(run.id)
         assert result[0]["status"] == "completed"
-        assert result[0]["duration_seconds"] is not None
+        assert result[0]["total_duration_seconds"] is not None
 
     @pytest.mark.asyncio
     async def test_returns_empty_on_db_error(self) -> None:

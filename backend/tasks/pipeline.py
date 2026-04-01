@@ -104,9 +104,12 @@ class PipelineRunner:
             step_name: Name of the pipeline step (e.g., "price_refresh").
             duration_seconds: How long the step took.
         """
+        import json as json_mod
+
         from sqlalchemy import text
 
         try:
+            step_json = json_mod.dumps({step_name: round(duration_seconds, 1)})
             async with async_session_factory() as session:
                 await session.execute(
                     text("""
@@ -116,7 +119,7 @@ class PipelineRunner:
                         WHERE id = :run_id
                     """),
                     {
-                        "step_json": f'{{"{step_name}": {duration_seconds:.1f}}}',
+                        "step_json": step_json,
                         "run_id": str(run_id),
                     },
                 )
