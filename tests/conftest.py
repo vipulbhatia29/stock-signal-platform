@@ -155,6 +155,7 @@ class UserFactory(factory.Factory):
     hashed_password = factory.LazyFunction(lambda: hash_password("TestPass1"))
     role = UserRole.USER
     is_active = True
+    email_verified = True
     created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
     updated_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
 
