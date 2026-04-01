@@ -1063,6 +1063,51 @@ KAN-157 (eval) merged into KAN-162 (Langfuse) — Langfuse provides the eval inf
 | 3 | pandas-ta signals | Replace custom RSI/MACD/SMA/Bollinger with pandas-ta. Add Stochastic RSI, ADX, OBV. Lower priority | KAN-249 |
 
 **Estimated effort:** ~2-3 sessions. No frontend dependency — can be done independently.
+**Architectural constraint:** Materialize all computed metrics to DB. API endpoints read, never compute on-the-fly.
+
+### Phase 8.6: Prophet Backtesting & Confidence Calibration (Future)
+
+> Walk-forward validation of Prophet forecasts against historical data. Measure accuracy before trusting predictions.
+
+| # | Task | Description | JIRA |
+|---|------|-------------|------|
+| 1 | Walk-forward validation framework | Split history into train/test windows, generate retrospective forecasts, measure MAPE/MAE per ticker | KAN-323 |
+| 2 | Accuracy tracking table | Migration: `forecast_backtests` table (ticker, train_end, horizon, mape, mae, direction_accuracy) | KAN-323 |
+| 3 | Confidence calibration | Compare predicted confidence intervals vs actual — are 80% intervals really 80%? Adjust if not | KAN-323 |
+| 4 | Backtest dashboard | API endpoint + frontend: per-ticker forecast accuracy, aggregate stats, worst performers | KAN-323 |
+
+**Depends on:** Phase 8.5 (needs QuantStats metrics for evaluation context)
+
+### Phase 8.7: News-Sentiment Regressor for Prophet (Future)
+
+> Augment Prophet with LLM-scored news sentiment as an external regressor to improve forecast accuracy.
+
+| # | Task | Description | JIRA |
+|---|------|-------------|------|
+| 1 | News scoring pipeline | LLM-based pipeline: ingest news per stock/sector → score sentiment (-1 to +1) → store daily aggregate | KAN-324 |
+| 2 | Sentiment time-series table | Migration: `news_sentiment_daily` (ticker, date, score, article_count, sector_score) | KAN-324 |
+| 3 | Prophet `add_regressor()` integration | Feed daily sentiment score as external regressor during model training | KAN-324 |
+| 4 | A/B backtest | Compare Prophet-only vs Prophet+sentiment accuracy using Phase 8.6 framework | KAN-324 |
+
+**Depends on:** Phase 8.6 (need backtest framework to measure if news improves accuracy)
+
+### Live Testing Bug Sprint (Session 80 E2E audit)
+
+> Bugs found during first full live testing pass with real data (97 positions, 566 stocks, 10y prices).
+
+| # | Severity | Bug | Page | Root Cause | JIRA |
+|---|----------|-----|------|-----------|------|
+| 1 | **CRITICAL** | Dashboard crashes — `HealthGradeBadge` gets `undefined` grade | `/dashboard` | `getGradeColor()` in `signals-zone.tsx` calls `.startsWith()` on `undefined`. `/portfolio/health` returns no grade field. | KAN-318 |
+| 2 | **HIGH** | Duplicate React key `WVE` in SignalsZone | `/dashboard` | Ticker appears in both `movers.gainers` and `movers.losers` — `key={m.ticker}` collides. | KAN-319 |
+| 3 | **HIGH** | `/stocks/:ticker/intelligence` intermittent 500 | `/stocks/AAPL` | First call fails, retry succeeds. Likely cold-start or rate limit issue in intelligence endpoint. | KAN-320 |
+| 4 | **MEDIUM** | Chat tool call display shows raw char-by-char args | Chat panel | Tool args rendered as `(0: "{", 1: "t"...)` instead of parsed JSON. Serialization bug in tool call display component. | KAN-321 |
+| 5 | **LOW** | 63 stocks show "Unknown" sector | `/sectors` | Portfolio-only tickers (non-S&P) created without sector data. Need sector backfill in seed script. | KAN-322 |
+| 6 | **LOW** | Signal history chart shows single-point flat line | `/stocks/AAPL` | Only one snapshot per ticker (fresh seed). Not a code bug — resolves with daily pipeline runs. | — |
+| 7 | **LOW** | Command center 403 redirects to crashed dashboard | `/admin/command-center` | Expected 403 for non-admin, but redirect target (dashboard) is broken due to BUG-1. Fixing BUG-1 resolves this. | — |
+
+**Pages passing clean:** Login, Register, Screener, Portfolio, Sectors, Observability, Stock Detail (all tabs).
+**Chat:** Working end-to-end — agent calls tools, streams response, shows disclaimer.
+**Search:** Autocomplete working with watchlist + market results.
 
 ### Parking Lot (low priority, pick up when needed)
 - Schwab CSV import

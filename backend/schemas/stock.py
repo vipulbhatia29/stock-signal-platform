@@ -195,6 +195,19 @@ class SignalResponse(BaseModel):
     is_stale: bool = False
 
 
+class StockAnalyticsResponse(BaseModel):
+    """QuantStats per-stock analytics from the latest signal snapshot."""
+
+    ticker: str
+    sortino: float | None = None
+    max_drawdown: float | None = None
+    alpha: float | None = None
+    beta: float | None = None
+    data_days: int | None = None
+
+    model_config = {"from_attributes": True}
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Watchlist schemas
 # ─────────────────────────────────────────────────────────────────────────────

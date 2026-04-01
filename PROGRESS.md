@@ -1836,3 +1836,55 @@ Full implementation of KAN-232 (BU-6). Brainstorm → spec → 3-expert spec rev
 - **JIRA:** KAN-300–316 (12 subtasks + 2 deferred subtasks + 3 bugs)
 
 **KAN-233 BU-7 Phase 1 MVP: COMPLETE.** Phase 2 (Cache/Chat/Auth/Alerts zones) is future work.
+
+---
+
+## Session 80 — Live Testing + Phase 8.5 Refinement (2026-03-31 / 2026-04-01)
+
+### Live Testing Setup
+- **Environment boot:** Docker (Postgres 5433, Redis 6380, Langfuse 3001) all running
+- **`.env` patched:** JWT_SECRET_KEY generated, Langfuse keys (pk-lf/sk-lf) configured, Alpha Vantage key added
+- **Data seeded:**
+  - 566 stocks (503 S&P 500 + 63 portfolio-only) with 10y prices (~1.4M price rows)
+  - Fundamentals (PE, Piotroski, earnings) for all 566
+  - 49,546 dividend records
+  - User `vipul@example.com` with 97-position portfolio ($78K, from Fidelity CSV)
+  - 97 watchlist entries, 97 Prophet models trained, 97 recommendations generated
+  - New seed script: `scripts/seed_portfolio.py` (Fidelity CSV importer)
+
+### E2E Playwright Testing (MCP browser)
+Crawled all pages, clicked all stock detail tabs, tested search + chat.
+
+**5 bugs found, JIRA tickets created:**
+
+| Ticket | Severity | Bug |
+|--------|----------|-----|
+| KAN-318 | CRITICAL | Dashboard crash — HealthGradeBadge gets undefined grade |
+| KAN-319 | HIGH | Duplicate React key 'WVE' in SignalsZone movers |
+| KAN-320 | HIGH | Intelligence endpoint intermittent 500 on first call |
+| KAN-321 | MEDIUM | Chat tool call display shows raw char-by-char args |
+| KAN-322 | LOW | 63 portfolio-only stocks show "Unknown" sector |
+
+**Pages passing clean:** Login, Register, Screener, Portfolio ($41K displayed), Sectors, Observability, Stock Detail (all 9 tabs), Search autocomplete, Chat (full agent round-trip).
+
+### Phase 8.5 Portfolio Analytics — Brainstorm + Spec + Plan
+- **Brainstorm:** Researched metrics for passive investors. Tier 1: CAGR, max drawdown, Sharpe, beta, dividend yield. Tier 2: Sortino, Calmar, alpha, VaR, drawdown duration. Rebalancing: Min Volatility > Max Sharpe for passive.
+- **Spec written:** `docs/superpowers/specs/2026-04-01-phase-8.5-portfolio-analytics.md` — codebase-verified with exact file paths, function signatures, DB columns, migration plan.
+- **Key design decisions:** Materialize everything to DB. Keep scoring engine ours. pandas-ta drop-in replace (4 indicators). QuantStats portfolio + per-stock. PyPortfolioOpt 3 strategies (min_vol default).
+- **Plan written:** `docs/superpowers/plans/2026-04-01-phase-8.5-portfolio-analytics.md` — 4 stories, 30 tasks, 43 files (32 modified + 11 new).
+- **Expert panel review (4 experts):** 4 Critical, 6 High, 4 Medium, 2 Low findings.
+  - **C1:** pandas-ta 0.4.71b0 broken with NumPy 2.x → switch to `pandas-ta-openbb`
+  - **C2:** `max_drawdown()` returns negative → store `abs()`
+  - **C3:** `greeks()` returns pd.Series not dict → use `.to_dict()`
+  - **C4:** bbands column names include float (`BBL_20_2.0`) → use exact names
+  - **H6:** Nightly-only rebalancing for V1 (no transaction trigger — race condition)
+
+### Future Phases Captured
+- **KAN-323:** Phase 8.6 Prophet Backtesting (walk-forward validation, MAPE tracking)
+- **KAN-324:** Phase 8.7 News-Sentiment Regressor (LLM scoring → Prophet add_regressor)
+- Dependency chain: 8.5 → 8.6 → 8.7
+
+### No Code Changes
+This session was entirely planning, testing, and documentation. No backend/frontend code modified.
+
+**Resume point:** Incorporate 16 review findings into plan, then execute Phase 8.5 Story 1 (pandas-ta-openbb replacement).

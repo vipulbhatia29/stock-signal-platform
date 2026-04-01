@@ -6,6 +6,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Integer,
     String,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -52,6 +53,13 @@ class SignalSnapshot(Base):
     annual_return: Mapped[float | None] = mapped_column(Float, nullable=True)
     volatility: Mapped[float | None] = mapped_column(Float, nullable=True)
     sharpe_ratio: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # QuantStats per-stock metrics (vs SPY benchmark)
+    sortino: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_drawdown: Mapped[float | None] = mapped_column(Float, nullable=True)
+    alpha: Mapped[float | None] = mapped_column(Float, nullable=True)
+    beta: Mapped[float | None] = mapped_column(Float, nullable=True)
+    data_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Price
     change_pct: Mapped[float | None] = mapped_column(Float, nullable=True)

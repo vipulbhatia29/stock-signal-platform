@@ -80,6 +80,9 @@ class UserPreference(UUIDPrimaryKeyMixin, Base):
     quiet_hours_start: Mapped[time | None] = mapped_column(Time, nullable=True)
     quiet_hours_end: Mapped[time | None] = mapped_column(Time, nullable=True)
     composite_weights: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    rebalancing_strategy: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, server_default="min_volatility"
+    )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),

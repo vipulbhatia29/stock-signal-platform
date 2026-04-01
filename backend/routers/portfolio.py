@@ -18,6 +18,7 @@ from backend.routers.preferences import _get_or_create_preference
 from backend.schemas.portfolio import (
     DivestmentAlert,
     DividendSummaryResponse,
+    PortfolioAnalyticsResponse,
     PortfolioSnapshotResponse,
     PortfolioSummaryResponse,
     PositionWithAlerts,
@@ -349,19 +350,15 @@ async def get_rebalancing(
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
 ) -> RebalancingResponse:
-    """Compute rebalancing suggestions for all open positions.
+    """Return optimized rebalancing suggestions from materialized data.
 
-    For each held position, calculates how much the user would need to invest
-    to bring it to its equal-weight target (capped by max_position_pct and
-    max_sector_pct from UserPreference).
-
-    Available cash is computed as total_value - sum(market_values) — i.e.,
-    what is not currently invested. Phase 3.5: no explicit cash account exists,
-    so available_cash is reported as 0.0.
+    Reads from the `rebalancing_suggestions` table (populated by the nightly
+    pipeline). Falls back to on-the-fly equal-weight calculation if no
+    materialized data exists yet.
     """
-    portfolio = await get_or_create_portfolio(current_user.id, db)
-    pref = await _get_or_create_preference(current_user.id, db)
+    from backend.models.portfolio import RebalancingSuggestion as RebalSuggModel
 
+    portfolio = await get_or_create_portfolio(current_user.id, db)
     positions = await get_positions_with_pnl(portfolio.id, db)
 
     if not positions:
@@ -372,73 +369,67 @@ async def get_rebalancing(
             suggestions=[],
         )
 
-    # Compute portfolio totals
     total_value = sum(p.market_value or 0.0 for p in positions)
-    available_cash = 0.0  # no cash account in Phase 3.5
 
-    num_positions = len(positions)
+    # Try materialized suggestions first
+    result = await db.execute(
+        select(RebalSuggModel)
+        .where(RebalSuggModel.portfolio_id == portfolio.id)
+        .order_by(RebalSuggModel.delta_dollars.desc())
+    )
+    materialized = list(result.scalars().all())
 
-    # Build sector allocation map for sector cap checks
-    sector_totals: dict[str, float] = {}
-    for p in positions:
-        if p.sector and p.market_value:
-            sector_totals[p.sector] = sector_totals.get(p.sector, 0.0) + p.market_value
-    sector_pct_map: dict[str, float] = {
-        sector: (val / total_value * 100) if total_value > 0 else 0.0
-        for sector, val in sector_totals.items()
-    }
-
-    suggestions = []
-    for pos in positions:
-        alloc = pos.allocation_pct or 0.0
-        sector_alloc = sector_pct_map.get(pos.sector or "", 0.0)
-
-        amount = calculate_position_size(
-            ticker=pos.ticker,
-            current_allocation_pct=alloc,
-            total_value=total_value,
-            available_cash=available_cash,
-            num_target_positions=num_positions,
-            max_position_pct=pref.max_position_pct,
-            sector_allocation_pct=sector_alloc,
-            max_sector_pct=pref.max_sector_pct,
-        )
-
-        equal_weight_pct = 100.0 / max(num_positions, 1)
-        target_pct = min(pref.max_position_pct, equal_weight_pct)
-
-        if sector_alloc >= pref.max_sector_pct:
-            action = "AT_CAP"
-            reason = f"Sector {pos.sector or 'Unknown'} is at the {pref.max_sector_pct:.0f}% cap"
-        elif amount > 0:
-            action = "BUY_MORE"
-            reason = (
-                f"Under-weight ({alloc:.1f}% vs {target_pct:.1f}% target). "
-                f"Add ${amount:,.2f} to reach target."
-            )
-        else:
-            action = "HOLD"
-            reason = f"At or above target allocation ({alloc:.1f}% \u2265 {target_pct:.1f}%)"
-
-        suggestions.append(
+    if materialized:
+        suggestions = [
             RebalancingSuggestion(
-                ticker=pos.ticker,
-                action=action,
-                current_allocation_pct=alloc,
-                target_allocation_pct=round(target_pct, 2),
-                suggested_amount=amount,
-                reason=reason,
+                ticker=s.ticker,
+                action=s.action,
+                current_allocation_pct=round(s.current_weight * 100, 2),
+                target_allocation_pct=round(s.target_weight * 100, 2),
+                suggested_amount=abs(s.delta_dollars),
+                reason=(
+                    f"Strategy: {s.strategy}. "
+                    f"Target {s.target_weight:.1%} vs current {s.current_weight:.1%}."
+                ),
             )
-        )
-
-    # Sort: BUY_MORE first (highest gap), then HOLD, then AT_CAP
-    action_order = {"BUY_MORE": 0, "HOLD": 1, "AT_CAP": 2}
-    suggestions.sort(key=lambda s: (action_order.get(s.action, 9), -s.suggested_amount))
+            for s in materialized
+        ]
+    else:
+        # Fallback: equal-weight on-the-fly (no materialized data yet)
+        pref = await _get_or_create_preference(current_user.id, db)
+        num_positions = len(positions)
+        suggestions = []
+        for pos in positions:
+            alloc = pos.allocation_pct or 0.0
+            amount = calculate_position_size(
+                ticker=pos.ticker,
+                current_allocation_pct=alloc,
+                total_value=total_value,
+                available_cash=0.0,
+                num_target_positions=num_positions,
+                max_position_pct=pref.max_position_pct,
+                sector_allocation_pct=0.0,
+                max_sector_pct=pref.max_sector_pct,
+            )
+            equal_weight_pct = 100.0 / max(num_positions, 1)
+            target_pct = min(pref.max_position_pct, equal_weight_pct)
+            action = "BUY_MORE" if amount > 0 else "HOLD"
+            reason = f"Equal-weight target {target_pct:.1f}%"
+            suggestions.append(
+                RebalancingSuggestion(
+                    ticker=pos.ticker,
+                    action=action,
+                    current_allocation_pct=alloc,
+                    target_allocation_pct=round(target_pct, 2),
+                    suggested_amount=amount,
+                    reason=reason,
+                )
+            )
 
     return RebalancingResponse(
         total_value=total_value,
-        available_cash=available_cash,
-        num_positions=num_positions,
+        available_cash=0.0,
+        num_positions=len(positions),
         suggestions=suggestions,
     )
 
@@ -535,3 +526,47 @@ async def get_portfolio_health(
         await cache.set(cache_key, json.dumps(result.data, default=str), CacheTier.VOLATILE)
 
     return result.data or {"error": result.error}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio Analytics (QuantStats)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/analytics",
+    response_model=PortfolioAnalyticsResponse,
+    summary="Portfolio-level QuantStats analytics",
+)
+async def get_portfolio_analytics(
+    db: AsyncSession = Depends(get_async_session),
+    user: User = Depends(get_current_user),
+) -> PortfolioAnalyticsResponse:
+    """Return QuantStats metrics from the latest portfolio snapshot."""
+    from backend.models.portfolio import PortfolioSnapshot
+
+    portfolio = await get_or_create_portfolio(user.id, db)
+
+    result = await db.execute(
+        select(PortfolioSnapshot)
+        .where(PortfolioSnapshot.portfolio_id == portfolio.id)
+        .order_by(PortfolioSnapshot.snapshot_date.desc())
+        .limit(1)
+    )
+    snapshot = result.scalar_one_or_none()
+
+    if snapshot is None:
+        return PortfolioAnalyticsResponse()
+
+    return PortfolioAnalyticsResponse(
+        sharpe=snapshot.sharpe,
+        sortino=snapshot.sortino,
+        max_drawdown=snapshot.max_drawdown,
+        max_drawdown_duration=snapshot.max_drawdown_duration,
+        calmar=snapshot.calmar,
+        alpha=snapshot.alpha,
+        beta=snapshot.beta,
+        var_95=snapshot.var_95,
+        cagr=snapshot.cagr,
+        data_days=snapshot.data_days,
+    )

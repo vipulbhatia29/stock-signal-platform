@@ -1,13 +1,23 @@
 """Celery tasks for market data refresh operations."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from datetime import date
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import pandas as pd
 
 from sqlalchemy import select
 
 from backend.database import async_session_factory
-from backend.services.signals import compute_signals, store_signal_snapshot
+from backend.services.signals import (
+    compute_quantstats_stock,
+    compute_signals,
+    store_signal_snapshot,
+)
 from backend.services.stock_data import fetch_prices_delta, load_prices_df
 from backend.tasks import celery_app
 from backend.tasks.pipeline import PipelineRunner, detect_gap, set_watermark_status
@@ -17,11 +27,12 @@ logger = logging.getLogger(__name__)
 _runner = PipelineRunner()
 
 
-async def _refresh_ticker_async(ticker: str) -> dict:
+async def _refresh_ticker_async(ticker: str, spy_closes: "pd.Series | None" = None) -> dict:
     """Async implementation: fetch prices, compute signals, store snapshot.
 
     Args:
         ticker: The stock ticker symbol.
+        spy_closes: Optional SPY closing prices for QuantStats benchmark computation.
 
     Returns:
         A dict with ticker and status.
@@ -35,6 +46,18 @@ async def _refresh_ticker_async(ticker: str) -> dict:
             return {"ticker": ticker, "status": "no_data"}
 
         signal_result = compute_signals(ticker, full_df)
+
+        # Compute QuantStats per-stock metrics if SPY data available
+        if spy_closes is not None and not spy_closes.empty:
+            closes_col = full_df.get("Adj Close", full_df.get("Close"))
+            if closes_col is not None and len(closes_col) >= 30:
+                qs_metrics = compute_quantstats_stock(closes_col, spy_closes)
+                signal_result.sortino = qs_metrics["sortino"]
+                signal_result.max_drawdown = qs_metrics["max_drawdown"]
+                signal_result.alpha = qs_metrics["alpha"]
+                signal_result.beta = qs_metrics["beta"]
+                signal_result.data_days = qs_metrics.get("data_days")
+
         await store_signal_snapshot(signal_result, db)
 
         # Refresh beta/yield/forward_pe from yfinance info
@@ -110,6 +133,36 @@ def refresh_ticker_task(self, ticker: str) -> dict:
         raise
 
 
+async def _load_spy_closes() -> "pd.Series":
+    """Load SPY closing prices from the database for QuantStats benchmark.
+
+    Returns:
+        pd.Series indexed by date with SPY close prices.
+    """
+    import pandas as pd
+    from sqlalchemy import select
+
+    from backend.models.price import StockPrice
+
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(StockPrice.time, StockPrice.adj_close)
+            .where(StockPrice.ticker == "SPY")
+            .order_by(StockPrice.time.asc())
+        )
+        rows = result.all()
+
+    if not rows:
+        return pd.Series(dtype=float)
+
+    dates = [r.time for r in rows]
+    prices = [float(r.adj_close) for r in rows]
+    idx = pd.DatetimeIndex(dates)
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    return pd.Series(prices, index=idx, dtype=float)
+
+
 async def _get_all_watchlist_tickers() -> list[str]:
     """Query DB for all distinct tickers currently in any user's watchlist.
 
@@ -149,12 +202,26 @@ async def _nightly_price_refresh_async() -> dict:
         logger.warning("No watchlisted tickers to refresh")
         return {"status": "no_tickers", "tickers_total": 0}
 
+    # Ensure SPY has fresh price data before loading closes for QuantStats
+    try:
+        await _refresh_ticker_async("SPY")
+        logger.info("SPY benchmark prices refreshed for QuantStats")
+    except Exception:
+        logger.warning("Failed to refresh SPY prices — QuantStats metrics may be null")
+
+    # Fetch SPY closes once for QuantStats benchmark (best-effort)
+    spy_closes = None
+    try:
+        spy_closes = await _load_spy_closes()
+    except Exception:
+        logger.warning("Failed to load SPY closes for QuantStats — metrics will be null")
+
     # Start tracked run
     run_id = await _runner.start_run("price_refresh", "scheduled", len(tickers))
 
     for ticker in tickers:
         try:
-            result = await _refresh_ticker_async(ticker)
+            result = await _refresh_ticker_async(ticker, spy_closes=spy_closes)
             if result["status"] == "ok":
                 await _runner.record_ticker_success(run_id, ticker)
             else:
@@ -222,7 +289,11 @@ def nightly_pipeline_chain_task() -> dict:
         evaluate_recommendations_task,
     )
     from backend.tasks.forecasting import forecast_refresh_task
-    from backend.tasks.portfolio import snapshot_all_portfolios_task, snapshot_health_task
+    from backend.tasks.portfolio import (
+        materialize_rebalancing_task,
+        snapshot_all_portfolios_task,
+        snapshot_health_task,
+    )
     from backend.tasks.recommendations import generate_recommendations_task
 
     results: dict = {}
@@ -275,6 +346,7 @@ def nightly_pipeline_chain_task() -> dict:
     phase4_tasks: dict[str, tuple] = {
         "alerts": (generate_alerts_task, {"pipeline_context": results.get("drift")}),
         "health_snapshots": (snapshot_health_task, {}),
+        "rebalancing": (materialize_rebalancing_task, {}),
     }
     logger.info("Nightly chain phase 4: running %d steps in parallel", len(phase4_tasks))
 

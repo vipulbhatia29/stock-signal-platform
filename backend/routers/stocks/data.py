@@ -34,6 +34,7 @@ from backend.schemas.stock import (
     RSIResponse,
     SignalResponse,
     SMAResponse,
+    StockAnalyticsResponse,
 )
 from backend.services.signals import get_latest_signals as get_latest_signals_svc
 from backend.services.stock_data import (
@@ -556,3 +557,45 @@ async def get_benchmark(
         await cache.set(cache_key, response.model_dump_json(), CacheTier.STANDARD)
 
     return response
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-stock analytics (QuantStats)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/{ticker}/analytics",
+    response_model=StockAnalyticsResponse,
+    summary="Per-stock QuantStats analytics",
+)
+async def get_stock_analytics(
+    ticker: TickerPath,
+    db: AsyncSession = Depends(get_async_session),
+    _user: User = Depends(get_current_user),
+) -> StockAnalyticsResponse:
+    """Return the latest QuantStats analytics for a stock from signal_snapshots."""
+    from backend.models.signal import SignalSnapshot
+
+    t = ticker.upper()
+    await require_stock(t, db)
+
+    result = await db.execute(
+        select(SignalSnapshot)
+        .where(SignalSnapshot.ticker == t)
+        .order_by(SignalSnapshot.computed_at.desc())
+        .limit(1)
+    )
+    snapshot = result.scalar_one_or_none()
+
+    if snapshot is None:
+        return StockAnalyticsResponse(ticker=t)
+
+    return StockAnalyticsResponse(
+        ticker=t,
+        sortino=snapshot.sortino,
+        max_drawdown=snapshot.max_drawdown,
+        alpha=snapshot.alpha,
+        beta=snapshot.beta,
+        data_days=snapshot.data_days,
+    )

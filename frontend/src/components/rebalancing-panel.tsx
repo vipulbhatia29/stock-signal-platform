@@ -13,6 +13,13 @@ const ACTION_LABEL: Record<RebalancingSuggestion["action"], string> = {
   BUY_MORE: "Buy more",
   HOLD: "Hold",
   AT_CAP: "At cap",
+  REDUCE: "Reduce",
+};
+
+const STRATEGY_LABEL: Record<string, string> = {
+  min_volatility: "Min Volatility",
+  max_sharpe: "Max Sharpe",
+  risk_parity: "Risk Parity",
 };
 
 export function RebalancingPanel({ suggestions }: Props) {
@@ -25,10 +32,20 @@ export function RebalancingPanel({ suggestions }: Props) {
       ? `${actionable.length} position${actionable.length > 1 ? "s" : ""} under target allocation`
       : "All positions at target allocation";
 
+  // Extract strategy from first suggestion's reason (e.g. "Strategy: min_volatility. ...")
+  const strategyMatch = suggestions[0]?.reason?.match(/Strategy:\s*(\w+)/);
+  const strategy = strategyMatch ? strategyMatch[1] : null;
+  const strategyLabel = strategy ? STRATEGY_LABEL[strategy] : null;
+
   return (
     <div className="mt-6">
       <SectionHeading>
         <span>Rebalancing</span>
+        {strategyLabel && (
+          <Badge variant="outline" className="ml-2 text-[10px] uppercase tracking-wide">
+            {strategyLabel}
+          </Badge>
+        )}
         <span className="ml-2 text-xs font-normal text-muted-foreground normal-case tracking-normal">
           {subtitle}
         </span>
@@ -61,7 +78,9 @@ export function RebalancingPanel({ suggestions }: Props) {
                 className={cn(
                   "border-b border-border last:border-0 transition-colors hover:bg-hov",
                   s.action === "BUY_MORE" &&
-                    "border-l-2 border-l-[var(--color-gain)]"
+                    "border-l-2 border-l-[var(--color-gain)]",
+                  s.action === "REDUCE" &&
+                    "border-l-2 border-l-[var(--color-loss)]"
                 )}
               >
                 <td className="px-4 py-2.5 font-mono font-medium">
@@ -80,9 +99,11 @@ export function RebalancingPanel({ suggestions }: Props) {
                     variant={
                       s.action === "BUY_MORE"
                         ? "default"
-                        : s.action === "AT_CAP"
-                          ? "outline"
-                          : "secondary"
+                        : s.action === "REDUCE"
+                          ? "destructive"
+                          : s.action === "AT_CAP"
+                            ? "outline"
+                            : "secondary"
                     }
                     className={cn(
                       s.action === "AT_CAP" &&
@@ -111,8 +132,9 @@ export function RebalancingPanel({ suggestions }: Props) {
         </table>
       </div>
       <p className="text-xs text-muted-foreground mt-2">
-        Targets based on equal-weight across {suggestions.length} positions,
-        capped by your concentration limits.
+        {strategyLabel
+          ? `Optimized using ${strategyLabel} strategy across ${suggestions.length} positions.`
+          : `Targets based on equal-weight across ${suggestions.length} positions, capped by your concentration limits.`}
       </p>
     </div>
   );

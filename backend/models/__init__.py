@@ -16,6 +16,7 @@ from backend.models.portfolio import (  # noqa: F401
     Portfolio,
     PortfolioSnapshot,
     Position,
+    RebalancingSuggestion,
     Transaction,
 )
 from backend.models.portfolio_health import PortfolioHealthSnapshot
@@ -45,6 +46,7 @@ __all__ = [
     "PortfolioHealthSnapshot",
     "PortfolioSnapshot",
     "Position",
+    "RebalancingSuggestion",
     "RecommendationOutcome",
     "RecommendationSnapshot",
     "SignalSnapshot",

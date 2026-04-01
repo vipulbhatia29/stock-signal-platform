@@ -113,6 +113,15 @@ export interface SignalResponse {
   is_stale: boolean;
 }
 
+export interface StockAnalyticsResponse {
+  ticker: string;
+  sortino: number | null;
+  max_drawdown: number | null;
+  alpha: number | null;
+  beta: number | null;
+  data_days: number | null;
+}
+
 // ── Watchlist ─────────────────────────────────────────────────────────────────
 
 export interface WatchlistAddRequest {
@@ -388,7 +397,7 @@ export interface UserPreferencesUpdate {
 
 export interface RebalancingSuggestion {
   ticker: string;
-  action: "BUY_MORE" | "HOLD" | "AT_CAP";
+  action: "BUY_MORE" | "HOLD" | "AT_CAP" | "REDUCE";
   current_allocation_pct: number | null;
   target_allocation_pct: number;
   suggested_amount: number;
@@ -400,6 +409,19 @@ export interface RebalancingResponse {
   available_cash: number;
   num_positions: number;
   suggestions: RebalancingSuggestion[];
+}
+
+export interface PortfolioAnalyticsResponse {
+  sharpe: number | null;
+  sortino: number | null;
+  max_drawdown: number | null;
+  max_drawdown_duration: number | null;
+  calmar: number | null;
+  alpha: number | null;
+  beta: number | null;
+  var_95: number | null;
+  cagr: number | null;
+  data_days: number | null;
 }
 
 // ── API Error ─────────────────────────────────────────────────────────────────

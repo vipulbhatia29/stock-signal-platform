@@ -30,6 +30,8 @@ import type {
   MarketBriefingResult,
   PortfolioHealthResult,
   DashboardNewsResponse,
+  PortfolioAnalyticsResponse,
+  StockAnalyticsResponse,
 } from "@/types/api";
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
@@ -465,5 +467,26 @@ export function useBulkSignalsByTickers(
       ),
     enabled: enabled && tickers.length > 0,
     staleTime: 60 * 1000,
+  });
+}
+
+// ── Portfolio Analytics (QuantStats) ─────────────────────────────────────────
+
+export function usePortfolioAnalytics() {
+  return useQuery<PortfolioAnalyticsResponse>({
+    queryKey: ["portfolio", "analytics"],
+    queryFn: () => get<PortfolioAnalyticsResponse>("/portfolio/analytics"),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ── Stock Analytics (QuantStats) ─────────────────────────────────────────────
+
+export function useStockAnalytics(ticker: string) {
+  return useQuery<StockAnalyticsResponse>({
+    queryKey: ["stock-analytics", ticker],
+    queryFn: () => get<StockAnalyticsResponse>(`/stocks/${ticker}/analytics`),
+    staleTime: 5 * 60 * 1000,
+    enabled: !!ticker,
   });
 }

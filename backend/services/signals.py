@@ -15,12 +15,14 @@ Public API:
 
 from __future__ import annotations
 
+import importlib.metadata  # noqa: F401 — pandas-ta-openbb maps.py needs this submodule loaded
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
+import pandas_ta as ta
 from sqlalchemy import Float, func, select
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -130,6 +132,13 @@ class SignalResult:
     # Price change (daily)
     change_pct: float | None = None  # daily price change percentage
     current_price: float | None = None  # latest close price
+
+    # QuantStats per-stock metrics (vs SPY benchmark)
+    sortino: float | None = None
+    max_drawdown: float | None = None  # stored as positive (e.g. 0.15 = 15%)
+    alpha: float | None = None
+    beta: float | None = None
+    data_days: int | None = None  # number of trading days used for QuantStats
 
 
 def compute_price_change(
@@ -278,17 +287,11 @@ def compute_rsi(closes: pd.Series, period: int = RSI_PERIOD) -> tuple[float | No
     if len(closes) < period + 1:
         return None, None
 
-    delta = closes.diff()
-    gains = delta.clip(lower=0)
-    losses = (-delta).clip(lower=0)
+    rsi_series = ta.rsi(closes, length=period)
+    if rsi_series is None or rsi_series.dropna().empty:
+        return None, None
 
-    avg_gain = gains.ewm(com=period - 1, min_periods=period).mean()
-    avg_loss = losses.ewm(com=period - 1, min_periods=period).mean()
-
-    rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-
-    rsi_value = round(float(rsi.iloc[-1]), 2)
+    rsi_value = round(float(rsi_series.iloc[-1]), 2)
 
     if rsi_value < RSI_OVERSOLD:
         signal = RSISignal.OVERSOLD
@@ -320,15 +323,15 @@ def compute_macd(
     if len(closes) < slow + signal_period:
         return None, None, None
 
-    ema_fast = closes.ewm(span=fast, adjust=False).mean()
-    ema_slow = closes.ewm(span=slow, adjust=False).mean()
+    macd_df = ta.macd(closes, fast=fast, slow=slow, signal=signal_period)
+    if macd_df is None or macd_df.dropna().empty:
+        return None, None, None
 
-    macd_line = ema_fast - ema_slow
-    signal_line = macd_line.ewm(span=signal_period, adjust=False).mean()
-    histogram = macd_line - signal_line
+    macd_col = f"MACD_{fast}_{slow}_{signal_period}"
+    hist_col = f"MACDh_{fast}_{slow}_{signal_period}"
 
-    macd_val = round(float(macd_line.iloc[-1]), 4)
-    hist_val = round(float(histogram.iloc[-1]), 4)
+    macd_val = round(float(macd_df[macd_col].iloc[-1]), 4)
+    hist_val = round(float(macd_df[hist_col].iloc[-1]), 4)
 
     signal = MACDSignal.BULLISH if hist_val > 0 else MACDSignal.BEARISH
 
@@ -350,8 +353,8 @@ def compute_sma(
     Returns:
         Tuple of (sma_50_value, sma_200_value, signal_label).
     """
-    sma_short = closes.rolling(window=short).mean() if len(closes) >= short else None
-    sma_long = closes.rolling(window=long).mean() if len(closes) >= long else None
+    sma_short = ta.sma(closes, length=short) if len(closes) >= short else None
+    sma_long = ta.sma(closes, length=long) if len(closes) >= long else None
 
     sma50_val = (
         round(float(sma_short.iloc[-1]), 4)
@@ -406,14 +409,17 @@ def compute_bollinger(
     if len(closes) < period:
         return None, None, None
 
-    sma = closes.rolling(window=period).mean()
-    std = closes.rolling(window=period).std()
+    bb_df = ta.bbands(closes, length=period, std=num_std)
+    if bb_df is None or bb_df.dropna().empty:
+        return None, None, None
 
-    upper = sma + (num_std * std)
-    lower = sma - (num_std * std)
+    # pandas-ta-openbb uses integer std in column names (e.g. BBU_20_2 not BBU_20_2.0)
+    std_str = str(int(num_std)) if num_std == int(num_std) else str(num_std)
+    upper_col = f"BBU_{period}_{std_str}"
+    lower_col = f"BBL_{period}_{std_str}"
 
-    upper_val = round(float(upper.iloc[-1]), 4)
-    lower_val = round(float(lower.iloc[-1]), 4)
+    upper_val = round(float(bb_df[upper_col].iloc[-1]), 4)
+    lower_val = round(float(bb_df[lower_col].iloc[-1]), 4)
     current_price = float(closes.iloc[-1])
 
     if current_price > upper_val:
@@ -462,6 +468,70 @@ def compute_risk_return(
         sharpe = round((annualized - risk_free_rate) / vol, 4)
 
     return annualized, vol, sharpe
+
+
+def compute_quantstats_stock(
+    closes: pd.Series,
+    spy_closes: pd.Series,
+    risk_free_rate: float = DEFAULT_RISK_FREE_RATE,
+) -> dict:
+    """Compute per-stock QuantStats metrics vs SPY benchmark.
+
+    Args:
+        closes: Daily closing prices for the stock.
+        spy_closes: Daily closing prices for SPY (benchmark).
+        risk_free_rate: Annual risk-free rate (default 4.5%).
+
+    Returns:
+        Dict with sortino, max_drawdown (positive), alpha, beta.
+        All values are None when insufficient data (< 30 common trading days).
+    """
+    import quantstats as qs
+
+    null_result: dict = {
+        "sortino": None,
+        "max_drawdown": None,
+        "alpha": None,
+        "beta": None,
+        "data_days": 0,
+    }
+
+    returns = closes.pct_change().dropna()
+    spy_returns = spy_closes.pct_change().dropna()
+    # Normalize to tz-naive for intersection compatibility
+    if returns.index.tz is not None:
+        returns.index = returns.index.tz_localize(None)
+    if spy_returns.index.tz is not None:
+        spy_returns.index = spy_returns.index.tz_localize(None)
+    common = returns.index.intersection(spy_returns.index)
+
+    if len(common) < 30:
+        null_result["data_days"] = len(common)
+        return null_result
+
+    returns = returns[common]
+    spy_returns = spy_returns[common]
+
+    try:
+        import math
+
+        def _safe(val: float, digits: int = 4) -> float | None:
+            f = float(val)
+            return round(f, digits) if math.isfinite(f) else None
+
+        greeks = qs.stats.greeks(returns, spy_returns)
+        greeks_dict = greeks.to_dict() if hasattr(greeks, "to_dict") else {}
+
+        return {
+            "sortino": _safe(qs.stats.sortino(returns, rf=risk_free_rate)),
+            "max_drawdown": _safe(abs(qs.stats.max_drawdown(returns))),
+            "alpha": _safe(greeks_dict.get("alpha", 0.0)),
+            "beta": _safe(greeks_dict.get("beta", 0.0)),
+            "data_days": len(common),
+        }
+    except Exception:
+        logger.warning("QuantStats computation failed for stock, returning nulls", exc_info=True)
+        return null_result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -614,6 +684,11 @@ async def store_signal_snapshot(
         "composite_weights": result.composite_weights,
         "change_pct": result.change_pct,
         "current_price": result.current_price,
+        "sortino": result.sortino,
+        "max_drawdown": result.max_drawdown,
+        "alpha": result.alpha,
+        "beta": result.beta,
+        "data_days": result.data_days,
     }
 
     stmt = pg_insert(SignalSnapshot).values(values)
