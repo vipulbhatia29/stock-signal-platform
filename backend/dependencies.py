@@ -227,12 +227,17 @@ async def get_current_user(
     token_payload = decode_token(token, expected_type="access")
     user_id = token_payload.user_id
 
-    # User-level revocation check
+    # User-level revocation check (graceful — skip if Redis unavailable)
     if token_payload.iat:
-        from backend.services.token_blocklist import check_user_revocation
+        try:
+            from backend.services.token_blocklist import check_user_revocation
 
-        if await check_user_revocation(token_payload.user_id, token_payload.iat):
-            raise credentials_exception
+            if await check_user_revocation(token_payload.user_id, token_payload.iat):
+                raise credentials_exception
+        except credentials_exception.__class__:
+            raise
+        except Exception:
+            pass  # Redis down — allow request through
 
     # 1. Try cache first (graceful degradation if cache unavailable)
     cache = _get_cache(request)
