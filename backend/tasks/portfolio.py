@@ -4,7 +4,12 @@ import asyncio
 import logging
 
 from backend.database import async_session_factory
-from backend.services.portfolio import get_all_portfolio_ids, snapshot_portfolio_value
+from backend.services.portfolio import (
+    compute_quantstats_portfolio,
+    get_all_portfolio_ids,
+    materialize_rebalancing,
+    snapshot_portfolio_value,
+)
 from backend.tasks import celery_app
 
 logger = logging.getLogger(__name__)
@@ -26,6 +31,27 @@ async def _snapshot_all_portfolios_async() -> dict:
             result = await snapshot_portfolio_value(pid, db)
             if result:
                 snapshotted += 1
+                # Update the just-created snapshot with QuantStats metrics
+                try:
+                    qs_metrics = await compute_quantstats_portfolio(pid, db)
+                    if qs_metrics.get("sharpe") is not None:
+                        from sqlalchemy import update
+
+                        from backend.models.portfolio import PortfolioSnapshot
+
+                        await db.execute(
+                            update(PortfolioSnapshot)
+                            .where(
+                                PortfolioSnapshot.portfolio_id == pid,
+                                PortfolioSnapshot.snapshot_date == result.snapshot_date,
+                            )
+                            .values(**{k: v for k, v in qs_metrics.items() if v is not None})
+                        )
+                        await db.commit()
+                except Exception:
+                    logger.warning(
+                        "QuantStats computation failed for portfolio %s", pid, exc_info=True
+                    )
             else:
                 skipped += 1
 
@@ -160,3 +186,47 @@ def snapshot_health_task(self) -> dict:
     """
     logger.info("Starting health snapshots (attempt %d)", self.request.retries + 1)
     return asyncio.run(_snapshot_health_async())
+
+
+async def _materialize_rebalancing_async() -> dict:
+    """Compute and store rebalancing suggestions for all portfolios.
+
+    Returns:
+        Dict with computed and skipped counts.
+    """
+    async with async_session_factory() as db:
+        portfolio_ids = await get_all_portfolio_ids(db)
+
+    computed = 0
+    skipped = 0
+    for pid in portfolio_ids:
+        try:
+            async with async_session_factory() as db:
+                await materialize_rebalancing(pid, db)
+                computed += 1
+        except Exception:
+            logger.warning(
+                "Rebalancing materialization failed for portfolio %s",
+                pid,
+                exc_info=True,
+            )
+            skipped += 1
+
+    logger.info("Rebalancing: %d computed, %d skipped", computed, skipped)
+    return {"computed": computed, "skipped": skipped}
+
+
+@celery_app.task(
+    bind=True,
+    autoretry_for=(Exception,),
+    max_retries=2,
+    retry_backoff=True,
+    name="backend.tasks.portfolio.materialize_rebalancing_task",
+)
+def materialize_rebalancing_task(self) -> dict:
+    """Compute and store optimized rebalancing suggestions for all portfolios.
+
+    Runs as part of the nightly pipeline Phase 4.
+    """
+    logger.info("Starting rebalancing materialization (attempt %d)", self.request.retries + 1)
+    return asyncio.run(_materialize_rebalancing_async())

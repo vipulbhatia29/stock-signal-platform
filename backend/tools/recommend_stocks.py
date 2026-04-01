@@ -149,7 +149,7 @@ class RecommendStocksTool(BaseTool):
                 latest_signals_subq = (
                     select(
                         SignalSnapshot.ticker,
-                        func.max(SignalSnapshot.snapshot_date).label("max_date"),
+                        func.max(SignalSnapshot.computed_at).label("max_date"),
                     )
                     .group_by(SignalSnapshot.ticker)
                     .subquery()
@@ -159,7 +159,7 @@ class RecommendStocksTool(BaseTool):
                     .join(
                         latest_signals_subq,
                         (SignalSnapshot.ticker == latest_signals_subq.c.ticker)
-                        & (SignalSnapshot.snapshot_date == latest_signals_subq.c.max_date),
+                        & (SignalSnapshot.computed_at == latest_signals_subq.c.max_date),
                     )
                     .join(Stock, SignalSnapshot.ticker == Stock.ticker)
                     .where(SignalSnapshot.composite_score >= 8.0)

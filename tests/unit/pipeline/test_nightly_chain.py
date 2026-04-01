@@ -19,12 +19,21 @@ class TestNightlyPriceRefresh:
 
     @pytest.mark.asyncio
     @patch("backend.tasks.market_data._runner")
+    @patch("backend.tasks.market_data._load_spy_closes", new_callable=AsyncMock)
     @patch("backend.tasks.market_data._get_all_watchlist_tickers", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.detect_gap", new_callable=AsyncMock)
     @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
-    async def test_full_success(self, mock_refresh, mock_gap, mock_tickers, mock_runner) -> None:
+    async def test_full_success(
+        self,
+        mock_refresh,
+        mock_gap,
+        mock_tickers,
+        mock_spy,
+        mock_runner,
+    ) -> None:
         """Full nightly run with all tickers succeeding should return 'success'."""
         mock_runner.detect_stale_runs = AsyncMock(return_value=[])
+        mock_spy.return_value = None
         mock_gap.return_value = []
         mock_tickers.return_value = ["AAPL", "MSFT"]
         mock_runner.start_run = AsyncMock(return_value="run-id")
@@ -43,18 +52,28 @@ class TestNightlyPriceRefresh:
 
     @pytest.mark.asyncio
     @patch("backend.tasks.market_data._runner")
+    @patch("backend.tasks.market_data._load_spy_closes", new_callable=AsyncMock)
     @patch("backend.tasks.market_data._get_all_watchlist_tickers", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.detect_gap", new_callable=AsyncMock)
     @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
-    async def test_partial_failure(self, mock_refresh, mock_gap, mock_tickers, mock_runner) -> None:
+    async def test_partial_failure(
+        self,
+        mock_refresh,
+        mock_gap,
+        mock_tickers,
+        mock_spy,
+        mock_runner,
+    ) -> None:
         """Nightly run with some failures should return 'partial'."""
         mock_runner.detect_stale_runs = AsyncMock(return_value=[])
         mock_gap.return_value = []
         mock_tickers.return_value = ["AAPL", "TSLA"]
+        mock_spy.return_value = None  # SPY closes (not used in this test)
         mock_runner.start_run = AsyncMock(return_value="run-id")
 
-        # AAPL succeeds, TSLA fails
+        # SPY refresh first, then AAPL succeeds, TSLA fails
         mock_refresh.side_effect = [
+            {"ticker": "SPY", "status": "ok"},  # explicit SPY refresh
             {"ticker": "AAPL", "status": "ok"},
             Exception("yfinance timeout"),
         ]

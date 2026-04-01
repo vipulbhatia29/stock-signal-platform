@@ -136,8 +136,65 @@ class PortfolioSnapshot(Base):
     unrealized_pnl: Mapped[Decimal] = mapped_column(sa.Numeric(14, 2), nullable=False)
     position_count: Mapped[int] = mapped_column(sa.Integer, nullable=False, default=0)
 
+    # QuantStats portfolio-level metrics
+    sharpe: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    sortino: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    max_drawdown: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    max_drawdown_duration: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+    calmar: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    alpha: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    beta: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    var_95: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    cagr: Mapped[float | None] = mapped_column(sa.Float, nullable=True)
+    data_days: Mapped[int | None] = mapped_column(sa.Integer, nullable=True)
+
     def __repr__(self) -> str:
         return (
             f"<PortfolioSnapshot portfolio_id={self.portfolio_id} "
             f"date={self.snapshot_date} value={self.total_value}>"
+        )
+
+
+class RebalancingSuggestion(Base):
+    """Materialized rebalancing suggestion from PyPortfolioOpt optimization."""
+
+    __tablename__ = "rebalancing_suggestions"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        sa.UUID(),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    portfolio_id: Mapped[uuid.UUID] = mapped_column(
+        sa.ForeignKey("portfolios.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    ticker: Mapped[str] = mapped_column(
+        sa.ForeignKey("stocks.ticker", ondelete="CASCADE"),
+        nullable=False,
+    )
+    strategy: Mapped[str] = mapped_column(sa.String(20), nullable=False)
+    target_weight: Mapped[float] = mapped_column(sa.Float, nullable=False)
+    current_weight: Mapped[float] = mapped_column(sa.Float, nullable=False)
+    delta_shares: Mapped[float] = mapped_column(sa.Float, nullable=False)
+    delta_dollars: Mapped[float] = mapped_column(sa.Float, nullable=False)
+    action: Mapped[str] = mapped_column(sa.String(20), nullable=False)
+    computed_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "portfolio_id",
+            "ticker",
+            "strategy",
+            name="uq_rebal_portfolio_ticker_strategy",
+        ),
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<RebalancingSuggestion {self.ticker} {self.action} target={self.target_weight:.2%}>"
         )

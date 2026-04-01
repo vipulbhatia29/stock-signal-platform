@@ -161,6 +161,7 @@ class UserPreferenceResponse(BaseModel):
     max_position_pct: float
     max_sector_pct: float
     min_cash_reserve_pct: float
+    rebalancing_strategy: str | None = "min_volatility"
 
     model_config = {"from_attributes": True}
 
@@ -172,6 +173,7 @@ class UserPreferenceUpdate(BaseModel):
     max_position_pct: float | None = Field(None, gt=0, le=100)
     max_sector_pct: float | None = Field(None, gt=0, le=100)
     min_cash_reserve_pct: float | None = Field(None, gt=0, le=100)
+    rebalancing_strategy: Literal["min_volatility", "max_sharpe", "risk_parity"] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -197,3 +199,25 @@ class RebalancingResponse(BaseModel):
     available_cash: float
     num_positions: int
     suggestions: list[RebalancingSuggestion]
+
+
+# ---------------------------------------------------------------------------
+# Portfolio Analytics (QuantStats)
+# ---------------------------------------------------------------------------
+
+
+class PortfolioAnalyticsResponse(BaseModel):
+    """QuantStats portfolio-level analytics from the latest portfolio snapshot."""
+
+    sharpe: float | None = None
+    sortino: float | None = None
+    max_drawdown: float | None = None
+    max_drawdown_duration: int | None = None
+    calmar: float | None = None
+    alpha: float | None = None
+    beta: float | None = None
+    var_95: float | None = None
+    cagr: float | None = None
+    data_days: int | None = None
+
+    model_config = {"from_attributes": True}

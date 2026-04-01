@@ -8,8 +8,8 @@ test("renders grade letter", () => {
 });
 
 test("renders score when provided", () => {
-  render(<HealthGradeBadge grade="B" score={78} />);
-  expect(screen.getByText("78/100")).toBeInTheDocument();
+  render(<HealthGradeBadge grade="B" score={7.8} />);
+  expect(screen.getByText("7.8/10")).toBeInTheDocument();
 });
 
 test("applies correct color for C grade (warning)", () => {

@@ -29,6 +29,7 @@ from backend.tools.fundamentals_tool import FundamentalsTool
 from backend.tools.geopolitical import GeopoliticalEventsTool
 from backend.tools.ingest_stock_tool import IngestStockTool
 from backend.tools.market_briefing import MarketBriefingTool
+from backend.tools.portfolio_analytics import PortfolioAnalyticsTool
 from backend.tools.portfolio_exposure import PortfolioExposureTool
 from backend.tools.portfolio_health import PortfolioHealthTool
 from backend.tools.recommend_stocks import RecommendStocksTool
@@ -66,6 +67,7 @@ INTERNAL_TOOL_CLASSES: list[type] = [
     DividendSustainabilityTool,
     RiskNarrativeTool,
     PortfolioHealthTool,
+    PortfolioAnalyticsTool,
     MarketBriefingTool,
     StockIntelligenceTool,
     RecommendStocksTool,
@@ -76,7 +78,7 @@ def build_registry() -> ToolRegistry:
     """Build a ToolRegistry with all internal tools and MCP adapters.
 
     Creates and returns a fully populated registry containing:
-    - 24 internal tools (analysis, screening, forecasting, intelligence, etc.)
+    - 25 internal tools (analysis, screening, forecasting, intelligence, etc.)
     - 4 MCP adapter tools (Edgar, Alpha Vantage, FRED, Finnhub)
 
     Returns:

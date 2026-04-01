@@ -47,16 +47,32 @@ def _score_signal_quality(weighted_composite: float) -> float:
     return round(max(0.0, min(10.0, weighted_composite)), 1)
 
 
-def _score_risk(weighted_sharpe: float) -> float:
-    """Score risk from portfolio-weighted Sharpe ratio.
+def _score_risk(
+    weighted_sharpe: float,
+    weighted_sortino: float | None = None,
+    weighted_drawdown: float | None = None,
+) -> float:
+    """Score risk from portfolio-weighted Sharpe, Sortino, and max drawdown.
 
-    Sharpe > 1.5 = excellent (10), Sharpe < 0 = poor (0).
+    Combines three inputs (equal weight when all available):
+    - Sharpe: > 1.5 = excellent (10), < 0 = poor (0)
+    - Sortino: > 2.0 = excellent (10), < 0 = poor (0)
+    - Max drawdown: < 5% = excellent (10), > 30% = poor (0)
+
+    Falls back to Sharpe-only when Sortino/drawdown are None (no QuantStats data).
     """
-    if weighted_sharpe >= 1.5:
-        return 10.0
-    if weighted_sharpe <= 0:
-        return 0.0
-    return round(10.0 * weighted_sharpe / 1.5, 1)
+    sharpe_score = max(0.0, min(10.0, 10.0 * weighted_sharpe / 1.5))
+
+    # If no QuantStats data, fall back to Sharpe-only
+    if weighted_sortino is None and weighted_drawdown is None:
+        return round(sharpe_score, 1)
+
+    sortino_score = max(0.0, min(10.0, 10.0 * (weighted_sortino or 0.0) / 2.0))
+    dd_val = weighted_drawdown or 0.0
+    dd_score = max(0.0, min(10.0, 10.0 * (1.0 - dd_val / 0.30)))
+
+    combined = (sharpe_score + sortino_score + dd_score) / 3.0
+    return round(combined, 1)
 
 
 def _score_income(weighted_yield: float) -> float:
@@ -98,7 +114,7 @@ def _score_to_grade(score: float) -> str:
     if score >= 8.0:
         return "B+"
     if score >= 7.5:
-        return "B+"
+        return "B"
     if score >= 7.0:
         return "B"
     if score >= 6.5:
@@ -174,7 +190,7 @@ async def compute_portfolio_health(
     latest_signals_subq = (
         select(
             SignalSnapshot.ticker,
-            func.max(SignalSnapshot.snapshot_date).label("max_date"),
+            func.max(SignalSnapshot.computed_at).label("max_date"),
         )
         .where(SignalSnapshot.ticker.in_(tickers))
         .group_by(SignalSnapshot.ticker)
@@ -183,7 +199,7 @@ async def compute_portfolio_health(
     signals_stmt = select(SignalSnapshot).join(
         latest_signals_subq,
         (SignalSnapshot.ticker == latest_signals_subq.c.ticker)
-        & (SignalSnapshot.snapshot_date == latest_signals_subq.c.max_date),
+        & (SignalSnapshot.computed_at == latest_signals_subq.c.max_date),
     )
     signal_rows = (await db.execute(signals_stmt)).scalars().all()
     signal_map = {s.ticker: s for s in signal_rows}
@@ -193,6 +209,8 @@ async def compute_portfolio_health(
     sector_allocs: dict[str, float] = defaultdict(float)
     weighted_composite = 0.0
     weighted_sharpe = 0.0
+    weighted_sortino: float | None = None
+    weighted_drawdown: float | None = None
     weighted_yield = 0.0
     weighted_beta = 0.0
 
@@ -212,6 +230,16 @@ async def compute_portfolio_health(
         if signal_score is not None:
             weighted_composite += signal_score * w
         weighted_sharpe += sharpe * w
+
+        # Accumulate QuantStats metrics (None until at least one stock has data)
+        if signal and signal.sortino is not None:
+            if weighted_sortino is None:
+                weighted_sortino = 0.0
+            if weighted_drawdown is None:
+                weighted_drawdown = 0.0
+            weighted_sortino += float(signal.sortino) * w
+            weighted_drawdown += float(signal.max_drawdown or 0) * w
+
         weighted_yield += (stock.dividend_yield or 0.0) * w
         weighted_beta += (stock.beta or 1.0) * w
 
@@ -231,7 +259,7 @@ async def compute_portfolio_health(
     component_scores = {
         "diversification": _score_diversification(hhi),
         "signal_quality": _score_signal_quality(weighted_composite),
-        "risk": _score_risk(weighted_sharpe),
+        "risk": _score_risk(weighted_sharpe, weighted_sortino, weighted_drawdown),
         "income": _score_income(weighted_yield),
         "sector_balance": _score_sector_balance(max_sector_pct),
     }

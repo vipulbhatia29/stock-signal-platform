@@ -14,6 +14,7 @@ import {
   useStockNews,
   useStockIntelligence,
   useBenchmark,
+  useStockAnalytics,
 } from "@/hooks/use-stocks";
 import { useForecast } from "@/hooks/use-forecasts";
 import { StockHeader } from "@/components/stock-header";
@@ -23,6 +24,7 @@ import { BenchmarkChart } from "@/components/benchmark-chart";
 import { SignalCards } from "@/components/signal-cards";
 import { SignalHistoryChart } from "@/components/signal-history-chart";
 import { RiskReturnCard } from "@/components/risk-return-card";
+import { StockAnalyticsCard } from "@/components/stock-analytics-card";
 import { FundamentalsCard } from "@/components/fundamentals-card";
 import { DividendCard } from "@/components/dividend-card";
 import { ForecastCard } from "@/components/forecast-card";
@@ -49,6 +51,7 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
   const removeFromWatchlist = useRemoveFromWatchlist();
   const ingestTicker = useIngestTicker();
   const { data: fundamentals, isLoading: fundLoading } = useFundamentals(ticker);
+  const { data: analytics, isLoading: analyticsLoading } = useStockAnalytics(ticker);
   const { data: dividends, isLoading: divLoading } = useDividends(ticker);
   const { data: forecast, isLoading: forecastLoading } = useForecast(ticker);
 
@@ -172,6 +175,9 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
 
       <section id="sec-risk">
         <RiskReturnCard returns={signals?.returns} />
+        <div className="mt-3">
+          <StockAnalyticsCard analytics={analytics} isLoading={analyticsLoading} />
+        </div>
       </section>
 
       <section id="sec-fundamentals">

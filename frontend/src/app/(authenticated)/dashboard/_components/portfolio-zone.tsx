@@ -7,7 +7,7 @@ import { HealthGradeBadge } from "@/components/health-grade-badge";
 import { SectorPerformanceBars } from "@/components/sector-performance-bars";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePortfolioSummary, usePortfolioHealth, useMarketBriefing } from "@/hooks/use-stocks";
+import { usePortfolioSummary, usePortfolioHealth, useMarketBriefing, usePortfolioAnalytics } from "@/hooks/use-stocks";
 import { formatCurrency } from "@/lib/format";
 
 /** Zone 3 — Portfolio KPIs + health grade + sector performance. */
@@ -15,6 +15,7 @@ export function PortfolioZone() {
   const { data: summary, isLoading: summaryLoading } = usePortfolioSummary();
   const { data: health, isLoading: healthLoading } = usePortfolioHealth();
   const { data: briefing } = useMarketBriefing();
+  const { data: analytics } = usePortfolioAnalytics();
 
   const isLoading = summaryLoading || healthLoading;
 
@@ -68,6 +69,27 @@ export function PortfolioZone() {
         {/* Cost Basis */}
         <PortfolioKPITile label="Cost Basis" value={formatCurrency(summary.total_cost_basis)} accent="neutral" />
       </div>
+
+      {/* QuantStats Analytics Row */}
+      {analytics && analytics.data_days != null && analytics.data_days >= 30 && (
+        <div className="mt-3 grid grid-cols-3 gap-3">
+          <PortfolioKPITile
+            label="Sortino"
+            value={analytics.sortino?.toFixed(2) ?? "—"}
+            accent="neutral"
+          />
+          <PortfolioKPITile
+            label="Max Drawdown"
+            value={analytics.max_drawdown != null ? `${(analytics.max_drawdown * 100).toFixed(1)}%` : "—"}
+            accent={analytics.max_drawdown != null && analytics.max_drawdown > 0.15 ? "loss" : "neutral"}
+          />
+          <PortfolioKPITile
+            label="Alpha"
+            value={analytics.alpha?.toFixed(2) ?? "—"}
+            accent={analytics.alpha != null ? (analytics.alpha >= 0 ? "gain" : "loss") : "neutral"}
+          />
+        </div>
+      )}
 
       {sectorBars.length > 0 && (
         <div className="mt-3">

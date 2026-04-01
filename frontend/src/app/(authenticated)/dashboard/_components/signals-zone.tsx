@@ -97,8 +97,8 @@ export function SignalsZone() {
           </div>
         ) : (
           <div className="space-y-1">
-            {[...movers.gainers.slice(0, 3), ...movers.losers.slice(0, 3)].map((m) => (
-              <MoverRow key={m.ticker} ticker={m.ticker} price={m.current_price} changePct={m.change_pct} macdSignal={m.macd_signal_label} onClick={() => router.push(`/stocks/${m.ticker}`)} />
+            {[...movers.gainers.slice(0, 3), ...movers.losers.slice(0, 3)].map((m, i) => (
+              <MoverRow key={`${m.ticker}-${i}`} ticker={m.ticker} price={m.current_price} changePct={m.change_pct} macdSignal={m.macd_signal_label} onClick={() => router.push(`/stocks/${m.ticker}`)} />
             ))}
           </div>
         )}

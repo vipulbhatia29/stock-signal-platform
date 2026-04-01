@@ -16,6 +16,7 @@ jest.mock("@/hooks/use-stocks", () => ({
   useBulkSignalsByTickers: () => mockUseBulkSignalsByTickers(),
   usePortfolioSummary: () => mockUsePortfolioSummary(),
   usePortfolioHealth: () => mockUsePortfolioHealth(),
+  usePortfolioAnalytics: () => ({ data: undefined, isLoading: false }),
   useUserDashboardNews: () => mockUseUserDashboardNews(),
 }));
 
