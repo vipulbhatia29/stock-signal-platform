@@ -113,6 +113,17 @@ An 8-step Celery Beat pipeline runs at 9:30 PM ET every trading day:
 7. **Alert generation** — signal flips, new buy opportunities, drift warnings
 8. **Portfolio snapshots** — capture end-of-day portfolio value
 
+### Authentication & Account Management
+
+Full-featured auth system supporting both traditional and social login:
+
+- **Google OAuth 2.0** — sign up, log in, or auto-link an existing account to Google. Stateless PKCE-style flow with state + nonce validation and JWKS caching.
+- **Email verification** — new accounts receive a verification email via Resend. Unverified users are soft-blocked from write operations (add to watchlist, portfolio transactions, etc.) until they confirm their address.
+- **Password reset** — forgot-password flow with time-limited, single-use tokens. No email enumeration; per-email rate limiting.
+- **Account settings** — `/account` page with four sections: profile info, change/set password, Google link/unlink, and danger zone.
+- **Account deletion** — soft-delete with a 30-day grace period before anonymization. A Celery Beat task (3:15 AM daily) purges expired accounts.
+- **Admin tools** — admin-only endpoints to manually verify an email address or recover a soft-deleted account within the grace window.
+
 ### In-App Alerts
 
 Bell icon with unread count, severity-colored badges, and undo dismiss. Alert categories:
@@ -172,7 +183,8 @@ No paid data subscriptions required. All core functionality works with just the 
 | **LLM Providers** | Anthropic (primary), Groq (fast fallback), OpenAI (secondary) |
 | **Observability** | Langfuse (tracing), ObservabilityCollector (metrics), Assessment Engine (eval) |
 | **Background** | Celery + Celery Beat (task scheduling) |
-| **Auth** | JWT (httpOnly cookies + Bearer tokens), bcrypt password hashing |
+| **Auth** | JWT (httpOnly cookies + Bearer tokens), bcrypt password hashing, Google OAuth 2.0 (PKCE + JWKS) |
+| **Email** | Resend API (transactional email — verification, password reset); dev console fallback |
 | **MCP** | FastMCP server (tool exposure), 4 MCP adapters (external data) |
 | **Package Management** | uv (Python), npm (Node.js) |
 | **CI/CD** | GitHub Actions (lint, test, build), branch protection on main + develop |
@@ -203,6 +215,9 @@ No paid data subscriptions required. All core functionality works with just the 
 | `FRED_API_KEY` | No | Federal Reserve macro data (yield curve, unemployment) | [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) |
 | `FINNHUB_API_KEY` | No | Analyst ratings, ESG scores, supply chain | [finnhub.io](https://finnhub.io/register) |
 | `ALPHA_VANTAGE_API_KEY` | No | News sentiment analysis | [alphavantage.co](https://www.alphavantage.co/support/#api-key) |
+| `GOOGLE_CLIENT_ID` | No | Google OAuth 2.0 login/register | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
+| `GOOGLE_CLIENT_SECRET` | No | Google OAuth 2.0 login/register | [console.cloud.google.com](https://console.cloud.google.com/apis/credentials) |
+| `RESEND_API_KEY` | No | Transactional email (verification + password reset). Without it, emails are printed to the dev console. | [resend.com](https://resend.com/api-keys) |
 
 **Minimum to get started:** Just `ANTHROPIC_API_KEY` and a self-generated `JWT_SECRET_KEY`. Everything else is optional.
 
@@ -313,8 +328,8 @@ graph TB
     subgraph FastAPI["FastAPI :8181"]
         MW["Middleware<br/>CORS | JWT | Rate Limit"]
 
-        subgraph Routers["10 Routers — 46 endpoints"]
-            R_Auth["/auth<br/>register, login, refresh, SSO"]
+        subgraph Routers["10 Routers — 63 endpoints"]
+            R_Auth["/auth<br/>register, login, refresh, OAuth,<br/>verify, reset, account, admin"]
             R_Stocks["/stocks<br/>signals, prices, fundamentals,<br/>screener, watchlist, ingest"]
             R_Portfolio["/portfolio<br/>transactions, positions, summary,<br/>rebalancing, snapshots, dividends"]
             R_Chat["/chat<br/>stream, sessions, feedback"]
@@ -369,6 +384,8 @@ graph TB
         Edgar["Edgar (MCP)<br/>SEC filings"]
         FH["Finnhub (MCP)<br/>analyst, ESG"]
         AV["Alpha Vantage (MCP)<br/>sentiment"]
+        Resend["Resend<br/>transactional email"]
+        GoogleOAuth["Google OAuth 2.0<br/>JWKS + token exchange"]
     end
 
     NextJS --> MW
@@ -390,6 +407,8 @@ graph TB
     T_MCP --> FH
     T_MCP --> AV
     LLM --> External
+    Routers --> Resend
+    Routers --> GoogleOAuth
     Observability --> PG
     Observability --> LF
     MCPServer --> ToolLayer
@@ -471,17 +490,29 @@ cd frontend && npm run lint             # TypeScript/React lint
 
 ## API Endpoints
 
-50 endpoints across 11 routers. Key endpoints listed below — full interactive docs at http://localhost:8181/docs (Swagger UI).
+63 endpoints across 11 routers. Key endpoints listed below — full interactive docs at http://localhost:8181/docs (Swagger UI).
 
 <details>
-<summary><strong>Auth</strong> — 4 endpoints</summary>
+<summary><strong>Auth</strong> — 17 endpoints</summary>
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/auth/register` | POST | Create account |
+| `/api/v1/auth/register` | POST | Create account (sends verification email) |
 | `/api/v1/auth/login` | POST | Login (returns JWT in httpOnly cookie) |
 | `/api/v1/auth/refresh` | POST | Refresh access token |
 | `/api/v1/auth/logout` | POST | Logout (blocklist refresh token) |
+| `/api/v1/auth/verify-email` | POST | Verify email address with token |
+| `/api/v1/auth/resend-verification` | POST | Re-send verification email |
+| `/api/v1/auth/forgot-password` | POST | Request password reset email |
+| `/api/v1/auth/reset-password` | POST | Reset password with token |
+| `/api/v1/auth/oauth/google/authorize` | GET | Initiate Google OAuth flow |
+| `/api/v1/auth/oauth/google/callback` | GET | Google OAuth callback (new user / auto-link / returning) |
+| `/api/v1/auth/account` | GET | Current account info |
+| `/api/v1/auth/account/password` | PUT | Change or set password |
+| `/api/v1/auth/account/google/unlink` | DELETE | Unlink Google account |
+| `/api/v1/auth/account/delete` | DELETE | Soft-delete account (30-day grace period) |
+| `/api/v1/auth/admin/verify-email` | POST | Admin: manually verify a user's email |
+| `/api/v1/auth/admin/recover-account` | POST | Admin: recover soft-deleted account |
 
 </details>
 

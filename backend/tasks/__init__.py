@@ -69,6 +69,10 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.audit.purge_login_attempts_task",
         "schedule": crontab(hour=3, minute=0),
     },
+    "purge-deleted-accounts-daily": {
+        "task": "backend.tasks.audit.purge_deleted_accounts_task",
+        "schedule": crontab(hour=3, minute=15),
+    },
     "model-retrain-biweekly": {
         "task": "backend.tasks.forecasting.model_retrain_all_task",
         "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET

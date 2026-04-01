@@ -59,16 +59,27 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 
 ## Active / Future Phases
 
-### Phase C: Google OAuth + User Acquisition (~3 days, KAN-152)
+### Phase C: Auth Overhaul ✅ (Session 82, Epic KAN-325)
 
-> Unblocks subscriptions and real user signups. PKCE flow, account linking.
+> Google OAuth, email verification, password reset, account settings, account deletion, admin tools.
+> Brainstormed + spec-reviewed + design-reviewed. 30 JIRA tickets (KAN-326 to KAN-355).
 
-| # | Task | Brainstorm? | Effort |
-|---|------|-------------|--------|
-| C1 | Account linking policy (merge on email? separate accounts?) | **Business** | ~0.5 day |
-| C2 | PKCE flow, CachedJWKSClient, dual auth (JWT + Google) | **Technical** | ~0.5 day |
-| C3 | Backend: Google OAuth provider, user linking, token exchange | No | ~1.5 days |
-| C4 | Frontend: "Sign in with Google" button, auth flow | No | ~0.5 day |
+**Sprint 1-6 (Implementation) ✅:**
+- **Sprint 1:** Foundation — models, migration 023, config, CachedUser, token revocation, schemas (KAN-326–334)
+- **Sprint 2:** EmailService (Resend) + email verification endpoints (KAN-335–336)
+- **Sprint 3:** GoogleOAuthService + OAuth authorize/callback + login guards (KAN-337–339)
+- **Sprint 4:** Password reset + change/set password + Google unlink + account info (KAN-340–342)
+- **Sprint 5:** Account deletion + admin endpoints + Celery purge + write guards on 11 endpoints (KAN-343–346)
+- **Sprint 6:** Frontend — API functions, Google buttons, 3 auth pages, account settings, verification banner (KAN-347–352)
+
+**Expert review:** 4-persona review (PM, Staff FS, Security, QA) found 22 issues — all critical/major fixed.
+**Files:** 10 new + 25 modified = 35 total. Migration 023 applied (`5c9a05c38ee1`).
+**Tests:** 1296 backend passing (no regressions). TypeScript 0 errors.
+
+**Sprint 7 (Testing) — TODO:**
+- KAN-353: Unit tests (~33 tests)
+- KAN-354: API integration tests (~42 tests)
+- KAN-355: Frontend Jest tests (~12 tests)
 
 ### Phase D: Subscriptions + Monetization (~5 days)
 

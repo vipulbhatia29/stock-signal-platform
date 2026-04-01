@@ -4,7 +4,7 @@
 
 **Version:** 1.1
 **Date:** March 2026
-**Status:** Living Document — Phase 1-8.5 complete, Phase C (Google OAuth) next
+**Status:** Living Document — Phase 1-C complete, Phase D (Stripe) next
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
 ---
@@ -105,6 +105,7 @@ erDiagram
     users ||--o{ recommendation_snapshots : receives
     users ||--o{ in_app_alerts : receives
     users ||--o{ recommendation_outcomes : evaluated
+    users ||--o{ oauth_accounts : linked_to
 
     portfolios ||--o{ positions : contains
     portfolios ||--o{ transactions : records
@@ -128,8 +129,19 @@ erDiagram
     users {
         uuid id PK
         string email UK
-        string hashed_password
+        string hashed_password "nullable — null for OAuth-only"
         string role
+        boolean email_verified
+        datetime deleted_at "null = active; set = soft-deleted"
+    }
+
+    oauth_accounts {
+        uuid id PK
+        uuid user_id FK
+        string provider "google"
+        string provider_user_id UK
+        string email
+        datetime created_at
     }
 
     stocks {
@@ -252,6 +264,53 @@ POST /api/v1/auth/logout
 
 Note: Login and refresh also set httpOnly cookies (access_token + refresh_token).
 Server reads tokens from cookies OR Authorization header (dual-mode auth).
+```
+
+### 3.2.1 Phase C Auth Endpoints ✅ IMPLEMENTED
+
+```
+POST /api/v1/auth/forgot-password
+  Request:  { email: string }
+  Response: { message: string }   # Always 200 (no email enumeration)
+
+POST /api/v1/auth/reset-password
+  Request:  { token: string, new_password: string }
+  Response: { message: string }
+  Errors:   400 (invalid/expired token)
+
+POST /api/v1/auth/resend-verification
+  Response: { message: string }
+  Auth:     Required (unverified user)
+
+GET /api/v1/auth/verify-email?token={token}
+  Response: { message: string }
+  Errors:   400 (invalid/expired token)
+
+GET /api/v1/auth/google/authorize
+  Response: { auth_url: string }  # Redirect target with state+nonce
+
+GET /api/v1/auth/google/callback?code={code}&state={state}
+  Response: Sets httpOnly cookies; redirects to /dashboard
+  Errors:   400 (state mismatch), 409 (email conflict with password account)
+
+DELETE /api/v1/auth/account
+  Response: 204
+  Auth:     Required
+  Behavior: Soft-delete (sets deleted_at); 30-day purge via Celery task.
+
+--- Admin endpoints (ADMIN role required) ---
+
+POST /api/v1/admin/users/{user_id}/verify
+  Response: { message: string }
+
+POST /api/v1/admin/users/{user_id}/recover
+  Response: { message: string }  # Restores soft-deleted account
+
+GET /api/v1/admin/users
+  Response: [{ id, email, role, email_verified, deleted_at, created_at }]
+
+GET /api/v1/admin/users/{user_id}
+  Response: UserAdminDetail
 ```
 
 ### 3.3 Stock & Signal Endpoints
@@ -398,6 +457,8 @@ GET /api/v1/stocks/{ticker}/analytics               [200 OK]
 - `PortfolioAnalyticsTool` — reads materialized QuantStats from latest portfolio_snapshots row via ContextVar user_id.
 
 **Migration 022** (`c870473fe107`): signal_snapshots +5 cols, portfolio_snapshots +10 cols, user_preferences +1 col, rebalancing_suggestions table, SPY seed.
+
+**Migration 023** (`5c9a05c38ee1`): `oauth_accounts` table; users +`email_verified`, `deleted_at` columns; `hashed_password` made nullable (for OAuth-only users).
 
 ### 3.6 Chat Endpoint (Phase 4)
 
@@ -675,6 +736,13 @@ GET /api/v1/auth/me
 ## 4. Service Layer Design
 
 > **Implementation status:** The service layer pattern described below is ASPIRATIONAL. It is planned for Phase 3+. In the current implementation (Phases 1-2), routers call tools directly (e.g., `from backend.tools.signals import compute_signals`). The Redis caching strategy is also not yet implemented.
+
+### 4.0.1 Phase C Services
+
+| Service | File | Description |
+|---------|------|-------------|
+| `EmailService` | `backend/services/email.py` | Transactional email via Resend API. Sends: email verification link, password reset link, account deletion confirmation. Fire-and-forget with error logging. Feature-gated on `RESEND_API_KEY`. |
+| `GoogleOAuthService` | `backend/services/google_oauth.py` | Authorization URL generation (state + nonce), code exchange, JWKS validation via PyJWT, user lookup/creation, OAuthAccount management. JWKS cached in Redis (stable TTL). |
 
 ### 4.1 Service Pattern
 
@@ -1296,6 +1364,43 @@ sequenceDiagram
 **Dual-mode auth dependency**: `get_current_user` checks `Authorization: Bearer`
 header first (for API clients, scripts). If absent, reads `access_token` cookie.
 This allows both browser (cookie) and programmatic (header) access.
+
+### 9.1.1 Google OAuth 2.0 Flow (Phase C) ✅ IMPLEMENTED
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant API as FastAPI
+    participant G as Google OAuth
+
+    B->>API: GET /auth/google/authorize
+    API-->>B: { auth_url } (state + nonce in session cookie)
+
+    B->>G: Redirect to Google consent screen
+    G-->>B: Redirect to /auth/google/callback?code=...&state=...
+
+    B->>API: GET /auth/google/callback
+    API->>G: Exchange code for id_token + access_token
+    API->>G: Fetch JWKS, validate id_token (nonce, aud, exp)
+    API->>API: Lookup OAuthAccount by (provider, provider_user_id)
+    alt New user
+        API->>API: Create User (email_verified=True) + OAuthAccount
+    else Existing OAuth user
+        API->>API: Load User via OAuthAccount
+    else Email collision with password account
+        API-->>B: 409 (link accounts manually)
+    end
+    API-->>B: Set httpOnly cookies, redirect /dashboard
+```
+
+**Implementation:** `backend/services/google_oauth.py` (httpx + PyJWT, JWKS cached in Redis).
+State is a signed UUID stored in a short-lived cookie (CSRF protection). Nonce embedded in id_token claim.
+
+### 9.1.2 User-Level Token Revocation (Phase C) ✅ IMPLEMENTED
+
+All JWTs embed an `iat` (issued-at) timestamp. On sensitive actions (password change, account deletion, OAuth unlink), a Redis key `auth:revoke:{user_id}` is set to the current timestamp. The `get_current_user` dependency rejects any token with `iat < revoke_timestamp`, forcing immediate re-login across all sessions.
+
+This is in addition to the existing JTI refresh-token blocklist.
 
 ### 9.2 Rate Limiting Design
 

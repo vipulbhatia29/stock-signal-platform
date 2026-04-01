@@ -2,14 +2,14 @@
 
 > Stock analysis SaaS for part-time investors — US equities, signal detection, portfolio tracking, AI-powered recommendations.
 
-Generated: 2026-04-01 | Session: 81 | Alembic head: `c870473fe107` (migration 022)
+Generated: 2026-04-01 | Session: 81 | Alembic head: `5c9a05c38ee1` (migration 023)
 
 ## Project Structure
 
 ```
 backend/                    FastAPI + SQLAlchemy async + Celery
 ├── agents/                 LangGraph ReAct loop, guards, planner, context
-├── migrations/versions/    22 Alembic migrations (TimescaleDB hypertables)
+├── migrations/versions/    23 Alembic migrations (TimescaleDB hypertables)
 ├── models/ (20 files)      SQLAlchemy 2.0 ORM models
 ├── observability/          Collector, writer, token_budget, langfuse, queries, routers
 ├── routers/ (16 files)     API routers mounted under /api/v1/
@@ -49,15 +49,31 @@ docs/
 | Unit Tests | `tests/unit/` | `uv run pytest tests/unit/ -q` |
 | Frontend Tests | `frontend/` | `npx jest --no-coverage` |
 
-## Core Models (28)
+## Core Models (29)
 
-User, UserPreference, Stock, Watchlist, StockPrice (hypertable), SignalSnapshot (hypertable), PortfolioSnapshot (hypertable), Portfolio, Position, Transaction, RebalancingSuggestion, DividendPayment, EarningsSnapshot, ForecastResult, ModelVersion, RecommendationSnapshot, RecommendationOutcome, ChatSession, ChatMessage, InAppAlert, AssessmentResult, AssessmentRun, LLMCallLog, ToolExecutionLog, LLMModelConfig, LoginAttempt, PipelineRun, PipelineWatermark, PortfolioHealthSnapshot
+User, UserPreference, OAuthAccount, Stock, Watchlist, StockPrice (hypertable), SignalSnapshot (hypertable), PortfolioSnapshot (hypertable), Portfolio, Position, Transaction, RebalancingSuggestion, DividendPayment, EarningsSnapshot, ForecastResult, ModelVersion, RecommendationSnapshot, RecommendationOutcome, ChatSession, ChatMessage, InAppAlert, AssessmentResult, AssessmentRun, LLMCallLog, ToolExecutionLog, LLMModelConfig, LoginAttempt, PipelineRun, PipelineWatermark, PortfolioHealthSnapshot
+
+## Backend Models (detailed)
+
+| File | Model | Purpose |
+|------|-------|---------|
+| `backend/models/user.py` | User | Core user identity, email, password hash, email_verified, deleted_at |
+| `backend/models/oauth_account.py` | OAuthAccount | OAuth provider linking (provider, provider_sub, user FK) |
+| (other 27 models) | — | See Core Models list above |
+
+## Backend Services (detailed)
+
+| File | Service | Purpose |
+|--------|---------|---------|
+| `backend/services/email.py` | EmailService | Resend API integration (verification, reset, deletion emails) |
+| `backend/services/google_oauth.py` | GoogleOAuthService | OAuth 2.0 auth code flow, JWKS validation |
+| (other 12 services) | — | Signals, portfolio, cache, stocks, etc. |
 
 ## API Routes (16 routers)
 
 | Prefix | Router | Key Endpoints |
 |--------|--------|---------------|
-| `/auth` | auth.py | login, register, refresh, logout, me, OIDC |
+| `/auth` | auth.py | login, register, refresh, logout, me, OIDC, Google OAuth, email verification, password reset, account settings, account deletion, admin tools (20+ endpoints) |
 | `/stocks` | stocks/ | signals, prices, analytics, ingest, search, watchlist, fundamentals, news, intelligence, benchmark, OHLC |
 | `/portfolio` | portfolio.py | transactions, positions, summary, history, dividends, rebalancing, analytics, health |
 | `/preferences` | preferences.py | GET + PATCH user preferences (incl. rebalancing_strategy) |
@@ -71,6 +87,23 @@ User, UserPreference, Stock, Watchlist, StockPrice (hypertable), SignalSnapshot 
 | `/observability` | observability.py | KPIs, queries, query detail, grouped charts, assessments |
 | `/admin` | admin.py | LLM config, system health, command center |
 | `/health` | health.py | readiness + liveness |
+
+## Frontend Pages (Auth Overhaul)
+
+| Path | Page | Purpose |
+|------|------|---------|
+| `frontend/src/app/auth/verify-email/page.tsx` | Email Verification | Email verification landing (token-based confirmation) |
+| `frontend/src/app/auth/forgot-password/page.tsx` | Forgot Password | Password reset request form |
+| `frontend/src/app/auth/reset-password/page.tsx` | Reset Password | Password reset form (token-based) |
+| `frontend/src/app/(authenticated)/account/page.tsx` | Account Settings | Profile, security, linked accounts, danger zone (delete account) |
+| `frontend/src/components/email-verification-banner.tsx` | Email Verification Banner | Verification prompt in authenticated layout |
+
+## Migrations
+
+| File | Alembic Revision | Purpose |
+|------|------------------|---------|
+| `backend/migrations/versions/023_*.py` | `5c9a05c38ee1` | Auth overhaul: oauth_accounts table, email_verified flag, deleted_at, ChatSession FK fix |
+| (previous 22 migrations) | (c870473fe107 and earlier) | Core models, hypertables, indexes, etc. |
 
 ## Agent Architecture
 
@@ -114,6 +147,7 @@ Phase 4: [parallel] Alerts, health snapshots, rebalancing materialization
 | yfinance | Market data source |
 | langfuse | LLM observability |
 | pyjwt | JWT authentication |
+| resend | Email sending API |
 | tanstack/react-query | Frontend data fetching |
 | recharts | Frontend charts |
 | shadcn/ui | UI component library |

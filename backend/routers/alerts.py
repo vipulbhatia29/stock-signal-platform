@@ -7,7 +7,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
-from backend.dependencies import get_current_user
+from backend.dependencies import get_current_user, require_verified_email
 from backend.models.alert import InAppAlert
 from backend.models.user import User
 from backend.schemas.alerts import (
@@ -112,6 +112,7 @@ async def mark_alerts_read(
     Returns:
         BatchReadResponse with count of updated alerts.
     """
+    require_verified_email(current_user)
     if not body.alert_ids:
         return BatchReadResponse(updated=0)
 

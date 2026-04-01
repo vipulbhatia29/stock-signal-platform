@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
-from backend.dependencies import get_current_user
+from backend.dependencies import get_current_user, require_verified_email
 from backend.models.user import User, UserPreference
 from backend.schemas.portfolio import UserPreferenceResponse, UserPreferenceUpdate
 
@@ -72,6 +72,7 @@ async def update_preferences(
 
     Only supplied fields are changed; omitted fields keep their current values.
     """
+    require_verified_email(current_user)
     pref = await _get_or_create_preference(current_user.id, db)
 
     update_data = body.model_dump(exclude_unset=True)

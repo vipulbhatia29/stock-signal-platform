@@ -7,6 +7,7 @@ import { ChatPanel } from "@/components/chat-panel";
 import { ArtifactBar } from "@/components/chat/artifact-bar";
 import { ChatProvider, useChat } from "@/contexts/chat-context";
 import { useAddToWatchlist, useIngestTicker, useWatchlist } from "@/hooks/use-stocks";
+import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { toast } from "sonner";
 
 function AuthenticatedShell({ children }: { children: React.ReactNode }) {
@@ -45,6 +46,7 @@ function AuthenticatedShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <Topbar onAddTicker={handleAddTicker} />
+        <EmailVerificationBanner />
         {artifact && (
           <ArtifactBar artifact={artifact} onDismiss={() => setArtifact(null)} />
         )}

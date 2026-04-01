@@ -28,6 +28,7 @@ class TokenPayload:
 
     user_id: uuid.UUID
     jti: str | None = None
+    iat: datetime | None = None
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
@@ -48,6 +49,8 @@ class CachedUser(BaseModel):
     email: str
     role: UserRole
     is_active: bool
+    email_verified: bool
+    has_password: bool  # True if hashed_password is not None
     created_at: datetime
     updated_at: datetime
 
@@ -76,6 +79,7 @@ def create_access_token(user_id: uuid.UUID) -> str:
         "sub": str(user_id),
         "exp": expire,
         "type": "access",
+        "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
@@ -88,6 +92,7 @@ def create_refresh_token(user_id: uuid.UUID) -> str:
         "exp": expire,
         "type": "refresh",
         "jti": str(uuid.uuid4()),
+        "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
@@ -116,9 +121,12 @@ def decode_token(token: str, expected_type: str = "access") -> TokenPayload:
         token_type: str | None = payload.get("type")
         if user_id_str is None or token_type != expected_type:
             raise credentials_exception
+        iat_raw = payload.get("iat")
+        iat = datetime.fromtimestamp(iat_raw, tz=timezone.utc) if iat_raw else None
         return TokenPayload(
             user_id=uuid.UUID(user_id_str),
             jti=payload.get("jti"),
+            iat=iat,
         )
     except (PyJWTError, ValueError):
         raise credentials_exception
@@ -167,7 +175,16 @@ async def _get_cached_user(cache: CacheService, user_id: uuid.UUID) -> CachedUse
 async def _set_cached_user(cache: CacheService, user: User) -> None:
     """Serialize and store a User in Redis (excluding hashed_password)."""
     try:
-        cached = CachedUser.model_validate(user)
+        cached = CachedUser(
+            id=user.id,
+            email=user.email,
+            role=user.role,
+            is_active=user.is_active,
+            email_verified=user.email_verified,
+            has_password=user.hashed_password is not None,
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+        )
         await cache.set(
             _user_cache_key(user.id),
             cached.model_dump_json(),
@@ -202,8 +219,20 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
     token_payload = decode_token(token, expected_type="access")
     user_id = token_payload.user_id
+
+    # User-level revocation check
+    if token_payload.iat:
+        from backend.services.token_blocklist import check_user_revocation
+
+        if await check_user_revocation(token_payload.user_id, token_payload.iat):
+            raise credentials_exception
 
     # 1. Try cache first (graceful degradation if cache unavailable)
     cache = _get_cache(request)
@@ -247,4 +276,11 @@ def require_admin(user: User | CachedUser) -> User | CachedUser:
     """
     if user.role != UserRole.ADMIN:
         raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+def require_verified_email(user: User | CachedUser) -> User | CachedUser:
+    """Raise 403 if user email is not verified."""
+    if not user.email_verified:
+        raise HTTPException(status_code=403, detail="Email verification required")
     return user

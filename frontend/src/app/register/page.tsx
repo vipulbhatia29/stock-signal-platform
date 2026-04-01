@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Mail, Lock, User, ArrowRight, TrendingUp, BarChart3, Shield } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { toast } from "sonner";
+import { getGoogleAuthUrl } from "@/lib/api";
 
 function BrandPanel() {
   return (
@@ -110,7 +110,7 @@ export default function RegisterPage() {
           <form onSubmit={handleSubmit} className="space-y-4" data-testid="register-form">
             <button
               type="button"
-              onClick={() => toast.info("Google OAuth coming soon")}
+              onClick={() => { window.location.href = getGoogleAuthUrl(); }}
               className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-card2 py-2.5 text-sm font-medium text-foreground hover:bg-hov transition-colors"
             >
               <svg className="h-4 w-4" viewBox="0 0 24 24">

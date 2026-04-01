@@ -57,6 +57,16 @@ class Settings(BaseSettings):
     # Comma-separated whitelist of allowed OIDC redirect URIs
     OIDC_REDIRECT_URIS: str = "http://localhost:3001/api/auth/callback/custom"
 
+    # --- Google OAuth ---
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_OAUTH_REDIRECT_URI: str = "http://localhost:8181/api/v1/auth/google/callback"
+
+    # --- Email (Resend) ---
+    RESEND_API_KEY: str = ""
+    EMAIL_FROM_ADDRESS: str = "noreply@stocksignal.app"
+    FRONTEND_BASE_URL: str = "http://localhost:3000"
+
     # --- Agent ---
     MCP_TOOLS: bool = True  # MCP stdio transport for agent tool calls (kill switch: set False)
     MAX_TOOL_RESULT_CHARS: int = 3000  # Truncate tool results before synthesis

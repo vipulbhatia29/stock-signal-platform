@@ -122,3 +122,27 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 46 files changed, 3642 insertions
 - Alembic head: `c870473fe107` (migration 022)
 - JIRA: KAN-246 Epic + KAN-247/248/249/318/319 → Done
+
+---
+
+## Session 82 — Phase C: Auth Overhaul — Google OAuth, Email Verification, Account Management (2026-04-01)
+
+**Branch:** `feat/KAN-325-auth-overhaul` | **Epic KAN-325** (30 tickets: KAN-326–355)
+
+### Implementation (Sprints 1-6)
+- **Sprint 1:** Foundation — OAuthAccount model, User fields (email_verified, deleted_at, nullable hashed_password), LoginAttempt method/provider_sub, JWT iat claim, CachedUser extension, user-level token revocation, migration 023, 9 new Pydantic schemas
+- **Sprint 2:** EmailService (Resend + dev console fallback), email verification endpoints (verify + resend), register sends verification email
+- **Sprint 3:** GoogleOAuthService (httpx + PyJWT, JWKS cached, state+nonce), OAuth authorize/callback (3 flows: new user, auto-link, returning), login guards (NULL password, deleted accounts)
+- **Sprint 4:** Forgot/reset password (no email enumeration, per-email rate limit), change/set password, Google unlink (lockout prevention), account info endpoint
+- **Sprint 5:** Account deletion (soft delete + 30-day anonymize), admin verify-email + recover, Celery purge task (3:15 AM daily), require_verified_email on 11 write endpoints
+- **Sprint 6:** Frontend API functions (10), Google buttons wired, 3 auth pages (verify/forgot/reset), /account settings (4 sections), email verification banner, middleware + sidebar updates
+
+### Expert Review
+- 4-persona review (PM, Staff FS, Security, QA) found 22 issues
+- All critical/major fixed: Redis graceful degradation, open redirect prevention, per-email rate limiting, token invalidation on resend, iat in JWT, str(e) removal, UUID leak in admin response, token deletion race fix
+
+### Session 82 Totals
+- 35 files (10 new + 25 modified), 13 new API endpoints
+- Migration 023 (Alembic head: `5c9a05c38ee1`)
+- 1296 backend tests passing (no regressions), TypeScript 0 errors
+- Sprint 7 (testing: ~87 tests) deferred to next session
