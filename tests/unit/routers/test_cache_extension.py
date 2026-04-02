@@ -20,19 +20,3 @@ class TestCacheKeyConventions:
         """STABLE TTL is ~86400s +/-10%."""
         ttl = CacheTier.STABLE.ttl
         assert 77760 <= ttl <= 95040
-
-    def test_app_namespace_recommendations(self) -> None:
-        key = "app:recommendations"
-        assert key.startswith("app:")
-
-    def test_app_namespace_fundamentals(self) -> None:
-        key = "app:fundamentals:AAPL"
-        assert key.startswith("app:")
-
-    def test_user_namespace_positions(self) -> None:
-        key = "user:abc123:positions"
-        assert key.startswith("user:")
-
-    def test_app_namespace_forecast_sector(self) -> None:
-        key = "app:forecast:sector:Technology"
-        assert key.startswith("app:")
