@@ -7,6 +7,7 @@ from backend.models.news_sentiment import NewsArticle, NewsSentimentDaily
 
 
 def test_news_article_instantiation():
+    """NewsArticle can be instantiated with scored_at defaulting to None."""
     article = NewsArticle(
         id=uuid.uuid4(),
         published_at=datetime(2026, 4, 1, 12, 0, tzinfo=timezone.utc),
@@ -23,6 +24,7 @@ def test_news_article_instantiation():
 
 
 def test_news_article_repr():
+    """NewsArticle repr includes source and ticker."""
     article = NewsArticle(
         source="finnhub",
         ticker="AAPL",
@@ -32,6 +34,7 @@ def test_news_article_repr():
 
 
 def test_sentiment_daily_instantiation():
+    """NewsSentimentDaily can be instantiated with all sentiment fields."""
     sentiment = NewsSentimentDaily(
         date=date(2026, 4, 1),
         ticker="AAPL",

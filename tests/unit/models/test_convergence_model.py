@@ -6,6 +6,7 @@ from backend.models.convergence import SignalConvergenceDaily
 
 
 def test_convergence_daily_instantiation():
+    """SignalConvergenceDaily can be instantiated with nullable news_sentiment."""
     row = SignalConvergenceDaily(
         date=date(2026, 4, 1),
         ticker="AAPL",
@@ -25,6 +26,7 @@ def test_convergence_daily_instantiation():
 
 
 def test_convergence_daily_repr():
+    """SignalConvergenceDaily repr includes ticker and convergence label."""
     row = SignalConvergenceDaily(
         date=date(2026, 4, 1),
         ticker="MSFT",

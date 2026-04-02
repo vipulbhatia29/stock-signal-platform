@@ -51,12 +51,9 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["ticker"], ["stocks.ticker"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "ix_backtest_runs_ticker_horizon",
-        "backtest_runs",
-        ["ticker", "horizon_days", "created_at"],
-        unique=False,
-        postgresql_using="btree",
+    op.execute(
+        "CREATE INDEX ix_backtest_runs_ticker_horizon "
+        "ON backtest_runs(ticker, horizon_days, created_at DESC)"
     )
 
     # 2. signal_convergence_daily — daily convergence snapshot (hypertable)
@@ -108,7 +105,7 @@ def upgrade() -> None:
     # Dedupe index includes partitioning column for TimescaleDB compatibility.
     # App-level dedup uses INSERT ... ON CONFLICT(dedupe_hash, published_at).
     op.execute("CREATE UNIQUE INDEX ix_news_dedupe ON news_articles(dedupe_hash, published_at)")
-    op.execute("CREATE INDEX ix_news_ticker ON news_articles(ticker, published_at DESC)")
+    op.execute("CREATE INDEX ix_news_articles_ticker_published ON news_articles(ticker, published_at DESC)")
 
     # 4. news_sentiment_daily — aggregated daily sentiment (hypertable)
     op.create_table(
@@ -146,7 +143,7 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.execute("CREATE INDEX ix_audit_user ON admin_audit_log(user_id, created_at DESC)")
+    op.execute("CREATE INDEX ix_audit_user_created ON admin_audit_log(user_id, created_at DESC)")
 
 
 def downgrade() -> None:

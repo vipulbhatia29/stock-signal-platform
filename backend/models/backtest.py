@@ -3,7 +3,7 @@
 import uuid as _uuid
 from datetime import date
 
-from sqlalchemy import Date, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import Date, Float, ForeignKey, Index, Integer, String, desc
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,8 +42,7 @@ class BacktestRun(TimestampMixin, Base):
             "ix_backtest_runs_ticker_horizon",
             "ticker",
             "horizon_days",
-            "created_at",
-            postgresql_using="btree",
+            desc("created_at"),
         ),
     )
 

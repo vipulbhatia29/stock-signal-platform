@@ -7,6 +7,7 @@ from backend.models.backtest import BacktestRun
 
 
 def test_backtest_run_instantiation():
+    """BacktestRun can be instantiated with all required fields including metadata_."""
     run = BacktestRun(
         id=uuid.uuid4(),
         ticker="AAPL",
@@ -33,6 +34,7 @@ def test_backtest_run_instantiation():
 
 
 def test_backtest_run_repr():
+    """BacktestRun repr includes ticker and horizon."""
     run = BacktestRun(ticker="TSLA", horizon_days=180, mape=0.123)
     assert "TSLA" in repr(run)
     assert "180" in repr(run)
