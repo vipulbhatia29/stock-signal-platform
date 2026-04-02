@@ -106,9 +106,7 @@ jobs:
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen
       - name: Run domain and regression tests
-        run: uv run pytest tests/unit/ -m "domain or regression" -q --timeout=30 || test $? -eq 5
-        env:
-          CI: ""  # Unset CI so session-scoped db_url fixture is not activated (no DB needed)
+        run: CI= uv run pytest tests/unit/ -m "domain or regression" -q --timeout=30 || test $? -eq 5
 
   type-check-full:
     needs: lint
