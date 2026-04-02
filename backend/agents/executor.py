@@ -242,7 +242,11 @@ async def execute_plan(
                     },
                 )
                 if attempt == MAX_RETRIES:
-                    result = ToolResult(status="error", error=str(e))
+                    logger.error("Tool '%s' execution failed", tool_name, exc_info=True)
+                    result = ToolResult(
+                        status="error",
+                        error="Tool execution failed. Please try again.",
+                    )
 
         tool_calls += 1
 

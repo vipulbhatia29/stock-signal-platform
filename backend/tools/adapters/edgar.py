@@ -93,9 +93,12 @@ class EdgarAdapter(MCPAdapter):
         try:
             data = await self._call_edgar(tool_name, params)
             return ToolResult(status="ok", data=data)
-        except Exception as exc:
-            logger.exception("EdgarAdapter.execute failed for %s", tool_name)
-            return ToolResult(status="error", error=str(exc))
+        except Exception:
+            logger.error("SEC EDGAR API call failed", exc_info=True)
+            return ToolResult(
+                status="error",
+                error="External data source unavailable. Please try again later.",
+            )
 
     async def _call_edgar(self, tool_name: str, params: dict[str, Any]) -> Any:
         """Call edgartools in a thread executor (it's synchronous)."""

@@ -56,7 +56,7 @@ class TestMCPToolClientCallTool:
         client._session.call_tool.side_effect = RuntimeError("MCP transport error")
         result = await client.call_tool("analyze_stock", {"ticker": "AAPL"})
         assert result.status == "error"
-        assert "MCP transport error" in result.error
+        assert result.error == "Tool execution failed. Please try again."
 
     @pytest.mark.asyncio
     async def test_call_tool_handles_empty_response(self) -> None:

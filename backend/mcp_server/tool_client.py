@@ -95,9 +95,13 @@ class MCPToolClient:
             return ToolResult(status="timeout", data=None, error=f"Tool {name} timed out")
         except ConnectionError:
             raise
-        except Exception as exc:
-            logger.exception("MCP tool call failed: %s", name)
-            return ToolResult(status="error", data=None, error=str(exc))
+        except Exception:
+            logger.error("MCP tool '%s' execution failed", name, exc_info=True)
+            return ToolResult(
+                status="error",
+                data=None,
+                error="Tool execution failed. Please try again.",
+            )
 
     async def list_tools(self) -> list[str]:
         """List available tools from the MCP server.

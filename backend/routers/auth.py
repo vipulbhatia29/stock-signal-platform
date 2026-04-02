@@ -824,7 +824,7 @@ async def google_authorize(
     # Validate redirect target (prevent open redirect)
     safe_next = next if next.startswith("/") and not next.startswith("//") else "/dashboard"
     auth_url, _ = await build_auth_url(next_url=safe_next)
-    return RedirectResponse(url=auth_url, status_code=302)
+    return RedirectResponse(url=auth_url, status_code=302)  # nosemgrep: no-open-redirect
 
 
 @router.get("/google/callback")
@@ -970,7 +970,7 @@ async def google_callback(
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id)
 
-    redirect = RedirectResponse(url=next_url, status_code=302)
+    redirect = RedirectResponse(url=next_url, status_code=302)  # nosemgrep: no-open-redirect
     _set_auth_cookies(redirect, access_token, refresh_token)
 
     # Record login attempt
@@ -1102,6 +1102,7 @@ async def oidc_authorize(
         params["state"] = state
     redirect_url = f"{redirect_uri}?{urlencode(params)}"
 
+    # nosemgrep: no-open-redirect — redirect_url built from trusted FRONTEND_BASE_URL + params
     return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
 
 

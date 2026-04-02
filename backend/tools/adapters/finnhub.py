@@ -111,9 +111,12 @@ class FinnhubAdapter(MCPAdapter):
                 return ToolResult(status="error", error=f"Unknown tool: {tool_name}")
             data = await handler(params)
             return ToolResult(status="ok", data=data)
-        except Exception as exc:
-            logger.exception("FinnhubAdapter.execute failed for %s", tool_name)
-            return ToolResult(status="error", error=str(exc))
+        except Exception:
+            logger.error("Finnhub API call failed", exc_info=True)
+            return ToolResult(
+                status="error",
+                error="External data source unavailable. Please try again later.",
+            )
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> dict:
         """Make an authenticated GET request to Finnhub."""
