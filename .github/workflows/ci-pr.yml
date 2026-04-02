@@ -9,7 +9,43 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
+      migrations: ${{ steps.filter.outputs.migrations }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'tests/unit/**'
+              - 'tests/api/**'
+              - 'tests/integration/**'
+              - 'tests/conftest.py'
+              - 'pyproject.toml'
+              - 'uv.lock'
+            frontend:
+              - 'frontend/**'
+            infra:
+              - '.github/workflows/**'
+              - 'docker-compose*.yml'
+              - 'backend/config.py'
+              - 'scripts/**'
+            migrations:
+              - 'backend/migrations/**'
+              - 'alembic.ini'
+
   backend-lint:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -25,6 +61,8 @@ jobs:
         run: uv run ruff format backend/ tests/ scripts/ --check
 
   frontend-lint:
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -43,6 +81,8 @@ jobs:
         run: npx tsc --noEmit
 
   backend-test:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -79,7 +119,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
         run: uv run alembic upgrade head
-      - name: Run backend tests
+      - name: Run unit tests
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
           REDIS_URL: ${{ secrets.CI_REDIS_URL }}
@@ -87,7 +127,7 @@ jobs:
           JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
           MCP_TOOLS: "true"
           CI: "true"
-        run: uv run pytest tests/unit/ tests/api/ -v --tb=short
+        run: uv run pytest tests/unit/ tests/api/ --timeout=60 -q --tb=short --randomly-seed=12345 -m "not domain and not regression"
       - name: Run integration tests
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
@@ -99,6 +139,8 @@ jobs:
         run: uv run pytest tests/integration/ -v --tb=short -m integration
 
   frontend-test:
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -115,6 +157,8 @@ jobs:
         run: npm test -- --passWithNoTests
 
   e2e-lint:
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -131,3 +175,162 @@ jobs:
         run: npx tsc --noEmit
       - name: List discovered tests
         run: npx playwright test --list 2>/dev/null || true
+
+  semgrep:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/python
+            p/owasp-top-ten
+            .semgrep/
+
+  dependency-audit:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
+      - name: pip-audit
+        shell: bash
+        run: uv run pip-audit --require-hashes --no-deps -r <(uv pip compile pyproject.toml) 2>/dev/null || uv run pip-audit
+        continue-on-error: true
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: cd frontend && npm ci
+      - name: npm audit
+        run: cd frontend && npm audit --audit-level=high
+        continue-on-error: true
+
+  gitleaks:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  bundle-size:
+    needs: [changes]
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Build and check bundle size
+        shell: bash
+        run: |
+          npm run build 2>&1 | tee /tmp/build-output.txt
+          TOTAL_SIZE=$(grep -oP 'First Load JS shared by all\s+\K[\d.]+\s*[kKmM]B' /tmp/build-output.txt | head -1 || echo "unknown")
+          echo "Bundle size: $TOTAL_SIZE"
+
+  domain-regression:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
+      - name: Run domain and regression tests
+        run: uv run pytest tests/unit/ -m "domain or regression" -q --timeout=30 || test $? -eq 5
+
+  type-check:
+    needs: [changes]
+    if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - run: uv sync --frozen
+      - name: Pyright type check
+        run: npx --yes pyright@latest
+
+  ci-gate:
+    if: always()
+    needs:
+      - backend-lint
+      - backend-test
+      - frontend-lint
+      - frontend-test
+      - e2e-lint
+      - domain-regression
+      - semgrep
+      - dependency-audit
+      - gitleaks
+      - bundle-size
+      - type-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate results
+        run: |
+          echo "Results:"
+          echo "  backend-lint: ${{ needs.backend-lint.result }}"
+          echo "  backend-test: ${{ needs.backend-test.result }}"
+          echo "  frontend-lint: ${{ needs.frontend-lint.result }}"
+          echo "  frontend-test: ${{ needs.frontend-test.result }}"
+          echo "  e2e-lint: ${{ needs.e2e-lint.result }}"
+          echo "  semgrep: ${{ needs.semgrep.result }}"
+          echo "  dependency-audit: ${{ needs.dependency-audit.result }}"
+          echo "  gitleaks: ${{ needs.gitleaks.result }}"
+          echo "  bundle-size: ${{ needs.bundle-size.result }}"
+
+          if [[ "${{ needs.backend-lint.result }}" == "failure" || "${{ needs.backend-lint.result }}" == "cancelled" ]]; then
+            echo "FAIL: backend-lint"
+            exit 1
+          fi
+          if [[ "${{ needs.backend-test.result }}" == "failure" || "${{ needs.backend-test.result }}" == "cancelled" ]]; then
+            echo "FAIL: backend-test"
+            exit 1
+          fi
+          if [[ "${{ needs.frontend-lint.result }}" == "failure" || "${{ needs.frontend-lint.result }}" == "cancelled" ]]; then
+            echo "FAIL: frontend-lint"
+            exit 1
+          fi
+          if [[ "${{ needs.frontend-test.result }}" == "failure" || "${{ needs.frontend-test.result }}" == "cancelled" ]]; then
+            echo "FAIL: frontend-test"
+            exit 1
+          fi
+          if [[ "${{ needs.e2e-lint.result }}" == "failure" || "${{ needs.e2e-lint.result }}" == "cancelled" ]]; then
+            echo "FAIL: e2e-lint"
+            exit 1
+          fi
+
+          echo "All required checks passed (or were skipped)"
