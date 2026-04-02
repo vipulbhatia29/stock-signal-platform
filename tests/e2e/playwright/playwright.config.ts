@@ -44,9 +44,9 @@ export default defineConfig({
           reuseExistingServer: true,
         },
         {
-          command: "cd ../../../frontend && npm run dev",
+          command: "cd ../../../frontend && npm run build && npm start",
           url: "http://localhost:3000",
-          timeout: 60_000,
+          timeout: 120_000,
           reuseExistingServer: true,
         },
       ],

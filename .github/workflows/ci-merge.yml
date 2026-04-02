@@ -68,7 +68,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
         run: uv run alembic upgrade head
-      - name: Run backend tests
+      - name: Run unit tests (xdist)
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
           REDIS_URL: ${{ secrets.CI_REDIS_URL }}
@@ -76,7 +76,16 @@ jobs:
           JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
           MCP_TOOLS: "true"
           CI: "true"
-        run: uv run pytest tests/unit/ tests/api/ -v --tb=short
+        run: uv run pytest tests/unit/ -n auto --timeout=30 -q --tb=short --randomly-seed=12345
+      - name: Run API tests
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.CI_REDIS_URL }}
+          JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
+          JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+          MCP_TOOLS: "true"
+          CI: "true"
+        run: uv run pytest tests/api/ --timeout=60 -q --tb=short
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -85,6 +94,19 @@ jobs:
       - run: cd frontend && npm ci
       - name: Run frontend tests
         run: cd frontend && npm test -- --passWithNoTests
+
+  domain-regression:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen
+      - name: Run domain and regression tests
+        run: uv run pytest tests/unit/ -m "domain or regression" -q --timeout=30
 
   integration:
     needs: unit-and-api
@@ -148,4 +170,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - name: Next.js production build
-        run: npm run build
+        run: npm run build 2>&1 | tee /tmp/next-build.log
+      - name: Report bundle size
+        run: |
+          echo "## Bundle Size" >> $GITHUB_STEP_SUMMARY
+          grep -A 20 "Route" /tmp/next-build.log | head -25 >> $GITHUB_STEP_SUMMARY || true

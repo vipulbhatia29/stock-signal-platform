@@ -1,0 +1,170 @@
+rules:
+  # ============================================================
+  # HARD RULE ENFORCEMENT (8 rules)
+  # ============================================================
+
+  - id: no-str-exception-in-httpexception
+    message: >
+      Never pass str(e) to HTTPException(detail=...). This leaks internal error
+      details and stack frames to end users. Log the real error with
+      logger.error(), then raise HTTPException with a safe generic message.
+    languages: [python]
+    severity: ERROR
+    pattern: raise HTTPException(..., detail=str($E), ...)
+
+  - id: no-str-exception-in-toolresult
+    message: >
+      Never pass str(e) to ToolResult(error=...). This leaks internal error
+      details. Log the real error with logger.error(), then return a safe
+      generic error message string.
+    languages: [python]
+    severity: ERROR
+    pattern: ToolResult(..., error=str($E), ...)
+
+  - id: async-endpoints-only
+    message: >
+      FastAPI endpoint handlers must be async def. Sync def handlers block
+      the event loop under load. Convert to async def and use await for
+      all I/O operations.
+    languages: [python]
+    severity: ERROR
+    patterns:
+      - pattern: |
+          @$ROUTER.$METHOD(...)
+          def $FUNC(...):
+              ...
+      - pattern-not: |
+          @$ROUTER.$METHOD(...)
+          async def $FUNC(...):
+              ...
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(get|post|put|delete|patch)$
+
+  - id: no-pip-install
+    message: >
+      Never call subprocess pip install in application code. Use uv only —
+      run `uv add <package>` from the project root. pip calls bypass the
+      lockfile and introduce undeclared dependencies.
+    languages: [python]
+    severity: ERROR
+    pattern: subprocess.run(["pip", ...], ...)
+
+  # TODO: no-mutable-module-state — module-level mutable list/dict literals
+  # are not reliably detectable with Semgrep pattern matching because Semgrep
+  # cannot distinguish module scope from function scope for bare assignments.
+  # Use ruff's B006 (mutable-argument-default) as a partial substitute.
+  # A complete check requires a linter with scope-aware analysis (e.g. pylint W0603).
+
+  - id: no-secrets-in-code
+    message: >
+      Hardcoded secret detected. Never embed secrets, passwords, API keys,
+      or tokens as string literals in source code. Use environment variables
+      via pydantic-settings (config.py) and load from backend/.env.
+    languages: [python]
+    severity: ERROR
+    patterns:
+      - pattern: $VAR = "..."
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: .*(secret|password|api_key|token|SECRET|PASSWORD|API_KEY|TOKEN).*
+      - pattern-not: $VAR = ""
+    paths:
+      exclude:
+        - backend/config.py
+        - tests/
+
+  - id: no-stack-trace-in-response
+    message: >
+      Never include traceback.format_exc() in an HTTPException detail. This
+      exposes internal implementation details to users. Log the traceback
+      server-side with logger.error(..., exc_info=True) and return a safe
+      generic message.
+    languages: [python]
+    severity: ERROR
+    pattern: raise HTTPException(..., detail=traceback.format_exc(...), ...)
+
+  - id: no-file-path-in-error
+    message: >
+      Never expose file paths in HTTP error responses. __file__ reveals the
+      server filesystem layout. Log path information server-side and return a
+      generic user-facing message.
+    languages: [python]
+    severity: ERROR
+    pattern: raise HTTPException(..., detail=__file__, ...)
+
+  # ============================================================
+  # AUTH / JWT / OAUTH SECURITY RULES (6 rules)
+  # ============================================================
+
+  - id: jwt-no-algorithm-pinning
+    message: >
+      jwt.decode() called without explicit algorithms= parameter. This allows
+      algorithm confusion attacks (e.g. RS256 vs HS256 downgrade). Always pass
+      algorithms=[settings.JWT_ALGORITHM] explicitly.
+    languages: [python]
+    severity: ERROR
+    patterns:
+      - pattern: jwt.decode($TOKEN, $KEY)
+      - pattern-not: jwt.decode($TOKEN, $KEY, algorithms=...)
+
+  - id: jwt-verify-disabled
+    message: >
+      JWT signature verification is disabled via options={"verify_signature": False}.
+      This accepts any token regardless of authenticity. Only disable verification
+      in tests, never in production auth paths.
+    languages: [python]
+    severity: ERROR
+    pattern: 'jwt.decode(..., options={"verify_signature": False, ...}, ...)'
+
+  - id: no-timing-unsafe-compare
+    message: >
+      Comparing secrets, tokens, passwords, keys, or hashes with == is
+      vulnerable to timing attacks. Use hmac.compare_digest() or
+      secrets.compare_digest() for constant-time comparison.
+    languages: [python]
+    severity: WARNING
+    patterns:
+      - pattern: $A == $B
+      - metavariable-regex:
+          metavariable: $A
+          regex: .*(token|secret|password|key|hash).*
+
+  - id: no-open-redirect
+    message: >
+      RedirectResponse constructed with a non-literal URL variable may allow
+      open redirect attacks. Validate the URL against an allowlist of trusted
+      domains or use a relative path before redirecting.
+    languages: [python]
+    severity: WARNING
+    patterns:
+      - pattern: RedirectResponse(url=$VAR, ...)
+      - pattern-not: RedirectResponse(url="...", ...)
+
+  - id: cookie-missing-secure-flag
+    message: >
+      set_cookie() called without secure=True. Cookies without the Secure flag
+      can be transmitted over plain HTTP, exposing session tokens. Always set
+      secure=True (or conditionally via settings.COOKIE_SECURE in dev).
+    languages: [python]
+    severity: WARNING
+    patterns:
+      - pattern: $RESPONSE.set_cookie(...)
+      - pattern-not: $RESPONSE.set_cookie(..., secure=True, ...)
+      - pattern-not: $RESPONSE.set_cookie(..., secure=$SECURE_VAR, ...)
+
+  - id: no-unbounded-redis-key
+    message: >
+      Redis key constructed from an f-string may be unbounded if user-controlled
+      values are interpolated without sanitisation or length capping. Ensure the
+      key space is bounded (e.g. by ticker length, user UUID format) to prevent
+      memory exhaustion or cache poisoning.
+    languages: [python]
+    severity: INFO
+    paths:
+      exclude:
+        - backend/services/cache.py
+        - backend/services/token_blocklist.py
+        - tests/
+    patterns:
+      - pattern: $REDIS.set(f"...", ...)
