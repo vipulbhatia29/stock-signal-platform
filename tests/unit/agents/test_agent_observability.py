@@ -599,7 +599,7 @@ class TestExecutorObservability:
         call_kwargs = collector.record_tool_execution.call_args[1]
         assert call_kwargs["tool_name"] == "analyze_stock"
         assert call_kwargs["status"] == "error"
-        assert "tool crashed" in call_kwargs["error"]
+        assert call_kwargs["error"] == "Tool execution failed. Please try again."
 
     @pytest.mark.asyncio
     async def test_no_collector_still_works(self) -> None:

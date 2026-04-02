@@ -63,9 +63,12 @@ class FredAdapter(MCPAdapter):
                 return ToolResult(status="error", error=f"Unknown tool: {tool_name}")
             data = await self._fetch_series(params)
             return ToolResult(status="ok", data=data)
-        except Exception as exc:
-            logger.exception("FredAdapter.execute failed for %s", tool_name)
-            return ToolResult(status="error", error=str(exc))
+        except Exception:
+            logger.error("FRED API call failed", exc_info=True)
+            return ToolResult(
+                status="error",
+                error="External data source unavailable. Please try again later.",
+            )
 
     async def _fetch_series(self, params: dict[str, Any]) -> dict:
         """Fetch observations for one or more FRED series."""

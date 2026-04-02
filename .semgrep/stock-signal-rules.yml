@@ -71,7 +71,7 @@ rules:
       - pattern-not: $VAR = ""
     paths:
       exclude:
-        - backend/config.py
+        - "**/backend/config.py"
         - tests/
 
   - id: no-stack-trace-in-response
@@ -163,8 +163,8 @@ rules:
     severity: INFO
     paths:
       exclude:
-        - backend/services/cache.py
-        - backend/services/token_blocklist.py
+        - "**/backend/services/cache.py"
+        - "**/backend/services/token_blocklist.py"
         - tests/
     patterns:
       - pattern: $REDIS.set(f"...", ...)

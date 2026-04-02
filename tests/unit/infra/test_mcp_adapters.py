@@ -116,4 +116,4 @@ async def test_adapter_execute_error_handling():
         result = await adapter.execute("get_economic_series", {"series_ids": ["DFF"]})
     assert isinstance(result, ToolResult)
     assert result.status == "error"
-    assert "API down" in result.error
+    assert result.error == "External data source unavailable. Please try again later."

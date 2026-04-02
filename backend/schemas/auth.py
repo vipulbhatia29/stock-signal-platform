@@ -35,7 +35,7 @@ class TokenResponse(BaseModel):
 
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # nosemgrep: no-secrets-in-code — OAuth2 type field, not a secret
     expires_in: int
 
 
