@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/metrics/health_checks.py
+# hypothesis_version: 6.151.10
+
+[0.0, 2.0, 3.0, 30.0, 60.0, 100, '_client', '_limits', '_redis', 'beat_active', 'celery', 'connected', 'enabled', 'langfuse', 'model', 'queued', 'rpm_used_pct', 'scheduled', 'spans_today', 'tpm_used_pct', 'traces_today', 'workers']

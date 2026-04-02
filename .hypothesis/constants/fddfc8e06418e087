@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/providers/anthropic.py
+# hypothesis_version: 6.151.10
+
+[1000, 4096, 'anthropic', 'arguments', 'assistant', 'content', 'description', 'function', 'id', 'input', 'input_schema', 'max_tokens', 'messages', 'model', 'name', 'parameters', 'role', 'system', 'text', 'tool', 'tool_call_id', 'tool_calls', 'tool_result', 'tool_use', 'tool_use_id', 'tools', 'type', 'user']

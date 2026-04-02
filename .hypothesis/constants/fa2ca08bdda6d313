@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/utils/sectors.py
+# hypothesis_version: 6.151.10
+
+['Basic Materials', 'Communications', 'Consumer Cyclical', 'Consumer Defensive', 'Consumer Staples', 'Energy', 'Financial Services', 'Financials', 'Health Care', 'Healthcare', 'Industrials', 'Materials', 'Real Estate', 'Technology', 'Telecom', 'Utilities']

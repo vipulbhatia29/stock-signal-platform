@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/schemas/auth.py
+# hypothesis_version: 6.151.10
+
+['Must be "DELETE"', 'bearer', 'from_attributes']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/main.py
+# hypothesis_version: 6.151.10
+
+['/api/v1', '/api/v1/auth', '/api/v1/indexes', '/api/v1/sectors', '/api/v1/stocks', '/mcp', '0.1.0', 'Authorization', 'Content-Type', 'DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'app:indexes', 'auth', 'groq', 'indexes', 'langfuse', 'name', 'planner', 'sectors', 'signal_snapshots', 'stock_prices', 'stocks', 'synthesizer', 'system', 't', 'ticker', 'users']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/metrics/http_middleware.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.5, 0.95, 0.99, 100, 300, 400, 1000, '+inf', '-inf', '/', '/api/', '/api/v1/health', ':', '^[A-Z]{1,5}$', '^\\d+$', 'count', 'endpoint', 'error_rate_pct', 'http_metrics', 'http_metrics:count', 'http_metrics:errors', 'http_metrics:latency', 'http_metrics:today', 'latency_p50_ms', 'latency_p95_ms', 'latency_p99_ms', 'rps_avg', 'sample_count', 'top_endpoints', 'total_errors_today', 'total_requests_today', 'window_seconds', '{id}', '{num}', '{param}']

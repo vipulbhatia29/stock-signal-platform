@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/chat.py
+# hypothesis_version: 6.151.10
+
+[0.0, 401, 403, 404, 422, '/chat', '/sessions', '/stream', 'Get session messages', 'List chat sessions', 'Message not found', 'Not authenticated', 'Not authorized', 'Session not found', 'Set message feedback', 'Validation error', 'agent_graph', 'agent_type', 'analyze_stock', 'application/x-ndjson', 'assistant', 'cache', 'chat', 'collector', 'completion_tokens', 'content', 'data', 'decline', 'declined', 'description', 'done', 'error', 'feedback', 'injection_detected', 'langfuse', 'latency_ms', 'llm_call', 'llm_client', 'model', 'none', 'not found', 'ok', 'out_of_scope', 'plan', 'positions', 'prompt_tokens', 'provider', 'reason', 'role', 'session_abuse_limit', 'status', 'ticker', 'tier', 'token', 'tool', 'tool_error', 'tool_executor', 'tool_registry', 'tool_result', 'user']

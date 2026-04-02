@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/synthesizer.py
+# hypothesis_version: 6.151.10
+
+[0.4, 0.5, 0.65, 500, '...', '?', 'Analysis complete.', 'No data', '```', 'confidence', 'confidence_label', 'content', 'data', 'evidence', 'gaps', 'held_tickers', 'high', 'low', 'medium', 'portfolio_note', 'positions', 'preferences', 'prompts', 'reason', 'role', 'scenarios', 'source', 'stale', 'status', 'summary', 'synthesizer.md', 'timestamp', 'tool', 'unavailable', 'unknown', 'unknown error', 'user', 'utf-8', '{{tool_results}}', '{{user_context}}']

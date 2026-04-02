@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/base.py
+# hypothesis_version: 6.151.10
+
+[10.0, 30.0, 'data', 'degraded', 'description', 'error', 'function', 'name', 'ok', 'parameters', 'redis', 'status', 'timeout', 'type']

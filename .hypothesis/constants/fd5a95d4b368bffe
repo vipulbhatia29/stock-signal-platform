@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/forecast.py
+# hypothesis_version: 6.151.10
+
+[255, 'CASCADE', 'active', 'forecast_results', 'model_versions', 'model_versions.id', 'prophet', 'rec_generated_at', 'rec_ticker', 'stocks.ticker', 'users.id']

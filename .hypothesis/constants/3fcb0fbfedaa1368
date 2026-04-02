@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/mcp_server/tool_client.py
+# hypothesis_version: 6.151.10
+
+[30.0, '-m', 'Empty MCP response', 'error', 'params', 'portfolio_exposure', 'python', 'recommendations', 'run', 'timeout', 'user_id', 'uv']

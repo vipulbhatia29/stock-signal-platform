@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/dependencies.py
+# hypothesis_version: 6.151.10
+
+[403, '/', '/api/v1/auth/login', 'Authorization', 'Bearer', 'Bearer ', 'Not authenticated', 'WWW-Authenticate', 'access', 'access_token', 'cache', 'exp', 'from_attributes', 'iat', 'jti', 'lax', 'refresh', 'refresh_token', 'sub', 'type']

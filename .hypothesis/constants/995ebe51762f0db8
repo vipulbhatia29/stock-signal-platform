@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/recommendations.py
+# hypothesis_version: 6.151.10
+
+['errors', 'no_users', 'partial', 'recommendations', 'status', 'success']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/schemas/llm_config.py
+# hypothesis_version: 6.151.10
+
+['from_attributes']

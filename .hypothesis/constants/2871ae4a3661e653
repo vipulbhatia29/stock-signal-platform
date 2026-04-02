@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/constants.py
+# hypothesis_version: 6.151.10
+
+['XLB', 'XLC', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLRE', 'XLU', 'XLV', 'XLY', 'consumer staples', 'energy', 'financials', 'healthcare', 'industrials', 'materials', 'real estate', 'technology', 'utilities']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/services/recommendations.py
+# hypothesis_version: 6.151.10
+
+[0.0, 2.0, 5.0, 6.5, 8.0, 9.0, 100.0, 'ABOVE_200', 'AVOID', 'BELOW_200', 'BULLISH', 'BUY', 'DEATH_CROSS', 'GOLDEN_CROSS', 'HIGH', 'HOLD', 'LOW', 'MEDIUM', 'OVERBOUGHT', 'OVERSOLD', 'SELL', 'WATCH', 'acknowledged', 'action', 'allocation_pct', 'annual_return', 'bollinger', 'composite_score', 'confidence', 'detail', 'generated_at', 'histogram', 'interpretation', 'is_actionable', 'is_held', 'label', 'lower', 'macd', 'position', 'reasoning', 'returns', 'rsi', 'score_breakdown', 'sharpe_ratio', 'signals', 'sma', 'sma_200', 'sma_50', 'summary', 'ticker', 'upper', 'user_id', 'value', 'volatility']

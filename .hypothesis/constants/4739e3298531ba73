@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/fundamentals.py
+# hypothesis_version: 6.151.10
+
+['FundamentalResult', 'compute_piotroski', 'fetch_analyst_data', 'fetch_fundamentals']

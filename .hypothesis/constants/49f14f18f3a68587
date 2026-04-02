@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/adapters/fred.py
+# hypothesis_version: 6.151.10
+
+[500, 'DFF', 'FRED API call failed', 'api_key', 'array', 'date', 'default', 'desc', 'description', 'economic_data', 'error', 'file_type', 'fred_tools', 'get_economic_series', 'integer', 'items', 'json', 'limit', 'object', 'observations', 'ok', 'properties', 'required', 'series', 'series_id', 'series_ids', 'sort_order', 'string', 'type', 'value']

@@ -1,0 +1,47 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - link [ref=e4] [cursor=pointer]:
+        - /url: /dashboard
+        - img [ref=e6]
+      - generic [ref=e9]:
+        - link "Dashboard" [ref=e11] [cursor=pointer]:
+          - /url: /dashboard
+        - link "Screener" [ref=e19] [cursor=pointer]:
+          - /url: /screener
+        - link "Portfolio" [ref=e25] [cursor=pointer]:
+          - /url: /portfolio
+        - link "Sectors" [ref=e31] [cursor=pointer]:
+          - /url: /sectors
+        - link "Observability" [ref=e37] [cursor=pointer]:
+          - /url: /observability
+      - generic [ref=e41]:
+        - button [ref=e42]
+        - button [ref=e47]
+    - generic [ref=e52]:
+      - banner [ref=e53]:
+        - generic [ref=e54]
+        - button "Search stocks to add..." [ref=e58]
+        - generic [ref=e59]
+      - main [ref=e69]:
+        - generic [ref=e71]
+    - complementary [ref=e172]:
+      - generic [ref=e174]:
+        - generic [ref=e176]
+        - generic [ref=e180]
+      - generic [ref=e188]:
+        - generic [ref=e189]
+        - paragraph [ref=e194]: Select an agent based on what you need help with
+        - generic [ref=e195]
+      - generic [ref=e209]: Ask me anything about your portfolio or the markets.
+      - generic [ref=e210]:
+        - generic [ref=e211]
+        - generic [ref=e216]
+      - generic [ref=e221]:
+        - textbox "Ask about stocks, portfolio, signals..." [ref=e222]
+        - button "Send message" [ref=e223]
+  - region "Notifications alt+T"
+  - button "Open Next.js Dev Tools" [ref=e231] [cursor=pointer]:
+    - img [ref=e232]
+  - alert [ref=e1466]
+  - generic [ref=e1467]: "-0.3%"

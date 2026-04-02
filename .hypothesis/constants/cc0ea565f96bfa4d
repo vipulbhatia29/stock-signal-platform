@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/fundamentals_tool.py
+# hypothesis_version: 6.151.10
+
+[5.0, 'Stock ticker symbol', 'data', 'datetime', 'description', 'error', 'get_fundamentals', 'gross_margins', 'industry', 'market_cap', 'name', 'object', 'ok', 'operating_margins', 'profit_margins', 'properties', 'required', 'return_on_equity', 'revenue_growth', 'sector', 'string', 'ticker', 'type']

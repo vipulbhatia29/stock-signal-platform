@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/schemas/observability.py
+# hypothesis_version: 6.151.10
+
+['agent_type', 'asc', 'completed', 'date', 'day', 'declined', 'desc', 'duration_ms', 'error', 'intent_category', 'llm_calls', 'model', 'month', 'provider', 'score', 'status', 'tier', 'timeout', 'timestamp', 'tool_name', 'total_cost_usd', 'user', 'week']

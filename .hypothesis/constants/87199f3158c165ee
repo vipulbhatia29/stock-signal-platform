@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/news.py
+# hypothesis_version: 6.151.10
+
+[5.0, 200, './/item', 'Google News', 'google_news', 'link', 'providerPublishTime', 'pubDate', 'published', 'publisher', 'source', 'title', 'yfinance']

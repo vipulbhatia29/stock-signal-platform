@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/context.py
+# hypothesis_version: 6.151.10
+
+['current_agent_type', 'current_query_id', 'current_session_id', 'current_user_id']

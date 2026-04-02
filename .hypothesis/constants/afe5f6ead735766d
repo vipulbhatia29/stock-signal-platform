@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/divestment.py
+# hypothesis_version: 6.151.10
+
+[3.0, 'allocation_pct', 'composite_score', 'critical', 'message', 'pct', 'rule', 'sector', 'sector_concentration', 'severity', 'stop_loss', 'threshold', 'unrealized_pnl_pct', 'value', 'warning', 'weak_fundamentals']

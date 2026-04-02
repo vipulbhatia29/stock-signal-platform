@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/services/email.py
+# hypothesis_version: 6.151.10
+
+[200, 'Email sent to %s: %s', 'development', 'from', 'html', 'subject', 'to']

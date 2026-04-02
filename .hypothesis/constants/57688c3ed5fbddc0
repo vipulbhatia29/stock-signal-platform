@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/sectors.py
+# hypothesis_version: 6.151.10
+
+[0.0, 100, 365, 400, 404, ',', '/{sector}/stocks', 'Filter scope', 'Sector not found', 'Unknown', 'all', 'app:sectors:summary', 'cache', 'last', 'max_computed_at', 'max_time', 'portfolio', 'returns', 'scores', 'sector', 'tickers', 'watchlist', 'your_count']

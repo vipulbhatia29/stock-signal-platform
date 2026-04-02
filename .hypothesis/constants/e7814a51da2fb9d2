@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/scripts/sync_sp500.py
+# hypothesis_version: 6.151.10
+
+['  %s — %s (%s)', '  ... and %d more', '-', '--dry-run', '.', 'Found %d tickers', 'GICS Sector', 'GICS Sub-Industry', 'S&P 500', 'Security', 'Symbol', 'User-Agent', '__main__', 'exchange', 'industry', 'inserted', 'is_active', 'lxml', 'name', 'removed_date', 'sector', 'sp500', 'store_true', 'ticker', 'total', 'updated', 'uq_ticker_index']

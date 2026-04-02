@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/result_validator.py
+# hypothesis_version: 6.151.10
+
+['FRED + news APIs', 'No data returned', 'Tool returned error', 'analyze_stock', 'compute_signals', 'computed_at', 'data', 'error', 'get_analyst_targets', 'get_company_profile', 'get_earnings_history', 'get_fundamentals', 'get_recommendations', 'ingest_stock', 'last_fetched_at', 'ok', 'reason', 'screen_stocks', 'search_stocks', 'source', 'stale', 'status', 'timeout', 'timestamp', 'tool', 'unavailable', 'web_search']

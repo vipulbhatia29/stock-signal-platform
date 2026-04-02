@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/warm_data.py
+# hypothesis_version: 6.151.10
+
+[86400, 604800, 'CPIAUCSL', 'DCOILWTICO', 'DFF', 'DGS10', 'UNRATE', 'get_13f_holdings', 'get_analyst_ratings', 'get_economic_series', 'limit', 'ok', 'series', 'series_ids', 'status', 'ticker', 'tickers', 'tickers_processed', 'warm:fred:indicators']

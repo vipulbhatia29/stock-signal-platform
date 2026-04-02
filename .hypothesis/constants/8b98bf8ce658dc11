@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/services/cache.py
+# hypothesis_version: 6.151.10
+
+[0.1, 100, 300, 1800, 7200, 86400, 'app:forecast:', 'app:fundamentals:', 'app:price:', 'app:signals:', 'session', 'stable', 'standard', 'volatile']

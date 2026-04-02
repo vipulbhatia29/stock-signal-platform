@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/login_attempt.py
+# hypothesis_version: 6.151.10
+
+[255, 500, 'SET NULL', 'login_attempts', 'password', 'users.id']

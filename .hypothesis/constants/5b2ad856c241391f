@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/analyze_stock.py
+# hypothesis_version: 6.151.10
+
+[15.0, 'analysis', 'analyze_stock', 'analyze_stock_failed', 'annual_return', 'bb_position', 'composite_score', 'description', 'error', 'macd_signal', 'macd_value', 'object', 'ok', 'properties', 'required', 'rsi_signal', 'rsi_value', 'sharpe_ratio', 'sma_signal', 'string', 'ticker', 'type', 'volatility']

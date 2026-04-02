@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/portfolio_health.py
+# hypothesis_version: 6.151.10
+
+['CASCADE', 'portfolios.id']

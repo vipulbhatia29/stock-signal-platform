@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/stocks/search.py
+# hypothesis_version: 6.151.10
+
+[5.0, '-', '.', '/search', '/{ticker}/ingest', 'EQUITY', 'ETF', 'NASDAQ', 'NYSE', 'NYSEArca', 'NasdaqCM', 'NasdaqGM', 'NasdaqGS', 'Stock not found', 'User-Agent', 'cache', 'composite_score', 'created', 'ensure_stock_exists', 'exchDisp', 'is_new', 'listsCount', 'longname', 'newsCount', 'q', 'query', 'quoteType', 'quotes', 'quotesCount', 'rows_fetched', 'sectorDisp', 'shortname', 'stock_name', 'symbol', 'ticker', 'updated', 'yahoo_search_failed']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/registry.py
+# hypothesis_version: 6.151.10
+
+['-', 'Input', '_', 'array', 'boolean', 'category', 'data', 'default', 'description', 'error', 'integer', 'number', 'object', 'ok', 'properties', 'required', 'status', 'string', 'tool', 'tool_registered', 'type']

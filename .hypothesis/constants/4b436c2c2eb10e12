@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/user_context.py
+# hypothesis_version: 6.151.10
+
+[0.0, 'Unknown', 'allocation_pct', 'avg_cost', 'held_tickers', 'max_position_pct', 'max_sector_pct', 'portfolio_id', 'positions', 'preferences', 'sector', 'sector_allocation', 'shares', 'ticker', 'user_id', 'watchlist']

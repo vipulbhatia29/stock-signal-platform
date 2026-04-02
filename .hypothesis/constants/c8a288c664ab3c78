@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/langfuse.py
+# hypothesis_version: 6.151.10
+
+['completion_tokens', 'cost', 'prompt_tokens']

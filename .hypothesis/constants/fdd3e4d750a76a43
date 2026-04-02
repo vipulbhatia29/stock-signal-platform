@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/__init__.py
+# hypothesis_version: 6.151.10
+
+['US/Eastern', 'backend.tasks.alerts', 'backend.tasks.audit', 'json', 'nightly-pipeline', 'schedule', 'sync-fred-indicators', 'task']

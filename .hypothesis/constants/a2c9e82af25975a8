@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/adapters/edgar.py
+# hypothesis_version: 6.151.10
+
+[200, 5000, '10-K', '13-F', '1A', '4', '8-K', 'Section not found', 'Stock ticker symbol', '__getitem__', '__iter__', 'date', 'default', 'description', 'edgar_tools', 'error', 'events', 'filing_date', 'get_10k_section', 'get_13f_holdings', 'get_8k_events', 'get_insider_trades', 'holdings', 'integer', 'limit', 'name', 'nameOfIssuer', 'object', 'ok', 'properties', 'required', 'sec_filings', 'section', 'shares', 'shrsOrPrnAmt', 'string', 'text', 'ticker', 'trades', 'type', 'value']

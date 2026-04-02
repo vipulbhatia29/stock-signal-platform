@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/assessment.py
+# hypothesis_version: 6.151.10
+
+['eval_results', 'eval_run_id', 'eval_runs', 'react_v2']

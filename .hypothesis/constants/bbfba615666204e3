@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/golden_dataset.py
+# hypothesis_version: 6.151.10
+
+['AAPL', 'API timeout', 'Analyze AAPL stock', 'Any news on GOOGL?', 'GOOGL', 'MSFT', 'NVDA', 'Service unavailable', 'TSLA', 'accuracy', 'analyze_stock', "can't", 'compare_stocks', 'comparison', 'defensive', 'dividend', "don't", 'forecast', 'general', 'get_forecast', 'get_fundamentals', 'growth', 'intelligence', 'interest rate', 'market', 'market_briefing', 'out_of_scope', 'portfolio', 'portfolio_health', 'reasoning', 'recession', 'recommend', 'recommend_stocks', 'recommendation', 'risk', 'risk_narrative', 'score', 'sorry', 'stock', 'unable']

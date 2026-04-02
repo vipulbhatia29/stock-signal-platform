@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/company_profile_tool.py
+# hypothesis_version: 6.151.10
+
+[5.0, 497, 500, '...', 'Stock ticker symbol', 'data', 'datetime', 'description', 'employees', 'error', 'get_company_profile', 'industry', 'market_cap', 'name', 'object', 'ok', 'properties', 'required', 'sector', 'string', 'summary', 'ticker', 'type', 'website']

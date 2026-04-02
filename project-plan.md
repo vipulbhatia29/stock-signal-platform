@@ -90,8 +90,8 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 |--------|--------|---------|--------|
 | 1 | KAN-357 | Foundation + Cleanup — delete dead tests, add packages, configure markers | ✅ Session 84, PR #162 |
 | 2 | KAN-358 | CI Overhaul — path-filter, ci-gate, quality gates, 13 Semgrep rules | ✅ Session 84, PRs #163-167 |
-| 3 | KAN-359 | Domain + Cache + Regression — Hypothesis (50+), golden datasets, Celery | |
-| 4 | KAN-360 | Auth + Security — IDOR matrix, token security, OAuth, rate limiting (absorbs KAN-354/355) | |
+| 3 | KAN-359 | Domain + Cache + Regression — Hypothesis (50+), golden datasets, Celery | ✅ Session 85, PR #169 |
+| 4 | KAN-360 | Auth + Security — IDOR matrix, token security, OAuth, rate limiting (absorbs KAN-354/355) | ✅ Session 85, PR #170 |
 | 5 | KAN-361 | Playwright E2E Expansion (~33 specs) + msw component integration | |
 | 6 | KAN-362 | Performance + Memory — Lighthouse, chart sizing, CDP heap, nightly CI | |
 | 7 | KAN-363 | Visual Regression — baseline capture (after UI stable) | |

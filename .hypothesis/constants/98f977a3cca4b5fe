@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/pipeline.py
+# hypothesis_version: 6.151.10
+
+['ok', 'pipeline_runs', 'pipeline_watermarks', 'running', 'scheduled']

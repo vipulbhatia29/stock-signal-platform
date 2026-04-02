@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/assessment_runner.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.8, 100, 1000, '--dry-run', '--trigger', '10', '140.00', '150.00', '300.00', '5', '8', 'AAPL', 'Assessment Portfolio', 'GOOGL', 'MSFT', '__main__', 'all_passed', 'analyze_stock', 'category', 'compare_stocks', 'comparison', 'dividend', 'external_resilience', 'failed', 'forecast', 'get_forecast', 'get_fundamentals', 'grounding', 'intelligence', 'local', 'market', 'market_briefing', 'passed', 'portfolio', 'portfolio_health', 'positions', 'query', 'react_v2', 'reasoning', 'reasoning_coherence', 'recommend_stocks', 'recommendation', 'results', 'risk', 'risk_narrative', 'run_id', 'shares', 'stock', 'store_true', 'termination', 'ticker', 'token', 'tool', 'tool_result', 'tool_selection', 'tool_start', 'tools', 'total_queries', 'trigger', 'utf-8']

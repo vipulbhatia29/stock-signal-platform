@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/market.py
+# hypothesis_version: 6.151.10
+
+['/briefing', '/market', 'app:market_briefing', 'cache', 'error', 'market', 'ok']

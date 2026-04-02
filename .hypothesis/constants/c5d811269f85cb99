@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/scoring_engine.py
+# hypothesis_version: 6.151.10
+
+[0.0, 1.0, '[1-5]', 'external_resilience', 'grounding', 'reasoning_coherence', 'termination', 'tool_selection']

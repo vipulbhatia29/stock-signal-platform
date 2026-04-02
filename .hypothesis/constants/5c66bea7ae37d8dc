@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/price.py
+# hypothesis_version: 6.151.10
+
+['CASCADE', 'stock_prices', 'stocks.ticker', 'yfinance']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/search_stocks_tool.py
+# hypothesis_version: 6.151.10
+
+[5.0, 10.0, '-', '.', 'EQUITY', 'ETF', 'NASDAQ', 'NYSE', 'NYSEArca', 'NasdaqCM', 'NasdaqGM', 'NasdaqGS', 'User-Agent', 'data', 'default', 'description', 'error', 'exchDisp', 'exchange', 'in_db', 'integer', 'limit', 'listsCount', 'longname', 'name', 'newsCount', 'object', 'ok', 'properties', 'q', 'query', 'quoteType', 'quotes', 'quotesCount', 'required', 'search_stocks', 'search_stocks_failed', 'sector', 'sectorDisp', 'shortname', 'string', 'symbol', 'ticker', 'type']

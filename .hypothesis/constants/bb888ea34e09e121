@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/tool_groups.py
+# hypothesis_version: 6.151.10
+
+['analyze_stock', 'compare_stocks', 'comparison', 'general', 'get_analyst_targets', 'get_company_profile', 'get_earnings_history', 'get_forecast', 'get_fundamentals', 'get_sector_forecast', 'group', 'market', 'market_briefing', 'portfolio', 'portfolio_health', 'recommend_stocks', 'risk_narrative', 'screen_stocks', 'simple_lookup', 'stock', 'tool']

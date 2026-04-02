@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/services/google_oauth.py
+# hypothesis_version: 6.151.10
+
+[300, '/', '//', '/dashboard', 'RS256', 'access_type', 'accounts.google.com', 'authorization_code', 'client_id', 'client_secret', 'code', 'email', 'email_verified', 'grant_type', 'id_token', 'name', 'next_url', 'nonce', 'offline', 'openid email profile', 'picture', 'prompt', 'redirect_uri', 'response_type', 'scope', 'select_account', 'state', 'sub', 'verify_exp']

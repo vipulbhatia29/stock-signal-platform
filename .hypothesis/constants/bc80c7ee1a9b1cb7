@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/evaluation.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.2, 2.0, 100, 180, '1d', 'BUY', 'Close', 'SELL', 'SPY', '^VIX', 'degraded', 'errors', 'evaluated', 'evaluated_count', 'high', 'no_pending', 'normal', 'prophet', 'retrain_triggered', 'rolling_mape', 'status', 'success', 'vix_regime']

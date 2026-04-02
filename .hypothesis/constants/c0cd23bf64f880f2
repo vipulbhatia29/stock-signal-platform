@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/portfolio.py
+# hypothesis_version: 6.151.10
+
+['_group_sectors', '_run_fifo', 'recompute_position']

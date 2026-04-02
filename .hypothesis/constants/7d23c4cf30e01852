@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/recommend_stocks.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.05, 0.1, 0.2, 0.25, 0.3, 0.35, 0.4, 0.8, 2.0, 3.0, 4.0, 5.0, 7.0, 8.0, 9.0, 10.0, 15.0, 100, 'Unknown', 'error', 'fundamental_score', 'fundamentals', 'max_date', 'momentum_score', 'object', 'ok', 'portfolio', 'portfolio_fit', 'portfolio_fit_score', 'portfolio_tickers', 'properties', 'recommend_stocks', 'required', 'sector_allocation', 'signal_score', 'signals', 'type']

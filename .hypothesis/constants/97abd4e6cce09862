@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/mcp_server/auth.py
+# hypothesis_version: 6.151.10
+
+[401, 'Authorization', 'Bearer ', 'MCP auth failed', 'OPTIONS', 'access', 'detail']

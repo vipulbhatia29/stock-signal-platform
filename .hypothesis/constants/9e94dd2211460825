@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/intelligence.py
+# hypothesis_version: 6.151.10
+
+[100, 'Action', 'Date', 'Earnings Date', 'Firm', 'FromGrade', 'Insider Trading', 'Name', 'Relation', 'Relationship', 'Shares', 'Start Date', 'ToGrade', 'Transaction', 'Value', 'action', 'date', 'empty', 'firm', 'from_grade', 'insider_name', 'relation', 'shares', 'sharesShort', 'shares_short', 'shortPercentOfFloat', 'shortRatio', 'short_ratio', 'to_dict', 'to_grade', 'transaction_type', 'value']

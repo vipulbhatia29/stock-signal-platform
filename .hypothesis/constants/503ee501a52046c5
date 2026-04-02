@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/services/pipelines.py
+# hypothesis_version: 6.151.10
+
+[0.0, 5.0, 'allocation_pct', 'composite_score', 'ensure_stock_exists', 'fetch_prices_delta', 'is_held', 'is_new', 'recommendation', 'rows_fetched', 'stock_name', 'ticker']

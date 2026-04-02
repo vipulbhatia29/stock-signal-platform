@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/intent_classifier.py
+# hypothesis_version: 6.151.10
+
+[1.0, 'A', 'ALL', 'AND', 'ANY', 'ARE', 'BUT', 'CAN', 'FEW', 'FOR', 'GET', 'HAS', 'HER', 'HIS', 'HOW', 'I', 'ITS', 'LET', 'MAY', 'NEW', 'NOT', 'O', 'OLD', 'SET', 'THE', 'VS', 'WAS', 'WHO', '\\b([A-Z]{1,5})\\b', '\\bmy\\b', 'comparison', 'general', 'market', 'out_of_scope', 'portfolio', 'simple_lookup', 'stock']

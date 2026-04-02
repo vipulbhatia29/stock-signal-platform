@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/user.py
+# hypothesis_version: 6.151.10
+
+[5.0, 10.0, 20.0, 30.0, 255, 'America/New_York', 'CASCADE', 'OAuthAccount', 'admin', 'all, delete-orphan', 'min_volatility', 'preference', 'user', 'user_preferences', 'user_role', 'users', 'users.id']

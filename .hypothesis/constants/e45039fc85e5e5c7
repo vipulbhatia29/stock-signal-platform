@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/adapters/finnhub.py
+# hypothesis_version: 6.151.10
+
+['/etf/holdings', '/stock/esg', '/stock/supply-chain', 'AAPL', 'ETF ticker symbol', 'Stock ticker symbol', 'buy', 'data', 'description', 'environment', 'environmentScore', 'error', 'finnhub_tools', 'get_analyst_ratings', 'get_esg_scores', 'get_etf_holdings', 'get_social_sentiment', 'get_supply_chain', 'governance', 'governanceScore', 'hold', 'holdings', 'market_intelligence', 'name', 'object', 'ok', 'percent', 'period', 'properties', 'recommendations', 'reddit', 'relatedType', 'relationship', 'relationships', 'required', 'sell', 'social', 'socialScore', 'string', 'strongBuy', 'strongSell', 'strong_buy', 'strong_sell', 'symbol', 'ticker', 'token', 'totalESGScore', 'total_score', 'twitter', 'type', 'value']

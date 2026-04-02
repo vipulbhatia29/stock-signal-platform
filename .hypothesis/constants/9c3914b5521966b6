@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/indexes.py
+# hypothesis_version: 6.151.10
+
+[200, '/{slug}/stocks', 'description', 'id', 'last_synced_at', 'latest_price', 'latest_signal', 'macd_signal', 'name', 'rn', 'slug', 'stock_count']

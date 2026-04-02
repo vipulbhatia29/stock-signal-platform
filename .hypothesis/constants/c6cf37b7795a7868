@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/mcp_server/lifecycle.py
+# hypothesis_version: 6.151.10
+
+['%Y-%m-%dT%H:%M:%SZ', 'MCP transport', 'disabled', 'error', 'fallback_direct', 'stdio']

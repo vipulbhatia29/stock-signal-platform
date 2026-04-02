@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/routers/user_observability.py
+# hypothesis_version: 6.151.10
+
+[100, 403, 404, 422, '/assessment/history', '/assessment/latest', '/kpis', '/observability', '/queries', '/queries/grouped', '/queries/{query_id}', 'Grouping dimension', 'Not admin', 'description', 'langfuse_trace_url', 'observability']

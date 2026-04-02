@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/writer.py
+# hypothesis_version: 6.151.10
+
+['cache_hit', 'completed', 'completion_tokens', 'cost_usd', 'error', 'langfuse_trace_id', 'latency_ms', 'llm_call', 'loop_step', 'model', 'params', 'prompt_tokens', 'provider', 'result', 'result_size_bytes', 'status', 'tier', 'tool_execution', 'tool_name']

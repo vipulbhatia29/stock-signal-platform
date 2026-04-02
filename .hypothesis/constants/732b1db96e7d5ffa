@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/services/signals.py
+# hypothesis_version: 6.151.10
+
+[-0.5, 0.0, 0.045, 0.5, 1.0, 1.5, 2.0, 2.5, 100, 200, 252, '50/50', 'ABOVE_200', 'Adj Close', 'BEARISH', 'BELOW_200', 'BULLISH', 'Close', 'DEATH_CROSS', 'GOLDEN_CROSS', 'LOWER', 'MIDDLE', 'NEUTRAL', 'OVERBOUGHT', 'OVERSOLD', 'UPPER', 'adj_close', 'alpha', 'annual_return', 'asc', 'bb_lower', 'bb_position', 'bb_upper', 'beta', 'change_pct', 'close', 'composite_score', 'composite_weights', 'computed_at', 'current_price', 'data_days', 'desc', 'fundamental_score_10', 'latest', 'macd', 'macd_histogram', 'macd_signal_label', 'macd_value', 'max_drawdown', 'mode', 'piotroski', 'price_history', 'rn', 'rsi', 'rsi_signal', 'rsi_value', 'sharpe', 'sharpe_ratio', 'sma', 'sma_200', 'sma_50', 'sma_signal', 'sortino', 'stock_sector', 'technical_only', 'ticker', 'to_dict', 'total', 'volatility']
