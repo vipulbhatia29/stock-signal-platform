@@ -2755,3 +2755,59 @@ Full implementation of KAN-232 (BU-6). Brainstorm → spec → 3-expert spec rev
 
 ---
 
+
+---
+
+## Session 79 — Command Center Sprints 1-3: Backend Complete (2026-03-31)
+
+**Branch:** `feat/KAN-233-command-center` | **PR #154 + #155 merged**
+- Package extraction: 9 files → `backend/observability/`, instrumentation, aggregate + 3 drill-down endpoints, migration 021
+- Frontend: 4 zone panels + 5 primitives, admin page, 3 drill-down sheets
+- +122 tests (76 backend + 46 frontend), 14 expert reviews, KAN-233 Phase 1 MVP DONE
+
+---
+
+## Session 80 — Live Testing + Phase 8.5 Refinement (2026-03-31 / 2026-04-01)
+
+**Branch:** develop (planning only)
+- 566 stocks ingested, 49,546 dividends, portfolio from Fidelity CSV
+- 5 bugs found via Playwright (KAN-318-322)
+- Phase 8.5 brainstorm + spec + plan + 4-expert review
+
+---
+
+## Session 81 — Phase 8.5 Portfolio Analytics Implementation (2026-04-01)
+
+**Branch:** `feat/KAN-249-pandas-ta-replacement` | **PR #158 merged**
+- pandas-ta → pandas-ta-openbb, QuantStats integration, PyPortfolioOpt rebalancing
+- Migration 022, 3 strategies, portfolio health scoring, frontend wiring
+- 4-expert review (21 findings), +38 tests, Alembic head: c870473fe107
+
+---
+
+## Session 82 — Phase C: Auth Overhaul (2026-04-01)
+
+**Branch:** `feat/KAN-325-auth-overhaul` | **Epic KAN-325** (30 tickets)
+- 6 sprints: foundation, email, OAuth, password, deletion, frontend
+- 35 files (10 new + 25 modified), 13 new API endpoints, migration 023
+- 4-persona review (22 issues fixed), 1296 backend tests passing
+
+---
+
+## Session 83 — Phase D: Test Suite Overhaul Spec (2026-04-01)
+
+**Branch:** `docs/session-83-test-overhaul-spec` | **Epic KAN-356**
+- T0-T5 tier architecture, 12 quality gates, security test matrix (OWASP Top 10)
+- 14 custom Semgrep rules, 50+ Hypothesis properties
+- 4-persona review (10 CRITICAL + 19 IMPORTANT incorporated)
+
+---
+
+## Session 84 — Phase D Sprints 1-2 + Bug Fixes (2026-04-02)
+
+**Branch:** multiple | **PRs #162-167 merged**
+- Sprint 1: deleted 4 dead tests, consolidated 4 groups, added 9 packages, git-lfs
+- Sprint 2: CI overhaul (paths-filter, ci-gate, 13 Semgrep rules, 6 advisory gates)
+- Tech debt: TimescaleDB teardown, Next.js Suspense, pyright config
+- Bug fixes: KAN-364 (6x str(e)), KAN-365 (Semgrep false positives)
+- Tests: 1601, CI: 13 checks (12 green)

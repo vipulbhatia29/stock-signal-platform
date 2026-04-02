@@ -130,27 +130,32 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 
 Parallel multi-ticker analysis with concurrency control. Data-driven activation — only if eval scores warrant it per multi-agent decision gate.
 
-### Phase 8.6: Prophet Backtesting (KAN-323)
+### Phase 8.6+: Forecast Intelligence System (Epic KAN-369)
 
-> Walk-forward validation of Prophet forecasts. **Depends on Phase 8.5 ✅.**
+> Three-level forecast system (stock → sector → portfolio) with backtesting, news sentiment, signal convergence UX, and admin pipeline orchestrator. Supersedes old KAN-323/KAN-324.
+> **Spec:** `docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md`
+> **Plan:** `docs/superpowers/plans/2026-04-02-forecast-intelligence-plan.md`
 
-| # | Task | Description |
-|---|------|-------------|
-| 1 | Walk-forward validation framework | Split train/test windows, measure MAPE/MAE per ticker |
-| 2 | Accuracy tracking table | Migration: `forecast_backtests` (ticker, train_end, horizon, mape, mae, direction_accuracy) |
-| 3 | Confidence calibration | Compare predicted vs actual confidence intervals |
-| 4 | Backtest dashboard | API endpoint + frontend: per-ticker accuracy, worst performers |
-
-### Phase 8.7: News-Sentiment Regressor (KAN-324)
-
-> Augment Prophet with LLM-scored news sentiment. **Depends on Phase 8.6.**
-
-| # | Task | Description |
-|---|------|-------------|
-| 1 | News scoring pipeline | LLM: ingest news → score sentiment (-1 to +1) → store daily aggregate |
-| 2 | Sentiment table | Migration: `news_sentiment_daily` (ticker, date, score, article_count) |
-| 3 | Prophet integration | `add_regressor()` with daily sentiment |
-| 4 | A/B backtest | Compare Prophet-only vs Prophet+sentiment using Phase 8.6 framework |
+| Sprint | Ticket | Summary | Status |
+|--------|--------|---------|--------|
+| **Spec A: Backtesting Engine (KAN-370)** | | Branch: `feat/KAN-370-backtesting` | |
+| 1 | KAN-374 | Migration 024 + config + shared models + factories + router stubs | ⏳ |
+| 2 | KAN-375 | BacktestEngine + walk-forward + metrics + DB integration | ⏳ |
+| 3 | KAN-376 | CacheInvalidator + drift upgrade + convergence snapshot | ⏳ |
+| 4 | KAN-377 | Backtest API + tests + frontend accuracy badge | ⏳ |
+| **Spec D: Admin Pipeline Orchestrator (KAN-371)** | | Branch: `feat/KAN-371-admin-pipelines` | |
+| 5 | KAN-378 | PipelineRegistry + seed tasks + admin user | ⏳ |
+| 6 | KAN-379 | Pipeline API + admin frontend page | ⏳ |
+| **Spec B: News Sentiment Pipeline (KAN-372)** | | Branch: `feat/KAN-372-news-sentiment` | |
+| 7 | KAN-380 | NewsProvider interface + Finnhub + EDGAR + Fed + Google | ⏳ |
+| 8 | KAN-381 | Sentiment scorer + Prophet integration + Celery tasks | ⏳ |
+| 9 | KAN-382 | Sentiment API + tests | ⏳ |
+| **Spec C: Convergence UX (KAN-373, blocked by KAN-370+372)** | | Branch: `feat/KAN-373-convergence-ux` | |
+| 10 | KAN-383 | Portfolio forecast (BL + Monte Carlo + CVaR) | ⏳ |
+| 11 | KAN-384 | Convergence service + rationale + API | ⏳ |
+| 12a | KAN-385 | Frontend convergence components | ⏳ |
+| 12b | KAN-386 | Frontend portfolio components + page integration | ⏳ |
+| 13 | KAN-387 | E2E tests + command center integration + final regression | ⏳ |
 
 ---
 
