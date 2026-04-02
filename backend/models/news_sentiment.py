@@ -1,5 +1,7 @@
 """News articles and sentiment aggregation models."""
 
+from __future__ import annotations
+
 import uuid as _uuid
 from datetime import date, datetime
 

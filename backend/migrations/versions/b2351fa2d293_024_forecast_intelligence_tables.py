@@ -105,7 +105,10 @@ def upgrade() -> None:
     # Dedupe index includes partitioning column for TimescaleDB compatibility.
     # App-level dedup uses INSERT ... ON CONFLICT(dedupe_hash, published_at).
     op.execute("CREATE UNIQUE INDEX ix_news_dedupe ON news_articles(dedupe_hash, published_at)")
-    op.execute("CREATE INDEX ix_news_articles_ticker_published ON news_articles(ticker, published_at DESC)")
+    op.execute(
+        "CREATE INDEX ix_news_articles_ticker_published "
+        "ON news_articles(ticker, published_at DESC)"
+    )
 
     # 4. news_sentiment_daily — aggregated daily sentiment (hypertable)
     op.create_table(
