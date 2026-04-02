@@ -92,13 +92,15 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 | 2 | KAN-358 | CI Overhaul — path-filter, ci-gate, quality gates, 13 Semgrep rules | ✅ Session 84, PRs #163-167 |
 | 3 | KAN-359 | Domain + Cache + Regression — Hypothesis (50+), golden datasets, Celery | ✅ Session 85, PR #169 |
 | 4 | KAN-360 | Auth + Security — IDOR matrix, token security, OAuth, rate limiting (absorbs KAN-354/355) | ✅ Session 85, PR #170 |
-| 5 | KAN-361 | Playwright E2E Expansion (~33 specs) + msw component integration | |
-| 6 | KAN-362 | Performance + Memory — Lighthouse, chart sizing, CDP heap, nightly CI | |
-| 7 | KAN-363 | Visual Regression — baseline capture (after UI stable) | |
+| 5 | KAN-361 | Playwright E2E Expansion (35 specs) + msw component integration (29 tests) | ✅ Session 86, PRs #172-173 |
+| 6 | KAN-362 | Performance + Memory — Lighthouse, chart sizing, CDP heap, nightly CI | ✅ Session 86, PR #174 |
+| 7 | KAN-363 | Visual Regression — baseline capture (after UI stable) | ⏸ Deferred — needs all UI pages working |
 
 **Bug fixes during Sprint 2:** KAN-364 (6x str(e) leak, PR #167), KAN-365 (Semgrep false positives, PR #167).
 **Tech debt fixes:** TimescaleDB teardown (PR #164), Next.js Suspense (PR #165), pyright config (PR #166).
-**Note:** Sprints 3 & 4 are parallelizable. Expected: 1601 → 2200+ tests, 1 → 13 CI checks.
+**Sprint 5 infra:** MSW v2 setup (server + handlers + custom jest-env-with-fetch), @axe-core/playwright for WCAG 2.0 AA.
+**Sprint 6 infra:** playwright-lighthouse, @lhci/cli, ci-nightly.yml (weekdays 04:00 UTC), "nightly" Playwright project.
+**Final count:** 1380 backend + 378 frontend + 42 E2E + 27 nightly perf = ~1827 tests. 14 CI checks (13 + ci-gate).
 
 ### Phase F: Subscriptions + Monetization (~5 days)
 
