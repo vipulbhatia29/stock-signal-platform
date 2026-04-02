@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AnalyticsCharts } from "@/app/(authenticated)/observability/_components/analytics-charts";
 import * as obsHooks from "@/hooks/use-observability";

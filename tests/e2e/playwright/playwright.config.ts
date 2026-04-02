@@ -30,6 +30,18 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
         storageState: ".auth/user.json",
       },
+      testIgnore: /performance|responsive/,
+      dependencies: ["setup"],
+    },
+    {
+      name: "nightly",
+      testDir: "./tests",
+      testMatch: /performance|responsive/,
+      timeout: 120_000,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: ".auth/user.json",
+      },
       dependencies: ["setup"],
     },
   ],

@@ -273,3 +273,40 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - Total across all phases: ~1786 tests
 - 2 infrastructure issues documented + fixed
 - Resume: Phase D Sprint 5 (KAN-361) — Playwright E2E Expansion
+
+---
+
+## Session 86 — Phase D Sprint 5: Playwright E2E + MSW Integration (2026-04-02)
+
+**Branch:** multiple PRs | **PRs #172-173 merged**
+
+### Sprint 5a+5b (KAN-366, KAN-367): Playwright E2E Expansion — PR #173
+- 4 new page objects: register, portfolio, stock, screener (upgraded with filters)
+- Auth E2E (9): register flow, forgot-password, protected route redirects
+- Dashboard E2E (4): zone rendering, sidebar navigation, refresh trigger
+- Portfolio E2E (6): page load, stat tiles, transaction dialog, positions, chart
+- Stock detail E2E (5): signals, price chart, fundamentals, screener-to-detail nav
+- Admin E2E (2): command center panel rendering, metric cards
+- Cross-cutting (9): no-backend-leaks (5: DOM, sourcemaps, headers, console, external requests), axe accessibility (4: WCAG 2.0 AA sweep)
+- @axe-core/playwright added to E2E project
+- TypeScript: zero errors
+
+### Sprint 5c (KAN-368): MSW Component Integration — PR #172
+- MSW v2 setup: server, handlers, custom jest-env-with-fetch, test-utils lifecycle
+- Dashboard integration (13): all 5 zones with data, loading, error, empty states
+- Portfolio integration (3): positions table, stat tiles, empty state
+- Stock detail integration (4): header, signals, chart, fundamentals
+- Auth integration (5): login/register form submission, validation, error handling
+- Error handling (4): API 500/503 graceful degradation
+- Jest config: custom environment for Node fetch globals, ESM/CJS shims for msw
+
+### Design Decision: App Router Boundary Tests
+- Spec called for loading.tsx/error.tsx boundary tests — N/A: project uses inline TanStack Query loading/error states, no Next.js boundary files exist
+
+### Session 86 Totals
+- 2 PRs merged (#172-173)
+- Tests: 1380 backend + 378 frontend + 35 Playwright E2E = ~1793
+- Frontend: 349 → 378 (+29 msw integration)
+- Playwright: 7 → 42 specs (+35 new across 9 files)
+- JIRA: KAN-361 + subtasks KAN-366/367/368 all Done
+- Resume: Phase D Sprint 6 (KAN-362) — Performance + Memory

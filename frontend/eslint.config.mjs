@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // CJS Jest infrastructure — requires `require()` / `module.exports`
+    "jest-env-with-fetch.js",
   ]),
 ]);
 
