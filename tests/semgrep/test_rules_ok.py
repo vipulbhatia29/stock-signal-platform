@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hmac
 import logging
+import os
 import subprocess
 
 import jwt
@@ -27,7 +28,7 @@ ALLOWED_REDIRECT_HOSTS = {"app.example.com", "localhost"}
 
 def good_http_exception():
     try:
-        result = 1 / 0
+        _ = 1 / 0
     except Exception:
         logger.error("Division failed", exc_info=True)
         raise HTTPException(status_code=400, detail="Invalid calculation")
@@ -107,7 +108,6 @@ def good_subprocess_uv():
 # ---------------------------------------------------------------------------
 
 # ok: no-secrets-in-code — reads from environment, not hardcoded
-import os
 DB_HOST = os.environ.get("DB_HOST", "localhost")
 SOME_LABEL = "my-label"
 DISPLAY_NAME = "My App Token"

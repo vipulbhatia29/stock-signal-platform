@@ -24,7 +24,7 @@ router = APIRouter()
 
 def bad_http_exception():
     try:
-        result = 1 / 0
+        _ = 1 / 0
     except Exception as e:
         # ruleid: no-str-exception-in-httpexception
         raise HTTPException(status_code=400, detail=str(e))
@@ -143,7 +143,9 @@ def bad_jwt_decode(token: str, secret: str) -> dict:
 def bad_jwt_no_verify(token: str, secret: str) -> dict:
     import jwt
     # ruleid: jwt-verify-disabled
-    return jwt.decode(token, secret, options={"verify_signature": False})  # nosemgrep: python.jwt.security.jwt-decode-without-verification
+    return jwt.decode(  # nosemgrep
+        token, secret, options={"verify_signature": False}
+    )
 
 
 # ---------------------------------------------------------------------------
