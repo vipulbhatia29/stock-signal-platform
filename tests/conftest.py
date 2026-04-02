@@ -22,7 +22,11 @@ from backend.database import get_async_session
 from backend.dependencies import create_access_token, hash_password
 from backend.main import app
 from backend.models import Base
+from backend.models.audit import AdminAuditLog
+from backend.models.backtest import BacktestRun
+from backend.models.convergence import SignalConvergenceDaily
 from backend.models.index import StockIndex, StockIndexMembership
+from backend.models.news_sentiment import NewsArticle, NewsSentimentDaily
 from backend.models.portfolio import Portfolio, Transaction
 from backend.models.price import StockPrice
 from backend.models.recommendation import RecommendationSnapshot
@@ -359,3 +363,90 @@ class TransactionFactory(factory.Factory):
     transacted_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
     notes = None
     created_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+
+
+# ---------------------------------------------------------------------------
+# Forecast Intelligence factories (Phase 8.6+)
+# ---------------------------------------------------------------------------
+class BacktestRunFactory(factory.Factory):
+    """Factory for BacktestRun model instances."""
+
+    class Meta:
+        model = BacktestRun
+
+    id = factory.LazyFunction(uuid.uuid4)
+    ticker = "AAPL"
+    model_version_id = factory.LazyFunction(uuid.uuid4)
+    config_label = "baseline"
+    train_start = factory.LazyFunction(lambda: datetime(2022, 1, 1).date())
+    train_end = factory.LazyFunction(lambda: datetime(2023, 12, 31).date())
+    test_start = factory.LazyFunction(lambda: datetime(2024, 1, 1).date())
+    test_end = factory.LazyFunction(lambda: datetime(2024, 12, 31).date())
+    horizon_days = 90
+    num_windows = 12
+    mape = 0.08
+    mae = 15.2
+    rmse = 18.5
+    direction_accuracy = 0.64
+    ci_containment = 0.78
+    market_regime = "bull"
+
+
+class SignalConvergenceDailyFactory(factory.Factory):
+    """Factory for SignalConvergenceDaily model instances."""
+
+    class Meta:
+        model = SignalConvergenceDaily
+
+    date = factory.LazyFunction(lambda: datetime(2026, 4, 1).date())
+    ticker = "AAPL"
+    rsi_direction = "bullish"
+    macd_direction = "bullish"
+    sma_direction = "bullish"
+    piotroski_direction = "neutral"
+    forecast_direction = "bullish"
+    signals_aligned = 4
+    convergence_label = "strong_bull"
+    composite_score = 8.5
+
+
+class NewsArticleFactory(factory.Factory):
+    """Factory for NewsArticle model instances."""
+
+    class Meta:
+        model = NewsArticle
+
+    published_at = factory.LazyFunction(lambda: datetime.now(timezone.utc))
+    id = factory.LazyFunction(uuid.uuid4)
+    ticker = "AAPL"
+    headline = factory.Faker("sentence")
+    source = "finnhub"
+    dedupe_hash = factory.LazyFunction(lambda: uuid.uuid4().hex)
+
+
+class NewsSentimentDailyFactory(factory.Factory):
+    """Factory for NewsSentimentDaily model instances."""
+
+    class Meta:
+        model = NewsSentimentDaily
+
+    date = factory.LazyFunction(lambda: datetime(2026, 4, 1).date())
+    ticker = "AAPL"
+    stock_sentiment = 0.5
+    sector_sentiment = 0.2
+    macro_sentiment = -0.1
+    article_count = 5
+    confidence = 0.8
+    quality_flag = "ok"
+
+
+class AdminAuditLogFactory(factory.Factory):
+    """Factory for AdminAuditLog model instances."""
+
+    class Meta:
+        model = AdminAuditLog
+
+    id = factory.LazyFunction(uuid.uuid4)
+    user_id = factory.LazyFunction(uuid.uuid4)
+    action = "pipeline_trigger"
+    target = "backtest_all"

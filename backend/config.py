@@ -80,6 +80,30 @@ class Settings(BaseSettings):
     # --- Logging ---
     LOG_LEVEL: str = "INFO"
 
+    # --- News Sources ---
+    EDGAR_USER_AGENT: str = "StockSignalPlatform admin@example.com"
+
+    # --- Sentiment Scoring ---
+    NEWS_SCORING_MODEL: str = "gpt-4o-mini"
+    NEWS_SCORING_FALLBACK: str = "groq"
+    NEWS_INGEST_LOOKBACK_HOURS: int = 6
+    NEWS_MIN_ARTICLES_FOR_SCORE: int = 1
+
+    # --- Backtesting ---
+    BACKTEST_MIN_TRAIN_DAYS: int = 365
+    BACKTEST_STEP_DAYS: int = 30
+    BACKTEST_MIN_WINDOWS: int = 12
+
+    # --- Black-Litterman ---
+    BL_RISK_AVERSION: float = 3.07
+    BL_MAX_VIEW_CONFIDENCE: float = 0.95
+
+    # --- Monte Carlo ---
+    MONTE_CARLO_SIMULATIONS: int = 10000
+
+    # --- Pipeline ---
+    PIPELINE_FAILURE_MODE: str = "continue"
+
     # --- Langfuse (optional — tracing + assessment) ---
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_PUBLIC_KEY: str = ""
