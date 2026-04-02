@@ -167,7 +167,7 @@ class TestPortfolioIDOR:
                 "transacted_at": datetime.now(timezone.utc).isoformat(),
             },
         )
-        assert resp.status_code in (403, 404, 422)
+        assert resp.status_code in (403, 404)
 
 
 # ---------------------------------------------------------------------------
@@ -221,9 +221,9 @@ class TestAlertsIDOR:
         data = resp.json()
         # User A has no alerts — list must be empty
         items = data.get("alerts", data.get("items", data))
-        if isinstance(items, list):
-            alert_ids = [str(a.get("id", "")) for a in items]
-            assert two_users["user_b_alert_id"] not in alert_ids
+        assert isinstance(items, list), f"Expected list of alerts, got {type(items)}"
+        alert_ids = [str(a.get("id", "")) for a in items]
+        assert two_users["user_b_alert_id"] not in alert_ids
 
     async def test_delete_alert_returns_404_or_403(
         self, client: AsyncClient, two_users: dict
@@ -257,7 +257,8 @@ class TestWatchlistIDOR:
         data = resp.json()
         # Response is a list of watchlist items
         items = data if isinstance(data, list) else data.get("items", data.get("watchlist", []))
-        tickers = [item.get("ticker", "") for item in items if isinstance(item, dict)]
+        assert isinstance(items, list), f"Expected list of watchlist items, got {type(items)}"
+        tickers = [item.get("ticker", "") for item in items]
         assert "MSFT" not in tickers
 
     async def test_delete_watchlist_item_returns_404_or_403(
@@ -308,7 +309,7 @@ class TestPreferencesIDOR:
             pref_b = result.scalar_one_or_none()
             if pref_b is not None:
                 # User B's timezone should remain the default
-                assert pref_b.timezone != new_tz or pref_b.timezone == "America/New_York"
+                assert pref_b.timezone != new_tz, f"User B timezone was changed to {new_tz}"
         await engine.dispose()
 
 

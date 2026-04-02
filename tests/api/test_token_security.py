@@ -135,13 +135,12 @@ class TestJWTStructuralValidation:
 
     async def test_jwt_signed_with_wrong_key_returns_401(self, client: AsyncClient) -> None:
         """JWT signed with a different secret key returns 401."""
-        import os
-
-        # Use a key that is guaranteed to differ from the real secret.
-        # We derive it by reversing the real key — same entropy, definitely wrong.
-        wrong_key = settings.JWT_SECRET_KEY[::-1] or os.urandom(32).hex()
+        # Use a hardcoded key that is guaranteed to differ from any real secret.
+        # Reversing the real key is unsafe (palindromes would match).
+        WRONG_JWT_SECRET = "definitely-not-the-real-secret-key-for-testing"  # noqa: S105  # nosemgrep
+        wrong_key = WRONG_JWT_SECRET
         expire = datetime.now(timezone.utc) + timedelta(minutes=30)
-        bad_token = jwt.encode(
+        bad_token = jwt.encode(  # nosemgrep
             {"sub": str(uuid.uuid4()), "exp": expire, "type": "access"},
             wrong_key,
             algorithm=settings.JWT_ALGORITHM,
