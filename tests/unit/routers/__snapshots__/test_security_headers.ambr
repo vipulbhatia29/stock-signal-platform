@@ -1,0 +1,6 @@
+# serializer version: 1
+# name: TestHealthEndpointSecurityHeaders.test_health_security_headers_snapshot
+  dict({
+    'content-type': 'application/json',
+  })
+# ---

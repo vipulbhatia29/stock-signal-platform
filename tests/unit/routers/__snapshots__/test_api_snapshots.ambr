@@ -1,0 +1,27 @@
+# serializer version: 1
+# name: TestHealthSnapshot.test_health_response_shape
+  dict({
+    'database': dict({
+      'error': None,
+      'healthy': 'bool',
+      'latency_ms': 'float',
+    }),
+    'mcp_tools': dict({
+      'enabled': 'bool',
+      'fallback_since': None,
+      'healthy': 'bool',
+      'last_error': None,
+      'mode': 'str',
+      'restarts': 'int',
+      'tool_count': 'int',
+      'uptime_seconds': None,
+    }),
+    'redis': dict({
+      'error': None,
+      'healthy': 'bool',
+      'latency_ms': 'float',
+    }),
+    'status': 'str',
+    'version': 'str',
+  })
+# ---
