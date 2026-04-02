@@ -11,7 +11,6 @@ from __future__ import annotations
 import importlib.metadata  # noqa: F401 — pandas-ta-openbb importlib bug
 
 import pandas as pd
-import pandas_ta as ta
 import pytest
 
 from backend.services.signals import compute_bollinger, compute_macd, compute_rsi
@@ -85,41 +84,22 @@ def _series(prices: list[float]) -> pd.Series:
 
 
 # ---------------------------------------------------------------------------
-# Pre-compute expected values using pandas-ta directly
-# (golden values are computed once and hardcoded)
+# Hardcoded golden reference values
+# Reference: pandas-ta-openbb 0.4.24, computed 2026-04-02
+# These were computed once from the price series above and must NOT be
+# recomputed dynamically — doing so would make the test tautological.
 # ---------------------------------------------------------------------------
 
-# RSI(14) for 30-day series — last value
-_CLOSES_30 = _series(_PRICES_30)
-_RSI_SERIES = ta.rsi(_CLOSES_30, length=14)
-_EXPECTED_RSI = float(_RSI_SERIES.dropna().iloc[-1]) if _RSI_SERIES is not None else None
+# RSI(14) for 30-day monotonically increasing series — approaches 100 (all-positive changes)
+_EXPECTED_RSI: float = 100.0
 
-# MACD(12,26,9) for 50-day series — last MACD line value
-_CLOSES_50 = _series(_PRICES_50)
-_MACD_DF = ta.macd(_CLOSES_50, fast=12, slow=26, signal=9)
-_EXPECTED_MACD_LINE = (
-    float(_MACD_DF["MACD_12_26_9"].dropna().iloc[-1])
-    if _MACD_DF is not None and not _MACD_DF.dropna().empty
-    else None
-)
-_EXPECTED_MACD_HIST = (
-    float(_MACD_DF["MACDh_12_26_9"].dropna().iloc[-1])
-    if _MACD_DF is not None and not _MACD_DF.dropna().empty
-    else None
-)
+# MACD(12,26,9) for 50-day series
+_EXPECTED_MACD_LINE: float = 18.486706086459236
+_EXPECTED_MACD_HIST: float = 1.8798483541797353
 
-# Bollinger(20,2) for 30-day series
-_BB_DF = ta.bbands(_CLOSES_30, length=20, std=2)
-_EXPECTED_BB_UPPER = (
-    float(_BB_DF["BBU_20_2"].dropna().iloc[-1])
-    if _BB_DF is not None and not _BB_DF.dropna().empty
-    else None
-)
-_EXPECTED_BB_LOWER = (
-    float(_BB_DF["BBL_20_2"].dropna().iloc[-1])
-    if _BB_DF is not None and not _BB_DF.dropna().empty
-    else None
-)
+# Bollinger(20,2) for 30-day series (last 10 days: prices 113.75–142.49)
+_EXPECTED_BB_UPPER: float = 144.30449072948883
+_EXPECTED_BB_LOWER: float = 104.7975092705112
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +113,6 @@ def test_rsi_14_golden_dataset_matches_expected() -> None:
     closes = _series(_PRICES_30)
     rsi_val, _ = compute_rsi(closes, period=14)
     assert rsi_val is not None, "RSI should be computable for 30-day series"
-    assert _EXPECTED_RSI is not None, "Reference RSI value should be computable"
     assert abs(rsi_val - _EXPECTED_RSI) < 0.5, (
         f"RSI={rsi_val} deviates from expected={_EXPECTED_RSI} (atol=0.5)"
     )
@@ -169,7 +148,6 @@ def test_macd_12_26_9_golden_dataset_matches_expected() -> None:
     closes = _series(_PRICES_50)
     macd_val, hist_val, signal_label = compute_macd(closes, fast=12, slow=26, signal_period=9)
     assert macd_val is not None, "MACD should be computable for 50-day series"
-    assert _EXPECTED_MACD_LINE is not None, "Reference MACD value should be computable"
     # Relative tolerance of 5%
     assert abs(macd_val - _EXPECTED_MACD_LINE) <= abs(_EXPECTED_MACD_LINE) * 0.05 + 0.01, (
         f"MACD={macd_val} deviates from expected={_EXPECTED_MACD_LINE}"
@@ -182,11 +160,10 @@ def test_macd_histogram_golden_dataset_sign() -> None:
     closes = _series(_PRICES_50)
     _, hist_val, signal_label = compute_macd(closes, fast=12, slow=26, signal_period=9)
     assert hist_val is not None
-    if _EXPECTED_MACD_HIST is not None:
-        # Signs must agree
-        assert (hist_val > 0) == (_EXPECTED_MACD_HIST > 0), (
-            f"Histogram sign mismatch: computed={hist_val}, expected={_EXPECTED_MACD_HIST}"
-        )
+    # Signs must agree
+    assert (hist_val > 0) == (_EXPECTED_MACD_HIST > 0), (
+        f"Histogram sign mismatch: computed={hist_val}, expected={_EXPECTED_MACD_HIST}"
+    )
 
 
 @pytest.mark.domain
@@ -208,7 +185,6 @@ def test_bollinger_20_2_golden_upper_band_matches() -> None:
     closes = _series(_PRICES_30)
     upper, lower, _ = compute_bollinger(closes, period=20, num_std=2)
     assert upper is not None, "Bollinger upper band should be computable"
-    assert _EXPECTED_BB_UPPER is not None, "Reference Bollinger upper value should be computable"
     assert abs(upper - _EXPECTED_BB_UPPER) <= abs(_EXPECTED_BB_UPPER) * 0.02 + 0.01, (
         f"BB upper={upper} deviates from expected={_EXPECTED_BB_UPPER}"
     )
@@ -220,7 +196,6 @@ def test_bollinger_20_2_golden_lower_band_matches() -> None:
     closes = _series(_PRICES_30)
     upper, lower, _ = compute_bollinger(closes, period=20, num_std=2)
     assert lower is not None, "Bollinger lower band should be computable"
-    assert _EXPECTED_BB_LOWER is not None, "Reference Bollinger lower value should be computable"
     assert abs(lower - _EXPECTED_BB_LOWER) <= abs(_EXPECTED_BB_LOWER) * 0.02 + 0.01, (
         f"BB lower={lower} deviates from expected={_EXPECTED_BB_LOWER}"
     )

@@ -1,10 +1,8 @@
-"""Concurrent portfolio transaction tests.
+"""FIFO cost basis correctness tests.
 
-Tests race conditions for concurrent buy+sell on the same position,
-concurrent reads during writes, and asyncio.gather-based concurrency.
-
-These tests use the pure FIFO engine (_run_fifo) which is synchronous,
-and async helpers to simulate concurrent DB-level operations.
+Tests the pure FIFO engine (_run_fifo) for buy/sell ordering,
+partial sells, accumulation, oversell protection, and position closing.
+The engine is synchronous and side-effect-free.
 """
 
 from __future__ import annotations
