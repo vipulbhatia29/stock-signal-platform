@@ -146,3 +146,44 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - Migration 023 (Alembic head: `5c9a05c38ee1`)
 - 1296 backend tests passing (no regressions), TypeScript 0 errors
 - Sprint 7 (testing: ~87 tests) deferred to next session
+
+---
+
+## Session 83 — Phase D: Test Suite Overhaul — Spec + JIRA Epic (2026-04-01)
+
+**Branch:** `docs/session-83-test-overhaul-spec` | **Epic KAN-356** (7 sprints: KAN-357–363)
+
+### Brainstorm + Research
+- Audited entire test suite: 179 files, ~33K lines (103 Python, 69 frontend, 7 Playwright)
+- Identified 5 dead test files, 4 consolidation targets, 8 shallow tests needing upgrade
+- Researched tools: pytest-xdist, Hypothesis, Playwright-Lighthouse, MemLab, Semgrep custom rules, dorny/paths-filter, msw, jest-axe
+- Researched: no mature Claude Code coverage plugin exists; DIY PostToolUse hook or sprint-end discipline
+- PM decided: deep Hypothesis (50+), git-lfs, custom Semgrep rules, sprint-end coverage, full skill
+
+### Spec Design
+- Designed T0-T5 tier architecture with path-based CI routing
+- Designed 12 quality gates (phased rollout via single ci-gate required check)
+- Designed security test matrix: IDOR (15), token security (8), OAuth CSRF (4), rate limiting (6), verification bypass (3), soft-delete isolation (4)
+- Full OWASP Top 10 coverage mapping
+- 14 custom Semgrep rules (8 Hard Rules + 6 auth/JWT/OAuth)
+- 50+ Hypothesis properties across 4 domains (signals, portfolio, QuantStats, recommendations)
+
+### Expert Review (4-persona)
+- QA Architect: 6 CRITICAL (xdist+DB, T5/T1 overlap, Sharpe invariant wrong, composite monotonicity, config.py filter, P&L antisymmetry)
+- Security Engineer: 2 CRITICAL (no IDOR tests, token blocklist fails open) + 10 IMPORTANT
+- DevOps/CI: 5 CRITICAL (path inconsistency, ci-gate skipped state, xdist+DB, no browser cache, T3 time)
+- Frontend/UX: 2 CRITICAL (Recharts gotchas, E2E against dev server) + 6 IMPORTANT
+- **All 10 CRITICAL + 19 IMPORTANT findings incorporated into spec**
+
+### Deliverables
+- Spec: `docs/superpowers/specs/2026-04-01-test-suite-overhaul.md`
+- JIRA Epic KAN-356 + 7 sprint tasks (KAN-357–363)
+- Skill: `~/.claude/skills/test-suite-design/SKILL.md` + `/test-suite-design` command
+- CLAUDE.md: Testing Conventions section + sprint-end coverage in checklist
+- project-plan.md: Phase D added, phase letters re-sequenced
+- KAN-354/355 absorbed into KAN-360 (Sprint 4)
+
+### Stats
+- 0 code changes (spec + planning session only)
+- Expected: 1625 → 2200+ tests, 2 → 12 quality gates
+- Resume: Phase D Sprint 1 (KAN-357) — Foundation + Cleanup

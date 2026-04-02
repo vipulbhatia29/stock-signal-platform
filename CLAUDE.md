@@ -62,6 +62,18 @@ Load what you need for the task at hand:
 9. **JIRA workflow** — follow `conventions/jira-sdlc-workflow` exactly. Never skip refinement. Never create implementation subtasks before plan is approved.
 10. **No str(e) anywhere** — never pass `str(e)` to `ToolResult(error=...)`, `HTTPException(detail=...)`, or any user-facing output. Log the real error, return a safe generic message.
 
+## Testing Conventions
+
+- **Tier architecture** — tests are organized in tiers T0-T5. Full spec: `docs/superpowers/specs/2026-04-01-test-suite-overhaul.md`
+- **xdist for unit tests ONLY** — `pytest-xdist -n auto` on `tests/unit/` only. API/integration tests run sequentially (shared DB = race conditions).
+- **E2E against production build** — Playwright runs against `next build && next start`, never `next dev` (Lighthouse scores differ 20-30 points).
+- **Coverage at sprint end** — no hooks, no mid-edit checks. Before the PR, report coverage delta and uncovered files. PM decides: fix gaps or ship.
+- **Quality gates phased rollout** — new CI gates start as optional. Promote to required via `ci-gate` after 2 weeks of green runs.
+- **Semgrep custom rules** — `.semgrep/stock-signal-rules.yml` encodes Hard Rules + auth/JWT patterns as permanent guardrails. Test rules in `tests/semgrep/`.
+- **Hypothesis `max_examples`** — `20` in CI (fast), `200` in nightly (thorough).
+- **Recharts in Playwright** — disable animations (`isAnimationActive={false}`) or wait for completion. Chart sizing is Playwright-only (jsdom has no layout engine).
+- **Every bug fix gets a regression test** — `@pytest.mark.regression`, reproduces the bug, prevents recurrence.
+
 ## Services (local dev)
 
 | Service | Command | Port |
@@ -114,4 +126,5 @@ Completed features in `docs/superpowers/archive/`. Never read archived files.
 5. `docs/TDD.md` — update if API contracts changed
 6. Serena memories — update `project/state` (ALWAYS), other memories as needed
 7. `MEMORY.md` — update Project State section
-8. Run `/ship` — promote session memories and open PR
+8. **If sprint complete** — run `uv run pytest --cov=backend --cov-report=term-missing -q` and report coverage delta + uncovered files. Get PM approval before shipping.
+9. Run `/ship` — promote session memories and open PR

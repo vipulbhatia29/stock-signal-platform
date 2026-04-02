@@ -76,14 +76,31 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 **Files:** 10 new + 25 modified = 35 total. Migration 023 applied (`5c9a05c38ee1`).
 **Tests:** 1296 backend passing (no regressions). TypeScript 0 errors.
 
-**Sprint 7 (Testing) — TODO:**
-- KAN-353: Unit tests (~33 tests)
-- KAN-354: API integration tests (~42 tests)
-- KAN-355: Frontend Jest tests (~12 tests)
+**Sprint 7 (Testing) — absorbed into Phase D Test Overhaul (KAN-354/355 → KAN-360):**
+- KAN-353: Unit tests (~33 tests) ✅ (Session 82)
+- KAN-354: API integration tests → absorbed into KAN-360 (Sprint 4)
+- KAN-355: Frontend Jest tests → absorbed into KAN-360 (Sprint 4)
 
-### Phase D: Subscriptions + Monetization (~5 days)
+### Phase D: Test Infrastructure Overhaul (Epic KAN-356)
 
-> Stripe integration, tier enforcement, pricing. **Depends on Phase C.**
+> Complete test suite redesign: tiered architecture (T0-T5), path-based CI routing, quality gates, security test matrix, Hypothesis domain tests, Playwright E2E expansion, Lighthouse performance, custom Semgrep rules. 4-expert reviewed spec.
+> **Spec:** `docs/superpowers/specs/2026-04-01-test-suite-overhaul.md`
+
+| Sprint | Ticket | Summary |
+|--------|--------|---------|
+| 1 | KAN-357 | Foundation + Cleanup — delete dead tests, add packages, configure markers |
+| 2 | KAN-358 | CI Overhaul — path-filter, ci-gate, 12 quality gates, 14 Semgrep rules |
+| 3 | KAN-359 | Domain + Cache + Regression — Hypothesis (50+), golden datasets, Celery |
+| 4 | KAN-360 | Auth + Security — IDOR matrix, token security, OAuth, rate limiting (absorbs KAN-354/355) |
+| 5 | KAN-361 | Playwright E2E Expansion (~33 specs) + msw component integration |
+| 6 | KAN-362 | Performance + Memory — Lighthouse, chart sizing, CDP heap, nightly CI |
+| 7 | KAN-363 | Visual Regression — baseline capture (after UI stable) |
+
+**Note:** Sprints 3 & 4 are parallelizable. Expected: 1625 → 2200+ tests, 2 → 12 quality gates.
+
+### Phase F: Subscriptions + Monetization (~5 days)
+
+> Stripe integration, tier enforcement, pricing. **Depends on Phase C + Phase D.**
 
 | # | Task | Brainstorm? | Effort |
 |---|------|-------------|--------|
@@ -95,7 +112,7 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 | D6 | LLM tier routing: free users → cheap models | No | ~0.5 day |
 | D7 | Frontend: pricing cards, usage meter, billing page | No | ~1 day |
 
-### Phase E: Cloud Deployment (~4 days)
+### Phase G: Cloud Deployment (~4 days)
 
 | # | Task | Brainstorm? | Effort |
 |---|------|-------------|--------|
@@ -105,7 +122,7 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 | E4 | Terraform / IaC for cloud infra | No | ~1.5 days |
 | E5 | deploy.yml: wire actual CI/CD deployment | No | ~0.5 day |
 
-### Phase F: Comparison Fan-Out (optional, ~2 days)
+### Phase H: Comparison Fan-Out (optional, ~2 days)
 
 Parallel multi-ticker analysis with concurrency control. Data-driven activation — only if eval scores warrant it per multi-agent decision gate.
 
