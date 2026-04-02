@@ -15,9 +15,12 @@ from backend.config import settings
 from backend.rate_limit import limiter
 from backend.routers import (
     admin,
+    admin_pipelines,
     alerts,
     auth,
+    backtesting,
     chat,
+    convergence,
     forecasts,
     health,
     indexes,
@@ -27,6 +30,7 @@ from backend.routers import (
     portfolio,
     preferences,
     sectors,
+    sentiment,
     stocks,
 )
 from backend.routers.tasks import router as tasks_router
@@ -324,6 +328,10 @@ app.include_router(admin.router, prefix="/api/v1")
 app.include_router(market.router, prefix="/api/v1")
 app.include_router(news.router, prefix="/api/v1")
 app.include_router(observability.router, prefix="/api/v1")
+app.include_router(backtesting.router, prefix="/api/v1")
+app.include_router(sentiment.router, prefix="/api/v1")
+app.include_router(convergence.router, prefix="/api/v1")
+app.include_router(admin_pipelines.router, prefix="/api/v1")
 
 from backend.observability.routers.command_center import (  # noqa: E402
     router as command_center_router,

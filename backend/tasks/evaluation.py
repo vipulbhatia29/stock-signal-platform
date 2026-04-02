@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import async_session_factory
@@ -16,12 +16,53 @@ logger = logging.getLogger(__name__)
 _runner = PipelineRunner()
 
 # Drift thresholds
-MAPE_DRIFT_THRESHOLD = 0.20  # 20%
 VOLATILITY_SPIKE_MULTIPLIER = 2.0
 VIX_HIGH_THRESHOLD = 30
 
+# Calibrated drift detection
+DRIFT_BASELINE_MULTIPLIER = 1.5  # threshold = backtest MAPE × 1.5
+DRIFT_FALLBACK_THRESHOLD = 0.20  # used when no backtest data exists
+CONSECUTIVE_FAILURES_FOR_EXPERIMENTAL = 3
+
 # Recommendation evaluation horizons
 EVAL_HORIZONS = [30, 90, 180]
+
+
+# ---------------------------------------------------------------------------
+# Calibrated drift detection helpers
+# ---------------------------------------------------------------------------
+
+
+def compute_calibrated_threshold(backtest_mape: float | None) -> float:
+    """Compute per-ticker drift threshold from backtest baseline.
+
+    Args:
+        backtest_mape: Best MAPE from backtest runs, or None if no backtests.
+
+    Returns:
+        Calibrated threshold (backtest_mape × 1.5), or fallback 20%.
+    """
+    if backtest_mape is None or backtest_mape <= 0:
+        return DRIFT_FALLBACK_THRESHOLD
+    return backtest_mape * DRIFT_BASELINE_MULTIPLIER
+
+
+def should_demote_to_experimental(
+    consecutive_failures: int,
+    current_status: str,
+) -> bool:
+    """Determine if model should be demoted to experimental status.
+
+    Args:
+        consecutive_failures: Number of consecutive drift threshold breaches.
+        current_status: Current model status.
+
+    Returns:
+        True if model should be demoted to experimental.
+    """
+    if current_status == "experimental":
+        return False  # already experimental
+    return consecutive_failures >= CONSECUTIVE_FAILURES_FOR_EXPERIMENTAL
 
 
 # ---------------------------------------------------------------------------
@@ -172,18 +213,23 @@ async def _update_model_mapes(db: AsyncSession) -> None:
 
 
 async def _check_drift_async() -> dict:
-    """Check for model drift, volatility spikes, and VIX regime.
+    """Check for model drift using per-ticker calibrated baselines.
+
+    Uses backtest MAPE × 1.5 as threshold instead of flat 20%.
+    Tracks consecutive failures and demotes to experimental after 3.
 
     Returns:
         Dict with drift detection results.
     """
+    from backend.models.backtest import BacktestRun
     from backend.models.forecast import ModelVersion
 
     retrain_triggered: list[str] = []
     degraded: list[str] = []
+    experimental_demoted: list[str] = []
 
     async with async_session_factory() as db:
-        # Check model MAPE drift
+        # Get all active Prophet models
         result = await db.execute(
             select(ModelVersion).where(
                 ModelVersion.is_active.is_(True),
@@ -192,18 +238,78 @@ async def _check_drift_async() -> dict:
         )
         active_models = result.scalars().all()
 
+        # Batch-fetch best backtest MAPE per ticker (avoids N+1)
+        tickers = [mv.ticker for mv in active_models]
+        if tickers:
+            bt_result = await db.execute(
+                select(
+                    BacktestRun.ticker,
+                    func.min(BacktestRun.mape).label("best_mape"),
+                )
+                .where(BacktestRun.ticker.in_(tickers))
+                .group_by(BacktestRun.ticker)
+            )
+            backtest_mapes: dict[str, float] = {
+                row.ticker: float(row.best_mape) for row in bt_result.all()
+            }
+        else:
+            backtest_mapes = {}
+
+        # Check each model against its calibrated threshold
         for mv in active_models:
             mape = (mv.metrics or {}).get("rolling_mape")
-            if mape is not None and mape > MAPE_DRIFT_THRESHOLD:
-                mv.status = "degraded"
-                degraded.append(mv.ticker)
+            if mape is None:
+                continue
+
+            backtest_mape = backtest_mapes.get(mv.ticker)
+            threshold = compute_calibrated_threshold(backtest_mape)
+
+            if mape > threshold:
+                # Track consecutive failures
+                metrics = dict(mv.metrics or {})
+                failures = metrics.get("consecutive_drift_failures", 0) + 1
+                metrics["consecutive_drift_failures"] = failures
+                metrics["drift_threshold_used"] = round(threshold, 4)
+                mv.metrics = metrics
+
+                # Check for experimental demotion
+                if should_demote_to_experimental(failures, mv.status):
+                    mv.status = "experimental"
+                    experimental_demoted.append(mv.ticker)
+                    logger.warning(
+                        "Model demoted to experimental for %s: %d consecutive failures",
+                        mv.ticker,
+                        failures,
+                    )
+                else:
+                    mv.status = "degraded"
+                    degraded.append(mv.ticker)
+
                 retrain_triggered.append(mv.ticker)
                 logger.warning(
-                    "Drift detected for %s: MAPE=%.1f%% > %.0f%% threshold",
+                    "Drift detected for %s: MAPE=%.1f%% > %.1f%% calibrated threshold "
+                    "(backtest baseline=%.1f%%, failures=%d)",
                     mv.ticker,
                     mape * 100,
-                    MAPE_DRIFT_THRESHOLD * 100,
+                    threshold * 100,
+                    (backtest_mape or 0) * 100,
+                    failures,
                 )
+            else:
+                # Reset consecutive failures on passing check
+                metrics = dict(mv.metrics or {})
+                if metrics.get("consecutive_drift_failures", 0) > 0:
+                    metrics["consecutive_drift_failures"] = 0
+                    mv.metrics = metrics
+
+                # Self-healing: experimental → active if now passing
+                if mv.status == "experimental":
+                    mv.status = "active"
+                    logger.info(
+                        "Model self-healed for %s: MAPE=%.1f%% within threshold",
+                        mv.ticker,
+                        mape * 100,
+                    )
 
         # Check volatility spikes for each ticker
         for mv in active_models:
@@ -227,13 +333,15 @@ async def _check_drift_async() -> dict:
     vix_regime = await _check_vix_regime()
 
     logger.info(
-        "Drift check: %d degraded, %d retrain queued, VIX regime=%s",
+        "Drift check: %d degraded, %d experimental, %d retrain queued, VIX=%s",
         len(degraded),
+        len(experimental_demoted),
         len(retrain_triggered),
         vix_regime,
     )
     return {
         "degraded": degraded,
+        "experimental_demoted": experimental_demoted,
         "retrain_triggered": retrain_triggered,
         "vix_regime": vix_regime,
     }

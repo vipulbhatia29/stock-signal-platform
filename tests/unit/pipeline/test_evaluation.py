@@ -135,12 +135,15 @@ class TestDriftDetection:
             training_data_start=date(2024, 1, 1),
             training_data_end=date(2026, 1, 1),
             data_points=500,
-            metrics={"rolling_mape": 0.25},  # 25% > 20% threshold
+            metrics={"rolling_mape": 0.25},  # 25% > 20% fallback threshold
         )
 
         models_result = MagicMock()
         models_result.scalars.return_value.all.return_value = [degraded_model]
-        mock_session.execute = AsyncMock(return_value=models_result)
+        # Second execute() call is the backtest MAPE batch query — return empty
+        backtest_result = MagicMock()
+        backtest_result.all.return_value = []
+        mock_session.execute = AsyncMock(side_effect=[models_result, backtest_result])
 
         result = await _check_drift_async()
 
@@ -183,12 +186,15 @@ class TestDriftDetection:
             training_data_start=date(2024, 1, 1),
             training_data_end=date(2026, 1, 1),
             data_points=500,
-            metrics={"rolling_mape": 0.08},  # 8% < 20%
+            metrics={"rolling_mape": 0.08},  # 8% < 20% fallback
         )
 
         models_result = MagicMock()
         models_result.scalars.return_value.all.return_value = [healthy_model]
-        mock_session.execute = AsyncMock(return_value=models_result)
+        # Second execute() call is the backtest MAPE batch query — return empty
+        backtest_result = MagicMock()
+        backtest_result.all.return_value = []
+        mock_session.execute = AsyncMock(side_effect=[models_result, backtest_result])
 
         result = await _check_drift_async()
 

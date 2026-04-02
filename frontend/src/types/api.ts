@@ -1007,3 +1007,97 @@ export interface BenchmarkComparisonResponse {
   period: string;
   series: BenchmarkSeries[];
 }
+
+// ── Forecast Intelligence ────────────────────────────────────────────────────
+
+export interface BacktestResult {
+  id: string;
+  ticker: string;
+  model_version_id: string;
+  config_label: string;
+  horizon_days: number;
+  train_start: string;
+  train_end: string;
+  test_start: string;
+  test_end: string;
+  num_windows: number;
+  mape: number;
+  mae: number;
+  rmse: number;
+  direction_accuracy: number;
+  ci_containment: number;
+  market_regime: string | null;
+  created_at: string;
+}
+
+export interface SignalLight {
+  name: string;
+  direction: 'bullish' | 'bearish' | 'neutral';
+  value: number | null;
+}
+
+export interface StockConvergence {
+  ticker: string;
+  lights: SignalLight[];
+  aligned_count: number;
+  total_signals: number;
+  convergence_label: string;
+  divergence: { pattern: string; hit_rate: number; sample_count: number } | null;
+  model_status: string;
+}
+
+export interface NewsSentiment {
+  date: string;
+  ticker: string;
+  stock_sentiment: number;
+  sector_sentiment: number;
+  macro_sentiment: number;
+  article_count: number;
+  confidence: number;
+  dominant_event_type: string | null;
+}
+
+export interface BLForecastResult {
+  portfolio_expected_return: number;
+  per_position_returns: Record<string, number>;
+  view_contributions: Record<string, number>;
+  confidence_level: string;
+}
+
+export interface MonteCarloResult {
+  horizon_days: number;
+  bands: {
+    day: number;
+    p5: number;
+    p25: number;
+    median: number;
+    p75: number;
+    p95: number;
+  }[];
+}
+
+export interface CVaRResult {
+  var_pct_95: number;
+  cvar_pct_95: number;
+  var_pct_99: number;
+  cvar_pct_99: number;
+  horizon_days: number;
+}
+
+export interface PipelineTask {
+  name: string;
+  display_name: string;
+  group: string;
+  order: number;
+  status: 'not_run' | 'queued' | 'running' | 'success' | 'failed';
+  schedule: string | null;
+  estimated_duration: string;
+  is_seed: boolean;
+  idempotent: boolean;
+}
+
+export interface PipelineGroup {
+  name: string;
+  tasks: PipelineTask[];
+  is_running: boolean;
+}
