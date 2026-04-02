@@ -109,6 +109,8 @@ exclude_lines = [
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "basic"
+venvPath = "."
+venv = ".venv"
 reportMissingImports = true
 reportMissingTypeStubs = false
 exclude = [
