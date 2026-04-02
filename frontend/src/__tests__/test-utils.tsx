@@ -1,6 +1,17 @@
 import React from "react";
 import { render, RenderOptions } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { server } from "./msw/server";
+
+// ── MSW server lifecycle ─────────────────────────────────────────────────────
+// These run automatically for any test file that imports from test-utils.
+// Individual tests can further override handlers via server.use().
+
+beforeAll(() => server.listen({ onUnhandledRequest: "warn" }));
+afterEach(() => server.resetHandlers());
+afterAll(() => server.close());
+
+// ── Query client factory ─────────────────────────────────────────────────────
 
 function createTestQueryClient() {
   return new QueryClient({
@@ -10,6 +21,8 @@ function createTestQueryClient() {
     },
   });
 }
+
+// ── renderWithProviders ──────────────────────────────────────────────────────
 
 export function renderWithProviders(
   ui: React.ReactElement,
@@ -27,3 +40,4 @@ export function renderWithProviders(
 }
 
 export * from "@testing-library/react";
+export { server };
