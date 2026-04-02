@@ -256,7 +256,15 @@ jobs:
         shell: bash
         run: |
           npm run build 2>&1 | tee /tmp/build-output.txt
-          TOTAL_SIZE=$(grep -oP 'First Load JS shared by all\s+\K[\d.]+\s*[kKmM]B' /tmp/build-output.txt | head -1 || echo "unknown")
+          BUILD_EXIT=${PIPESTATUS[0]}
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "::error::Next.js build failed (exit $BUILD_EXIT)"
+            exit 1
+          fi
+          # Extract shared JS size from Next.js build output
+          TOTAL_SIZE=$(grep -o 'First Load JS shared by all.*' /tmp/build-output.txt | grep -o '[0-9.]* kB' | head -1 || echo "unknown")
+          echo "## Bundle Size" >> $GITHUB_STEP_SUMMARY
+          echo "First Load JS shared: **${TOTAL_SIZE}**" >> $GITHUB_STEP_SUMMARY
           echo "Bundle size: $TOTAL_SIZE"
 
   domain-regression:
