@@ -11,6 +11,7 @@ class BacktestRunResponse(BaseModel):
 
     id: UUID
     ticker: str
+    model_version_id: UUID
     config_label: str
     horizon_days: int
     train_start: date

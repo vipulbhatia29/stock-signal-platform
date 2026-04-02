@@ -1013,8 +1013,14 @@ export interface BenchmarkComparisonResponse {
 export interface BacktestResult {
   id: string;
   ticker: string;
+  model_version_id: string;
   config_label: string;
   horizon_days: number;
+  train_start: string;
+  train_end: string;
+  test_start: string;
+  test_end: string;
+  num_windows: number;
   mape: number;
   mae: number;
   rmse: number;

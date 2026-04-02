@@ -36,12 +36,17 @@ class CacheInvalidator:
         Does NOT clear BL/MC/CVaR — those have 1hr TTL (natural expiry).
         """
         try:
+            keys = []
             for t in tickers:
-                await self._redis.delete(
-                    f"app:convergence:{t}",
-                    f"app:convergence:rationale:{t}",
-                    f"app:forecast:{t}",
+                keys.extend(
+                    [
+                        f"app:convergence:{t}",
+                        f"app:convergence:rationale:{t}",
+                        f"app:forecast:{t}",
+                    ]
                 )
+            if keys:
+                await self._redis.delete(*keys)
             await self._clear_pattern("app:sector-forecast:*")
             logger.info("Cache invalidated for %d tickers (prices)", len(tickers))
         except Exception:
@@ -50,11 +55,16 @@ class CacheInvalidator:
     async def on_signals_updated(self, tickers: list[str]) -> None:
         """Signal snapshots recomputed."""
         try:
+            keys = []
             for t in tickers:
-                await self._redis.delete(
-                    f"app:convergence:{t}",
-                    f"app:convergence:rationale:{t}",
+                keys.extend(
+                    [
+                        f"app:convergence:{t}",
+                        f"app:convergence:rationale:{t}",
+                    ]
                 )
+            if keys:
+                await self._redis.delete(*keys)
             logger.info("Cache invalidated for %d tickers (signals)", len(tickers))
         except Exception:
             logger.warning("Cache invalidation failed (signals)", exc_info=True)
@@ -66,12 +76,17 @@ class CacheInvalidator:
     async def on_forecast_updated(self, tickers: list[str]) -> None:
         """Forecasts regenerated. Clears forecast, convergence, sector, and BL caches."""
         try:
+            keys = []
             for t in tickers:
-                await self._redis.delete(
-                    f"app:forecast:{t}",
-                    f"app:convergence:{t}",
-                    f"app:convergence:rationale:{t}",
+                keys.extend(
+                    [
+                        f"app:forecast:{t}",
+                        f"app:convergence:{t}",
+                        f"app:convergence:rationale:{t}",
+                    ]
                 )
+            if keys:
+                await self._redis.delete(*keys)
             # Sector + BL caches — clear all (can't map ticker→sector/user here)
             await self._clear_pattern("app:sector-forecast:*")
             await self._clear_pattern("app:bl-forecast:*")
@@ -82,8 +97,9 @@ class CacheInvalidator:
     async def on_backtest_completed(self, tickers: list[str]) -> None:
         """Backtest results updated."""
         try:
-            for t in tickers:
-                await self._redis.delete(f"app:backtest:{t}")
+            keys = [f"app:backtest:{t}" for t in tickers]
+            if keys:
+                await self._redis.delete(*keys)
             logger.info("Cache invalidated for %d tickers (backtest)", len(tickers))
         except Exception:
             logger.warning("Cache invalidation failed (backtest)", exc_info=True)
@@ -91,12 +107,17 @@ class CacheInvalidator:
     async def on_sentiment_scored(self, tickers: list[str]) -> None:
         """New sentiment scores available."""
         try:
+            keys = []
             for t in tickers:
-                await self._redis.delete(
-                    f"app:sentiment:{t}",
-                    f"app:convergence:{t}",
-                    f"app:convergence:rationale:{t}",
+                keys.extend(
+                    [
+                        f"app:sentiment:{t}",
+                        f"app:convergence:{t}",
+                        f"app:convergence:rationale:{t}",
+                    ]
                 )
+            if keys:
+                await self._redis.delete(*keys)
             logger.info("Cache invalidated for %d tickers (sentiment)", len(tickers))
         except Exception:
             logger.warning("Cache invalidation failed (sentiment)", exc_info=True)
