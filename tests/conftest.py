@@ -78,7 +78,12 @@ def redis_container():
 # ---------------------------------------------------------------------------
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _setup_database(db_url):
-    """Create TimescaleDB extension and all tables once for the test session."""
+    """Create TimescaleDB extension and all tables once for the test session.
+
+    Teardown uses DROP ... CASCADE per table to handle TimescaleDB hypertables
+    correctly. SQLAlchemy's metadata.drop_all() doesn't account for hypertable
+    child partitions, causing 'table does not exist' errors on teardown.
+    """
     engine = create_async_engine(db_url, echo=False)
     async with engine.begin() as conn:
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
@@ -87,7 +92,11 @@ async def _setup_database(db_url):
     yield
     engine = create_async_engine(db_url, echo=False)
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        for table in reversed(Base.metadata.sorted_tables):
+            # table.name from Base.metadata — not user input
+            await conn.execute(
+                sa.text(f'DROP TABLE IF EXISTS "{table.name}" CASCADE')  # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query
+            )
     await engine.dispose()
 
 

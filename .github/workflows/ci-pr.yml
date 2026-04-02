@@ -119,7 +119,7 @@ jobs:
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
         run: uv run alembic upgrade head
-      - name: Run unit tests
+      - name: Run unit tests (xdist)
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
           REDIS_URL: ${{ secrets.CI_REDIS_URL }}
@@ -127,7 +127,16 @@ jobs:
           JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
           MCP_TOOLS: "true"
           CI: "true"
-        run: uv run pytest tests/unit/ tests/api/ --timeout=60 -q --tb=short --randomly-seed=12345 -m "not domain and not regression"
+        run: uv run pytest tests/unit/ -n auto --timeout=30 -q --tb=short --randomly-seed=12345 -m "not domain and not regression" --cov=backend --cov-report=term-missing --no-cov-on-fail
+      - name: Run API tests
+        env:
+          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+          REDIS_URL: ${{ secrets.CI_REDIS_URL }}
+          JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
+          JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
+          MCP_TOOLS: "true"
+          CI: "true"
+        run: uv run pytest tests/api/ --timeout=60 -q --tb=short
       - name: Run integration tests
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
