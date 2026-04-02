@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/risk_narrative.py
+# hypothesis_version: 6.151.10
+
+[-0.1, 10.0, 100, 'Negative ROE', 'Overbought (RSI)', 'Oversold (RSI)', 'Revenue declining', 'Stock ticker symbol', 'Weak composite score', 'analysis', 'confidence_range_pct', 'datetime', 'description', 'detail', 'elevated', 'error', 'etf_ticker', 'factor', 'forecast_context', 'high', 'low', 'medium', 'moderate', 'name', 'object', 'ok', 'predicted_price', 'properties', 'required', 'risk_factors', 'risk_level', 'risk_narrative', 'sector', 'sector_context', 'severity', 'string', 'target_date', 'ticker', 'type']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/llm_client.py
+# hypothesis_version: 6.151.10
+
+[1.0, 2.0, 10.0, 30.0, 1000, ', ', 'attempt', 'completion_tokens', 'consecutive_failures', 'delay', 'error', 'exhausted', 'llm', 'llm_retry', 'model', 'prompt_tokens', 'provider', 'provider_exhausted', 'provider_failed', 'provider_skipped', 'reason', 'retry_after', 'tier', 'type']

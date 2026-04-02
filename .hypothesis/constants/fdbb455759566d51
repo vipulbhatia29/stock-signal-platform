@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/planner.py
+# hypothesis_version: 6.151.10
+
+[', ', '```', 'content', 'entity_context', 'held_tickers', 'intent', 'market_overview', 'original_steps', 'out_of_scope', 'params', 'plan_truncated', 'planner.md', 'portfolio', 'preferences', 'prompts', 'reasoning', 'resolved_pronouns', 'role', 'simple_lookup', 'skip_synthesis', 'steps', 'stock_analysis', 'tool', 'user', 'utf-8', 'watchlist', '{{query}}', '{{user_context}}']

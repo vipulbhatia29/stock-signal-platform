@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/utils/sanitize.py
+# hypothesis_version: 6.151.10
+
+[300, '[EMAIL]', '[REDACTED]', '[SANITIZE_ERROR]', 'api_key', 'authorization', 'email', 'password', 'secret', 'token', 'user_id']

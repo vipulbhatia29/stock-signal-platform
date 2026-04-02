@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/executor.py
+# hypothesis_version: 6.151.10
+
+[45.0, 1000, '$PREV_RESULT', '.', 'No result', 'analyze_stock', 'attempt', 'circuit_broken', 'compare_stocks', 'completed_steps', 'data', 'elapsed', 'error', 'executor_timeout', 'executor_tool_error', 'failures', 'get_analyst_targets', 'get_company_profile', 'get_earnings_history', 'get_forecast', 'get_fundamentals', 'needs_replan', 'ok', 'params', 'query', 'reason', 'results', 'risk_narrative', 'search_stocks', 'status', 'success', 'ticker', 'timed_out', 'tool', 'tool_calls', 'unavailable']

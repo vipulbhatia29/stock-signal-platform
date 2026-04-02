@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/ingest_stock_tool.py
+# hypothesis_version: 6.151.10
+
+[30.0, 'composite_score', 'created', 'data', 'description', 'error', 'ingest_stock', 'ingest_stock_failed', 'name', 'object', 'ok', 'piotroski_score', 'properties', 'required', 'rows_fetched', 'status', 'string', 'ticker', 'type', 'updated']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/portfolio.py
+# hypothesis_version: 6.151.10
+
+[0.0, 100.0, 100, 200, 365, 3650, '/analytics', '/dividends/{ticker}', '/health', '/health/history', '/history', '/portfolio', '/positions', '/rebalancing', '/summary', '/transactions', 'BUY_MORE', 'Delete a transaction', 'Filter by ticker', 'HOLD', 'Offset', 'Page size', 'SELL', 'Unknown', 'allocation_pct', 'cache', 'composite_score', 'error', 'foreign key', 'json', 'latest', 'ok', 'pct', 'portfolio', 'sector', 'shares', 'ticker', 'unrealized_pnl_pct']

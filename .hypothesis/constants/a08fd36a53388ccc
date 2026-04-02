@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/portfolio.py
+# hypothesis_version: 6.151.10
+
+[120, 'computed', 'diversification', 'grade', 'health_score', 'hhi', 'income', 'income_score', 'position_count', 'risk', 'risk_score', 'sector_balance', 'sector_balance_score', 'sharpe', 'signal_quality', 'signal_quality_score', 'skipped', 'snapshotted', 'weighted_beta', 'weighted_sharpe', 'weighted_yield']

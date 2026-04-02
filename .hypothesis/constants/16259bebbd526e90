@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/config.py
+# hypothesis_version: 6.151.10
+
+[3000, 3600, ',', 'America/New_York', 'HS256', 'INFO', 'backend/.env', 'development', 'ignore', 'production', 'staging', 'utf-8']

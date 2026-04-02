@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/news.py
+# hypothesis_version: 6.151.10
+
+['/dashboard', '/news', 'BUY', 'STRONG_BUY', 'cache', 'google_news', 'news', 'portfolio_ticker']

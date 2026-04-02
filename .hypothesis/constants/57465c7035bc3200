@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/analyst_targets_tool.py
+# hypothesis_version: 6.151.10
+
+[5.0, 'Stock ticker symbol', 'buy_count', 'data', 'datetime', 'description', 'error', 'get_analyst_targets', 'has_targets', 'hold_count', 'message', 'object', 'ok', 'properties', 'required', 'sell_count', 'string', 'target_high', 'target_low', 'target_mean', 'ticker', 'type']

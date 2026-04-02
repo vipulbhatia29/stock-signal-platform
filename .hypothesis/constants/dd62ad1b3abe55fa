@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/dividends.py
+# hypothesis_version: 6.151.10
+
+[0.0, 100, 200, 'amount', 'annual_dividends', 'dividend_yield', 'ex_date', 'history', 'last_ex_date', 'payment_count', 'ticker', 'total_received']

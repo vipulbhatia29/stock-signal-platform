@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/compute_signals_tool.py
+# hypothesis_version: 6.151.10
+
+[10.0, 'annual_return', 'bb_position', 'composite_score', 'compute_signals', 'data', 'description', 'error', 'macd_signal', 'macd_value', 'object', 'ok', 'properties', 'required', 'rsi_signal', 'rsi_value', 'sharpe_ratio', 'sma_signal', 'string', 'ticker', 'type', 'volatility']

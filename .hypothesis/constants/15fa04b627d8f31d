@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/recommendations.py
+# hypothesis_version: 6.151.10
+
+['Action', 'BUY_THRESHOLD', 'Confidence', 'MIN_TRADE_SIZE', 'PortfolioState', 'RecommendationResult', 'WATCH_THRESHOLD', 'store_recommendation']

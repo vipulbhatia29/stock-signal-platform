@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/guards.py
+# hypothesis_version: 6.151.10
+
+[0.5, 0.65, 200, 2000, '<\\s*/?\\s*system\\s*>', '```\\s*system', 'analyze_stock', 'compare_stocks', 'confidence', 'confidence_label', 'credit_card', 'evidence', 'gaps', 'get_analyst_targets', 'get_company_profile', 'get_earnings_history', 'get_forecast', 'get_fundamentals', 'https?://', 'ingest_stock', 'medium', 'phone', 'risk_narrative', 'search_stocks', 'ssn', 'system\\s*:\\s*', 'web_search']

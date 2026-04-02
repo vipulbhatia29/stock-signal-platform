@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/portfolio_analytics.py
+# hypothesis_version: 6.151.10
+
+[10.0, 'alpha', 'beta', 'cagr', 'calmar', 'data_days', 'error', 'max_drawdown', 'message', 'object', 'ok', 'portfolio', 'properties', 'sharpe', 'sortino', 'type', 'var_95']

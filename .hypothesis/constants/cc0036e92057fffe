@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/oauth_account.py
+# hypothesis_version: 6.151.10
+
+[255, 'CASCADE', 'User', 'oauth_accounts', 'provider', 'provider_sub', 'user_id', 'users.id']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/forecasts.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.1, 0.2, 1.0, 100, 404, '/forecasts/portfolio', '/forecasts/{ticker}', 'cache', 'forecasts', 'high', 'latest_date', 'low', 'lower_sum', 'medium', 'none', 'return_sum', 'rolling_mape', 'upper_sum']

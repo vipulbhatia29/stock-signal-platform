@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/__init__.py
+# hypothesis_version: 6.151.10
+
+['AssessmentResult', 'AssessmentRun', 'Base', 'ChatMessage', 'ChatSession', 'DividendPayment', 'EarningsSnapshot', 'ForecastResult', 'InAppAlert', 'LLMCallLog', 'LLMModelConfig', 'LoginAttempt', 'ModelVersion', 'OAuthAccount', 'PipelineRun', 'PipelineWatermark', 'Portfolio', 'PortfolioSnapshot', 'Position', 'SignalSnapshot', 'Stock', 'StockIndex', 'StockIndexMembership', 'StockPrice', 'ToolExecutionLog', 'Transaction', 'User', 'UserPreference', 'UserRole', 'Watchlist']

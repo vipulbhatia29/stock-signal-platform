@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/stocks/data.py
+# hypothesis_version: 6.151.10
+
+[180, 365, 404, 730, 1825, 3650, '/{ticker}/analytics', '/{ticker}/benchmark', '/{ticker}/news', '/{ticker}/prices', '/{ticker}/signals', 'Benchmark comparison', 'NASDAQ Composite', 'S&P 500', '^GSPC', '^IXIC', 'cache', 'description', 'format']

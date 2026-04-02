@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/geopolitical.py
+# hypothesis_version: 6.151.10
+
+[15.0, '%Y-%m-%d', 'days', 'default', 'description', 'domain', 'error', 'geopolitical_failed', 'integer', 'language', 'macro', 'max_results', 'object', 'ok', 'properties', 'query', 'required', 'seendate', 'string', 'title', 'type', 'url']

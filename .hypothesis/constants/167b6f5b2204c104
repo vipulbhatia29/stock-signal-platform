@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/market_data.py
+# hypothesis_version: 6.151.10
+
+[100, 'Adj Close', 'Close', 'SPY', 'alerts', 'alpha', 'app:forecast:*', 'app:screener:*', 'app:sectors:*', 'app:signals:*', 'backfilling', 'beta', 'data_days', 'dispatched', 'dividendYield', 'dividend_yield', 'drift', 'failed', 'forecast_evaluation', 'forecast_refresh', 'forwardPE', 'forward_pe', 'health_snapshots', 'max_drawdown', 'no_data', 'no_tickers', 'ok', 'pd.Series', 'pd.Series | None', 'pipeline_context', 'portfolio_snapshots', 'price_refresh', 'rebalancing', 'recommendations', 'run_id', 'scheduled', 'sortino', 'status', 'ticker', 'tickers', 'tickers_total']

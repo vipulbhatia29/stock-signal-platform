@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/routers/tasks.py
+# hypothesis_version: 6.151.10
+
+['/tasks', '/{task_id}/status', 'state', 'task_id', 'tasks']

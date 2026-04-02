@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/metrics/db_pool.py
+# hypothesis_version: 6.151.10
+
+['checked_in', 'checked_out', 'error', 'overflow', 'pool_size', 'pool_status', 'status', 'unavailable']

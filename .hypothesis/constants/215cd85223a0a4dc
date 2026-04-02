@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/services/portfolio.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.001, 0.95, 1.0, 5.0, 30.0, 100.0, 100, 365, '0', 'BUY', 'BUY_MORE', 'HOLD', 'My Portfolio', 'REDUCE', 'SPY', 'Unknown', '_cost_basis_total', 'action', 'all', 'alpha', 'at', 'avg_cost_basis', 'beta', 'cagr', 'calmar', 'closed_at', 'current_price', 'current_weight', 'data_days', 'days', 'delta_dollars', 'delta_shares', 'id', 'index', 'market_value', 'max_drawdown', 'max_sharpe', 'min_volatility', 'over_limit', 'pct', 'pd.DataFrame', 'position_count', 'price', 'risk_parity', 'sector', 'shares', 'sharpe', 'sortino', 'strategy', 'target_weight', 'ticker', 'to_dict', 'total_cost_basis', 'total_value', 'type', 'unrealized_pnl', 'var_95']

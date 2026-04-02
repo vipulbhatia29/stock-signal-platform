@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/screen_stocks.py
+# hypothesis_version: 6.151.10
+
+[10.0, 'analysis', 'composite_score', 'default', 'description', 'error', 'integer', 'limit', 'macd_signal', 'min_score', 'number', 'object', 'ok', 'properties', 'rsi_signal', 'rsi_state', 'screen_stocks', 'screen_stocks_failed', 'sector', 'string', 'ticker', 'type']

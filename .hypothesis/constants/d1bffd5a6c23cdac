@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/web_search.py
+# hypothesis_version: 6.151.10
+
+[8.0, 10.0, 'Search query', 'api_key', 'data', 'default', 'description', 'engine', 'error', 'google', 'integer', 'link', 'num', 'num_results', 'object', 'ok', 'organic_results', 'properties', 'q', 'query', 'required', 'snippet', 'string', 'title', 'type', 'web_search', 'web_search_failed']

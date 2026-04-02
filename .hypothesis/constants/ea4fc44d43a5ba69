@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/scripts/seed_prices.py
+# hypothesis_version: 6.151.10
+
+[0.5, '  %s', '  %s: %s', '+', '--dry-run', '--period', '--tickers', '--universe', '10y', 'AAPL', 'AMZN', 'Failed tickers:', 'GOOGL', 'JPM', 'META', 'MSFT', 'N/A', 'NVDA', 'TSLA', 'UNH', 'V', '__main__', 'action', 'composite_score', 'confidence', 'error', 'ok', 'price_rows', 'status', 'store_true', 'ticker', 'unknown']

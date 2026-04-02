@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/simple_formatter.py
+# hypothesis_version: 6.151.10
+
+[1000000.0, 1000000000.0, 1000000000000.0, ' | ', '...', '.1%', '.1f', '?', 'Found:\n', 'Gross Margins', 'P/E', 'ROE', 'Revenue Growth', 'Unknown', 'analyze_stock', 'buy_count', 'composite_score', 'get_analyst_targets', 'get_company_profile', 'get_earnings_history', 'get_fundamentals', 'gross_margins', 'has_earnings', 'has_targets', 'hold_count', 'industry', 'macd_signal_label', 'market_cap', 'n/a', 'name', 'pe_ratio', 'return_on_equity', 'revenue_growth', 'rsi_signal', 'search_stocks', 'sector', 'sell_count', 'sma_signal', 'summary', 'target_high', 'target_low', 'target_mean', 'ticker', 'tool']

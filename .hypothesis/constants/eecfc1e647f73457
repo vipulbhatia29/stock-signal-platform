@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/alerts.py
+# hypothesis_version: 6.151.10
+
+[0.0, 100, '/dashboard', 'AVOID', 'BUY', 'Concentration Risk', 'Forecast Degraded', 'New BUY Signal', 'Pipeline Failed', 'Pipeline Issue', 'SELL', 'Score Downgrade', 'Score Upgrade', 'Sector Overweight', 'Stop-Loss Triggered', 'Unknown', 'WATCH', 'Weak Fundamentals', '_', 'alerts_cleaned', 'alerts_created', 'allocation_pct', 'composite_score', 'critical', 'degraded', 'divestment', 'downgrade', 'drift', 'failed', 'info', 'latest', 'message', 'partial', 'pct', 'pipeline', 'pipeline:partial', 'pipeline:total', 'price_refresh', 'recommendation', 'route', 'rule', 'sector', 'sector_concentration', 'severity', 'signal_change', 'status', 'stop_loss', 'threshold', 'ticker', 'unrealized_pnl_pct', 'upgrade', 'value', 'warning', 'weak_fundamentals']

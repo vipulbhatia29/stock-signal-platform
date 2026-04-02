@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/earnings_history_tool.py
+# hypothesis_version: 6.151.10
+
+[5.0, 'Stock ticker symbol', 'beat_count', 'data', 'datetime', 'default', 'description', 'eps_actual', 'eps_estimate', 'error', 'get_earnings_history', 'has_earnings', 'integer', 'message', 'object', 'ok', 'properties', 'quarter', 'quarters', 'required', 'string', 'summary', 'surprise_pct', 'ticker', 'total_quarters', 'type']

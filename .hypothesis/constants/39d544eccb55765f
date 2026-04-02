@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/routers/health.py
+# hypothesis_version: 6.151.10
+
+[1000, '/health', '0.1.0', 'SELECT 1', 'cache', 'degraded', 'direct', 'disabled', 'mcp_manager', 'ok', 'registry']

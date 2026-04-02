@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/dividend_sustainability.py
+# hypothesis_version: 6.151.10
+
+[0.75, 1.0, 1.5, 15.0, 100, 'Stock ticker symbol', 'at_risk', 'data', 'description', 'dividendRate', 'dividendYield', 'dividend_rate', 'dividend_yield', 'error', 'fcf_coverage', 'freeCashflow', 'free_cashflow', 'marketCap', 'message', 'moderate', 'object', 'ok', 'payoutRatio', 'payout_ratio', 'pays_dividend', 'properties', 'required', 'safe', 'string', 'sustainability', 'ticker', 'trailingEps', 'trailing_eps', 'type', 'unknown']

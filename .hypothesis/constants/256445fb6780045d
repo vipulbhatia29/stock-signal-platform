@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/metrics/pipeline_stats.py
+# hypothesis_version: 6.151.10
+
+['America/New_York', 'completed_at', 'days_since_last', 'error_summary', 'has_gap', 'id', 'last_completed_at', 'last_completed_date', 'pipeline_name', 'retry_count', 'started_at', 'status', 'step_durations', 'tickers_failed', 'tickers_succeeded', 'tickers_total', 'trigger']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/stock_intelligence.py
+# hypothesis_version: 6.151.10
+
+[15.0, 'Stock ticker symbol', 'Ticker is required', 'data', 'description', 'eps_revisions', 'error', 'insider_transactions', 'next_earnings_date', 'object', 'ok', 'properties', 'required', 'short_interest', 'string', 'ticker', 'type', 'upgrades_downgrades']

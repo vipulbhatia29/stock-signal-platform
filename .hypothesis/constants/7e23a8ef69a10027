@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/providers/groq.py
+# hypothesis_version: 6.151.10
+
+[200, 1000, ', ', '401', '429', '502', '503', 'api key', 'arguments', 'auth', 'connection', 'context', 'context_length', 'groq', 'id', 'name', 'over_budget', 'permanent', 'rate', 'rate_limit', 'timeout', 'token', 'too long', 'too many', 'transient']

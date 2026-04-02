@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/market_briefing.py
+# hypothesis_version: 6.151.10
+
+[30.0, 100, '%Y-%m-%d', '2d', 'Close', 'Consumer Staples', 'Dow Jones', 'Energy', 'Financials', 'Healthcare', 'Industrials', 'Materials', 'NASDAQ', 'Real Estate', 'S&P 500', 'Technology', 'Utilities', 'VIX', 'XLB', 'XLC', 'XLE', 'XLF', 'XLI', 'XLK', 'XLP', 'XLRE', 'XLU', 'XLV', 'XLY', '^DJI', '^GSPC', '^IXIC', '^VIX', 'briefing_date', 'change_pct', 'composite_score', 'current_price', 'date', 'error', 'etf', 'gainers', 'general_news', 'iloc', 'indexes', 'last_price', 'losers', 'macd_signal_label', 'market', 'market_briefing', 'name', 'news_fetch_failed', 'object', 'ok', 'portfolio_news', 'portfolio_ticker', 'previous_close', 'price', 'properties', 'required', 'sector', 'sector_performance', 'stock+market+today', 'ticker', 'top_movers', 'type', 'upcoming_earnings']

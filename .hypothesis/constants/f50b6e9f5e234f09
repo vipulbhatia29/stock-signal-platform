@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/recommendations_tool.py
+# hypothesis_version: 6.151.10
+
+[0.0, 15.0, 'Stock ticker symbol', 'action', 'composite_score', 'confidence', 'description', 'error', 'get_recommendations', 'object', 'ok', 'portfolio', 'properties', 'reasoning', 'required', 'string', 'ticker', 'type']

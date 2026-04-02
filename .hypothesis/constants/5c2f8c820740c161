@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/scorecard_tool.py
+# hypothesis_version: 6.151.10
+
+[10.0, 100, 'avg_alpha', 'avg_alpha_pct', 'buy_hit_rate_pct', 'correct', 'description', 'error', 'hit_rate', 'horizon_days', 'horizons', 'message', 'object', 'ok', 'overall_hit_rate_pct', 'portfolio', 'properties', 'required', 'return_pct', 'sell_hit_rate_pct', 'string', 'ticker', 'total', 'total_outcomes', 'type', 'user_id', 'worst_miss']

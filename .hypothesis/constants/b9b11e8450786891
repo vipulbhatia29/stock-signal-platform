@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tasks/forecasting.py
+# hypothesis_version: 6.151.10
+
+['Failed to retrain %s', 'forecast_refresh', 'forecasts', 'model_retrain', 'no_models', 'no_tickers', 'prophet', 'refreshed', 'scheduled', 'status', 'ticker', 'total', 'trained', 'version']

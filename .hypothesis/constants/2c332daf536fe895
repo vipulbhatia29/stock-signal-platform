@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/react_loop.py
+# hypothesis_version: 6.151.10
+
+[200, 300, 1000, '?', 'Analysis complete.', 'No data', 'No prior context.', 'Tool failed', 'arguments', 'assistant', 'cache_check_failed', 'cache_hit', 'cache_write_failed', 'content', 'data', 'db', 'done', 'elapsed', 'error', 'external', 'failures', 'function', 'id', 'iteration', 'name', 'ok', 'positions', 'preferences', 'prompts', 'react', 'react_loop_llm_error', 'react_loop_timeout', 'react_system.md', 'role', 'source', 'status', 'synthesis', 'system', 'thinking', 'ticker', 'timeout', 'token', 'tool', 'tool_call_id', 'tool_calls', 'tool_error', 'tool_execution_error', 'tool_result', 'tool_start', 'type', 'user', 'utf-8', 'watchlist', 'web_search', '{{entity_context}}', '{{user_context}}']

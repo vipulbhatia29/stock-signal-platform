@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/stream.py
+# hypothesis_version: 6.151.10
+
+['Tool failed', 'content', 'context_truncated', 'data', 'decline', 'decline_message', 'done', 'error', 'evidence', 'intent', 'ok', 'out_of_scope', 'params', 'plan', 'provider_fallback', 'reason', 'reasoning', 'response_text', 'status', 'steps', 'synthesis', 'thinking', 'token', 'tool', 'tool_error', 'tool_result', 'tool_results', 'tool_start', 'type', 'unavailable', 'usage']

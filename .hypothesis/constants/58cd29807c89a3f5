@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/collector.py
+# hypothesis_version: 6.151.10
+
+[0.0, 0.95, 300, 1000, 'avg_ms', 'cache_hit', 'cascade_count', 'cascade_log', 'cascades_by_model', 'cnt', 'completed', 'completion_tokens', 'cost_usd', 'degraded', 'disabled', 'down', 'error', 'failures', 'failures_5m', 'healthy', 'langfuse_trace_id', 'latency', 'latency_ms', 'llm_call', 'loop_step', 'model', 'p95_ms', 'params', 'prompt_tokens', 'provider', 'reason', 'requests_by_model', 'result', 'result_size_bytes', 'rpm_by_model', 'status', 'successes_5m', 'summary', 'tier', 'tiers', 'timestamp', 'tool_execution', 'tool_name', 'total']

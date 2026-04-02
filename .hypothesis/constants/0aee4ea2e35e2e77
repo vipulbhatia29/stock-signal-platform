@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/agents/entity_registry.py
+# hypothesis_version: 6.151.10
+
+['comparisons', 'contributions', 'data', 'dual', 'name', 'plural', 'singular', 'ticker']

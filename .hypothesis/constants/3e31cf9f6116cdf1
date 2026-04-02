@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/models/stock.py
+# hypothesis_version: 6.151.10
+
+[100, 255, 'CASCADE', 'stocks', 'stocks.ticker', 'users.id', 'watchlist', 'watchlist_items']

@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/tools/adapters/alpha_vantage.py
+# hypothesis_version: 6.151.10
+
+[500, '05. price', '06. volume', '09. change', '10. change percent', 'GLOBAL_QUOTE', 'Global Quote', 'NEWS_SENTIMENT', 'Stock ticker symbol', 'TIME_SERIES_INTRADAY', 'alpha_vantage_tools', 'apikey', 'articles', 'change', 'change_percent', 'default', 'description', 'error', 'feed', 'function', 'get_news_sentiment', 'get_quotes', 'integer', 'limit', 'market_data', 'object', 'ok', 'price', 'properties', 'published', 'required', 'sentiment_label', 'sentiment_score', 'source', 'string', 'symbol', 'ticker', 'tickers', 'time_published', 'title', 'type', 'volume']

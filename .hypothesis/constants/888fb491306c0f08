@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/observability/token_budget.py
+# hypothesis_version: 6.151.10
+
+[0.8, 1.2, 1000, 86400, 100000, 'budget', 'content', 'day_requests', 'day_tokens', 'minute_requests', 'minute_tokens']

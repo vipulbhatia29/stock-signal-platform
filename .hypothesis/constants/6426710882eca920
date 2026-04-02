@@ -1,0 +1,4 @@
+# file: /Users/sigmoid/Documents/projects/stockanalysis/stock-signal-platform/backend/schemas/stock.py
+# hypothesis_version: 6.151.10
+
+['10y', '1mo', '1y', '2y', '3mo', '5y', '6mo', 'Gross margins', 'Operating margins', 'Profit margins', 'Return on equity', 'Revenue growth rate', 'from_attributes', 'list', 'ohlc']
