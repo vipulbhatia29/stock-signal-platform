@@ -46,7 +46,6 @@ jest.mock("@/components/migration-toast", () => ({
 // ── Imports (after mocks) ─────────────────────────────────────────────────────
 
 import { MarketPulseZone } from "@/app/(authenticated)/dashboard/_components/market-pulse-zone";
-import { SignalsZone } from "@/app/(authenticated)/dashboard/_components/signals-zone";
 import { PortfolioZone } from "@/app/(authenticated)/dashboard/_components/portfolio-zone";
 import { AlertsZone } from "@/app/(authenticated)/dashboard/_components/alerts-zone";
 import { NewsZone } from "@/app/(authenticated)/dashboard/_components/news-zone";
