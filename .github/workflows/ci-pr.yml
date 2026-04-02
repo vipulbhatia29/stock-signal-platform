@@ -127,16 +127,7 @@ jobs:
           JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
           MCP_TOOLS: "true"
           CI: "true"
-        run: uv run pytest tests/unit/ -n auto --timeout=30 -q --tb=short --randomly-seed=12345 -m "not domain and not regression"
-      - name: Run API tests
-        env:
-          DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
-          REDIS_URL: ${{ secrets.CI_REDIS_URL }}
-          JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
-          JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
-          MCP_TOOLS: "true"
-          CI: "true"
-        run: uv run pytest tests/api/ --timeout=60 -q --tb=short
+        run: uv run pytest tests/unit/ tests/api/ --timeout=60 -q --tb=short --randomly-seed=12345 -m "not domain and not regression"
       - name: Run integration tests
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
