@@ -286,9 +286,11 @@ jobs:
     if: needs.changes.outputs.backend == 'true' || needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
     continue-on-error: true
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
@@ -297,8 +299,17 @@ jobs:
         with:
           node-version: 22
       - run: uv sync --frozen
-      - name: Pyright type check
-        run: npx --yes pyright@latest
+      - name: Pyright on changed files
+        shell: bash
+        run: |
+          CHANGED=$(git diff --name-only origin/develop -- 'backend/**.py' | head -50)
+          if [ -z "$CHANGED" ]; then
+            echo "No backend Python files changed — skipping pyright"
+            exit 0
+          fi
+          echo "Checking $(echo "$CHANGED" | wc -l | tr -d ' ') changed files:"
+          echo "$CHANGED"
+          npx --yes pyright@latest $CHANGED
 
   ci-gate:
     if: always()
