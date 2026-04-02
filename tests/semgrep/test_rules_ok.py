@@ -26,6 +26,7 @@ ALLOWED_REDIRECT_HOSTS = {"app.example.com", "localhost"}
 # ok: no-str-exception-in-httpexception
 # ---------------------------------------------------------------------------
 
+
 def good_http_exception():
     try:
         _ = 1 / 0
@@ -41,6 +42,7 @@ def good_http_exception_404():
 # ---------------------------------------------------------------------------
 # ok: no-str-exception-in-toolresult
 # ---------------------------------------------------------------------------
+
 
 class ToolResult:
     def __init__(self, error: str | None = None, output: str | None = None):
@@ -59,6 +61,7 @@ def good_tool_result():
 # ---------------------------------------------------------------------------
 # ok: async-endpoints-only
 # ---------------------------------------------------------------------------
+
 
 # ok: async-endpoints-only
 @router.get("/async-good")
@@ -93,6 +96,7 @@ async def websocket_handler():
 # ok: no-pip-install
 # ---------------------------------------------------------------------------
 
+
 def good_subprocess():
     # ok: no-pip-install
     subprocess.run(["git", "status"], check=True)
@@ -117,6 +121,7 @@ DISPLAY_NAME = "My App Token"
 # ok: no-stack-trace-in-response
 # ---------------------------------------------------------------------------
 
+
 def good_traceback_handling():
     try:
         pass
@@ -129,6 +134,7 @@ def good_traceback_handling():
 # ok: no-file-path-in-error
 # ---------------------------------------------------------------------------
 
+
 def good_error_response():
     raise HTTPException(status_code=500, detail="Internal server error")
 
@@ -136,6 +142,7 @@ def good_error_response():
 # ---------------------------------------------------------------------------
 # ok: jwt-no-algorithm-pinning
 # ---------------------------------------------------------------------------
+
 
 def good_jwt_decode(token: str, secret: str) -> dict:
     # ok: jwt-no-algorithm-pinning
@@ -151,6 +158,7 @@ def good_jwt_decode_rs256(token: str, pubkey: str) -> dict:
 # ok: jwt-verify-disabled
 # ---------------------------------------------------------------------------
 
+
 def good_jwt_decode_with_options(token: str, secret: str) -> dict:
     # ok: jwt-verify-disabled — only verify_exp is relaxed, not verify_signature
     return jwt.decode(
@@ -164,6 +172,7 @@ def good_jwt_decode_with_options(token: str, secret: str) -> dict:
 # ---------------------------------------------------------------------------
 # ok: no-timing-unsafe-compare
 # ---------------------------------------------------------------------------
+
 
 def good_token_compare(access_token: str, expected_token: str) -> bool:
     # ok: no-timing-unsafe-compare
@@ -179,6 +188,7 @@ def good_compare_plain_strings(a: str, b: str) -> bool:
 # ok: no-open-redirect
 # ---------------------------------------------------------------------------
 
+
 def good_redirect_literal() -> RedirectResponse:
     # ok: no-open-redirect
     return RedirectResponse(url="/dashboard", status_code=302)
@@ -187,6 +197,7 @@ def good_redirect_literal() -> RedirectResponse:
 def good_redirect_validated(next_url: str) -> RedirectResponse:
     # ok: no-open-redirect — validated against allowlist before redirect
     from urllib.parse import urlparse
+
     parsed = urlparse(next_url)
     if parsed.hostname not in ALLOWED_REDIRECT_HOSTS:
         raise HTTPException(status_code=400, detail="Invalid redirect target")
@@ -197,6 +208,7 @@ def good_redirect_validated(next_url: str) -> RedirectResponse:
 # ---------------------------------------------------------------------------
 # ok: cookie-missing-secure-flag
 # ---------------------------------------------------------------------------
+
 
 def good_cookie_secure_true(response):
     # ok: cookie-missing-secure-flag
@@ -217,6 +229,7 @@ def good_cookie_secure_setting(response, settings):
 # ---------------------------------------------------------------------------
 # ok: no-unbounded-redis-key
 # ---------------------------------------------------------------------------
+
 
 async def good_redis_key_literal(redis):
     # ok: no-unbounded-redis-key

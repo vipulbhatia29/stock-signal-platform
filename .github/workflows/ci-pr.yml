@@ -127,7 +127,7 @@ jobs:
           JWT_ALGORITHM: ${{ secrets.CI_JWT_ALGORITHM }}
           MCP_TOOLS: "true"
           CI: "true"
-        run: uv run pytest tests/unit/ -n auto --timeout=30 -q --tb=short --randomly-seed=12345 -m "not domain and not regression" --cov=backend --cov-report=term-missing
+        run: uv run pytest tests/unit/ -n auto --timeout=30 -q --tb=short --randomly-seed=12345 -m "not domain and not regression"
       - name: Run API tests
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}

@@ -22,6 +22,7 @@ router = APIRouter()
 # Rule 1: no-str-exception-in-httpexception
 # ---------------------------------------------------------------------------
 
+
 def bad_http_exception():
     try:
         _ = 1 / 0
@@ -42,6 +43,7 @@ def bad_http_exception_with_status():
 # Rule 2: no-str-exception-in-toolresult
 # ---------------------------------------------------------------------------
 
+
 class ToolResult:
     def __init__(self, error: str | None = None, output: str | None = None):
         self.error = error
@@ -59,6 +61,7 @@ def bad_tool_result():
 # ---------------------------------------------------------------------------
 # Rule 3: async-endpoints-only
 # ---------------------------------------------------------------------------
+
 
 # ruleid: async-endpoints-only
 @router.get("/sync-bad")
@@ -81,6 +84,7 @@ def sync_delete_handler(item_id: int):
 # ---------------------------------------------------------------------------
 # Rule 4: no-pip-install
 # ---------------------------------------------------------------------------
+
 
 def bad_install():
     # ruleid: no-pip-install
@@ -110,6 +114,7 @@ database_password = "hunter2"  # noqa: S105
 # Rule 6: no-stack-trace-in-response
 # ---------------------------------------------------------------------------
 
+
 def bad_traceback_response():
     try:
         pass
@@ -122,6 +127,7 @@ def bad_traceback_response():
 # Rule 7: no-file-path-in-error
 # ---------------------------------------------------------------------------
 
+
 def bad_file_path_response():
     # ruleid: no-file-path-in-error
     raise HTTPException(status_code=500, detail=__file__)
@@ -130,6 +136,7 @@ def bad_file_path_response():
 # ---------------------------------------------------------------------------
 # Rule 8: jwt-no-algorithm-pinning
 # ---------------------------------------------------------------------------
+
 
 def bad_jwt_decode(token: str, secret: str) -> dict:
     # ruleid: jwt-no-algorithm-pinning
@@ -140,8 +147,10 @@ def bad_jwt_decode(token: str, secret: str) -> dict:
 # Rule 9: jwt-verify-disabled
 # ---------------------------------------------------------------------------
 
+
 def bad_jwt_no_verify(token: str, secret: str) -> dict:
     import jwt
+
     # ruleid: jwt-verify-disabled
     return jwt.decode(  # nosemgrep
         token, secret, options={"verify_signature": False}
@@ -151,6 +160,7 @@ def bad_jwt_no_verify(token: str, secret: str) -> dict:
 # ---------------------------------------------------------------------------
 # Rule 10: no-timing-unsafe-compare
 # ---------------------------------------------------------------------------
+
 
 def bad_token_compare(access_token: str, expected_token: str) -> bool:
     # ruleid: no-timing-unsafe-compare
@@ -166,6 +176,7 @@ def bad_secret_compare(api_secret: str, incoming: str) -> bool:
 # Rule 11: no-open-redirect
 # ---------------------------------------------------------------------------
 
+
 def bad_open_redirect(next_url: str) -> RedirectResponse:
     # ruleid: no-open-redirect
     return RedirectResponse(url=next_url, status_code=302)
@@ -179,6 +190,7 @@ def bad_open_redirect_variable(redirect_target: str) -> RedirectResponse:
 # ---------------------------------------------------------------------------
 # Rule 12: cookie-missing-secure-flag
 # ---------------------------------------------------------------------------
+
 
 def bad_cookie(response):
     # ruleid: cookie-missing-secure-flag
@@ -198,6 +210,7 @@ def bad_cookie_no_secure(response):
 # ---------------------------------------------------------------------------
 # Rule 13: no-unbounded-redis-key
 # ---------------------------------------------------------------------------
+
 
 async def bad_redis_key(redis, ticker: str, user_id: str):
     # ruleid: no-unbounded-redis-key
