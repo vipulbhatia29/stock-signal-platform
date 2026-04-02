@@ -93,10 +93,10 @@ async def _setup_database(db_url):
     engine = create_async_engine(db_url, echo=False)
     async with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
+            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query
             # table.name from Base.metadata — not user input
-            await conn.execute(
-                sa.text(f'DROP TABLE IF EXISTS "{table.name}" CASCADE')  # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query
-            )
+            stmt = f'DROP TABLE IF EXISTS "{table.name}" CASCADE'
+            await conn.execute(sa.text(stmt))
     await engine.dispose()
 
 
