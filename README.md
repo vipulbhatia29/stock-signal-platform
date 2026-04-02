@@ -48,32 +48,28 @@ A conversational interface powered by LangGraph that can answer questions like:
 - *"How is my portfolio exposed to tech?"*
 - *"What are the risks of holding TSLA?"*
 
-The agent uses a dual architecture:
+The agent uses a **ReAct Loop** architecture (default, feature-flagged via `REACT_AGENT=true`):
 
-**Plan-Execute-Synthesize (V2)** — structured pipeline for complex queries:
-1. **Planner** (Claude Sonnet) classifies your question, detects stale data, generates a tool execution plan
-2. **Executor** (mechanical, no LLM) calls tools in order, validates results, retries on failure
-3. **Synthesizer** (Claude Sonnet) produces confidence-weighted analysis with bull/base/bear scenarios
-
-**ReAct Loop (V1)** — iterative reasoning for open-ended exploration:
 1. **Intent** — understand what the user is asking
 2. **Plan** — decide which tool to call next
 3. **Execute** — call the tool and observe results
 4. **Reason** — decide if more tools are needed or if the answer is ready
 
-Both architectures share 20 internal tools and 4 MCP adapters, with guardrails for PII detection, prompt injection defense, and automatic disclaimer insertion. Every claim traces back to a specific data source and timestamp.
+A legacy **Plan-Execute-Synthesize** pipeline (planner, mechanical executor, synthesizer) is available for rollback by setting `REACT_AGENT=false`.
+
+The agent has access to 25 internal tools and 4 MCP adapters, with guardrails for PII detection, prompt injection defense, and automatic disclaimer insertion. Every claim traces back to a specific data source and timestamp.
 
 ### LLM Factory
 
-Multi-provider cascade with automatic failover:
+Data-driven multi-provider cascade configured via `llm_model_config` table in the database. Provider priority, rate limits, and cost tracking are all DB-managed — no code changes needed to adjust the cascade.
 
-| Provider | Role | Use Case |
-|----------|------|----------|
-| **Anthropic** (Claude Sonnet) | Primary | Planning, synthesis, complex reasoning |
-| **Groq** (Llama/Mixtral) | Fast fallback | Tool-calling loops, simple queries |
+| Provider | Default Role | Use Case |
+|----------|-------------|----------|
+| **Groq** (Llama/Mixtral) | Primary (agent) | Tool-calling loops, fast inference |
+| **Anthropic** (Claude Sonnet) | Fallback / synthesis | Complex reasoning, planning |
 | **OpenAI** (GPT-4o) | Secondary fallback | Additional capacity |
 
-Features token budgeting per tier (planner/executor/synthesizer), cost tracking per query, and Redis-backed rate limiting with Lua scripts for atomic operations.
+Features token budgeting per tier, per-query cost tracking, and Redis-backed rate limiting with Lua scripts for atomic operations.
 
 ### Prophet Forecasting
 
@@ -92,6 +88,15 @@ Features token budgeting per tier (planner/executor/synthesizer), cost tracking 
 - Divestment rules engine (stop-loss, concentration limits, fundamental deterioration)
 - Rebalancing suggestions with specific dollar amounts
 - Daily portfolio snapshots for historical value tracking
+
+### Stock Intelligence & Recommendations
+
+- **Stock intelligence** — insider trades, analyst upgrades/downgrades, EPS revisions, short interest
+- **AI-powered stock recommendations** — daily BUY/SELL/WATCH/AVOID with confidence scoring and evidence lineage
+- **Recommendation scorecard** — accuracy tracking against SPY benchmark at 30/90/180-day horizons
+- **Portfolio health scoring** — risk-adjusted metrics, concentration analysis, diversification grades
+- **Geopolitical events analysis** — assess market impact of geopolitical developments on portfolio holdings
+- **Market briefing synthesis** — daily market summary combining signals, news, and macro data
 
 ### Stock Screener
 
@@ -143,7 +148,7 @@ Every AI interaction is instrumented end-to-end:
 
 ### MCP Tool Server
 
-The platform exposes its tool registry via [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), mounted at `/mcp` with JWT authentication. This lets external AI tools (Claude Code, Cursor, etc.) call any of the 24 registered tools directly — search stocks, get signals, run forecasts, check portfolio exposure — all through a standardized protocol.
+The platform exposes its tool registry via [Model Context Protocol](https://modelcontextprotocol.io/) (MCP), mounted at `/mcp` with JWT authentication. This lets external AI tools (Claude Code, Cursor, etc.) call any of the 29 registered tools directly — search stocks, get signals, run forecasts, check portfolio exposure — all through a standardized protocol.
 
 ### Cache Service
 
@@ -180,7 +185,7 @@ No paid data subscriptions required. All core functionality works with just the 
 | **Database** | PostgreSQL 16 + TimescaleDB (time-series hypertables) |
 | **Cache/Broker** | Redis 7 (cache + Celery broker + JWT token blocklist) |
 | **AI/ML** | LangGraph (agent orchestration), Claude Sonnet (LLM), Prophet (forecasting) |
-| **LLM Providers** | Anthropic (primary), Groq (fast fallback), OpenAI (secondary) |
+| **LLM Providers** | Groq (primary agent), Anthropic (fallback/synthesis), OpenAI (secondary) — DB-driven cascade |
 | **Observability** | Langfuse (tracing), ObservabilityCollector (metrics), Assessment Engine (eval) |
 | **Background** | Celery + Celery Beat (task scheduling) |
 | **Auth** | JWT (httpOnly cookies + Bearer tokens), bcrypt password hashing, Google OAuth 2.0 (PKCE + JWKS) |
@@ -261,7 +266,7 @@ cd frontend && npm install && cd ..     # Frontend dependencies
 #### 4. Initialize database
 
 ```bash
-uv run alembic upgrade head             # Run all 12 migrations
+uv run alembic upgrade head             # Run all migrations
 ```
 
 #### 5. Bootstrap data
@@ -328,28 +333,33 @@ graph TB
     subgraph FastAPI["FastAPI :8181"]
         MW["Middleware<br/>CORS | JWT | Rate Limit"]
 
-        subgraph Routers["10 Routers — 63 endpoints"]
+        subgraph Routers["15 Routers"]
             R_Auth["/auth<br/>register, login, refresh, OAuth,<br/>verify, reset, account, admin"]
             R_Stocks["/stocks<br/>signals, prices, fundamentals,<br/>screener, watchlist, ingest"]
             R_Portfolio["/portfolio<br/>transactions, positions, summary,<br/>rebalancing, snapshots, dividends"]
             R_Chat["/chat<br/>stream, sessions, feedback"]
             R_Forecast["/forecasts<br/>ticker, sector, portfolio"]
             R_Alerts["/alerts<br/>list, dismiss, bulk-dismiss"]
+            R_Market["/market<br/>market data"]
+            R_News["/news<br/>news feed"]
             R_Sectors["/sectors<br/>summary, stocks, correlation"]
             R_Indexes["/indexes<br/>list, memberships"]
             R_Prefs["/preferences<br/>get, update"]
             R_Tasks["/tasks<br/>nightly pipeline trigger"]
+            R_Admin["/admin<br/>command center"]
+            R_Health["/health<br/>health check"]
+            R_Obs["/observability<br/>metrics, usage"]
         end
 
         subgraph Agent["AI Agent Layer"]
-            V2["V2: Plan → Execute → Synthesize"]
-            V1["V1: ReAct Loop"]
+            V1["ReAct Loop (default)"]
+            V2["Plan→Execute→Synthesize (rollback)"]
             Guard["Guardrails<br/>PII | Injection | Disclaimer"]
-            LLM["LLMClient<br/>Anthropic → Groq → OpenAI<br/>token budgeting + cost tracking"]
+            LLM["LLMClient<br/>DB-driven cascade<br/>Groq → Anthropic → OpenAI<br/>token budgeting + cost tracking"]
         end
 
-        subgraph ToolLayer["24 Tools"]
-            T_Internal["20 Internal Tools<br/>market data, signals, fundamentals,<br/>forecasting, portfolio, recommendations,<br/>risk, dividends, health, briefing"]
+        subgraph ToolLayer["29 Tools"]
+            T_Internal["25 Internal Tools<br/>market data, signals, fundamentals,<br/>forecasting, portfolio, recommendations,<br/>risk, dividends, health, briefing,<br/>intelligence, geopolitical, scorecard"]
             T_MCP["4 MCP Adapters<br/>Edgar | Alpha Vantage | FRED | Finnhub"]
         end
 
@@ -367,7 +377,7 @@ graph TB
     end
 
     subgraph Storage
-        PG[("PostgreSQL + TimescaleDB<br/>:5433<br/>12 migrations, 24 models")]
+        PG[("PostgreSQL + TimescaleDB<br/>:5433<br/>24 migrations")]
         Redis[("Redis 7<br/>:6380<br/>cache + broker + token blocklist")]
     end
 
@@ -423,24 +433,23 @@ stock-signal-platform/
 │   ├── config.py            # Pydantic Settings (.env loader)
 │   ├── database.py          # Async SQLAlchemy session factory
 │   ├── validation.py        # Input validation (TickerPath, signal enums, dedup)
-│   ├── guards.py            # Guardrails (PII, injection, disclaimer, decline count)
-│   ├── models/              # 24 SQLAlchemy ORM models (Stock, Signal, Portfolio, Chat, Forecast...)
+│   ├── models/              # SQLAlchemy ORM models (Stock, Signal, Portfolio, Chat, Forecast...)
 │   ├── schemas/             # Pydantic v2 request/response schemas
-│   ├── routers/             # 10 FastAPI route handlers (46 endpoints total)
+│   ├── routers/             # 15 FastAPI route handlers
 │   ├── services/            # Service layer (stock_data, signals, recommendations, portfolio...)
-│   ├── tools/               # 20 internal tools + 4 MCP adapters
+│   ├── tools/               # 25 internal tools + 4 MCP adapters
 │   │   └── adapters/        # MCP adapters (Edgar, Alpha Vantage, FRED, Finnhub)
 │   ├── agents/              # LangGraph AI agents
-│   │   ├── graph.py         # V1 ReAct StateGraph
-│   │   ├── graph_v2.py      # V2 Plan→Execute→Synthesize StateGraph
-│   │   ├── planner.py       # Query classification + tool plan generation
-│   │   ├── executor.py      # Mechanical tool executor with retry
-│   │   ├── synthesizer.py   # Confidence-weighted response generation
+│   │   ├── react_loop.py    # ReAct loop (default agent architecture)
+│   │   ├── graph.py         # Plan→Execute→Synthesize (rollback option)
+│   │   ├── guards.py        # Guardrails (PII, injection, disclaimer)
 │   │   ├── llm_client.py    # Multi-provider cascade with token budgeting
+│   │   ├── model_config.py  # DB-driven provider cascade configuration
 │   │   └── providers/       # Anthropic, Groq, OpenAI provider implementations
+│   ├── observability/       # ObservabilityCollector, Langfuse, metrics, admin routers
 │   ├── mcp_server/          # FastMCP server (expose tools via MCP protocol)
 │   ├── tasks/               # Celery background tasks (nightly pipeline, retraining)
-│   └── migrations/          # 12 Alembic migrations
+│   └── migrations/          # 24 Alembic migrations
 ├── frontend/
 │   ├── src/app/             # Next.js App Router pages
 │   ├── src/components/      # React components (dashboard, screener, portfolio, chat)
@@ -449,12 +458,13 @@ stock-signal-platform/
 │   └── src/types/           # 105 TypeScript API type definitions
 ├── scripts/                 # Bootstrap and sync scripts
 ├── tests/
-│   ├── unit/                # 705 unit tests (by domain: signals, portfolio, agents, forecasting)
-│   ├── api/                 # 196 API endpoint tests (testcontainers for DB isolation)
-│   ├── integration/         # 4 integration tests (MCP, end-to-end flows)
-│   ├── e2e/                 # 7 Playwright E2E tests
+│   ├── unit/                # Unit tests (by domain: signals, portfolio, agents, forecasting)
+│   ├── api/                 # API endpoint tests (testcontainers for DB isolation)
+│   ├── integration/         # Integration tests (MCP, cache, observability, agent flows)
+│   ├── e2e/                 # Playwright E2E + nightly performance tests
+│   ├── semgrep/             # Custom Semgrep rule tests
 │   └── eval/                # Assessment engine (golden dataset scoring)
-├── frontend/src/__tests__/  # 66 frontend component tests
+├── frontend/src/__tests__/  # Frontend component + MSW integration tests
 ├── docs/                    # PRD, FSD, TDD, specs, plans
 ├── docker-compose.yml       # TimescaleDB + Redis + Langfuse
 ├── setup.sh                 # Automated setup script
@@ -486,11 +496,11 @@ uv run ruff format backend/ tests/     # Python format
 cd frontend && npm run lint             # TypeScript/React lint
 ```
 
-**Test coverage:** 705 unit + 196 API + 7 e2e + 4 integration + 66 frontend = **978 total tests**.
+**Test coverage:** ~1,827 total tests (1,380 backend + 378 frontend + 42 E2E + 27 nightly perf). Tiered test architecture (T0-T4), 14 CI checks via `ci-gate`, 13 custom Semgrep rules as permanent guardrails.
 
 ## API Endpoints
 
-63 endpoints across 11 routers. Key endpoints listed below — full interactive docs at http://localhost:8181/docs (Swagger UI).
+Endpoints across 15 routers. Key endpoints listed below — full interactive docs at http://localhost:8181/docs (Swagger UI).
 
 <details>
 <summary><strong>Auth</strong> — 17 endpoints</summary>
@@ -579,13 +589,15 @@ cd frontend && npm run lint             # TypeScript/React lint
 </details>
 
 <details>
-<summary><strong>Alerts, Sectors, Indexes, Preferences, Tasks</strong> — 12 endpoints</summary>
+<summary><strong>Alerts, Market, News, Sectors, Indexes, Preferences, Tasks, Health, Observability</strong></summary>
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/v1/alerts` | GET | In-app alerts (signal flips, drift, new buys) |
 | `/api/v1/alerts/{id}/dismiss` | POST | Dismiss an alert |
 | `/api/v1/alerts/bulk-dismiss` | POST | Dismiss multiple alerts |
+| `/api/v1/market/...` | GET | Market data endpoints |
+| `/api/v1/news/...` | GET | News feed endpoints |
 | `/api/v1/sectors/summary` | GET | Sector performance overview |
 | `/api/v1/sectors/{sector}/stocks` | GET | Stocks in a sector with drill-down |
 | `/api/v1/sectors/correlation` | GET | Sector correlation matrix |
@@ -593,6 +605,7 @@ cd frontend && npm run lint             # TypeScript/React lint
 | `/api/v1/indexes/{index}/stocks` | GET | Index constituents |
 | `/api/v1/preferences` | GET | User preferences |
 | `/api/v1/preferences` | PATCH | Update preferences |
+| `/api/v1/observability/...` | GET | User-scoped observability metrics |
 | `/api/v1/tasks/run-nightly` | POST | Manually trigger nightly pipeline |
 | `/health` | GET | Health check |
 
@@ -626,7 +639,7 @@ All configuration is via environment variables in `backend/.env`. See `backend/.
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `60` | JWT access token TTL |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | JWT refresh token TTL |
 | `USER_TIMEZONE` | `America/New_York` | Timezone for market hours |
-| `AGENT_V2` | `true` | Enable Plan-Execute-Synthesize agent (vs ReAct) |
+| `REACT_AGENT` | `true` | Use ReAct loop agent (set `false` for Plan-Execute-Synthesize) |
 | `MCP_TOOLS` | `false` | Enable MCP tool server at `/mcp` |
 | `LANGFUSE_SECRET_KEY` | — | Langfuse secret for tracing (optional) |
 | `LANGFUSE_PUBLIC_KEY` | — | Langfuse public key (optional) |
@@ -641,7 +654,11 @@ All configuration is via environment variables in `backend/.env`. See `backend/.
 - **Package manager:** [uv](https://docs.astral.sh/uv/) for Python, npm for Node.js. Never use `pip install`.
 - **Branching:** `main` (production) <- `develop` (integration) <- `feat/KAN-*` (feature branches). All PRs target `develop`.
 - **Pre-commit hooks:** Ruff lint + format, frontend lint — installed automatically.
-- **CI:** GitHub Actions runs on every PR: backend lint, frontend lint, backend tests (with testcontainers), frontend tests, MCP integration tests, E2E lint.
+- **CI:** GitHub Actions with 14 checks via `ci-gate`: backend lint + tests (testcontainers), frontend lint + tests, MCP integration, E2E (Playwright), Semgrep (13 custom rules), Pyright type checking, and nightly performance (Lighthouse, heap, responsive).
+
+## Roadmap
+
+- **Forecast Intelligence (Phase 8.6+)** — multi-horizon ensemble forecasting with regime detection, confidence calibration, and forecast-driven recommendations. See [`docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md`](docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md).
 
 ## License
 

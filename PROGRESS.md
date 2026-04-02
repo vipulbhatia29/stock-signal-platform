@@ -42,195 +42,8 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 
 ---
 
-## Session 79 — Command Center Sprints 1-3: Backend Complete (2026-03-31)
-
-**Branch:** `feat/KAN-233-command-center` | **PR #154 + #155 merged**
-
-### Backend (Sprints 1-3)
-- Package extraction: 9 files → `backend/observability/`
-- Instrumentation: HTTP metrics, DB pool, pipeline stats, login audit, health checks
-- Aggregate endpoint + 3 drill-down endpoints
-- Migration 021 (login_attempts + pipeline step_durations)
-- 11 expert reviews, all Critical/Important fixed
-- +76 tests (1182→1258)
-
-### Frontend (Sprint 4)
-- 4 zone panels (System, Pipeline, LLM, Security) + 5 primitives
-- Admin page assembly + `useCommandCenter` hook
-- 3 drill-down sheets (ErrorLog, SlowQueries, FailedLogins)
-- +46 frontend tests
-
-### Session 79 Totals
-- +122 tests total (76 backend + 46 frontend)
-- 14 expert reviews across 4 sprints
-- KAN-233 Phase 1 MVP DONE
-
----
-
-## Session 80 — Live Testing + Phase 8.5 Refinement (2026-03-31 / 2026-04-01)
-
-**Branch:** develop (no feature branch — planning only)
-
-### Data Bootstrap
-- 566 stocks ingested (S&P 500 + NASDAQ-100 + Dow 30 + custom)
-- 49,546 dividend records
-- User `vipul@example.com` with 97-position portfolio ($78K, from Fidelity CSV)
-- New seed script: `scripts/seed_portfolio.py`
-
-### E2E Playwright Testing
-5 bugs found: KAN-318 (CRITICAL dashboard crash), KAN-319-322.
-
-### Phase 8.5 Refinement
-- Brainstorm + spec + plan + 4-expert review (16 findings incorporated)
-- Future phases captured: KAN-323 (Prophet Backtesting), KAN-324 (News-Sentiment)
-
----
-
-## Session 81 — Phase 8.5 Portfolio Analytics Implementation (2026-04-01)
-
-**Branch:** `feat/KAN-249-pandas-ta-replacement` | **PR #158 merged**
-
-### Story 1 (KAN-249): pandas-ta Replacement
-- `pandas-ta` → `pandas-ta-openbb` (NumPy 2 compatible)
-- 4 indicators replaced: RSI, MACD, SMA, Bollinger
-- `importlib.metadata` workaround (noqa: F401)
-
-### Story 2 (KAN-247): QuantStats Integration
-- Migration 022: +5 cols signal_snapshots, +10 portfolio_snapshots, rebalancing_strategy, rebalancing_suggestions table, SPY seed
-- `compute_quantstats_stock()` + `compute_quantstats_portfolio()` — NaN/Inf guarded
-- Pipeline: SPY auto-refresh, per-ticker QuantStats, portfolio snapshot UPDATE
-- Health scoring: `_score_risk()` 3-way blend (Sharpe+Sortino+drawdown), None sentinel
-- Endpoints: `GET /stocks/{ticker}/analytics`, `GET /portfolio/analytics`
-- Agent tool: `PortfolioAnalyticsTool` (25th internal tool)
-
-### Story 3 (KAN-248): PyPortfolioOpt Rebalancing
-- 3 strategies: min_volatility, max_sharpe, risk_parity
-- Position caps from UserPreference, feasibility guard (max_w >= 1/n)
-- Materialized to DB, nightly Phase 4 task, equal-weight fallback
-
-### Story 4: Frontend Wiring
-- StockAnalyticsCard, dashboard QuantStats KPIs, rebalancing strategy badge
-- Bug fixes: KAN-318 (undefined grade), KAN-319 (duplicate key), HealthGradeBadge /10 scale
-
-### 4-Expert Review — 21 findings fixed
-- 6 Critical: column case mismatch, SignalSnapshot.computed_at, position caps, SPY auto-refresh, data_days, missing tests
-- 9 Important: calmar inf, var confidence, adj_close consistency, None sentinel, grade dedup, stale footer
-- 6 Minor: tz normalization, ORM session scope, duplicate decorator
-
-### Stats
-- +38 tests (1296 backend + 329 frontend = 1625 total)
-- 46 files changed, 3642 insertions
-- Alembic head: `c870473fe107` (migration 022)
-- JIRA: KAN-246 Epic + KAN-247/248/249/318/319 → Done
-
----
-
-## Session 82 — Phase C: Auth Overhaul — Google OAuth, Email Verification, Account Management (2026-04-01)
-
-**Branch:** `feat/KAN-325-auth-overhaul` | **Epic KAN-325** (30 tickets: KAN-326–355)
-
-### Implementation (Sprints 1-6)
-- **Sprint 1:** Foundation — OAuthAccount model, User fields (email_verified, deleted_at, nullable hashed_password), LoginAttempt method/provider_sub, JWT iat claim, CachedUser extension, user-level token revocation, migration 023, 9 new Pydantic schemas
-- **Sprint 2:** EmailService (Resend + dev console fallback), email verification endpoints (verify + resend), register sends verification email
-- **Sprint 3:** GoogleOAuthService (httpx + PyJWT, JWKS cached, state+nonce), OAuth authorize/callback (3 flows: new user, auto-link, returning), login guards (NULL password, deleted accounts)
-- **Sprint 4:** Forgot/reset password (no email enumeration, per-email rate limit), change/set password, Google unlink (lockout prevention), account info endpoint
-- **Sprint 5:** Account deletion (soft delete + 30-day anonymize), admin verify-email + recover, Celery purge task (3:15 AM daily), require_verified_email on 11 write endpoints
-- **Sprint 6:** Frontend API functions (10), Google buttons wired, 3 auth pages (verify/forgot/reset), /account settings (4 sections), email verification banner, middleware + sidebar updates
-
-### Expert Review
-- 4-persona review (PM, Staff FS, Security, QA) found 22 issues
-- All critical/major fixed: Redis graceful degradation, open redirect prevention, per-email rate limiting, token invalidation on resend, iat in JWT, str(e) removal, UUID leak in admin response, token deletion race fix
-
-### Session 82 Totals
-- 35 files (10 new + 25 modified), 13 new API endpoints
-- Migration 023 (Alembic head: `5c9a05c38ee1`)
-- 1296 backend tests passing (no regressions), TypeScript 0 errors
-- Sprint 7 (testing: ~87 tests) deferred to next session
-
----
-
-## Session 83 — Phase D: Test Suite Overhaul — Spec + JIRA Epic (2026-04-01)
-
-**Branch:** `docs/session-83-test-overhaul-spec` | **Epic KAN-356** (7 sprints: KAN-357–363)
-
-### Brainstorm + Research
-- Audited entire test suite: 179 files, ~33K lines (103 Python, 69 frontend, 7 Playwright)
-- Identified 5 dead test files, 4 consolidation targets, 8 shallow tests needing upgrade
-- Researched tools: pytest-xdist, Hypothesis, Playwright-Lighthouse, MemLab, Semgrep custom rules, dorny/paths-filter, msw, jest-axe
-- Researched: no mature Claude Code coverage plugin exists; DIY PostToolUse hook or sprint-end discipline
-- PM decided: deep Hypothesis (50+), git-lfs, custom Semgrep rules, sprint-end coverage, full skill
-
-### Spec Design
-- Designed T0-T5 tier architecture with path-based CI routing
-- Designed 12 quality gates (phased rollout via single ci-gate required check)
-- Designed security test matrix: IDOR (15), token security (8), OAuth CSRF (4), rate limiting (6), verification bypass (3), soft-delete isolation (4)
-- Full OWASP Top 10 coverage mapping
-- 14 custom Semgrep rules (8 Hard Rules + 6 auth/JWT/OAuth)
-- 50+ Hypothesis properties across 4 domains (signals, portfolio, QuantStats, recommendations)
-
-### Expert Review (4-persona)
-- QA Architect: 6 CRITICAL (xdist+DB, T5/T1 overlap, Sharpe invariant wrong, composite monotonicity, config.py filter, P&L antisymmetry)
-- Security Engineer: 2 CRITICAL (no IDOR tests, token blocklist fails open) + 10 IMPORTANT
-- DevOps/CI: 5 CRITICAL (path inconsistency, ci-gate skipped state, xdist+DB, no browser cache, T3 time)
-- Frontend/UX: 2 CRITICAL (Recharts gotchas, E2E against dev server) + 6 IMPORTANT
-- **All 10 CRITICAL + 19 IMPORTANT findings incorporated into spec**
-
-### Deliverables
-- Spec: `docs/superpowers/specs/2026-04-01-test-suite-overhaul.md`
-- JIRA Epic KAN-356 + 7 sprint tasks (KAN-357–363)
-- Skill: `~/.claude/skills/test-suite-design/SKILL.md` + `/test-suite-design` command
-- CLAUDE.md: Testing Conventions section + sprint-end coverage in checklist
-- project-plan.md: Phase D added, phase letters re-sequenced
-- KAN-354/355 absorbed into KAN-360 (Sprint 4)
-
-### Stats
-- 0 code changes (spec + planning session only)
-- Expected: 1625 → 2200+ tests, 2 → 12 quality gates
-- Resume: Phase D Sprint 1 (KAN-357) — Foundation + Cleanup
-
----
-
-## Session 84 — Phase D Sprints 1-2 + Bug Fixes (2026-04-02)
-
-**Branch:** multiple PRs | **PRs #162-167 merged**
-
-### Sprint 1 (KAN-357): Test Foundation + Cleanup — PR #162
-- Deleted 4 dead test files (test_ohlc_schema, test_pagination, test_chat_models, root health-grade-badge)
-- Trimmed 4 string-literal tests from test_cache_extension (kept 3 real TTL tests)
-- Consolidated 4 test groups: fundamentals (2→1), observability agents (4→1), signals (2→1), health-grade-badge
-- Added 6 backend packages: pytest-xdist, pytest-randomly, pytest-timeout, fakeredis[lua], hypothesis, syrupy
-- Added 3 frontend packages: msw, jest-axe, @types/jest-axe
-- Configured pytest markers (domain, regression, migration, cache), coverage omit, timeout=30
-- Created shared test utilities: renderWithProviders(), next/navigation auto-mock
-- Refactored observability writer tests (1090→759 lines via shared fixtures + parametrize)
-- Configured git-lfs for e2e screenshot PNGs
-
-### Sprint 2 (KAN-358): CI Overhaul — PR #163
-- Rewrote ci-pr.yml: dorny/paths-filter@v3 (backend/frontend/infra/migrations), ci-gate (single required check)
-- 6 advisory quality gates: Semgrep SAST, dependency-audit, gitleaks, bundle-size, domain-regression, pyright
-- 13 custom Semgrep rules: 8 Hard Rule enforcement + 5 auth/JWT/OAuth security
-- Test snippets in tests/semgrep/ (bad code + safe code for Semgrep --test)
-- Updated ci-merge.yml: split backend tests, domain-regression job, bundle size reporting
-- Playwright webServer switched to production build (npm run build && npm start)
-- Added pip-audit, pytest-alembic, pyright config (basic mode)
-
-### Tech Debt Fixes — PRs #164-166
-- **PR #164:** Fixed TimescaleDB teardown bug (drop_all → per-table DROP CASCADE), re-enabled xdist, restored coverage with --no-cov-on-fail, set fail_under=60
-- **PR #165:** Fixed Next.js build — Suspense boundary for useSearchParams in reset-password + verify-email pages
-- **PR #166:** Pyright venv config (267 false positives → 0), changed-files-only PR check, full codebase merge check
-
-### Bug Fixes — PR #167
-- **KAN-364 (High):** Fixed 6x ToolResult(error=str(e)) Hard Rule #10 violations across executor, tool_client, 4 MCP adapters
-- **KAN-365 (Medium):** Suppressed 4 Semgrep false positives (cookie key names, OAuth, URL), fixed path deprecation warnings
-- Semgrep findings: 20 → 7 (remaining = INFO-level bounded redis keys)
-
-### Session 84 Totals
-- 6 PRs merged (#162-167), 2 JIRA bugs filed and fixed (KAN-364/365)
-- Tests: 1273 backend + 328 frontend = 1601 (−24 dead tests, 0 coverage loss)
-- CI: 13 checks, 12 green (type-check advisory — pre-existing type-stub gaps)
-- Semgrep: 13 custom rules enforcing Hard Rules + security patterns
-- 16 stale local branches cleaned up
-- Resume: Phase D Sprint 3 (KAN-359) — Hypothesis, golden datasets, cache tests
+### Sessions 79-84 (archived → `docs/superpowers/archive/progress-full-log.md`)
+**S79:** Command Center MVP (PRs #154-155, +122 tests). **S80:** Live testing, 5 bugs found, Phase 8.5 brainstorm. **S81:** Portfolio Analytics — pandas-ta-openbb, QuantStats, PyPortfolioOpt (PR #158, +38 tests). **S82:** Auth Overhaul — Google OAuth, email verification, account management (30 tickets, 13 endpoints, migration 023). **S83:** Test overhaul spec + JIRA Epic KAN-356. **S84:** Test Sprints 1-2, CI overhaul, 13 Semgrep rules, bug fixes (PRs #162-167).
 
 ---
 
@@ -310,3 +123,52 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - Playwright: 7 → 42 specs (+35 new across 9 files)
 - JIRA: KAN-361 + subtasks KAN-366/367/368 all Done
 - Resume: Phase D Sprint 6 (KAN-362) — Performance + Memory
+
+---
+
+## Session 87 — Phase 8.6+ Forecast Intelligence: Brainstorm + Spec + Plan + JIRA (2026-04-02)
+
+**Branch:** `docs/session-86-closeout` (planning session, no code changes)
+
+### Brainstorm (comprehensive, visual companion)
+- Explored forecast accuracy, signal convergence, news sentiment, portfolio forecasting
+- Decided: transparency is the product differentiator — rationale with every prediction
+- UX model: traffic lights (B) + divergence alerts (C) + rationale (always) — adaptive
+- Three-level forecast: Stock (Prophet + regressors) → Sector (equal-weight aggregation) → Portfolio (Black-Litterman + Monte Carlo + CVaR)
+- News sources: Finnhub (primary, free) + EDGAR 8-K + Fed RSS + FRED + Google News (fallback)
+- News → Prophet: LLM scores (GPT-4o-mini) → 3 regressors (stock, sector, macro sentiment) → `add_regressor()`
+- Seasonality: per-ticker optimization via backtesting (4 configs, winner stored)
+- Drift detection: per-ticker calibrated baseline (MAPE × 1.5), validate-before-promote, experimental demotion (self-healing)
+- Admin pipeline orchestrator: Celery task groups, dependency resolution, seed hydration from UI
+- CacheInvalidator: event-driven, trigger-agnostic service
+- Storage: ~55 MB/year compressed, signal_convergence_daily for historical pattern analysis
+
+### Spec Design — 21 sections, 3 expert review rounds
+- Per-section expert reviews (quant finance, ML/NLP, portfolio analyst, platform engineer)
+- 4-persona staff review (architect, security, QA, PM) — 22 findings, all applied
+- 5-persona comprehensive review (full-stack, middleware, QA, domain, architect) — 25 findings, all applied
+- Frontend design system audit: all new components mapped to existing tokens
+
+### Implementation Plan — 13 sprints
+- 4 specs: A (backtesting) → D (admin pipeline) → B (news sentiment) → C (convergence UX)
+- 107 files (32 modify, 75 create), one branch per spec
+- 6-persona plan review (PM, UI/UX, full-stack, backend, DevOps, spec auditor) — 22 findings applied
+- Sprint 12 split into 12a/12b, router stubs front-loaded, factory-boy factories in Sprint 1
+
+### JIRA Tickets Created
+- Epic: KAN-369 (Phase 8.6+ Forecast Intelligence System)
+- Stories: KAN-370 (Spec A), KAN-371 (Spec D), KAN-372 (Spec B), KAN-373 (Spec C)
+- Subtasks: KAN-374–387 (14 sprint tickets)
+- Dependencies: KAN-373 blocked by KAN-370 + KAN-372
+- 19 tickets total
+
+### Doc Audit + Overhaul
+- Audited TDD (1692 lines), FSD (1061), PRD (699), README (648) — found 20+ undocumented features
+- Fixed: phase status bloat, stale diagrams, missing tools/routers, LLM provider cascade contradiction
+- Updated project-plan.md with Phase 8.6+ ticket map
+
+### Stats
+- 0 code changes (spec + planning + doc overhaul session)
+- Spec: `docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md`
+- Plan: `docs/superpowers/plans/2026-04-02-forecast-intelligence-plan.md`
+- Resume: Phase 8.6+ Sprint 1 (KAN-374) — Migration 024 + config + shared models

@@ -2,9 +2,9 @@
 
 ## Stock Signal Platform
 
-**Version:** 1.1
-**Date:** March 2026
-**Status:** Living Document — Phases 1-C complete. Phase B.5 BU-1-7 shipped. Phase 8.5 Portfolio Analytics shipped (Session 81). Phase C auth overhaul shipped (Session 82).
+**Version:** 2.0
+**Date:** April 2026
+**Status:** Living Document
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -25,9 +25,7 @@ constitutes correct behavior. The TDD (docs/TDD.md) defines HOW to build it.
 | ADMIN | Platform owner (you) | Full access: CRUD all data, manage users, system config |
 | USER | Regular investor | Own portfolio, own watchlist, own chat, read signals |
 
-Phase 1 ships with ADMIN only. USER role added if sharing with others.
-
-**Email verification enforcement (Phase C):** Unverified users are soft-blocked on 11 write endpoints (portfolio transactions, watchlist add/remove, preferences, alerts, chat, etc.). Read endpoints are unaffected. A dismissible verification banner is shown in the app shell until the email is confirmed. ADMIN users bypass verification checks.
+**Email verification enforcement:** Unverified users are soft-blocked on 11 write endpoints (portfolio transactions, watchlist add/remove, preferences, alerts, chat, etc.). Read endpoints are unaffected. A dismissible verification banner is shown in the app shell until the email is confirmed. ADMIN users bypass verification checks.
 
 ---
 
@@ -46,13 +44,13 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 - Input: email, password
 - Output: { access_token, refresh_token, token_type, expires_in }
 - access_token: JWT, expires in ACCESS_TOKEN_EXPIRE_MINUTES (default 60)
-- refresh_token: JWT (not opaque — rotation/invalidation NOT implemented, see backlog), expires in REFRESH_TOKEN_EXPIRE_DAYS (default 7)
+- refresh_token: JWT, expires in REFRESH_TOKEN_EXPIRE_DAYS (default 7). Token rotation (invalidation of old refresh tokens) not implemented.
 - Error: 401 if credentials invalid
 
 **FR-1.3: Token Refresh**
 - Input: refresh_token
 - Output: new { access_token, refresh_token } pair
-- **Note:** Token rotation (invalidation of old refresh tokens) is NOT implemented in Phase 1. Both old and new refresh JWTs remain valid until expiry. A server-side blacklist (Redis or DB) is needed — see Phase 3 backlog.
+- Token rotation not implemented — both old and new refresh JWTs remain valid until expiry
 - Error: 401 if refresh_token expired or invalid
 
 **FR-1.4: User Preferences**
@@ -60,14 +58,14 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
   position/sector caps, stop-loss defaults
 - Preferences used by recommendation engine, alert system, and background jobs
 
-**FR-1.5: httpOnly Cookie Authentication (Phase 2)**
+**FR-1.5: httpOnly Cookie Authentication** ✅ IMPLEMENTED
 - Login and refresh endpoints set JWT tokens as httpOnly, Secure, SameSite=Lax cookies
 - Frontend cannot access tokens via JavaScript (XSS protection)
 - Server reads tokens from cookies OR `Authorization: Bearer` header (dual-mode)
 - `POST /api/v1/auth/logout` clears cookies (Set-Cookie with Max-Age=0)
 - CORS must set `allow_credentials=True` with explicit `allow_origins` (no wildcard)
 
-**FR-1.6: Google OAuth 2.0 (Phase C)** ✅ IMPLEMENTED
+**FR-1.6: Google OAuth 2.0** ✅ IMPLEMENTED
 - User story: "As a new user, I can sign in with my Google account without creating a password."
 - Authorization code flow with PKCE-equivalent state + nonce parameters (CSRF protection)
 - JWKS validation via PyJWT; `aud` and `exp` claims verified
@@ -76,20 +74,20 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 - New OAuth users have `email_verified=True` immediately (Google already verified it)
 - `GET /api/v1/auth/google/authorize` — returns auth URL; `GET /api/v1/auth/google/callback` — handles redirect
 
-**FR-1.7: Email Verification (Phase C)** ✅ IMPLEMENTED
+**FR-1.7: Email Verification** ✅ IMPLEMENTED
 - On registration, a verification email is sent via Resend API with a signed token (24-hour expiry)
 - `GET /api/v1/auth/verify-email?token=...` — marks user `email_verified=True`
 - `POST /api/v1/auth/resend-verification` — resends email (rate-limited, auth required)
 - Soft-block: 11 write endpoints check `email_verified`; unverified users receive 403 with "verify your email" message
 - Verification banner displayed in app shell (dismissible per session, reappears on next login)
 
-**FR-1.8: Password Reset (Phase C)** ✅ IMPLEMENTED
+**FR-1.8: Password Reset** ✅ IMPLEMENTED
 - `POST /api/v1/auth/forgot-password` — always returns 200 (prevents email enumeration); sends reset link if email exists
 - Reset token: signed JWT with 1-hour expiry, single-use (invalidated in Redis on use)
 - `POST /api/v1/auth/reset-password` — validates token, hashes new password, invalidates all existing sessions via user-level token revocation
 - OAuth-only users (no password) receive a "set up password" variant email
 
-**FR-1.9: Account Settings Page (Phase C)** ✅ IMPLEMENTED
+**FR-1.9: Account Settings Page** ✅ IMPLEMENTED
 - Route: `/account`
 - Four sections:
   1. **Profile** — display name, email (read-only)
@@ -97,14 +95,14 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
   3. **Linked Accounts** — Google OAuth connection status; Connect/Disconnect button
   4. **Danger Zone** — Delete Account (requires typed confirmation "DELETE")
 
-**FR-1.10: Account Deletion (Phase C)** ✅ IMPLEMENTED
+**FR-1.10: Account Deletion** ✅ IMPLEMENTED
 - `DELETE /api/v1/auth/account` — soft-delete: sets `deleted_at` timestamp, clears httpOnly cookies
 - Deleted accounts cannot log in; all API requests return 401
 - 30-day grace period: Celery task runs nightly and hard-deletes accounts where `deleted_at + 30d < now`
 - Hard delete cascades to all user data (portfolio, watchlist, chat sessions, alerts, preferences)
 - Admin can recover a soft-deleted account within 30 days via `POST /api/v1/admin/users/{id}/recover`
 
-**FR-1.11: Admin User Management (Phase C)** ✅ IMPLEMENTED
+**FR-1.11: Admin User Management** ✅ IMPLEMENTED
 - `GET /api/v1/admin/users` — paginated user list with verification status and deletion state (ADMIN only)
 - `POST /api/v1/admin/users/{id}/verify` — manually verify a user's email
 - `POST /api/v1/admin/users/{id}/recover` — restore a soft-deleted account
@@ -119,7 +117,7 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 **FR-2.2: Watchlist Management**
 - Add ticker to watchlist: ticker must exist in Stock table
 - Remove ticker from watchlist
-- List watchlist with composite_score (joined from latest signal snapshot). Note: `current_price` and full signal summary are NOT returned — see Phase 3 backlog.
+- List watchlist with composite_score (joined from latest signal snapshot). `current_price` and full signal summary not returned.
 - Maximum 100 tickers per user watchlist
 
 **FR-2.3: Stock Lookup**
@@ -127,7 +125,7 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 - If ticker not in database, attempt to add via yfinance lookup
 - Return: ticker, name, exchange, sector, industry
 
-**FR-2.4: Stock Index Management (Phase 2)**
+**FR-2.4: Stock Index Management** ✅ IMPLEMENTED
 - System maintains multiple stock indexes: S&P 500, NASDAQ-100, Dow 30
 - Each index is a `StockIndex` record with name, description, last sync timestamp
 - Stocks belong to indexes via `StockIndexMembership` (many-to-many with dates)
@@ -136,9 +134,9 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 - Replaces the `is_in_universe` boolean approach with proper index membership
 - Seed scripts sync membership from public sources (Wikipedia, etc.)
 
-> **Implementation note:** `removed_date` and `last_synced_at` fields were NOT implemented. The `is_in_universe` boolean on `Stock` model was NOT removed — it coexists with the new index membership system. These are tracked in the Phase 3 backlog.
+> **Note:** `removed_date` and `last_synced_at` fields not implemented. The `is_in_universe` boolean on `Stock` model coexists with the index membership system.
 
-**FR-2.5: On-Demand Data Ingestion (Phase 2)**
+**FR-2.5: On-Demand Data Ingestion** ✅ IMPLEMENTED
 - When user searches for a ticker not yet in the system, UI can trigger ingestion
 - `POST /api/v1/stocks/{ticker}/ingest` fetches 10Y of OHLCV data from yfinance
 - If ticker already has data: delta fetch only (from `last_fetched_at` to today)
@@ -200,7 +198,7 @@ For a given ticker, using the last 252 trading days of price data:
 
 **FR-3.2: Composite Score Calculation**
 
-Phase 1 (technical only, composite_weights stored per snapshot):
+Technical-only scoring (composite_weights stored per snapshot):
 
 ```
 score = 0
@@ -234,13 +232,13 @@ else: +0
 composite_score = score  # 0-10 range
 ```
 
-Phase 3 adds fundamental signals (see FR-5) and rebalances to 50/50 weight.
+When fundamental signals (FR-5) are added, scoring rebalances to 50/50 weight.
 
 **FR-3.3: Signal Staleness**
 - Signals older than 24 hours are flagged as STALE
-- Stale signals are flagged in API responses (`is_stale` field). **Note:** Staleness is NOT enforced in the recommendation engine — recommendations can still be generated from stale signals. Enforcement planned for Phase 3.
+- Stale signals are flagged in API responses (`is_stale` field). Staleness is not enforced in the recommendation engine — recommendations can still be generated from stale signals.
 
-**FR-3.4: Per-Stock Risk Analytics (Phase 8.5)** ✅ IMPLEMENTED
+**FR-3.4: Per-Stock Risk Analytics** ✅ IMPLEMENTED
 - Technical indicators (RSI, MACD, SMA, Bollinger) computed via `pandas-ta-openbb` library (replaces hand-rolled)
 - Per-stock QuantStats metrics materialized to `signal_snapshots`: Sortino, max_drawdown (positive), alpha, beta (vs SPY benchmark)
 - `data_days` field tracks how many common trading days were used for computation
@@ -253,23 +251,23 @@ Phase 3 adds fundamental signals (see FR-5) and rebalances to 50/50 weight.
 
 **FR-4.1: Decision Rules**
 
-> **Phase 1 Implementation:** Basic score-threshold rules only:
+> **Current Implementation:** Basic score-threshold rules:
 > - Score >=9 → BUY (HIGH confidence); >=8 → BUY (MEDIUM)
 > - Score >=6.5 → WATCH (MEDIUM); >=5 → WATCH (LOW)
 > - Score <2 → AVOID (HIGH); <5 → AVOID (MEDIUM)
 >
-> Actions HOLD and SELL are defined but require portfolio context (Phase 3). No portfolio awareness, no position sizing, no macro regime in Phase 1.
+> Actions HOLD and SELL are defined but require portfolio context. No portfolio awareness, no position sizing, no macro regime.
 
 Run daily after signal computation. For each stock in watchlist + universe:
 
 ```
-INPUT: composite_score, portfolio_state (optional), macro_regime (Phase 5)
+INPUT: composite_score, portfolio_state (optional), macro_regime (future)
 
 IF composite_score >= 8:
     IF stock is held AND allocation >= max_position_pct:
         action = HOLD, confidence = HIGH
         reason = "Strong signals but already at target allocation"
-    ELIF macro_regime == RISK_OFF (Phase 5):
+    ELIF macro_regime == RISK_OFF (not implemented):
         action = BUY, confidence = LOW
         reason = "Strong signals but macro environment is cautious"
     ELSE:
@@ -287,7 +285,7 @@ ELIF composite_score < 5:
         IF trailing_stop_breached:
             action = SELL, confidence = HIGH
             reason = "Stop-loss triggered at X%"
-        ELIF piotroski < 4 (Phase 3):
+        ELIF piotroski < 4 (not implemented):
             action = SELL, confidence = HIGH
             reason = "Fundamental deterioration"
         ELSE:
@@ -327,12 +325,12 @@ calculate_position_size(ticker, portfolio):
 
 **FR-4.3: Recommendation Surfacing**
 - `GET /api/v1/stocks/recommendations` returns today's actionable items
-- Sorted by: composite_score DESC (confidence is not part of sort order in Phase 1)
+- Sorted by: composite_score DESC
 - Filterable by: action (BUY/SELL/HOLD), confidence level
 - "Action Required" panel on dashboard shows only BUY and SELL with HIGH confidence
 - User can acknowledge a recommendation (marks acknowledged=True)
 
-### FR-5: Fundamental Analysis (Phase 3)
+### FR-5: Fundamental Analysis (not implemented)
 
 **FR-5.1: Fundamental Signals**
 
@@ -347,13 +345,13 @@ calculate_position_size(ticker, portfolio):
 
 Fundamental sub-score: 0 to 8 points, normalized to 0-10.
 
-**FR-5.2: Combined Composite Score (Phase 3+)**
+**FR-5.2: Combined Composite Score (not implemented)**
 ```
 composite = (technical_score * 0.5) + (fundamental_score * 0.5)
 ```
 Users can override weights via UserPreference.composite_weights.
 
-### FR-6: Portfolio Management (Phase 3) ✅ IMPLEMENTED
+### FR-6: Portfolio Management ✅ IMPLEMENTED
 
 **FR-6.1: Transaction Logging** ✅
 - Input: ticker, transaction_type (BUY/SELL), shares, price_per_share, transacted_at, notes
@@ -386,21 +384,21 @@ Users can override weights via UserPreference.composite_weights.
 - Adjust avg_cost: divide by ratio_to/ratio_from
 - Historical prices use adj_close (already split-adjusted by yfinance)
 
-**FR-6.4: Dividend Tracking** ✅ (Session 23)
+**FR-6.4: Dividend Tracking** ✅ IMPLEMENTED
 - Fetch dividends from yfinance dividend history via `fetch_dividends()` tool
 - Store as DividendPayment rows (TimescaleDB hypertable, composite PK: ticker + ex_date)
 - `GET /api/v1/portfolio/dividends/{ticker}` — summary with total received, trailing-12-month annual dividends, dividend yield, payment history
 - Stock detail page: DividendCard component with KPI row + collapsible payment history table
 - Idempotent upserts via ON CONFLICT DO NOTHING
 
-**FR-6.5: Portfolio Snapshots** ✅ (Session 22)
+**FR-6.5: Portfolio Snapshots** ✅ IMPLEMENTED
 - Celery Beat daily task at 21:00 UTC (4 PM ET after market close)
 - Stores PortfolioSnapshot: total_value, total_cost_basis, unrealized_pnl, position_count
 - `GET /api/v1/portfolio/history?days=N` — returns daily snapshots
 - PortfolioValueChart: area chart with value line + cost basis dashed line
 - Upsert (ON CONFLICT DO UPDATE) for idempotent daily re-runs
 
-**FR-6.6: Divestment Rules Engine** (IMPLEMENTED — Session 24)
+**FR-6.6: Divestment Rules Engine** ✅ IMPLEMENTED
 - On-demand alerts bundled into positions endpoint response (`PositionWithAlerts`)
 - 4 rule types: stop_loss (critical), position_concentration (warning), sector_concentration (warning), weak_fundamentals (warning)
 - All thresholds configurable via UserPreference model (not hardcoded)
@@ -410,7 +408,7 @@ Users can override weights via UserPreference.composite_weights.
 - Pure function `check_divestment_rules()` in `backend/tools/divestment.py`
 - Null safety: skips rules when dependent values are None
 
-**FR-6.7: Portfolio Analytics (Phase 8.5)** ✅ IMPLEMENTED
+**FR-6.7: Portfolio Analytics** ✅ IMPLEMENTED
 - Portfolio-level QuantStats metrics materialized to `portfolio_snapshots`: Sharpe, Sortino, max_drawdown, max_drawdown_duration (days), Calmar, alpha, beta (vs SPY), VaR 95%, CAGR, data_days
 - `GET /api/v1/portfolio/analytics` — reads latest materialized row
 - Minimum 30 days of snapshots required; below threshold → all null with `data_days` count
@@ -418,17 +416,17 @@ Users can override weights via UserPreference.composite_weights.
 - Calmar ratio isolated (can be infinite when drawdown is zero) — stored as null, not inf
 - VaR stored as positive (absolute loss at 95% confidence)
 
-**FR-6.8: Optimized Rebalancing (Phase 8.5)** ✅ IMPLEMENTED
+**FR-6.8: Optimized Rebalancing** ✅ IMPLEMENTED
 - Replaces equal-weight with PyPortfolioOpt optimization
 - 3 strategies via `UserPreference.rebalancing_strategy`: min_volatility (default), max_sharpe, risk_parity
 - Position caps from `UserPreference.max_position_pct` applied as weight bounds (min 1/n for feasibility)
-- Materialized to `rebalancing_suggestions` table during nightly pipeline Phase 4
+- Materialized to `rebalancing_suggestions` table during nightly pipeline
 - `GET /api/v1/portfolio/rebalancing` reads materialized data; falls back to equal-weight if none exists
 - Actions: BUY_MORE, HOLD, REDUCE (was: BUY_MORE, HOLD, AT_CAP)
 - Risk Parity uses Hierarchical Risk Parity (HRPOpt) — takes returns, not prices
 - Graceful degradation: < 2 positions or < 30 days of data → equal-weight fallback
 
-### FR-7: Screener (Phase 2)
+### FR-7: Screener ✅ IMPLEMENTED
 
 **FR-7.1: Stock Universe**
 - Operates on stocks belonging to a selected index (S&P 500, NASDAQ-100, Dow 30)
@@ -441,7 +439,7 @@ Users can override weights via UserPreference.composite_weights.
 - MACD state: BULLISH / BEARISH
 - Sector: multi-select from GICS sectors
 - Composite score: range slider (0-10)
-- Sharpe ratio: sortable (no dedicated filter param in Phase 1 — see backlog)
+- Sharpe ratio: sortable (no dedicated filter param)
 
 **FR-7.3: Sorting**
 - Default: composite_score DESC
@@ -466,37 +464,37 @@ Users can override weights via UserPreference.composite_weights.
 - Default: last 90 days; configurable up to 365 days
 - Used by stock detail page to render signal trend charts (composite score, RSI over time)
 
-**FR-7.7: Screener Column Preset Tabs (Phase 2.5)**
+**FR-7.7: Screener Column Preset Tabs** ✅ IMPLEMENTED
 - TradingView-style tab bar above screener table: Overview | Signals | Performance
 - Each tab shows a different column set (column definitions in `COL` record + `TAB_COLUMNS` presets)
 - Tab selection is ephemeral UI state (not URL-persisted)
 
-**FR-7.8: Screener Grid View (Phase 2.5)**
+**FR-7.8: Screener Grid View** ✅ IMPLEMENTED
 - Toggle between table view and chart grid view (miniature sparkline cards per stock)
 - Grid cards show: full-width Sparkline, ticker, signal badges, composite score
 - `price_history: list[float]` (last 30 daily closes) returned in bulk signals endpoint
 - Grid/table toggle via `viewMode` state; density toggle hidden in grid mode
 
-**FR-7.9: Screener Density Toggle (Phase 2.5)**
+**FR-7.9: Screener Density Toggle** ✅ IMPLEMENTED
 - Comfortable (default) and compact row padding modes
 - Persisted to localStorage via `DensityProvider` context
 - Toggle visible only in table view
 
-**FR-7.10: Dashboard Composition (Phase 2)**
+**FR-7.10: Dashboard Composition** ✅ IMPLEMENTED
 - Index cards: S&P 500, NASDAQ-100, Dow 30 with stock count, displayed at top
 - Watchlist section: stock cards with ticker, price, sentiment badge, composite score
 - Ticker search bar triggering on-demand ingestion
 - Sector filter toggle
 - Staggered fade-in entry animations
 
-**FR-7.11: Stock Detail Page (Phase 2)**
+**FR-7.11: Stock Detail Page** ✅ IMPLEMENTED
 - Breadcrumb navigation (Dashboard > TICKER)
 - Price chart (Recharts) with sentiment-tinted gradient, 1M/3M/6M/1Y/2Y/5Y timeframe selector
 - Signal breakdown cards: RSI, MACD, SMA, Bollinger (staggered animation)
 - Signal history chart (dual-axis: composite score + RSI over time)
 - Risk & return section: annualized return, volatility, Sharpe ratio
 
-**FR-7.12: Shell Layout + Design System (Phase 4A)** ✅ IMPLEMENTED
+**FR-7.12: Shell Layout + Design System** ✅ IMPLEMENTED
 - Dark-only application (`forcedTheme="dark"`) — light mode removed; `enableSystem` disabled
 - Shell layout: 54px icon-only `SidebarNav` + `Topbar` + docked right `ChatPanel`
 - `ChatPanel`: drag-resizable via DOM events, width persisted to localStorage (`stocksignal:cp-width`), hides via `transform: translateX(100%)` (preserves width when closed)
@@ -505,7 +503,7 @@ Users can override weights via UserPreference.composite_weights.
 - Typography: Sora (UI labels) + JetBrains Mono (numbers/metrics) loaded via `next/font/google`
 - All components restyed to navy design tokens (card2, hov, bhi, warning, cyan)
 
-### FR-8: AI Chatbot — Financial Intelligence Platform (Phase 4B ✅ + 4C ✅ + 4D ✅ IMPLEMENTED)
+### FR-8: AI Chatbot — Financial Intelligence Platform ✅ IMPLEMENTED
 
 **FR-8.1: Agent Selection**
 - General Agent: web search + news Q&A (limited tool access)
@@ -514,16 +512,12 @@ Users can override weights via UserPreference.composite_weights.
 - Agent type bound at session creation (cannot switch mid-session)
 
 **FR-8.2: Tool Orchestration**
-- Tool Registry with 13 internal tools and 4 MCPAdapter external sources
-- V1 (AGENT_V2=false): LLM tool-calling ReAct loop, max 15 iterations
-- V2 (AGENT_V2=true): Plan→Execute→Synthesize three-phase architecture:
-  - Planner (LLM): classifies intent, generates ordered tool plan (max 10 steps)
-  - Executor (mechanical, no LLM): runs tools via registry, $PREV_RESULT resolution, retries, circuit breaker
-  - Synthesizer (LLM): confidence scoring, bull/base/bear scenarios, evidence tree with citations
+- Tool Registry with 25+ internal tools and 4 MCPAdapter external sources
+- **Active architecture: ReAct loop** — LLM tool-calling with max 15 iterations
 - All data in responses must come from tool results (no hallucination)
-- If a tool fails, result marked "unavailable" with reason; synthesizer acknowledges gap
+- If a tool fails, result marked "unavailable" with reason; response acknowledges gap
 - Scope enforcement: financial-only queries. Non-financial/speculative queries declined gracefully.
-- Phase 4D tools (get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile) read from DB — data materialized during ingestion
+- Enriched tools (get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile) read from DB — data materialized during ingestion
 
 **FR-8.3: External Data Integration (5 layers)**
 - SEC Filings: 10-K, 10-Q, 8-K, 13F, Form 4 (via EdgarTools MCP)
@@ -540,13 +534,12 @@ Users can override weights via UserPreference.composite_weights.
 
 **FR-8.5: Streaming**
 - Response streams via NDJSON over SSE
-- V1 events: thinking, tool_start, tool_result, token, done, provider_fallback, error
-- V2 events (Phase 4D): plan, tool_error, evidence, decline (+ all V1 events)
-- Frontend renders incrementally as tokens arrive ✅ (Phase 4C)
-- Tool execution status shown as progress indicators ✅ (ToolCard component)
-- Plan display shows research steps with checkmarks ✅ (Phase 4D — PlanDisplay)
-- Evidence section with collapsible source citations ✅ (Phase 4D — EvidenceSection)
-- Decline messages for out-of-scope queries ✅ (Phase 4D — DeclineMessage)
+- Events: thinking, tool_start, tool_result, token, done, provider_fallback, error, plan, tool_error, evidence, decline
+- Frontend renders incrementally as tokens arrive
+- Tool execution status shown as progress indicators (ToolCard component)
+- Plan display shows research steps with checkmarks (PlanDisplay)
+- Evidence section with collapsible source citations (EvidenceSection)
+- Decline messages for out-of-scope queries (DeclineMessage)
 
 **FR-8.6: Conversation History**
 - Stored per ChatSession (user + agent_type)
@@ -555,7 +548,7 @@ Users can override weights via UserPreference.composite_weights.
 - History summary when context exceeds 12K tokens
 - Sessions auto-expire after 24 hours of inactivity
 
-**FR-8.7: MCP Server (pulled forward from Phase 6)**
+**FR-8.7: MCP Server** ✅ IMPLEMENTED
 - Platform intelligence exposed as MCP server at `/mcp` (Streamable HTTP)
 - Same Tool Registry powers both chat endpoint and MCP server
 - Callable by Claude Code, Cursor, or any MCP-compatible client
@@ -568,7 +561,7 @@ Users can override weights via UserPreference.composite_weights.
 - MCP server health tracking — disconnected adapters excluded from tool set
 - User informed of degraded data availability in response
 
-**FR-8.9: Evidence Display & User Feedback (Phase 4D) ✅ IMPLEMENTED**
+**FR-8.9: Evidence Display & User Feedback** ✅ IMPLEMENTED
 - Every assistant response can include an evidence section showing source citations
 - Evidence items: claim text, source tool name, value, timestamp
 - Evidence section is collapsible (hidden by default, "Show Evidence" toggle)
@@ -576,7 +569,7 @@ Users can override weights via UserPreference.composite_weights.
 - Feedback persisted via `PATCH /chat/sessions/{id}/messages/{id}/feedback`
 - Feedback stored as "up"/"down" on ChatMessage model
 
-**FR-8.10: Onboarding Experience (KAN-57) ✅ IMPLEMENTED**
+**FR-8.10: Onboarding Experience** ✅ IMPLEMENTED
 - Welcome banner on first visit (localStorage-based detection, dismissible)
 - Banner shows 5 suggested tickers (AAPL, MSFT, GOOGL, TSLA, NVDA) as one-click add buttons
 - Quick-add: ingests stock data + adds to watchlist in one action
@@ -584,14 +577,14 @@ Users can override weights via UserPreference.composite_weights.
 - Trending stocks section on dashboard (top 5 by composite score, visible even with empty watchlist)
 - Uses existing `GET /stocks/signals/bulk?sort_by=composite_score&limit=5` endpoint
 
-**FR-8.11: Enriched Data Layer (Phase 4D) ✅ IMPLEMENTED**
+**FR-8.11: Enriched Data Layer** ✅ IMPLEMENTED
 - All yfinance data materialized to DB during ingestion (ingest-time enrichment pattern)
 - Stock model enriched with: business summary, employees, website, market cap, revenue growth, gross/operating/profit margins, ROE, analyst targets (mean/high/low), analyst buy/hold/sell counts
 - Quarterly earnings stored in EarningsSnapshot table (EPS estimate, actual, surprise %)
 - `GET /stocks/{ticker}/fundamentals` returns all enriched fields
 - Agent tools read from DB at query time (fast, reliable, no external API calls)
 
-### FR-9: Alerts & Notifications (Phase 5) ✅ IMPLEMENTED (in-app only, Telegram deferred)
+### FR-9: Alerts & Notifications ✅ IMPLEMENTED (in-app only)
 
 **FR-9.1: Alert Rules**
 - Trailing stop-loss: price drops X% from recent high (X from UserPreference)
@@ -606,13 +599,13 @@ Users can override weights via UserPreference.composite_weights.
 - Acknowledged alerts don't re-fire until condition clears and re-triggers
 
 **FR-9.3: Notification Channels**
-- Telegram integration: **REMOVED from roadmap.** In-app alerts sufficient.
+- In-app alerts only. Telegram integration removed from roadmap.
 - Morning briefing contents: overnight signal changes, portfolio P&L,
   today's recommendations, any triggered alerts
 - Quiet hours: no notifications between quiet_hours_start and quiet_hours_end
   (from UserPreference)
 
-### FR-10: Recommendation Evaluation (Phase 5) ✅ IMPLEMENTED
+### FR-10: Recommendation Evaluation ✅ IMPLEMENTED
 
 This is the feedback loop that answers: "Is this platform giving good advice?"
 Without it, the recommendation engine runs on assumptions that are never
@@ -677,7 +670,7 @@ After 3+ months of data accumulation, the following metrics become available:
   (not reconstructed later — avoids look-ahead bias)
 - Outcome evaluation uses closing prices only (no intraday)
 
-### FR-11: Forecasting & Scorecard UI (Phase 5) ✅ IMPLEMENTED
+### FR-11: Forecasting & Scorecard UI ✅ IMPLEMENTED
 
 ```mermaid
 flowchart TD
@@ -739,9 +732,7 @@ flowchart TD
 - 7 new agent tools allow chat queries: "forecast for AAPL", "compare AAPL and MSFT", "is AAPL's dividend safe?", "what are the risks?", "how accurate are your calls?"
 - Entity Registry enables pronoun resolution: "compare them", "what about it?"
 
-### FR-17: Dashboard Redesign — Daily Intelligence Briefing (Phase B.5 BU-3) ✅ IMPLEMENTED
-
-**Session 75, PR #149**
+### FR-17: Dashboard Redesign — Daily Intelligence Briefing ✅ IMPLEMENTED
 
 The dashboard is a 5-zone Daily Intelligence Briefing designed for passive investors who check once daily.
 
@@ -778,7 +769,7 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 
 ---
 
-### FR-18: Observability Dashboard — Query Analytics (Phase B.5 BU-5) ✅ IMPLEMENTED
+### FR-18: Observability Dashboard — Query Analytics ✅ IMPLEMENTED
 
 **FR-18.1: Query List Sorting & Filtering**
 - Users (admin) can sort the query list by: timestamp, cost, duration, call_count, or eval_score
@@ -807,54 +798,42 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - Declined queries appear in the query list and contribute to error_rate aggregations
 - Enables admin review of guard effectiveness and false-positive rates
 
-### FR-19: Observability Frontend — User-Facing Analytics (Phase B.5 BU-6)
+### FR-19: Observability Frontend — User-Facing Analytics ✅ IMPLEMENTED
 
 > SaaS differentiator: users see how their subscription money works. NOT internal admin tooling.
 
 **FR-19.1: Observability Page Route**
-- `/observability` page accessible from sidebar navigation (Activity icon)
+- `/observability` page accessible from sidebar navigation
 - Single route, role-aware rendering: regular users see own data, admins see additional sections
-- `GET /auth/me` endpoint provides user profile with role for conditional rendering
 
 **FR-19.2: KPI Strip**
-- 5 StatTile cards: Queries Today, Avg Latency (`formatDuration`), Avg Cost/Query (`formatMicroCurrency` — 4-decimal for sub-penny), Pass Rate (`formatPercent`), Fallback Rate
-- Color-coded accents: pass rate (gain ≥80%, warn 50-80%, loss <50%), fallback rate (gain <5%, warn 5-15%, loss ≥15%)
-- Staggered entrance animation, skeleton loading state
+- 5 KPI cards: Queries Today, Avg Latency, Avg Cost/Query, Pass Rate, Fallback Rate
+- Color-coded accents based on health thresholds
 
 **FR-19.3: Query History Table**
-- Paginated, sortable (5 columns), filterable (status pills + cost range min/max inputs)
-- Tool badges capped at 3 with "+N" overflow count
-- Status badges: completed (green), error (red), declined (yellow), timeout (grey)
+- Paginated, sortable, filterable (status, cost range)
+- Inline accordion expansion for step-by-step execution trace
 - Score column visible to admins only
 - URL param persistence for all filter/sort/page state
-- Inline accordion expansion: click row to see step-by-step execution trace
-- Expand affordance: chevron icon toggles on each row
 
 **FR-19.4: Query Detail Expansion**
-- Step timeline: step number badge, action name (mono font), type tag pill (llm/db/external), cache hit badge
+- Step timeline with action name, type tag, cache hit indicator
 - Input/output summaries (PII-sanitized by backend)
-- Langfuse deep-link button when `langfuse_trace_url` is present
-- Error state when detail fetch fails
-- Each expanded row owns its own data fetch (no stale data between expansions)
+- Langfuse deep-link when trace URL available
 
 **FR-19.5: Grouped Analytics Charts**
 - 8 dimension tabs (6 user + 2 admin-only: By User, By Intent)
-- Date dimension: dual-axis ComposedChart (cost area + latency line)
-- Categorical dimensions: BarChart; tool_name: horizontal bar
-- Date range quick selectors: 7d / 30d / 90d
-- Bucket selector for date: day / week / month
-- All chart state persisted in URL params (dim, bucket, range)
-- Admin dimension guard: resets to "date" if non-admin selects admin-only dimension
+- Date range quick selectors: 7d / 30d / 90d with day/week/month bucket granularity
+- All chart state persisted in URL params
 
 **FR-19.6: Assessment Quality Section**
-- Framed as platform quality ("We regularly test AI quality against benchmarks")
-- Latest assessment: pass rate StatTile + queries tested + cost + relative time
-- Admin-only: assessment history table with trigger, pass rate, queries, cost, date
+- Latest assessment summary: pass rate, queries tested, cost
+- Admin-only: assessment history table
 - Coming-soon empty state when no assessment data
 
-### FR-20: Platform Operations Command Center (Phase B.5 BU-7) ✅ IMPLEMENTED
+### FR-20: Platform Operations Command Center ✅ IMPLEMENTED
 
-> Admin-only nuclear-reactor-style dashboard. Single-pane-of-glass for the entire platform.
+> Admin-only operations dashboard. Single-pane-of-glass for the entire platform.
 
 **FR-20.1: Command Center Page**
 - `/admin/command-center` route, admin role-gated (non-admins redirected to dashboard)
@@ -896,6 +875,64 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - Each panel opened via "View Details" button on the corresponding zone
 - Data fetched on-demand (not pre-loaded)
 
+### FR-21: Extended Agent Tools ✅ IMPLEMENTED
+
+**FR-21.1: Geopolitical Events**
+- `get_geopolitical_events` — event detection with sector impact mapping via GDELT API
+- Returns events with relevance scores and affected sectors
+
+**FR-21.2: Stock Intelligence**
+- `get_stock_intelligence` — aggregated intelligence for a ticker including:
+  - Insider trades (buy/sell transactions from Form 4 filings)
+  - Analyst upgrades/downgrades with price target changes
+  - EPS revisions (consensus estimate changes over time)
+  - Short interest (shares short, days to cover, % of float)
+
+**FR-21.3: Recommend Stocks**
+- `recommend_stocks` — returns actionable recommendations from the recommendation engine
+- Filterable by action type (BUY, SELL, HOLD, WATCH, AVOID) and confidence level
+
+**FR-21.4: Portfolio Analytics Tool**
+- `get_portfolio_analytics` — returns QuantStats metrics (Sharpe, Sortino, max drawdown, alpha, beta, VaR, CAGR)
+- Reads from materialized `portfolio_snapshots` data
+
+**FR-21.5: Portfolio Health Scoring**
+- `get_portfolio_health` — letter grade (A-F) with component scores for diversification, risk, and performance
+- Surfaces concentration warnings and rebalancing suggestions
+
+**FR-21.6: Market Briefing**
+- `get_market_briefing` — daily summary including index performance, top movers, sector rotation, and macro indicators
+
+### FR-22: Recommendation Evaluation Scorecard ✅ IMPLEMENTED
+
+**FR-22.1: Scorecard Metrics**
+- Overall hit rate (% of recommendations where action was correct vs benchmark)
+- Per-action hit rates: BUY, SELL breakdown
+- Per-horizon accuracy: 30d, 90d, 180d
+- Average alpha (excess return vs SPY)
+
+**FR-22.2: Scorecard UI**
+- ScorecardModal accessible from dashboard Accuracy StatTile
+- Worst miss identification (ticker + actual return %)
+- Per-horizon breakdown grid
+
+**FR-22.3: Agent Access**
+- `get_scorecard` agent tool for conversational queries ("how accurate are your calls?")
+
+### FR-23: Admin Pipeline Control — PLANNED
+
+**FR-23.1: Manual Pipeline Triggers**
+- Admin UI to manually trigger nightly pipeline phases (price ingestion, signal computation, recommendation generation, forecast refresh)
+- Individual ticker re-processing
+
+**FR-23.2: Seed Hydration**
+- Admin-triggered bulk data hydration for new index additions
+- Progress tracking with ticker-level status
+
+**FR-23.3: Task Groups**
+- Celery task group management: view active/queued tasks, cancel stuck tasks
+- Pipeline run history with per-phase timing
+
 ---
 
 ## 4. Non-Functional Requirements
@@ -936,7 +973,7 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - All API endpoints require JWT (except /auth/login, /auth/register, /health)
 - Password hashing: bcrypt with cost factor 12
 - JWT tokens: RS256 or HS256, short-lived access (60 min), rotating refresh (7 days)
-- JWT storage: httpOnly, Secure, SameSite=Lax cookies (Phase 2+)
+- JWT storage: httpOnly, Secure, SameSite=Lax cookies
 - Rate limiting: 60 requests/minute per user (configurable); 5/min for data ingestion
 - CORS: whitelist frontend origin only, `allow_credentials=True`
 - Secrets: environment variables only, never in code or git
@@ -960,7 +997,7 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - LLM usage tracking: tokens_used and model_used on every ChatMessage
 - Error alerting: log ERROR level → future integration with monitoring
 
-### NFR-7: Developer Experience (Phase 4.5)
+### NFR-7: Developer Experience ✅ IMPLEMENTED
 
 - All PRs to `develop` must pass CI gate before merge (lint + unit + API tests + Jest)
 - All merges to `main` must pass full CI gate (lint → unit+api → integration stub → build)
@@ -987,7 +1024,7 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 | BUY correct definition | stock return > benchmark return | RecommendationOutcome |
 | SELL correct definition | stock return < benchmark return | RecommendationOutcome |
 | Alert dedup window | 24 hours | AlertLog |
-| Max chat tool calls per turn | 15 | Agent loop |
+| Max chat tool calls per turn | 15 | Agent loop (25+ tools + 4 MCP adapters available) |
 | LLM fallback order | Groq → Claude → LM Studio | Agent config |
 
 ---
@@ -1019,43 +1056,25 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 
 ---
 
-## 7. Feature × Phase Matrix
+## 7. Implementation Status Summary
 
-| Feature | Phase 1 | Phase 2 | Phase 3 | Phase 4 | Phase 5 | Phase 6 |
-|---------|---------|---------|---------|---------|---------|---------|
-| Auth + JWT refresh | ✓ | httpOnly cookies | | | | |
-| User preferences | ✓ | | Enhanced | | Enhanced | |
-| Stock universe + watchlist | ✓ | Index membership | | | | |
-| Technical signals | ✓ | | | | | |
-| Composite score (tech only) | ✓ | | Upgraded 50/50 | | | |
-| Basic recommendations | ✓ | | Portfolio-aware | | Macro-aware | |
-| Signal API | ✓ | | | | | |
-| Dashboard UI | | ✓ | Enhanced | | Enhanced | |
-| Screener UI | | ✓ | | | | |
-| Stock detail page | | ✓ | Enhanced | | | |
-| Screener column tabs | | ✓ (Phase 2.5) | | | | |
-| Screener grid view | | ✓ (Phase 2.5) | | | | |
-| Design system (colors, components) | | ✓ (Phase 2.5) | | | | |
-| Entry animations | | ✓ (Phase 2.5) | | | | |
-| Fundamental signals | | | ✓ | | | |
-| Portfolio tracker | | | ✓ | | | |
-| Dividends ✅ + splits | | | ✓ | | | |
-| Portfolio snapshots | | | ✓ | | | |
-| Alert rules engine | | | ✓ | | | |
-| Position sizing | | | ✓ | | | |
-| AI chatbot backend | | | | ✓ (4B) | | |
-| Tool Registry + MCPAdapters | | | | ✓ (4B) | | |
-| External MCP integrations | | | | ✓ (4B) | | |
-| Warm data pipeline | | | | ✓ (4B) | | |
-| MCP server (`/mcp`) | | | | ✓ (4B) | | |
-| Chat UI (frontend wiring) | | | | ✓ (4C done) | | |
-| CI/CD pipeline | | | | ✓ (done) | | |
-| Background jobs (Celery) | | | | | ✓ | |
-| Forecasting (Prophet) | | | | | ✓ | |
-| Model versioning | | | | | ✓ | |
-| Options flow (Unusual Whales) | | | | | ✓ | |
-| Telegram notifications | | | | | ~~REMOVED~~ | |
-| Dashboard Redesign (BU-3) | | | | | | ✅ B.5 |
-| Recommendation evaluation | | | | | ✓ | |
-| LLMOps / Gateway | | | | | | ✓ |
-| Cloud deployment | | | | | | ✓ |
+| FR | Feature | Status |
+|----|---------|--------|
+| FR-1 | Authentication & User Management (registration, login, OAuth, email verification, password reset, account settings, admin) | ✅ IMPLEMENTED |
+| FR-2 | Stock Universe & Watchlist (indexes, on-demand ingestion) | ✅ IMPLEMENTED |
+| FR-3 | Signal Engine (technical signals, composite score, risk analytics) | ✅ IMPLEMENTED |
+| FR-4 | Recommendation Engine (score-threshold rules) | ✅ IMPLEMENTED |
+| FR-5 | Fundamental Analysis (Piotroski, combined composite) | Not implemented |
+| FR-6 | Portfolio Management (FIFO, dividends, snapshots, analytics, rebalancing) | ✅ IMPLEMENTED |
+| FR-7 | Screener (filters, grid view, density, shell layout) | ✅ IMPLEMENTED |
+| FR-8 | AI Chatbot (ReAct agent, 25+ tools, 4 MCP adapters, streaming, evidence) | ✅ IMPLEMENTED |
+| FR-9 | Alerts & Notifications (in-app) | ✅ IMPLEMENTED |
+| FR-10 | Recommendation Evaluation (outcome capture, hit rates, alpha) | ✅ IMPLEMENTED |
+| FR-11 | Forecasting & Scorecard UI (Prophet, model versioning, drift detection) | ✅ IMPLEMENTED |
+| FR-17 | Dashboard Redesign — Daily Intelligence Briefing | ✅ IMPLEMENTED |
+| FR-18 | Observability Dashboard — Query Analytics | ✅ IMPLEMENTED |
+| FR-19 | Observability Frontend — User-Facing Analytics | ✅ IMPLEMENTED |
+| FR-20 | Platform Operations Command Center | ✅ IMPLEMENTED |
+| FR-21 | Extended Agent Tools (geopolitical, stock intelligence, market briefing) | ✅ IMPLEMENTED |
+| FR-22 | Recommendation Evaluation Scorecard | ✅ IMPLEMENTED |
+| FR-23 | Admin Pipeline Control (manual triggers, seed hydration, task groups) | PLANNED |
