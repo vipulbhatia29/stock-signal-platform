@@ -2,7 +2,7 @@
 
 > Stock analysis SaaS for part-time investors — US equities, signal detection, portfolio tracking, AI-powered recommendations.
 
-Generated: 2026-04-01 | Session: 81 | Alembic head: `5c9a05c38ee1` (migration 023)
+Generated: 2026-04-02 | Session: 84 | Alembic head: `5c9a05c38ee1` (migration 023)
 
 ## Project Structure
 
@@ -24,11 +24,14 @@ frontend/                   Next.js 15 + TypeScript + Tailwind v4 + shadcn/ui
 ├── src/hooks/ (12 files)   TanStack Query hooks for all data fetching
 ├── src/lib/                api.ts (fetch wrapper), auth.ts, format.ts, utils.ts
 └── src/types/api.ts        ~115 exported TypeScript interfaces (single source of truth)
-tests/                      1296 backend + 329 frontend = 1625 total
+tests/                      1273 backend + 328 frontend = 1601 total
 ├── unit/ (signals, services, tools, pipeline, agents, mcp, chat, guards, observability)
 ├── api/ (endpoint tests with testcontainers)
 ├── integration/ (MCP stdio + regression)
-└── frontend src/__tests__/ (67 test suites)
+├── semgrep/ (Semgrep rule test snippets)
+└── frontend src/__tests__/ (66 test suites)
+.semgrep/                   13 custom Semgrep rules (Hard Rules + auth/JWT/OAuth)
+.github/workflows/          ci-pr (13 jobs, path-filter + ci-gate), ci-merge, ci-eval, deploy
 docs/
 ├── PRD.md, FSD.md, TDD.md  Product/functional/technical specs
 ├── superpowers/specs/       20 design specs

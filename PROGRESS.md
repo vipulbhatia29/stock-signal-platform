@@ -187,3 +187,47 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 0 code changes (spec + planning session only)
 - Expected: 1625 → 2200+ tests, 2 → 12 quality gates
 - Resume: Phase D Sprint 1 (KAN-357) — Foundation + Cleanup
+
+---
+
+## Session 84 — Phase D Sprints 1-2 + Bug Fixes (2026-04-02)
+
+**Branch:** multiple PRs | **PRs #162-167 merged**
+
+### Sprint 1 (KAN-357): Test Foundation + Cleanup — PR #162
+- Deleted 4 dead test files (test_ohlc_schema, test_pagination, test_chat_models, root health-grade-badge)
+- Trimmed 4 string-literal tests from test_cache_extension (kept 3 real TTL tests)
+- Consolidated 4 test groups: fundamentals (2→1), observability agents (4→1), signals (2→1), health-grade-badge
+- Added 6 backend packages: pytest-xdist, pytest-randomly, pytest-timeout, fakeredis[lua], hypothesis, syrupy
+- Added 3 frontend packages: msw, jest-axe, @types/jest-axe
+- Configured pytest markers (domain, regression, migration, cache), coverage omit, timeout=30
+- Created shared test utilities: renderWithProviders(), next/navigation auto-mock
+- Refactored observability writer tests (1090→759 lines via shared fixtures + parametrize)
+- Configured git-lfs for e2e screenshot PNGs
+
+### Sprint 2 (KAN-358): CI Overhaul — PR #163
+- Rewrote ci-pr.yml: dorny/paths-filter@v3 (backend/frontend/infra/migrations), ci-gate (single required check)
+- 6 advisory quality gates: Semgrep SAST, dependency-audit, gitleaks, bundle-size, domain-regression, pyright
+- 13 custom Semgrep rules: 8 Hard Rule enforcement + 5 auth/JWT/OAuth security
+- Test snippets in tests/semgrep/ (bad code + safe code for Semgrep --test)
+- Updated ci-merge.yml: split backend tests, domain-regression job, bundle size reporting
+- Playwright webServer switched to production build (npm run build && npm start)
+- Added pip-audit, pytest-alembic, pyright config (basic mode)
+
+### Tech Debt Fixes — PRs #164-166
+- **PR #164:** Fixed TimescaleDB teardown bug (drop_all → per-table DROP CASCADE), re-enabled xdist, restored coverage with --no-cov-on-fail, set fail_under=60
+- **PR #165:** Fixed Next.js build — Suspense boundary for useSearchParams in reset-password + verify-email pages
+- **PR #166:** Pyright venv config (267 false positives → 0), changed-files-only PR check, full codebase merge check
+
+### Bug Fixes — PR #167
+- **KAN-364 (High):** Fixed 6x ToolResult(error=str(e)) Hard Rule #10 violations across executor, tool_client, 4 MCP adapters
+- **KAN-365 (Medium):** Suppressed 4 Semgrep false positives (cookie key names, OAuth, URL), fixed path deprecation warnings
+- Semgrep findings: 20 → 7 (remaining = INFO-level bounded redis keys)
+
+### Session 84 Totals
+- 6 PRs merged (#162-167), 2 JIRA bugs filed and fixed (KAN-364/365)
+- Tests: 1273 backend + 328 frontend = 1601 (−24 dead tests, 0 coverage loss)
+- CI: 13 checks, 12 green (type-check advisory — pre-existing type-stub gaps)
+- Semgrep: 13 custom rules enforcing Hard Rules + security patterns
+- 16 stale local branches cleaned up
+- Resume: Phase D Sprint 3 (KAN-359) — Hypothesis, golden datasets, cache tests

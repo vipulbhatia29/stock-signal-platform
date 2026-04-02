@@ -86,17 +86,19 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 > Complete test suite redesign: tiered architecture (T0-T5), path-based CI routing, quality gates, security test matrix, Hypothesis domain tests, Playwright E2E expansion, Lighthouse performance, custom Semgrep rules. 4-expert reviewed spec.
 > **Spec:** `docs/superpowers/specs/2026-04-01-test-suite-overhaul.md`
 
-| Sprint | Ticket | Summary |
-|--------|--------|---------|
-| 1 | KAN-357 | Foundation + Cleanup — delete dead tests, add packages, configure markers |
-| 2 | KAN-358 | CI Overhaul — path-filter, ci-gate, 12 quality gates, 14 Semgrep rules |
-| 3 | KAN-359 | Domain + Cache + Regression — Hypothesis (50+), golden datasets, Celery |
-| 4 | KAN-360 | Auth + Security — IDOR matrix, token security, OAuth, rate limiting (absorbs KAN-354/355) |
-| 5 | KAN-361 | Playwright E2E Expansion (~33 specs) + msw component integration |
-| 6 | KAN-362 | Performance + Memory — Lighthouse, chart sizing, CDP heap, nightly CI |
-| 7 | KAN-363 | Visual Regression — baseline capture (after UI stable) |
+| Sprint | Ticket | Summary | Status |
+|--------|--------|---------|--------|
+| 1 | KAN-357 | Foundation + Cleanup — delete dead tests, add packages, configure markers | ✅ Session 84, PR #162 |
+| 2 | KAN-358 | CI Overhaul — path-filter, ci-gate, quality gates, 13 Semgrep rules | ✅ Session 84, PRs #163-167 |
+| 3 | KAN-359 | Domain + Cache + Regression — Hypothesis (50+), golden datasets, Celery | |
+| 4 | KAN-360 | Auth + Security — IDOR matrix, token security, OAuth, rate limiting (absorbs KAN-354/355) | |
+| 5 | KAN-361 | Playwright E2E Expansion (~33 specs) + msw component integration | |
+| 6 | KAN-362 | Performance + Memory — Lighthouse, chart sizing, CDP heap, nightly CI | |
+| 7 | KAN-363 | Visual Regression — baseline capture (after UI stable) | |
 
-**Note:** Sprints 3 & 4 are parallelizable. Expected: 1625 → 2200+ tests, 2 → 12 quality gates.
+**Bug fixes during Sprint 2:** KAN-364 (6x str(e) leak, PR #167), KAN-365 (Semgrep false positives, PR #167).
+**Tech debt fixes:** TimescaleDB teardown (PR #164), Next.js Suspense (PR #165), pyright config (PR #166).
+**Note:** Sprints 3 & 4 are parallelizable. Expected: 1601 → 2200+ tests, 1 → 13 CI checks.
 
 ### Phase F: Subscriptions + Monetization (~5 days)
 
