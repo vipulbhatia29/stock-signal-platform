@@ -4,7 +4,7 @@
 
 **Version:** 1.1
 **Date:** March 2026
-**Status:** Living Document — Phases 1-8.5 complete. Phase B.5 BU-1-7 shipped. Phase 8.5 Portfolio Analytics shipped (Session 81).
+**Status:** Living Document — Phases 1-C complete. Phase B.5 BU-1-7 shipped. Phase 8.5 Portfolio Analytics shipped (Session 81). Phase C auth overhaul shipped (Session 82).
 **Prerequisite reading:** docs/PRD.md
 
 ---
@@ -26,6 +26,8 @@ constitutes correct behavior. The TDD (docs/TDD.md) defines HOW to build it.
 | USER | Regular investor | Own portfolio, own watchlist, own chat, read signals |
 
 Phase 1 ships with ADMIN only. USER role added if sharing with others.
+
+**Email verification enforcement (Phase C):** Unverified users are soft-blocked on 11 write endpoints (portfolio transactions, watchlist add/remove, preferences, alerts, chat, etc.). Read endpoints are unaffected. A dismissible verification banner is shown in the app shell until the email is confirmed. ADMIN users bypass verification checks.
 
 ---
 
@@ -64,6 +66,48 @@ Phase 1 ships with ADMIN only. USER role added if sharing with others.
 - Server reads tokens from cookies OR `Authorization: Bearer` header (dual-mode)
 - `POST /api/v1/auth/logout` clears cookies (Set-Cookie with Max-Age=0)
 - CORS must set `allow_credentials=True` with explicit `allow_origins` (no wildcard)
+
+**FR-1.6: Google OAuth 2.0 (Phase C)** ✅ IMPLEMENTED
+- User story: "As a new user, I can sign in with my Google account without creating a password."
+- Authorization code flow with PKCE-equivalent state + nonce parameters (CSRF protection)
+- JWKS validation via PyJWT; `aud` and `exp` claims verified
+- Auto-link: if Google email matches an existing OAuth account, the user is logged in
+- Account conflict: if Google email matches a password account, return 409 with instructions to link manually
+- New OAuth users have `email_verified=True` immediately (Google already verified it)
+- `GET /api/v1/auth/google/authorize` — returns auth URL; `GET /api/v1/auth/google/callback` — handles redirect
+
+**FR-1.7: Email Verification (Phase C)** ✅ IMPLEMENTED
+- On registration, a verification email is sent via Resend API with a signed token (24-hour expiry)
+- `GET /api/v1/auth/verify-email?token=...` — marks user `email_verified=True`
+- `POST /api/v1/auth/resend-verification` — resends email (rate-limited, auth required)
+- Soft-block: 11 write endpoints check `email_verified`; unverified users receive 403 with "verify your email" message
+- Verification banner displayed in app shell (dismissible per session, reappears on next login)
+
+**FR-1.8: Password Reset (Phase C)** ✅ IMPLEMENTED
+- `POST /api/v1/auth/forgot-password` — always returns 200 (prevents email enumeration); sends reset link if email exists
+- Reset token: signed JWT with 1-hour expiry, single-use (invalidated in Redis on use)
+- `POST /api/v1/auth/reset-password` — validates token, hashes new password, invalidates all existing sessions via user-level token revocation
+- OAuth-only users (no password) receive a "set up password" variant email
+
+**FR-1.9: Account Settings Page (Phase C)** ✅ IMPLEMENTED
+- Route: `/account`
+- Four sections:
+  1. **Profile** — display name, email (read-only)
+  2. **Security** — change password; shows last-login timestamp
+  3. **Linked Accounts** — Google OAuth connection status; Connect/Disconnect button
+  4. **Danger Zone** — Delete Account (requires typed confirmation "DELETE")
+
+**FR-1.10: Account Deletion (Phase C)** ✅ IMPLEMENTED
+- `DELETE /api/v1/auth/account` — soft-delete: sets `deleted_at` timestamp, clears httpOnly cookies
+- Deleted accounts cannot log in; all API requests return 401
+- 30-day grace period: Celery task runs nightly and hard-deletes accounts where `deleted_at + 30d < now`
+- Hard delete cascades to all user data (portfolio, watchlist, chat sessions, alerts, preferences)
+- Admin can recover a soft-deleted account within 30 days via `POST /api/v1/admin/users/{id}/recover`
+
+**FR-1.11: Admin User Management (Phase C)** ✅ IMPLEMENTED
+- `GET /api/v1/admin/users` — paginated user list with verification status and deletion state (ADMIN only)
+- `POST /api/v1/admin/users/{id}/verify` — manually verify a user's email
+- `POST /api/v1/admin/users/{id}/recover` — restore a soft-deleted account
 
 ### FR-2: Stock Universe & Watchlist
 

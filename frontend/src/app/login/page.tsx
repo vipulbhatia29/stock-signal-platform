@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { Mail, Lock, ArrowRight, TrendingUp, BarChart3, Shield } from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { toast } from "sonner";
+import { getGoogleAuthUrl } from "@/lib/api";
 
 function BrandPanel() {
   return (
@@ -84,7 +84,7 @@ function GoogleButton() {
   return (
     <button
       type="button"
-      onClick={() => toast.info("Google OAuth coming soon")}
+      onClick={() => { window.location.href = getGoogleAuthUrl(); }}
       className="flex w-full items-center justify-center gap-3 rounded-lg border border-border bg-card2 py-2.5 text-sm font-medium text-foreground hover:bg-hov transition-colors"
     >
       <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -193,7 +193,12 @@ export default function LoginPage() {
                 <input type="checkbox" className="rounded border-border bg-card2 h-3.5 w-3.5 accent-[var(--cyan)]" />
                 Remember me
               </label>
-              <span className="text-xs text-cyan cursor-not-allowed opacity-50">Forgot password?</span>
+              <a
+                href="/auth/forgot-password"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Forgot password?
+              </a>
             </div>
 
             <button

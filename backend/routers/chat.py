@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import async_session_factory, get_async_session
-from backend.dependencies import get_current_user
+from backend.dependencies import get_current_user, require_verified_email
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.user import User
 from backend.request_context import (
@@ -128,6 +128,7 @@ async def chat_stream(
     Resumes an existing session if session_id is given.
     Uses the Plan→Execute→Synthesize graph.
     """
+    require_verified_email(user)
     # ── Input guard ──────────────────────────────────────────────────
     from backend.agents.guards import (
         detect_and_strip_pii,
@@ -452,6 +453,7 @@ async def set_feedback(
     db: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Set thumbs up/down feedback on a chat message."""
+    require_verified_email(user)
     # Verify session belongs to user
     await _get_session(db, session_id, user.id)
 
@@ -515,6 +517,7 @@ async def delete_session(
     db: AsyncSession = Depends(get_async_session),
 ) -> dict:
     """Soft-delete a chat session (set is_active=False)."""
+    require_verified_email(user)
     try:
         await deactivate_session(db, session_id, user.id)
     except ValueError as exc:

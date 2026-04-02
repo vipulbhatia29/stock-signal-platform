@@ -28,6 +28,8 @@ class LoginAttempt(UUIDPrimaryKeyMixin, Base):
     user_agent: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     success: Mapped[bool] = mapped_column(Boolean, nullable=False)
     failure_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    method: Mapped[str] = mapped_column(String(20), nullable=False, default="password")
+    provider_sub: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     def __repr__(self) -> str:
         """Return debug representation."""

@@ -11,6 +11,7 @@ from backend.models.index import StockIndex, StockIndexMembership
 from backend.models.llm_config import LLMModelConfig
 from backend.models.login_attempt import LoginAttempt
 from backend.models.logs import LLMCallLog, ToolExecutionLog
+from backend.models.oauth_account import OAuthAccount
 from backend.models.pipeline import PipelineRun, PipelineWatermark
 from backend.models.portfolio import (  # noqa: F401
     Portfolio,
@@ -40,6 +41,7 @@ __all__ = [
     "LLMModelConfig",
     "LoginAttempt",
     "ModelVersion",
+    "OAuthAccount",
     "PipelineRun",
     "PipelineWatermark",
     "Portfolio",

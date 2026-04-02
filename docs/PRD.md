@@ -5,7 +5,7 @@
 **Version:** 3.0
 **Author:** Vipul Bhatia
 **Date:** March 2026
-**Status:** Living Document — Phases 1-8.5 complete, SaaS Launch Roadmap Phases A-B.5 complete, Phase 8.5 Portfolio Analytics shipped
+**Status:** Living Document — Phases 1-C complete, SaaS Launch Roadmap Phases A-C complete, Phase 8.5 Portfolio Analytics shipped, Phase C auth overhaul shipped
 
 ---
 
@@ -89,7 +89,7 @@ much to allocate
 
 ## 4. Product Vision
 
-### Current State (Phases 1-8 Complete + SaaS Roadmap A-B.5)
+### Current State (Phases 1-8.5 Complete + SaaS Roadmap A-C)
 
 A **Daily Intelligence Briefing** dashboard with 5 information zones (Market Pulse, Signals, Portfolio, Alerts, News), a stock screener with watchlist tab, enriched stock detail pages, portfolio tracking with FIFO P&L, Prophet-based price forecasting, and a **ReAct AI financial analyst** that:
 
@@ -114,9 +114,9 @@ A **Daily Intelligence Briefing** dashboard with 5 information zones (Market Pul
 
 ### Near-term Vision (SaaS Roadmap B.5-E)
 
-- **BU-5-7:** Observability frontend (user-facing query analytics), admin dashboard (LLM management, cost analytics)
-- **Phase C:** Google OAuth for real user signups
-- **Phase D:** Stripe subscriptions with tiered pricing (Free/Pro/Premium)
+- **BU-5-7:** Observability frontend (user-facing query analytics), admin dashboard (LLM management, cost analytics) ✅ COMPLETE
+- **Phase C:** Google OAuth, email verification, password reset, account management, account deletion ✅ COMPLETE
+- **Phase D:** Stripe subscriptions with tiered pricing (Free/Pro/Premium) — next
 - **Phase E:** Cloud deployment (containerized, managed DB, production observability)
 
 ### Long-term Vision
@@ -444,6 +444,20 @@ Sectors page with: sector accordion (11 canonical sectors), drill-down stocks ta
 
 FRED adapter provides macro data (yields, oil, unemployment). Market regime indicator (Risk-On/Neutral/Risk-Off) not yet implemented as a dashboard widget.
 
+### 5.20 Authentication & Account Management (Phase C) ✅ COMPLETE
+
+**Google OAuth 2.0:** Users can sign up and log in with their Google account (authorization code flow, JWKS validation, state + nonce CSRF protection). OAuth users have their email automatically verified.
+
+**Email Verification:** New password-based registrations receive a verification email (Resend API). Unverified users are soft-blocked from write operations until they confirm their email. A persistent banner in the app shell guides users to verify.
+
+**Password Reset:** Self-service forgot-password flow with time-limited, single-use reset tokens. Email enumeration prevented (always returns 200).
+
+**Account Settings Page (`/account`):** Users can view their profile, change their password, connect/disconnect Google OAuth, and manage their account.
+
+**Account Deletion & Data Privacy:** Users can request account deletion from the Danger Zone. Deletion is soft (30-day grace period) before a Celery task permanently purges all user data (portfolio, watchlist, chat, alerts). Admins can recover accounts within the grace period. Aligns with GDPR-style data erasure expectations.
+
+**Admin Tools:** Admin dashboard includes user list with verification status, manual email verification, and account recovery.
+
 ---
 
 ## 6. Non-Functional Requirements
@@ -466,15 +480,19 @@ FRED adapter provides macro data (yields, oil, unemployment). Market regime indi
 ### Security
 - JWT-based authentication with httpOnly cookies + header dual-mode
 - Direct bcrypt password hashing (passlib removed)
-- All API endpoints authenticated (except login/register)
+- All API endpoints authenticated (except login/register/oauth)
 - Secrets in environment variables, never in code
 - HTTPS in production
 - IDOR protection: user-scoped data isolation on all detail endpoints
 - Input guardrails: PII detection, injection blocking, control char sanitization
 - Output guardrails: generic error messages (no `str(e)` in user-facing output)
 - Redis refresh token blocklist with JTI rotation
+- User-level token revocation (Redis `auth:revoke:{user_id}` timestamp + `iat` claim check)
+- Google OAuth 2.0 with state + nonce CSRF protection; JWKS validation via PyJWT
+- Email verification soft-block on write endpoints
+- Single-use password reset tokens (invalidated in Redis on use)
+- Soft-delete + 30-day hard-purge for account deletion (data privacy)
 - MCP auth middleware on tool server endpoints
-- OIDC SSO support (feature-flagged, disabled when unconfigured)
 
 ### Observability
 - Structured tracing on every agent query (ObservabilityCollector + Langfuse)

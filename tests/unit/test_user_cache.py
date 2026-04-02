@@ -41,6 +41,7 @@ def fake_user(user_id: uuid.UUID, now: datetime) -> MagicMock:
     user.created_at = now
     user.updated_at = now
     user.hashed_password = "$2b$12$fakehash"
+    user.email_verified = True
     return user
 
 
@@ -51,6 +52,8 @@ def cached_user(user_id: uuid.UUID, now: datetime) -> CachedUser:
         email="test@example.com",
         role=UserRole.USER,
         is_active=True,
+        email_verified=True,
+        has_password=True,
         created_at=now,
         updated_at=now,
     )
@@ -91,6 +94,8 @@ class TestCachedUser:
             email="admin@example.com",
             role=UserRole.ADMIN,
             is_active=True,
+            email_verified=True,
+            has_password=True,
             created_at=now,
             updated_at=now,
         )
@@ -251,6 +256,8 @@ class TestGetCurrentUser:
             email="inactive@example.com",
             role=UserRole.USER,
             is_active=False,
+            email_verified=True,
+            has_password=True,
             created_at=now,
             updated_at=now,
         )

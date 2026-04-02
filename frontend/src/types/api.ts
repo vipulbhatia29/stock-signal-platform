@@ -871,6 +871,7 @@ export interface UserProfile {
   email: string;
   role: "admin" | "user";
   is_active: boolean;
+  email_verified?: boolean;
 }
 
 export interface KPIResponse {

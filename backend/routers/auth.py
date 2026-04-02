@@ -1,13 +1,15 @@
 """Authentication endpoints: register, login, refresh, logout, OIDC SSO."""
 
+import asyncio
 import logging
 import re
 import uuid
+from datetime import datetime, timezone
 from urllib.parse import urlencode
 
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,30 +26,56 @@ from backend.dependencies import (
     decode_token,
     get_current_user,
     hash_password,
+    require_admin,
     verify_password,
 )
+from backend.models.oauth_account import OAuthAccount
 from backend.models.user import User, UserPreference
 from backend.rate_limit import limiter
 from backend.schemas.auth import (
+    AccountInfoResponse,
+    AdminRecoverAccountRequest,
+    ChangePasswordRequest,
+    DeleteAccountRequest,
+    ForgotPasswordRequest,
+    MessageResponse,
+    ResetPasswordRequest,
+    SetPasswordRequest,
     TokenRefreshRequest,
     TokenResponse,
     UserLoginRequest,
     UserProfileResponse,
     UserRegisterRequest,
     UserRegisterResponse,
+    VerifyEmailRequest,
 )
+from backend.services.email import (
+    generate_token,
+    send_deletion_confirmation,
+    send_password_reset_email,
+    send_password_reset_google_only,
+    send_verification_email,
+)
+from backend.services.google_oauth import build_auth_url, exchange_code
 from backend.services.oidc_provider import (
     build_discovery_document,
     exchange_auth_code,
     store_auth_code,
 )
-from backend.services.token_blocklist import add_to_blocklist, is_blocklisted
+from backend.services.redis_pool import get_redis
+from backend.services.token_blocklist import add_to_blocklist, is_blocklisted, set_user_revocation
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 PASSWORD_PATTERN = re.compile(r"^(?=.*[A-Z])(?=.*\d).{8,}$")
+
+# Shared error messages (avoid line-length issues in endpoints)
+_PW_STRENGTH_MSG = "Password must contain at least 1 uppercase letter and 1 digit"
+_NO_PW_MSG = "No password set. Use set-password instead."
+_PW_ALREADY_SET_MSG = "Password already set. Use change-password instead."
+_RESET_SENT_MSG = "If an account with that email exists, a reset link has been sent"
 
 
 def _get_token_remaining_ttl(token: str) -> int:
@@ -110,14 +138,13 @@ def _record_login_attempt_bg(
     ip_address: str,
     user_agent: str,
     failure_reason: str | None = None,
+    method: str = "password",
 ) -> None:
     """Schedule fire-and-forget login attempt recording.
 
     Uses its own DB session to avoid blocking the auth flow
     or double-committing on the caller's session.
     """
-    import asyncio
-
     asyncio.create_task(
         _write_login_attempt(
             email=email,
@@ -126,6 +153,7 @@ def _record_login_attempt_bg(
             ip_address=ip_address,
             user_agent=user_agent,
             failure_reason=failure_reason,
+            method=method,
         )
     )
 
@@ -137,6 +165,7 @@ async def _write_login_attempt(
     ip_address: str,
     user_agent: str,
     failure_reason: str | None = None,
+    method: str = "password",
 ) -> None:
     """Write login attempt to DB with its own session."""
     try:
@@ -154,11 +183,39 @@ async def _write_login_attempt(
                 user_agent=user_agent,
                 success=success,
                 failure_reason=failure_reason,
+                method=method,
             )
             db.add(attempt)
             await db.commit()
     except Exception:
         logger.debug("Failed to record login attempt", exc_info=True)
+
+
+async def _send_verification_bg(email: str, token: str) -> None:
+    """Fire-and-forget verification email."""
+    try:
+        await send_verification_email(email, token)
+    except Exception:
+        logger.exception("Failed to send verification email to %s", email)
+
+
+async def _send_reset_email_bg(email: str, token: str, google_only: bool = False) -> None:
+    """Fire-and-forget password reset email."""
+    try:
+        if google_only:
+            await send_password_reset_google_only(email)
+        else:
+            await send_password_reset_email(email, token)
+    except Exception:
+        logger.exception("Failed to send reset notification email to %s", email)
+
+
+async def _send_deletion_email_bg(email: str) -> None:
+    """Fire-and-forget deletion confirmation email."""
+    try:
+        await send_deletion_confirmation(email)
+    except Exception:
+        logger.exception("Failed to send deletion email to %s", email)
 
 
 @router.post(
@@ -205,6 +262,20 @@ async def register(
 
     await db.commit()
     await db.refresh(user)
+
+    # Send verification email (or auto-verify in dev mode)
+    if settings.ENVIRONMENT == "development":
+        user.email_verified = True
+        user.email_verified_at = datetime.now(timezone.utc)
+        await db.commit()
+    else:
+        token = generate_token()
+        redis = await get_redis()
+        if redis:
+            await redis.set(f"email_verify:{token}", str(user.id), ex=86400)  # 24h TTL
+            await redis.set(f"email_verify_current:{user.id}", token, ex=86400)
+        asyncio.create_task(_send_verification_bg(user.email, token))
+
     return user
 
 
@@ -224,11 +295,11 @@ async def login(
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
 
-    if user is None or not verify_password(body.password, user.hashed_password):
+    if user is None:
         _record_login_attempt_bg(
             email=body.email,
             success=False,
-            user_id=user.id if user else None,
+            user_id=None,
             ip_address=request.client.host if request.client else "unknown",
             user_agent=request.headers.get("user-agent", "")[:500],
             failure_reason="invalid_credentials",
@@ -236,6 +307,21 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
+        )
+
+    # Check for deleted account (before is_active check)
+    if user.deleted_at is not None:
+        _record_login_attempt_bg(
+            email=body.email,
+            success=False,
+            user_id=user.id,
+            ip_address=request.client.host if request.client else "unknown",
+            user_agent=request.headers.get("user-agent", "")[:500],
+            failure_reason="account_deleted",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This account has been deleted. Contact support within 30 days to recover.",
         )
 
     if not user.is_active:
@@ -250,6 +336,35 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Account is disabled",
+        )
+
+    # Google-only user has no password
+    if user.hashed_password is None:
+        _record_login_attempt_bg(
+            email=body.email,
+            success=False,
+            user_id=user.id,
+            ip_address=request.client.host if request.client else "unknown",
+            user_agent=request.headers.get("user-agent", "")[:500],
+            failure_reason="no_password_set",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No password set. Use Google Sign-In or set a password in Account Settings.",
+        )
+
+    if not verify_password(body.password, user.hashed_password):
+        _record_login_attempt_bg(
+            email=body.email,
+            success=False,
+            user_id=user.id,
+            ip_address=request.client.host if request.client else "unknown",
+            user_agent=request.headers.get("user-agent", "")[:500],
+            failure_reason="invalid_credentials",
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
         )
 
     access_token = create_access_token(user.id)
@@ -358,6 +473,544 @@ async def get_me(
         role=user.role.value,
         is_active=user.is_active,
     )
+
+
+# ---------------------------------------------------------------------------
+# Email verification endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/verify-email", response_class=HTMLResponse)
+async def verify_email_page(token: str = "") -> HTMLResponse:
+    """Render HTML page that auto-POSTs the verification token (bot protection)."""
+    # Sanitize token — only allow URL-safe base64 chars (defense-in-depth)
+    safe_token = re.sub(r"[^A-Za-z0-9_\-]", "", token)
+    html = f"""<!DOCTYPE html>
+<html><head><title>Verifying email...</title></head>
+<body>
+<p id="msg">Verifying your email...</p>
+<script>
+function setMessage(text) {{
+    var el = document.getElementById('msg');
+    if (el) el.textContent = text;
+}}
+fetch('/api/v1/auth/verify-email', {{
+    method: 'POST',
+    headers: {{'Content-Type': 'application/json'}},
+    body: JSON.stringify({{token: '{safe_token}'}}),
+    credentials: 'include'
+}}).then(r => {{
+    if (r.ok) window.location.href = '/login?verified=true';
+    else setMessage('Invalid or expired link. Please request a new one.');
+}}).catch(() => {{
+    setMessage('Something went wrong. Please try again.');
+}});
+</script>
+</body></html>"""
+    return HTMLResponse(content=html)
+
+
+@router.post("/verify-email", response_model=MessageResponse)
+async def verify_email(
+    body: VerifyEmailRequest,
+    db: AsyncSession = Depends(get_async_session),
+) -> MessageResponse:
+    """Verify email address with token."""
+    redis = await get_redis()
+    if not redis:
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
+
+    key = f"email_verify:{body.token}"
+    user_id_str = await redis.get(key)
+    if not user_id_str:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+
+    # Decode user_id (might be bytes from Redis)
+    if isinstance(user_id_str, bytes):
+        user_id_str = user_id_str.decode()
+
+    user_id = uuid.UUID(user_id_str)
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid verification token")
+
+    # Delete token first (single-use, prevents race condition)
+    await redis.delete(key)
+
+    user.email_verified = True
+    user.email_verified_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return MessageResponse(message="Email verified")
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+@limiter.limit("3/hour")
+async def resend_verification(
+    request: Request,
+    user: User = Depends(get_current_user),
+) -> MessageResponse:
+    """Resend verification email. Rate limited to 3/hour."""
+    if user.email_verified:
+        return MessageResponse(message="Email already verified")
+
+    token = generate_token()
+    redis = await get_redis()
+    if redis:
+        # Invalidate previous token if tracked
+        old_token = await redis.get(f"email_verify_current:{user.id}")
+        if old_token:
+            if isinstance(old_token, bytes):
+                old_token = old_token.decode()
+            await redis.delete(f"email_verify:{old_token}")
+
+        # Store new token + track it per user
+        await redis.set(f"email_verify:{token}", str(user.id), ex=86400)
+        await redis.set(f"email_verify_current:{user.id}", token, ex=86400)
+
+    asyncio.create_task(_send_verification_bg(user.email, token))
+    return MessageResponse(message="Verification email sent")
+
+
+# --- Password reset & account settings ---
+
+
+@router.post("/forgot-password", response_model=MessageResponse)
+@limiter.limit("3/hour")
+async def forgot_password(
+    request: Request,
+    body: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_async_session),
+) -> MessageResponse:
+    """Request password reset. Always returns 200 (no email enumeration)."""
+    # Per-email rate limit (3/hour) via Redis — supplements IP-based limiter
+    redis = await get_redis()
+    if redis:
+        rate_key = f"forgot_pw_rate:{body.email}"
+        count = await redis.incr(rate_key)
+        if count == 1:
+            await redis.expire(rate_key, 3600)
+        if count > 3:
+            return MessageResponse(message=_RESET_SENT_MSG)
+
+    result = await db.execute(select(User).where(User.email == body.email))
+    user = result.scalar_one_or_none()
+
+    if user:
+        if user.hashed_password is None:
+            # Google-only user
+            asyncio.create_task(_send_reset_email_bg(user.email, "", google_only=True))
+        else:
+            token = generate_token()
+            redis = await get_redis()
+            if redis:
+                await redis.set(f"password_reset:{token}", str(user.id), ex=3600)  # 1h TTL
+            asyncio.create_task(_send_reset_email_bg(user.email, token))
+
+    # Always return same response (no email enumeration)
+    return MessageResponse(message=_RESET_SENT_MSG)
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+@limiter.limit("5/hour")
+async def reset_password(
+    request: Request,
+    body: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_async_session),
+) -> MessageResponse:
+    """Reset password with token. Revokes all sessions."""
+    if not PASSWORD_PATTERN.match(body.new_password):
+        raise HTTPException(status_code=422, detail=_PW_STRENGTH_MSG)
+
+    redis = await get_redis()
+    if not redis:
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
+
+    key = f"password_reset:{body.token}"
+    user_id_str = await redis.get(key)
+    if not user_id_str:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    if isinstance(user_id_str, bytes):
+        user_id_str = user_id_str.decode()
+
+    user_id = uuid.UUID(user_id_str)
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid reset token")
+
+    user.hashed_password = hash_password(body.new_password)
+    await db.commit()
+
+    # Delete token (single-use) and revoke all sessions
+    await redis.delete(key)
+    await set_user_revocation(user.id)
+
+    return MessageResponse(message="Password reset. Please log in.")
+
+
+@router.post("/change-password", response_model=MessageResponse)
+@limiter.limit("5/hour")
+async def change_password(
+    request: Request,
+    body: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MessageResponse:
+    """Change password (requires current password). Revokes other sessions."""
+    if not PASSWORD_PATTERN.match(body.new_password):
+        raise HTTPException(status_code=422, detail=_PW_STRENGTH_MSG)
+
+    # Must have a password to change it
+    if isinstance(user, CachedUser):
+        if not user.has_password:
+            raise HTTPException(status_code=400, detail=_NO_PW_MSG)
+        result = await db.execute(select(User).where(User.id == user.id))
+        db_user = result.scalar_one_or_none()
+        if not db_user:
+            raise HTTPException(status_code=401, detail="User not found")
+    else:
+        if user.hashed_password is None:
+            raise HTTPException(status_code=400, detail=_NO_PW_MSG)
+        db_user = user
+
+    if not verify_password(body.current_password, db_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    db_user.hashed_password = hash_password(body.new_password)
+    await db.commit()
+
+    # Revoke all other sessions
+    await set_user_revocation(user.id)
+
+    return MessageResponse(message="Password changed")
+
+
+@router.post("/set-password", response_model=MessageResponse)
+@limiter.limit("5/hour")
+async def set_password(
+    request: Request,
+    body: SetPasswordRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MessageResponse:
+    """Set password for Google-only users (no current password needed)."""
+    if not PASSWORD_PATTERN.match(body.new_password):
+        raise HTTPException(status_code=422, detail=_PW_STRENGTH_MSG)
+
+    # Only allowed when no password is set
+    if isinstance(user, CachedUser):
+        if user.has_password:
+            raise HTTPException(status_code=400, detail=_PW_ALREADY_SET_MSG)
+        result = await db.execute(select(User).where(User.id == user.id))
+        db_user = result.scalar_one_or_none()
+        if not db_user:
+            raise HTTPException(status_code=401, detail="User not found")
+    else:
+        if user.hashed_password is not None:
+            raise HTTPException(status_code=400, detail=_PW_ALREADY_SET_MSG)
+        db_user = user
+
+    db_user.hashed_password = hash_password(body.new_password)
+    await db.commit()
+
+    return MessageResponse(message="Password set")
+
+
+@router.get("/account", response_model=AccountInfoResponse)
+async def get_account_info(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> AccountInfoResponse:
+    """Return account info for settings page."""
+    result = await db.execute(
+        select(OAuthAccount).where(
+            OAuthAccount.user_id == user.id,
+            OAuthAccount.provider == "google",
+        )
+    )
+    google_oauth = result.scalar_one_or_none()
+
+    has_pw = user.has_password if isinstance(user, CachedUser) else user.hashed_password is not None
+
+    return AccountInfoResponse(
+        id=user.id,
+        email=user.email,
+        email_verified=user.email_verified,
+        has_password=has_pw,
+        google_linked=google_oauth is not None,
+        google_email=google_oauth.provider_email if google_oauth else None,
+        created_at=user.created_at,
+    )
+
+
+@router.post("/delete-account", response_model=MessageResponse)
+@limiter.limit("3/hour")
+async def delete_account(
+    request: Request,
+    body: DeleteAccountRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MessageResponse:
+    """Soft-delete account. Anonymize, deactivate, revoke tokens."""
+    if body.confirmation != "DELETE":
+        raise HTTPException(status_code=400, detail='Type "DELETE" to confirm')
+
+    # Re-auth: password users must provide password
+    if isinstance(user, CachedUser):
+        result = await db.execute(select(User).where(User.id == user.id))
+        db_user = result.scalar_one_or_none()
+        if not db_user:
+            raise HTTPException(status_code=401, detail="User not found")
+        has_pw = user.has_password
+    else:
+        db_user = user
+        has_pw = user.hashed_password is not None
+
+    if has_pw:
+        if not body.password:
+            raise HTTPException(status_code=400, detail="Password required")
+        if not verify_password(body.password, db_user.hashed_password):
+            raise HTTPException(status_code=401, detail="Incorrect password")
+
+    # Send deletion email BEFORE anonymizing
+    original_email = db_user.email
+    asyncio.create_task(_send_deletion_email_bg(original_email))
+
+    # Anonymize and deactivate
+    db_user.email = f"deleted_{uuid.uuid4()}@removed.local"
+    db_user.hashed_password = None
+    db_user.is_active = False
+    db_user.deleted_at = datetime.now(timezone.utc)
+
+    # Remove OAuth links
+    result = await db.execute(select(OAuthAccount).where(OAuthAccount.user_id == db_user.id))
+    for oauth in result.scalars().all():
+        await db.delete(oauth)
+
+    await db.commit()
+
+    # Revoke all tokens
+    await set_user_revocation(db_user.id)
+
+    return MessageResponse(message="Account scheduled for deletion")
+
+
+# ---------------------------------------------------------------------------
+# Google OAuth endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/google/authorize")
+@limiter.limit("10/minute")
+async def google_authorize(
+    request: Request,
+    next: str = "/dashboard",
+) -> RedirectResponse:
+    """Redirect to Google OAuth consent screen.
+
+    Args:
+        request: The incoming request (required by rate limiter).
+        next: URL to redirect to after successful authentication.
+
+    Returns:
+        A redirect to Google's OAuth consent screen.
+    """
+    if not settings.GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=503, detail="Google OAuth not configured")
+
+    # Validate redirect target (prevent open redirect)
+    safe_next = next if next.startswith("/") and not next.startswith("//") else "/dashboard"
+    auth_url, _ = await build_auth_url(next_url=safe_next)
+    return RedirectResponse(url=auth_url, status_code=302)
+
+
+@router.get("/google/callback")
+@limiter.limit("10/minute")
+async def google_callback(
+    request: Request,
+    code: str = "",
+    state: str = "",
+    db: AsyncSession = Depends(get_async_session),
+) -> RedirectResponse:
+    """Handle Google OAuth callback.
+
+    Exchanges code for user info, creates/links account, sets cookies.
+
+    Handles three flows:
+    1. Returning user (sub already linked) — log in.
+    2. Existing user by email (auto-link) — link + log in.
+    3. New user — create account + log in.
+
+    Args:
+        request: The incoming request (required by rate limiter).
+        code: Authorization code from Google.
+        state: State token for CSRF protection.
+        db: Async database session.
+
+    Returns:
+        A redirect to the post-login destination with auth cookies set.
+    """
+    if not code or not state:
+        raise HTTPException(status_code=400, detail="Missing code or state parameter")
+
+    # Exchange code for user info
+    try:
+        google_user, next_url = await exchange_code(code, state)
+    except ValueError:
+        logger.exception("Google OAuth exchange failed")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid or expired session. Please try again.",
+        )
+    except Exception:
+        logger.exception("Google OAuth API error")
+        raise HTTPException(
+            status_code=502,
+            detail="Google Sign-In temporarily unavailable. Use email/password.",
+        )
+
+    if not google_user.email_verified:
+        raise HTTPException(status_code=400, detail="Google account email not verified")
+
+    # --- Flow 1: Check if Google sub already linked ---
+    result = await db.execute(
+        select(OAuthAccount).where(
+            OAuthAccount.provider == "google",
+            OAuthAccount.provider_sub == google_user.sub,
+        )
+    )
+    existing_oauth = result.scalar_one_or_none()
+
+    if existing_oauth:
+        # Returning Google user — look up their account
+        result = await db.execute(select(User).where(User.id == existing_oauth.user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=401, detail="Account not found")
+        if user.deleted_at:
+            raise HTTPException(
+                status_code=401,
+                detail="This account has been deleted. Contact support within 30 days to recover.",
+            )
+        if not user.is_active:
+            raise HTTPException(status_code=401, detail="Account is disabled")
+    else:
+        # --- Flow 2: Check if email matches an existing user ---
+        result = await db.execute(select(User).where(User.email == google_user.email))
+        user = result.scalar_one_or_none()
+
+        if user:
+            # Auto-link Google to existing account
+            if not user.is_active:
+                raise HTTPException(status_code=401, detail="Account is disabled")
+            if user.deleted_at:
+                raise HTTPException(
+                    status_code=401,
+                    detail=(
+                        "This account has been deleted. Contact support within 30 days to recover."
+                    ),
+                )
+
+            # Check if user already has a different Google account linked
+            result = await db.execute(
+                select(OAuthAccount).where(
+                    OAuthAccount.user_id == user.id,
+                    OAuthAccount.provider == "google",
+                )
+            )
+            if result.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=409,
+                    detail="A different Google account is already linked to this user.",
+                )
+
+            oauth_account = OAuthAccount(
+                user_id=user.id,
+                provider="google",
+                provider_sub=google_user.sub,
+                provider_email=google_user.email,
+            )
+            db.add(oauth_account)
+
+            # Auto-verify email if not already verified
+            if not user.email_verified:
+                user.email_verified = True
+                user.email_verified_at = datetime.now(timezone.utc)
+
+            await db.commit()
+        else:
+            # --- Flow 3: New user — create account ---
+            user = User(
+                email=google_user.email,
+                hashed_password=None,
+                email_verified=True,
+                email_verified_at=datetime.now(timezone.utc),
+            )
+            db.add(user)
+            await db.flush()
+
+            # Create default preferences
+            preference = UserPreference(user_id=user.id)
+            db.add(preference)
+
+            oauth_account = OAuthAccount(
+                user_id=user.id,
+                provider="google",
+                provider_sub=google_user.sub,
+                provider_email=google_user.email,
+            )
+            db.add(oauth_account)
+            await db.commit()
+            await db.refresh(user)
+
+    # Issue JWT tokens and set cookies
+    access_token = create_access_token(user.id)
+    refresh_token = create_refresh_token(user.id)
+
+    redirect = RedirectResponse(url=next_url, status_code=302)
+    _set_auth_cookies(redirect, access_token, refresh_token)
+
+    # Record login attempt
+    _record_login_attempt_bg(
+        email=user.email,
+        success=True,
+        user_id=user.id,
+        ip_address=request.client.host if request.client else "unknown",
+        user_agent=request.headers.get("user-agent", "")[:500],
+        method="google_oauth",
+    )
+
+    return redirect
+
+
+@router.post("/google/unlink", response_model=MessageResponse)
+async def google_unlink(
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MessageResponse:
+    """Unlink Google account. Blocked if no password set (lockout prevention)."""
+    result = await db.execute(
+        select(OAuthAccount).where(
+            OAuthAccount.user_id == user.id,
+            OAuthAccount.provider == "google",
+        )
+    )
+    oauth = result.scalar_one_or_none()
+    if not oauth:
+        raise HTTPException(status_code=400, detail="No Google account linked")
+
+    # Check if user has a password (lockout prevention)
+    has_pw = user.has_password if isinstance(user, CachedUser) else user.hashed_password is not None
+    if not has_pw:
+        raise HTTPException(status_code=400, detail="Set a password before unlinking Google")
+
+    await db.delete(oauth)
+    await db.commit()
+
+    return MessageResponse(message="Google account unlinked")
 
 
 # ---------------------------------------------------------------------------
@@ -545,3 +1198,65 @@ async def oidc_userinfo(
             "auth_provider": "local",
         }
     )
+
+
+# --- Admin endpoints ---
+
+
+@router.post("/admin/users/{user_id}/verify-email", response_model=MessageResponse)
+async def admin_verify_email(
+    user_id: uuid.UUID,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MessageResponse:
+    """Admin: manually verify a user's email."""
+    require_admin(user)
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    target.email_verified = True
+    target.email_verified_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return MessageResponse(message="Email verified")
+
+
+@router.post("/admin/users/{user_id}/recover", response_model=MessageResponse)
+async def admin_recover_account(
+    user_id: uuid.UUID,
+    body: AdminRecoverAccountRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> MessageResponse:
+    """Admin: recover a soft-deleted account within 30-day window."""
+    require_admin(user)
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    target = result.scalar_one_or_none()
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if not target.deleted_at:
+        raise HTTPException(status_code=400, detail="Account is not deleted")
+
+    # Check 30-day window
+    days_since = (datetime.now(timezone.utc) - target.deleted_at).days
+    if days_since > 30:
+        raise HTTPException(status_code=400, detail="Recovery window expired (30 days)")
+
+    # Check new email not taken
+    existing = await db.execute(select(User).where(User.email == body.new_email))
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=409, detail="Email already in use")
+
+    target.email = body.new_email
+    target.is_active = True
+    target.deleted_at = None
+    target.email_verified = False
+    target.email_verified_at = None
+    await db.commit()
+
+    return MessageResponse(message="Account recovered. User must verify new email.")

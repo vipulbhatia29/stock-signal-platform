@@ -40,6 +40,7 @@ dependencies = [
     "pandas-ta-openbb>=0.4.24",
     "quantstats>=0.0.81",
     "pyportfolioopt>=1.6.0",
+    "resend>=2.27.0",
 ]
 
 [dependency-groups]

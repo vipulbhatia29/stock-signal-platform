@@ -120,19 +120,37 @@ export function SidebarNav() {
 
       {/* Bottom: settings + logout — padded above Next.js dev badge */}
       <div className="flex flex-col items-center gap-1 w-full mb-8">
-        {/* Settings — disabled */}
+        {/* Account */}
         <Tooltip>
           <TooltipTrigger
             render={
-              <button className="w-full h-10 flex items-center justify-center text-subtle/40 cursor-not-allowed">
-                <span className="w-10 h-10 rounded-lg flex items-center justify-center">
+              <Link
+                href="/account"
+                aria-label="Account"
+                className={cn(
+                  "relative w-full h-10 flex items-center justify-center",
+                  pathname.startsWith("/account") ? "text-cyan" : "text-subtle hover:text-muted-foreground"
+                )}
+              >
+                {pathname.startsWith("/account") && (
+                  <span
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-cyan rounded-r-sm"
+                    style={{ boxShadow: "0 0 8px var(--cg)" }}
+                  />
+                )}
+                <span
+                  className={cn(
+                    "w-10 h-10 rounded-lg flex items-center justify-center transition-colors",
+                    pathname.startsWith("/account") ? "bg-[var(--cdim)]" : "hover:bg-hov"
+                  )}
+                >
                   <Settings size={18} />
                 </span>
-              </button>
+              </Link>
             }
           />
           <TooltipContent side="right" className="text-xs">
-            Settings (Coming Soon)
+            Account
           </TooltipContent>
         </Tooltip>
 

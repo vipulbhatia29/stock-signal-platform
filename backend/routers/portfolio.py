@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
-from backend.dependencies import get_current_user
+from backend.dependencies import get_current_user, require_verified_email
 from backend.models.signal import SignalSnapshot
 from backend.models.user import User
 from backend.routers.preferences import _get_or_create_preference
@@ -69,6 +69,7 @@ async def create_transaction(
     - Ticker not found in stocks table
     - SELL exceeds available shares
     """
+    require_verified_email(current_user)
     from backend.models.portfolio import Transaction
 
     portfolio = await get_or_create_portfolio(current_user.id, db)
@@ -172,6 +173,7 @@ async def delete_transaction(
     without sufficient BUY lots.
     Returns 404 if transaction not found or belongs to another user.
     """
+    require_verified_email(current_user)
     portfolio = await get_or_create_portfolio(current_user.id, db)
 
     try:

@@ -157,3 +157,73 @@ export async function logoutRequest(): Promise<void> {
     credentials: "include",
   });
 }
+
+// --- Google OAuth ---
+export function getGoogleAuthUrl(next?: string): string {
+  const params = next ? `?next=${encodeURIComponent(next)}` : "";
+  return `${API_BASE}/auth/google/authorize${params}`;
+}
+
+// --- Email Verification ---
+export function verifyEmail(token: string): Promise<void> {
+  return post("/auth/verify-email", { token });
+}
+
+export function resendVerification(): Promise<void> {
+  return post("/auth/resend-verification");
+}
+
+// --- Password Reset ---
+export function forgotPassword(email: string): Promise<void> {
+  return post("/auth/forgot-password", { email });
+}
+
+export function resetPassword(
+  token: string,
+  newPassword: string
+): Promise<void> {
+  return post("/auth/reset-password", { token, new_password: newPassword });
+}
+
+// --- Account Settings ---
+export interface AccountInfo {
+  id: string;
+  email: string;
+  email_verified: boolean;
+  has_password: boolean;
+  google_linked: boolean;
+  google_email: string | null;
+  created_at: string;
+}
+
+export function getAccountInfo(): Promise<AccountInfo> {
+  return get("/auth/account");
+}
+
+export function changePassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  return post("/auth/change-password", {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+}
+
+export function setPassword(newPassword: string): Promise<void> {
+  return post("/auth/set-password", { new_password: newPassword });
+}
+
+export function unlinkGoogle(): Promise<void> {
+  return post("/auth/google/unlink");
+}
+
+export function deleteAccount(
+  confirmation: string,
+  password?: string
+): Promise<void> {
+  return post("/auth/delete-account", {
+    confirmation,
+    password: password ?? null,
+  });
+}

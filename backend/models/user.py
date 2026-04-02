@@ -22,6 +22,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
+    from backend.models.oauth_account import OAuthAccount
     from backend.models.portfolio import Portfolio
     from backend.models.stock import Watchlist
 
@@ -39,13 +40,18 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "users"
 
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
-    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    hashed_password: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, name="user_role", values_callable=lambda e: [m.value for m in e]),
         default=UserRole.USER,
         nullable=False,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    email_verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     preference: Mapped[UserPreference | None] = relationship(
@@ -58,6 +64,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         cascade="all, delete-orphan",
     )
     portfolio: Mapped[Portfolio | None] = relationship(back_populates="user", uselist=False)
+    oauth_accounts: Mapped[list["OAuthAccount"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
 
 class UserPreference(UUIDPrimaryKeyMixin, Base):

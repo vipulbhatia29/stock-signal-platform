@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
-from backend.dependencies import get_current_user
+from backend.dependencies import get_current_user, require_verified_email
 from backend.models.user import User
 from backend.rate_limit import limiter
 from backend.schemas.stock import WatchlistAddRequest, WatchlistItemResponse
@@ -70,6 +70,7 @@ async def add_to_watchlist(
     this ticker on their watchlist, returns 409 Conflict. If the watchlist
     is at the 100-ticker limit, returns 400 Bad Request.
     """
+    require_verified_email(current_user)
     try:
         return await add_to_watchlist_svc(current_user.id, body.ticker, db)
     except StockNotFoundError:
@@ -102,6 +103,7 @@ async def remove_from_watchlist(
     Returns 204 No Content on success (standard REST pattern for DELETE).
     Returns 404 if the ticker isn't in the user's watchlist.
     """
+    require_verified_email(current_user)
     try:
         await remove_from_watchlist_svc(current_user.id, ticker, db)
     except StockNotFoundError:
@@ -123,6 +125,7 @@ async def acknowledge_watchlist_price(
     indicator in the UI until a newer price arrives.
     Returns 404 if the ticker is not in the user's watchlist.
     """
+    require_verified_email(current_user)
     try:
         return await acknowledge_price(current_user.id, ticker, db)
     except StockNotFoundError:
@@ -145,6 +148,7 @@ async def refresh_all_watchlist(
     Returns a list of {ticker, task_id} for the frontend to poll task status.
     Rate limited to 2 requests/minute (expensive yfinance operation).
     """
+    require_verified_email(current_user)
     tickers = await get_watchlist_tickers(current_user.id, db)
 
     tasks = []
