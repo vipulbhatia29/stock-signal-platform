@@ -28,14 +28,14 @@ Part-time investors — professionals who:
 
 Computes technical and fundamental indicators for 500+ stocks, synthesized into a single **composite score (0-10)** that blends:
 
-| Technical Signals (50%) | Fundamental Signals (50%) |
+| Technical Signals (50%) | Fundamental Score (50%) |
 |------------------------|--------------------------|
-| RSI (14-period) — overbought/oversold | P/E Ratio |
-| MACD (12,26,9) — momentum | PEG Ratio |
-| SMA 50/200 Crossover — golden/death cross | Free Cash Flow Yield |
-| Bollinger Bands (20,2) — volatility position | Debt-to-Equity |
-| Annualized Return, Volatility, Sharpe Ratio | Piotroski F-Score (9 criteria) |
-| | Revenue/Earnings Growth, Margins, ROE |
+| RSI (14-period) — overbought/oversold | Piotroski F-Score (0-9, scaled to 0-5 pts) |
+| MACD (12,26,9) — momentum | |
+| SMA 50/200 Crossover — golden/death cross | **Also materialized (not scored):** |
+| Bollinger Bands (20,2) — volatility position | P/E, PEG, FCF Yield, D/E, margins, ROE |
+| Annualized Return, Volatility, Sharpe Ratio | Revenue/Earnings Growth, analyst targets |
+| Sortino, Max Drawdown, Alpha, Beta (via QuantStats) | |
 
 **Score interpretation:** 8-10 = BUY, 5-7 = WATCH, <5 = AVOID. Scores are portfolio-aware — if you already hold a stock at full allocation, it becomes HOLD instead of BUY.
 
@@ -71,13 +71,34 @@ Data-driven multi-provider cascade configured via `llm_model_config` table in th
 
 Features token budgeting per tier, per-query cost tracking, and Redis-backed rate limiting with Lua scripts for atomic operations.
 
-### Prophet Forecasting
+### Prophet Forecasting & Backtesting
 
 - Stock-level + 11 SPDR sector ETF + portfolio-level forecasts
-- 90/180/270-day prediction horizons
-- Biweekly model retraining with drift detection (MAPE > 20% triggers automatic retrain)
+- 90/180/270-day prediction horizons with confidence intervals
+- Biweekly model retraining with **per-ticker calibrated drift detection** (threshold = `backtest_mape × 1.5`, self-healing demotion after 3 consecutive failures)
+- Walk-forward backtesting engine with 5 metrics (MAPE, MAE, RMSE, direction accuracy, CI containment)
 - VIX regime overlay for forecast confidence
-- Forecast accuracy tracking and evaluation against actuals
+- AccuracyBadge component showing model accuracy tier (Excellent/Good/Fair/Poor)
+- News sentiment regressors feeding Prophet (stock, sector, macro — feature-flagged)
+
+### News Sentiment Pipeline
+
+- 4 news providers: **Finnhub** (primary), **SEC EDGAR** (8-K filings), **Fed RSS/FRED** (macro), **Google News** (fallback)
+- LLM-based sentiment scoring (GPT-4o-mini) with event type classification
+- 3 sentiment channels: stock-level, sector-level, macro-level
+- Exponential decay aggregation for daily sentiment rollups
+- 4x/day ingestion + scoring via Celery tasks
+- Quality flags: ok, suspect (low confidence), invalidated (manual override)
+- XML parsing uses `defusedxml` for XXE safety
+
+### Signal Convergence & Divergence UX
+
+- Multi-signal convergence analysis across 5+ indicators (RSI, MACD, SMA, Piotroski, Prophet forecast, news sentiment)
+- **Traffic light UX** — signal-by-signal bullish/bearish/neutral display with color coding
+- **Divergence alerts** — warning when forecast direction opposes technical signal majority
+- Historical hit rate computation for divergence patterns
+- Natural-language rationale explaining each convergence state
+- Portfolio-level and sector-level convergence aggregation
 
 ### Portfolio Tracker
 
@@ -86,8 +107,9 @@ Features token budgeting per tier, per-query cost tracking, and Redis-backed rat
 - Sector allocation breakdown with concentration warnings
 - Dividend tracking with full payment history
 - Divestment rules engine (stop-loss, concentration limits, fundamental deterioration)
-- Rebalancing suggestions with specific dollar amounts
+- Rebalancing suggestions (3 strategies: min volatility, max Sharpe, risk parity via PyPortfolioOpt)
 - Daily portfolio snapshots for historical value tracking
+- **Portfolio forecast:** Black-Litterman allocation, Monte Carlo simulation (10K paths), CVaR (95th/99th percentile)
 
 ### Stock Intelligence & Recommendations
 
@@ -107,16 +129,21 @@ Features token budgeting per tier, per-query cost tracking, and Redis-backed rat
 
 ### Nightly Automation Pipeline
 
-An 8-step Celery Beat pipeline runs at 9:30 PM ET every trading day:
+An 11-step Celery Beat pipeline runs at 9:30 PM ET every trading day:
 
 1. **Price refresh** — fetch latest prices, recompute all signals
 2. **Forecast refresh** — re-predict using active Prophet models
 3. **Recommendations** — generate BUY/SELL/WATCH/AVOID per user
 4. **Forecast evaluation** — compare matured predictions vs actuals
 5. **Recommendation evaluation** — compare past calls vs SPY benchmark at 30/90/180d
-6. **Drift detection** — MAPE drift + volatility spikes + VIX regime
-7. **Alert generation** — signal flips, new buy opportunities, drift warnings
-8. **Portfolio snapshots** — capture end-of-day portfolio value
+6. **Drift detection** — per-ticker calibrated thresholds + volatility spikes + VIX regime
+7. **Convergence snapshot** — compute 5-signal alignment for all tracked tickers
+8. **Alert generation** — signal flips, new buy opportunities, drift warnings, divergence alerts
+9. **Health snapshots** — portfolio health grade computation
+10. **Rebalancing** — materialize optimized position suggestions
+11. **Portfolio snapshots** — capture end-of-day portfolio value
+
+Additionally: news ingestion runs 4x/day (6, 10, 14, 18 ET), sentiment scoring 1 hour after each ingest, and warm data syncs (analyst consensus, FRED, institutional holders) run at 6-7 AM ET daily.
 
 ### Authentication & Account Management
 
@@ -144,7 +171,8 @@ Every AI interaction is instrumented end-to-end:
 - **Langfuse tracing** — parallel traces for chat sessions, ReAct loop spans, and LLM generations
 - **Provider cascade metrics** — fallback rates, latency percentiles, token usage by tier
 - **Assessment engine** — golden dataset of 20 queries scored across 5 dimensions for regression detection
-- **Platform Command Center** — admin-only `/admin/command-center` dashboard with 4 zones (System Health, API Traffic, LLM Operations, Pipeline) + 3 drill-down sheets, 15s auto-polling, per-zone circuit breakers
+- **Admin LLM management** — hot-reload model configs, chat session audit with full transcripts
+- **Platform Command Center** — admin-only `/admin/command-center` dashboard with **5 zones** (System Health, API Traffic, LLM Operations, Pipeline, Forecast Health) + 3 drill-down sheets, 15s auto-polling, per-zone circuit breakers
 
 ### MCP Tool Server
 
@@ -164,17 +192,21 @@ Four TTL tiers: volatile (60s), standard (5min), stable (1hr), session (until ch
 
 ## Data Sources
 
-| Source | Data | Cost |
-|--------|------|------|
-| [yfinance](https://github.com/ranaroussi/yfinance) | OHLCV prices, fundamentals, analyst targets, earnings, dividends, news | Free |
-| [FRED API](https://fred.stlouisfed.org/docs/api/) | Macro indicators — yield curve, unemployment, GDP (via MCP) | Free (API key) |
-| [Edgar](https://www.sec.gov/edgar/) | SEC filings — 10-K, 10-Q, 8-K (via MCP) | Free |
-| [Finnhub](https://finnhub.io/) | Analyst ratings, ESG scores, supply chain data (via MCP) | Free tier |
-| [Alpha Vantage](https://www.alphavantage.co/) | News sentiment analysis (via MCP) | Free tier |
-| [SerpAPI](https://serpapi.com/) | Web/news search for the AI agent | Free tier (100/month) |
-| Wikipedia | S&P 500, NASDAQ-100, Dow 30 constituent lists | Free |
+| Source | Data | Integration | Cost |
+|--------|------|-------------|------|
+| [yfinance](https://github.com/ranaroussi/yfinance) | OHLCV prices, fundamentals, analyst targets, earnings, dividends | Direct | Free |
+| [Finnhub](https://finnhub.io/) | Stock + market news, analyst ratings, ESG, supply chain | Direct (news) + MCP (agent) | Free tier |
+| [SEC EDGAR](https://www.sec.gov/edgar/) | 8-K/10-K filings for company events | Direct (news) + MCP (agent) | Free |
+| [Federal Reserve](https://www.federalreserve.gov/) | Fed press releases, FRED economic data releases | Direct (news RSS) | Free |
+| [Google News](https://news.google.com/) | Broad stock + market news (RSS fallback) | Direct (RSS) | Free |
+| [FRED API](https://fred.stlouisfed.org/docs/api/) | Macro indicators — yield curve, unemployment, GDP | MCP | Free (API key) |
+| [Alpha Vantage](https://www.alphavantage.co/) | News sentiment analysis | MCP | Free tier |
+| [SerpAPI](https://serpapi.com/) | Web/news search for the AI agent | Direct | Free tier (100/month) |
+| Wikipedia | S&P 500, NASDAQ-100, Dow 30 constituent lists | Direct | Free |
+| [Resend](https://resend.com/) | Transactional email (verification, password reset) | Direct | Free tier |
+| [Google OAuth](https://developers.google.com/identity) | OAuth 2.0 authentication + JWKS validation | Direct | Free |
 
-No paid data subscriptions required. All core functionality works with just the free yfinance library.
+No paid data subscriptions required. All core functionality works with just the free yfinance library. XML parsing uses `defusedxml` for XXE safety.
 
 ## Tech Stack
 
@@ -331,24 +363,22 @@ graph TB
     end
 
     subgraph FastAPI["FastAPI :8181"]
-        MW["Middleware<br/>CORS | JWT | Rate Limit"]
+        MW["Middleware<br/>CORS | JWT | Rate Limit | HttpMetrics"]
 
-        subgraph Routers["15 Routers"]
-            R_Auth["/auth<br/>register, login, refresh, OAuth,<br/>verify, reset, account, admin"]
-            R_Stocks["/stocks<br/>signals, prices, fundamentals,<br/>screener, watchlist, ingest"]
-            R_Portfolio["/portfolio<br/>transactions, positions, summary,<br/>rebalancing, snapshots, dividends"]
+        subgraph Routers["19 Routers"]
+            R_Auth["/auth<br/>register, login, OAuth,<br/>verify, reset, account"]
+            R_Stocks["/stocks<br/>signals, screener, watchlist"]
+            R_Portfolio["/portfolio<br/>transactions, positions,<br/>rebalancing, forecast"]
             R_Chat["/chat<br/>stream, sessions, feedback"]
             R_Forecast["/forecasts<br/>ticker, sector, portfolio"]
-            R_Alerts["/alerts<br/>list, dismiss, bulk-dismiss"]
-            R_Market["/market<br/>market data"]
-            R_News["/news<br/>news feed"]
-            R_Sectors["/sectors<br/>summary, stocks, correlation"]
-            R_Indexes["/indexes<br/>list, memberships"]
-            R_Prefs["/preferences<br/>get, update"]
-            R_Tasks["/tasks<br/>nightly pipeline trigger"]
-            R_Admin["/admin<br/>command center"]
-            R_Health["/health<br/>health check"]
-            R_Obs["/observability<br/>metrics, usage"]
+            R_Alerts["/alerts"]
+            R_Backtest["/backtests<br/>summary, run, calibrate"]
+            R_Conv["/convergence<br/>ticker, portfolio, sector"]
+            R_Sent["/sentiment<br/>ticker, bulk, macro, articles"]
+            R_Pipelines["/admin/pipelines<br/>groups, runs, cache"]
+            R_Admin["/admin<br/>command center, LLM, chat audit"]
+            R_Obs["/observability"]
+            R_Other["+ /market, /news, /sectors,<br/>/indexes, /preferences, /health"]
         end
 
         subgraph Agent["AI Agent Layer"]
@@ -367,8 +397,18 @@ graph TB
             OC["ObservabilityCollector<br/>per-query metrics"]
             LF["Langfuse<br/>parallel tracing"]
             AE["Assessment Engine<br/>golden dataset scoring"]
-            CC["Command Center<br/>4-zone admin dashboard"]
+            CC["Command Center<br/>5-zone admin dashboard"]
             HM["HTTP Metrics<br/>Redis sliding window"]
+        end
+
+        subgraph ServiceLayer["Service Layer"]
+            SL_BT["BacktestEngine"]
+            SL_Conv["SignalConvergenceService"]
+            SL_PF["PortfolioForecastService"]
+            SL_News["NewsIngestionService"]
+            SL_Sent["SentimentScorer"]
+            SL_Cache["CacheInvalidator"]
+            SL_Pipe["PipelineRegistry"]
         end
 
         Cache["Cache Service<br/>Redis 3-tier namespace<br/>4 TTL tiers"]
@@ -382,8 +422,8 @@ graph TB
     end
 
     subgraph Background["Celery"]
-        CW["Worker<br/>8-step nightly pipeline"]
-        CB["Beat Scheduler<br/>9:30 PM ET daily"]
+        CW["Worker<br/>11-step nightly pipeline<br/>+ 4x/day news sentiment"]
+        CB["Beat Scheduler<br/>9:30 PM ET daily + intraday"]
     end
 
     subgraph External["External APIs"]
@@ -402,14 +442,22 @@ graph TB
     MW --> Routers
     Routers --> Agent
     Routers --> ToolLayer
+    Routers --> ServiceLayer
     Agent --> ToolLayer
     Agent --> LLM
     Agent --> Guard
     ToolLayer --> PG
     ToolLayer --> Cache
+    ServiceLayer --> PG
+    ServiceLayer --> Cache
+    SL_News --> FH
+    SL_News --> Edgar
+    SL_Sent --> External
+    SL_Cache --> Redis
     Cache --> Redis
     CB --> CW
     CW --> ToolLayer
+    CW --> ServiceLayer
     ToolLayer --> YF
     ToolLayer --> Serp
     T_MCP --> FRED
@@ -435,8 +483,9 @@ stock-signal-platform/
 │   ├── validation.py        # Input validation (TickerPath, signal enums, dedup)
 │   ├── models/              # SQLAlchemy ORM models (Stock, Signal, Portfolio, Chat, Forecast...)
 │   ├── schemas/             # Pydantic v2 request/response schemas
-│   ├── routers/             # 15 FastAPI route handlers
-│   ├── services/            # Service layer (stock_data, signals, recommendations, portfolio...)
+│   ├── routers/             # 19 FastAPI route handlers (+ backtesting, convergence, sentiment, admin_pipelines)
+│   ├── services/            # Service layer (convergence, portfolio_forecast, rationale, news/, cache_invalidator, pipeline_registry, backtesting...)
+│   │   └── news/            # News providers (Finnhub, EDGAR, Fed RSS, Google) + sentiment scorer
 │   ├── tools/               # 25 internal tools + 4 MCP adapters
 │   │   └── adapters/        # MCP adapters (Edgar, Alpha Vantage, FRED, Finnhub)
 │   ├── agents/              # LangGraph AI agents
@@ -448,7 +497,7 @@ stock-signal-platform/
 │   │   └── providers/       # Anthropic, Groq, OpenAI provider implementations
 │   ├── observability/       # ObservabilityCollector, Langfuse, metrics, admin routers
 │   ├── mcp_server/          # FastMCP server (expose tools via MCP protocol)
-│   ├── tasks/               # Celery background tasks (nightly pipeline, retraining)
+│   ├── tasks/               # 15 Celery task files (nightly pipeline, news sentiment, convergence, assessment, seed)
 │   └── migrations/          # 24 Alembic migrations
 ├── frontend/
 │   ├── src/app/             # Next.js App Router pages
@@ -496,11 +545,11 @@ uv run ruff format backend/ tests/     # Python format
 cd frontend && npm run lint             # TypeScript/React lint
 ```
 
-**Test coverage:** ~1,827 total tests (1,380 backend + 378 frontend + 42 E2E + 27 nightly perf). Tiered test architecture (T0-T4), 14 CI checks via `ci-gate`, 13 custom Semgrep rules as permanent guardrails.
+**Test coverage:** ~2,319 total tests (1,848 backend + 423 frontend + 48 E2E + 27 nightly perf). Coverage: ~69% (floor 60%). Tiered test architecture (T0-T4), 14 CI checks via `ci-gate`, 13 custom Semgrep rules as permanent guardrails.
 
 ## API Endpoints
 
-Endpoints across 15 routers. Key endpoints listed below — full interactive docs at http://localhost:8181/docs (Swagger UI).
+Endpoints across 19 routers. Key endpoints listed below — full interactive docs at http://localhost:8181/docs (Swagger UI).
 
 <details>
 <summary><strong>Auth</strong> — 17 endpoints</summary>
@@ -589,6 +638,59 @@ Endpoints across 15 routers. Key endpoints listed below — full interactive doc
 </details>
 
 <details>
+<summary><strong>Backtesting</strong> — 5 endpoints</summary>
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/backtests/summary/all` | GET | Paginated backtest summary across all tickers |
+| `/api/v1/backtests/{ticker}` | GET | Latest backtest result for a ticker |
+| `/api/v1/backtests/{ticker}/history` | GET | Backtest history for a ticker |
+| `/api/v1/backtests/run` | POST | Trigger backtest run (admin) |
+| `/api/v1/backtests/calibrate` | POST | Trigger seasonality calibration (admin) |
+
+</details>
+
+<details>
+<summary><strong>Convergence</strong> — 4 endpoints</summary>
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/convergence/{ticker}` | GET | Signal convergence with divergence alert + rationale |
+| `/api/v1/convergence/{ticker}/history` | GET | Historical convergence snapshots |
+| `/api/v1/convergence/portfolio/{id}` | GET | Portfolio convergence summary |
+| `/api/v1/sectors/{sector}/convergence` | GET | Sector convergence summary |
+
+</details>
+
+<details>
+<summary><strong>Sentiment</strong> — 4 endpoints</summary>
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/sentiment/{ticker}` | GET | Daily sentiment timeseries |
+| `/api/v1/sentiment/{ticker}/articles` | GET | Paginated articles with scores |
+| `/api/v1/sentiment/bulk` | GET | Bulk sentiment for multiple tickers |
+| `/api/v1/sentiment/macro` | GET | Macro sentiment timeseries |
+
+</details>
+
+<details>
+<summary><strong>Admin Pipelines</strong> — 8 endpoints</summary>
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/admin/pipelines/groups` | GET | List all pipeline groups |
+| `/api/v1/admin/pipelines/groups/{group}` | GET | Get single group with execution plan |
+| `/api/v1/admin/pipelines/groups/{group}/run` | POST | Trigger pipeline group run |
+| `/api/v1/admin/pipelines/runs/{run_id}` | GET | Get run status |
+| `/api/v1/admin/pipelines/groups/{group}/runs` | GET | Get active run for group |
+| `/api/v1/admin/pipelines/groups/{group}/history` | GET | Run history |
+| `/api/v1/admin/pipelines/cache/clear` | POST | Clear cache by pattern |
+| `/api/v1/admin/pipelines/cache/clear-all` | POST | Clear all whitelisted caches |
+
+</details>
+
+<details>
 <summary><strong>Alerts, Market, News, Sectors, Indexes, Preferences, Tasks, Health, Observability</strong></summary>
 
 | Endpoint | Method | Description |
@@ -612,14 +714,20 @@ Endpoints across 15 routers. Key endpoints listed below — full interactive doc
 </details>
 
 <details>
-<summary><strong>Admin / Command Center</strong> — 4 endpoints</summary>
+<summary><strong>Admin / Command Center</strong> — 10 endpoints</summary>
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/admin/command-center` | GET | Aggregate dashboard (4 zones, 10s cache) |
+| `/api/v1/admin/command-center` | GET | Aggregate dashboard (5 zones, 10s cache) |
 | `/api/v1/admin/command-center/api-traffic` | GET | API traffic drill-down |
 | `/api/v1/admin/command-center/llm` | GET | LLM per-model cost + cascade log |
 | `/api/v1/admin/command-center/pipeline` | GET | Pipeline run history |
+| `/api/v1/admin/llm-models` | GET | List LLM model configs |
+| `/api/v1/admin/llm-models/{id}` | PATCH | Update model config (priority, enabled) |
+| `/api/v1/admin/llm-models/reload` | POST | Hot-reload model configs from DB |
+| `/api/v1/admin/chat-sessions` | GET | List all user chat sessions |
+| `/api/v1/admin/chat-sessions/{id}` | GET | Full session transcript |
+| `/api/v1/admin/chat-stats` | GET | Aggregate chat usage stats |
 
 </details>
 
@@ -658,7 +766,13 @@ All configuration is via environment variables in `backend/.env`. See `backend/.
 
 ## Roadmap
 
-- **Forecast Intelligence (Phase 8.6+)** — multi-horizon ensemble forecasting with regime detection, confidence calibration, and forecast-driven recommendations. See [`docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md`](docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md).
+**Recently completed:**
+- **Forecast Intelligence (Phase 8.6+)** ✅ — backtesting engine, news sentiment pipeline (4 providers + LLM scoring), signal convergence UX (traffic lights + divergence alerts), portfolio forecasting (Black-Litterman + Monte Carlo + CVaR), admin pipeline orchestrator. 13 sprints, 4 specs. See [`docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md`](docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md).
+
+**Next up:**
+- **Phase F: Subscriptions + Monetization** — Stripe integration, tier enforcement (Free/Pro/Premium), LLM tier routing
+- **Phase G: Cloud Deployment** — Docker Compose, MCP transport swap (stdio → Streamable HTTP), Terraform/IaC
+- **Tech debt (KAN-395-399)** — wire convergence snapshot task, SQL integration tests, portfolio router extraction
 
 ## License
 
