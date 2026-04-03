@@ -1,7 +1,10 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
+import { axe, toHaveNoViolations } from "jest-axe";
 import { TrafficLightRow, TrafficLightRowSkeleton } from "@/components/convergence/traffic-light-row";
 import type { SignalDirectionDetail } from "@/types/api";
+
+expect.extend(toHaveNoViolations);
 
 const MOCK_SIGNALS: SignalDirectionDetail[] = [
   { signal: "rsi", direction: "bullish", value: 35.0 },
@@ -52,6 +55,14 @@ describe("TrafficLightRow", () => {
     );
     const circles = container.querySelectorAll(".bg-loss");
     expect(circles.length).toBe(1); // sma
+  });
+
+  it("passes axe a11y checks", async () => {
+    const { container } = render(
+      <TrafficLightRow signals={MOCK_SIGNALS} />,
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });
 

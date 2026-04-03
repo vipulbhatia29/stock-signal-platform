@@ -252,6 +252,67 @@ class TestComputeConvergenceLabel:
         dirs = ["neutral"] * 6
         assert _compute_convergence_label(dirs) == "mixed"
 
+    def test_mixed_4_bullish_2_bearish(self) -> None:
+        """4 bullish + 2 bearish → mixed (bearish > 0, not strong_bull)."""
+        dirs = ["bullish", "bullish", "bullish", "bullish", "bearish", "bearish"]
+        assert _compute_convergence_label(dirs) == "mixed"
+
+
+# ---------------------------------------------------------------------------
+# Schema validation (C3 — ensure Pydantic round-trip works)
+# ---------------------------------------------------------------------------
+
+
+class TestSchemaValidation:
+    """Ensure service output can be serialized by Pydantic response schemas."""
+
+    def test_convergence_response_round_trip(self) -> None:
+        """ConvergenceResponse schema accepts service-layer data."""
+        from backend.schemas.convergence import ConvergenceResponse
+
+        data = ConvergenceResponse(
+            ticker="AAPL",
+            date="2026-04-03",
+            signals=[
+                {"signal": "rsi", "direction": "bullish", "value": 35.0},
+                {"signal": "macd", "direction": "neutral", "value": 0.0},
+                {"signal": "sma", "direction": "bullish", "value": 200.0},
+                {"signal": "piotroski", "direction": "neutral", "value": None},
+                {"signal": "forecast", "direction": "bearish", "value": -0.05},
+                {"signal": "news", "direction": "neutral", "value": 0.1},
+            ],
+            signals_aligned=2,
+            convergence_label="mixed",
+            composite_score=7.5,
+            divergence={
+                "is_divergent": True,
+                "forecast_direction": "bearish",
+                "technical_majority": "bullish",
+                "historical_hit_rate": 0.61,
+                "sample_count": 23,
+            },
+            rationale="Test rationale.",
+        )
+        dumped = data.model_dump()
+        assert dumped["convergence_label"] == "mixed"
+        assert dumped["divergence"]["is_divergent"] is True
+
+    def test_portfolio_convergence_response_round_trip(self) -> None:
+        """PortfolioConvergenceResponse schema accepts service-layer data."""
+        from backend.schemas.convergence import PortfolioConvergenceResponse
+
+        data = PortfolioConvergenceResponse(
+            portfolio_id="abc-123",
+            date="2026-04-03",
+            positions=[],
+            bullish_pct=0.6,
+            bearish_pct=0.3,
+            mixed_pct=0.1,
+            divergent_positions=["MSFT"],
+        )
+        dumped = data.model_dump()
+        assert dumped["bullish_pct"] == 0.6
+
 
 # ---------------------------------------------------------------------------
 # Service _compute_convergence (integration of classification)
@@ -311,23 +372,33 @@ class TestServiceComputeConvergence:
         return SimpleNamespace(predicted_price=predicted_price)
 
     def test_all_bullish_signals(self) -> None:
-        """All signals bullish → strong_bull."""
+        """All signals bullish → strong_bull with 6 aligned."""
         signal = self._make_signal(
-            rsi=30.0,  # bullish
-            macd_histogram=0.05,  # bullish (no prev, so neutral actually)
+            rsi=30.0,  # bullish (<40)
+            macd_histogram=0.05,  # bullish (>0 and rising)
             current_price=110.0,  # bullish (>2% above SMA)
             sma_200=100.0,
-            piotroski_score=8,  # bullish
+            piotroski_score=8,  # bullish (>=6)
         )
         # Forecast: predicted_price=120, current=110 → +9% → bullish
         forecast = self._make_forecast(120.0)
         service = SignalConvergenceService()
-        result = service._compute_convergence("AAPL", signal, 0.5, forecast)
+        # prev_macd=0.02 makes histogram rising (0.05 > 0.02) → bullish
+        result = service._compute_convergence(
+            "AAPL",
+            signal,
+            0.5,
+            forecast,
+            prev_macd_histogram=0.02,
+        )
 
         assert result.ticker == "AAPL"
-        assert result.convergence_label in ("strong_bull", "weak_bull")
-        assert result.signals_aligned >= 4
+        assert result.convergence_label == "strong_bull"
+        assert result.signals_aligned == 6
         assert len(result.signals) == 6
+        # Verify every signal is bullish
+        for sig in result.signals:
+            assert sig.direction == "bullish", f"{sig.signal} should be bullish"
 
     def test_all_neutral_signals(self) -> None:
         """All signals neutral → mixed, aligned=0."""

@@ -325,8 +325,10 @@ class SignalConvergenceService:
             TickerConvergence with all fields populated.
         """
         # Extract piotroski from composite_weights JSONB (stored during signal computation)
+        # JSONB numbers may deserialize as float — cast to int explicitly
         weights = signal.composite_weights or {}
-        piotroski_score: int | None = weights.get("piotroski")
+        raw_pio = weights.get("piotroski")
+        piotroski_score: int | None = int(raw_pio) if raw_pio is not None else None
 
         # Compute forecast predicted return from ForecastResult
         predicted_return: float | None = None

@@ -202,23 +202,28 @@ class TestComputeMonteCarlo:
         assert bands["p50"][last] < bands["p75"][last]
         assert bands["p75"][last] < bands["p95"][last]
 
-    def test_seeded_randomness_produces_reproducible_results(
+    def test_monte_carlo_produces_stable_median(
         self,
         service: PortfolioForecastService,
         prices_df: pd.DataFrame,
     ) -> None:
-        """Two runs with the same seed must produce identical terminal values."""
+        """Two independent MC runs should produce similar median terminal values.
+
+        Uses default_rng() (non-seeded) — we verify statistical stability
+        rather than exact reproducibility for thread-safety.
+        """
         expected_returns = {"AAPL": 0.10, "MSFT": 0.08, "GOOGL": 0.12}
 
-        np.random.seed(42)
         r1 = service._compute_monte_carlo(
             expected_returns, prices_df, WEIGHTS, TICKERS, INITIAL_VALUE, self.HORIZON
         )
-        np.random.seed(42)
         r2 = service._compute_monte_carlo(
             expected_returns, prices_df, WEIGHTS, TICKERS, INITIAL_VALUE, self.HORIZON
         )
-        assert r1.terminal_values == r2.terminal_values
+        median1 = float(np.median(r1.terminal_values))
+        median2 = float(np.median(r2.terminal_values))
+        # With 10K simulations, medians should be within 5% of each other
+        assert abs(median1 - median2) / median1 < 0.05
 
     def test_percentile_bands_have_correct_length(self, mc_result) -> None:  # type: ignore[no-untyped-def]
         """Each band list must contain exactly horizon_days values."""

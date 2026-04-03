@@ -269,7 +269,8 @@ class PortfolioForecastService:
         # Vectorised Monte Carlo: generate all random draws at once
         # cholesky @ z gives correlated returns with correct covariance (no extra vol scaling)
         # Shape: (n_sims, horizon_days, n_assets)
-        z_all = np.random.standard_normal((n_sims, horizon_days, n_assets))
+        rng = np.random.default_rng()
+        z_all = rng.standard_normal((n_sims, horizon_days, n_assets))
         # Apply Cholesky to get correlated returns: (n_sims, horizon_days, n_assets)
         correlated = z_all @ cholesky.T  # broadcast: each (n_assets,) × cholesky.T
         daily_returns_sim = daily_drift + correlated  # add drift
@@ -422,64 +423,74 @@ class PortfolioForecastService:
         from backend.models.forecast import ForecastResult, ModelVersion
         from backend.models.price import StockPrice
 
+        # 1. Bulk fetch active Prophet model versions
+        mv_result = await db.execute(
+            select(ModelVersion)
+            .distinct(ModelVersion.ticker)
+            .where(
+                ModelVersion.ticker.in_(tickers),
+                ModelVersion.model_type == "prophet",
+                ModelVersion.is_active.is_(True),
+            )
+            .order_by(ModelVersion.ticker, ModelVersion.trained_at.desc())
+        )
+        mv_by_ticker = {mv.ticker: mv for mv in mv_result.scalars().all()}
+        if not mv_by_ticker:
+            return {}, {}
+
+        mv_ids = [mv.id for mv in mv_by_ticker.values()]
+
+        # 2. Bulk fetch latest 90-day forecasts for those model versions
+        fr_result = await db.execute(
+            select(ForecastResult)
+            .distinct(ForecastResult.ticker)
+            .where(
+                ForecastResult.model_version_id.in_(mv_ids),
+                ForecastResult.horizon_days == 90,
+            )
+            .order_by(ForecastResult.ticker, ForecastResult.forecast_date.desc())
+        )
+        fc_by_ticker = {fc.ticker: fc for fc in fr_result.scalars().all()}
+
+        # 3. Bulk fetch latest prices
+        price_result = await db.execute(
+            select(StockPrice.ticker, StockPrice.adj_close)
+            .distinct(StockPrice.ticker)
+            .where(StockPrice.ticker.in_(tickers))
+            .order_by(StockPrice.ticker, StockPrice.time.desc())
+        )
+        price_by_ticker = {
+            row.ticker: float(row.adj_close)
+            for row in price_result.all()
+            if row.adj_close and float(row.adj_close) > 0
+        }
+
+        # 4. Bulk fetch latest backtest MAPE
+        bt_result = await db.execute(
+            select(BacktestRun.ticker, BacktestRun.mape)
+            .distinct(BacktestRun.ticker)
+            .where(BacktestRun.ticker.in_(tickers))
+            .order_by(BacktestRun.ticker, BacktestRun.created_at.desc())
+        )
+        mape_by_ticker = {
+            row.ticker: float(row.mape) for row in bt_result.all() if row.mape is not None
+        }
+
+        # 5. Compute views and confidences in Python
         views: dict[str, float] = {}
         confidences: dict[str, float] = {}
 
         for ticker in tickers:
-            # Get active Prophet model version
-            mv_result = await db.execute(
-                select(ModelVersion)
-                .where(
-                    ModelVersion.ticker == ticker,
-                    ModelVersion.model_type == "prophet",
-                    ModelVersion.is_active.is_(True),
-                )
-                .limit(1)
-            )
-            model_version = mv_result.scalar_one_or_none()
-            if model_version is None:
+            forecast = fc_by_ticker.get(ticker)
+            current_price = price_by_ticker.get(ticker)
+            if forecast is None or current_price is None:
                 continue
 
-            # Get latest 90-day forecast
-            fr_result = await db.execute(
-                select(ForecastResult)
-                .where(
-                    ForecastResult.model_version_id == model_version.id,
-                    ForecastResult.horizon_days == 90,
-                )
-                .order_by(ForecastResult.forecast_date.desc())
-                .limit(1)
-            )
-            forecast = fr_result.scalar_one_or_none()
-            if forecast is None:
-                continue
-
-            # Fetch most recent price to compute return
-            price_result = await db.execute(
-                select(StockPrice.adj_close)
-                .where(StockPrice.ticker == ticker)
-                .order_by(StockPrice.time.desc())
-                .limit(1)
-            )
-            current_price = price_result.scalar_one_or_none()
-            if current_price is None or float(current_price) <= 0:
-                continue
-
-            # Convert 90-day price forecast to annualized return
-            predicted_return = (float(forecast.predicted_price) - float(current_price)) / float(
-                current_price
-            )
+            predicted_return = (float(forecast.predicted_price) - current_price) / current_price
             annualized = (1 + predicted_return) ** (TRADING_DAYS / 90) - 1
             views[ticker] = annualized
 
-            # View confidence from latest backtest MAPE
-            bt_result = await db.execute(
-                select(BacktestRun.mape)
-                .where(BacktestRun.ticker == ticker)
-                .order_by(BacktestRun.created_at.desc())
-                .limit(1)
-            )
-            mape = bt_result.scalar_one_or_none()
+            mape = mape_by_ticker.get(ticker)
             confidences[ticker] = min(0.95, max(0.1, 1.0 - mape)) if mape is not None else 0.5
 
         return views, confidences

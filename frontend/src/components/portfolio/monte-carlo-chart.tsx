@@ -10,7 +10,6 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useChartColors, CHART_STYLE } from "@/lib/chart-theme";
-import { ChartTooltip } from "@/components/chart-tooltip";
 import { formatCurrency } from "@/lib/format";
 import type { MonteCarloSummary } from "@/types/api";
 
@@ -80,32 +79,36 @@ export function MonteCarloChart({ data, isLoading }: MonteCarloChartProps) {
             margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
           >
             <CartesianGrid
-              strokeDasharray="3 3"
-              stroke={CHART_STYLE.gridColor}
+              strokeDasharray={CHART_STYLE.grid.strokeDasharray}
+              className={CHART_STYLE.grid.className}
               vertical={false}
             />
             <XAxis
               dataKey="day"
-              tick={{ fill: colors.text, fontSize: 10 }}
+              tick={{ fontSize: 10 }}
               tickLine={false}
               axisLine={false}
+              className={CHART_STYLE.axis.className}
               tickFormatter={(d: number) => `${d}d`}
             />
             <YAxis
-              tick={{ fill: colors.text, fontSize: 10 }}
+              tick={{ fontSize: 10 }}
               tickLine={false}
               axisLine={false}
+              className={CHART_STYLE.axis.className}
               tickFormatter={(v: number) =>
                 `$${(v / 1000).toFixed(0)}k`
               }
               width={50}
             />
             <Tooltip
-              content={
-                <ChartTooltip
-                  formatValue={(v) => formatCurrency(v as number)}
-                />
-              }
+              formatter={(v) => formatCurrency(Number(v))}
+              labelFormatter={(d) => `Day ${d}`}
+              contentStyle={{
+                background: "var(--card2)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius)",
+              }}
             />
             {/* Outer band: p5-p95 */}
             <Area
@@ -120,7 +123,7 @@ export function MonteCarloChart({ data, isLoading }: MonteCarloChartProps) {
               type="monotone"
               dataKey="p5"
               stroke="none"
-              fill={CHART_STYLE.bgColor}
+              fill="var(--card)"
               fillOpacity={1}
               isAnimationActive={false}
             />
@@ -137,7 +140,7 @@ export function MonteCarloChart({ data, isLoading }: MonteCarloChartProps) {
               type="monotone"
               dataKey="p25"
               stroke="none"
-              fill={CHART_STYLE.bgColor}
+              fill="var(--card)"
               fillOpacity={1}
               isAnimationActive={false}
             />

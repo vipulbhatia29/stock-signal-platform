@@ -54,6 +54,7 @@ class RationaleGenerator:
         convergence_label: str,
         divergence: DivergenceInfo,
         ticker: str,
+        prophet_components: dict[str, float] | None = None,
     ) -> str:
         """Generate rationale for the convergence state of a ticker.
 
@@ -62,6 +63,8 @@ class RationaleGenerator:
             convergence_label: The computed convergence label.
             divergence: Divergence detection info.
             ticker: Stock ticker for context.
+            prophet_components: Optional Prophet forecast breakdown
+                (e.g. {"trend": 0.08, "stock_sentiment": 0.03, "macro": -0.04}).
 
         Returns:
             Human-readable rationale string.
@@ -74,21 +77,69 @@ class RationaleGenerator:
 
         # Route: all agree or nearly all agree → template
         if disagreeing_count == 0:
-            return self._template_all_agree(signals, convergence_label, bullish, bearish, neutral)
-
-        if disagreeing_count == 1:
-            return self._template_one_disagrees(
+            rationale = self._template_all_agree(
+                signals, convergence_label, bullish, bearish, neutral
+            )
+        elif disagreeing_count == 1:
+            rationale = self._template_one_disagrees(
                 signals, convergence_label, bullish, bearish, divergence
             )
-
-        # 2+ signals disagree — try LLM, fall back to template
-        if self._llm is not None:
+        elif self._llm is not None:
+            # 2+ signals disagree — try LLM, fall back to template
             try:
-                return await self._llm_rationale(signals, convergence_label, divergence, ticker)
+                rationale = await self._llm_rationale(
+                    signals, convergence_label, divergence, ticker
+                )
             except Exception:
-                logger.exception("LLM rationale generation failed for %s, using template", ticker)
+                logger.exception(
+                    "LLM rationale generation failed for %s, using template",
+                    ticker,
+                )
+                rationale = self._template_complex_divergence(
+                    signals, convergence_label, bullish, bearish
+                )
+        else:
+            rationale = self._template_complex_divergence(
+                signals, convergence_label, bullish, bearish
+            )
 
-        return self._template_complex_divergence(signals, convergence_label, bullish, bearish)
+        # Append Prophet component breakdown if available
+        if prophet_components:
+            rationale += " " + self._format_prophet_components(prophet_components)
+
+        return rationale
+
+    @staticmethod
+    def _format_prophet_components(components: dict[str, float]) -> str:
+        """Format Prophet forecast component breakdown.
+
+        Args:
+            components: Dict of component name → contribution percentage.
+                e.g. {"trend": 0.08, "stock_sentiment": 0.03, "macro": -0.04}
+
+        Returns:
+            Formatted string like "Forecast breakdown: Base trend: +8%.
+            Stock news: +3%. Macro headwinds: -4%. Net: +7%."
+        """
+        _LABELS = {
+            "trend": "Base trend",
+            "stock_sentiment": "Stock news",
+            "sector_sentiment": "Sector sentiment",
+            "macro_sentiment": "Macro",
+            "macro": "Macro",
+        }
+        parts = []
+        for key, value in components.items():
+            label = _LABELS.get(key, key.replace("_", " ").title())
+            pct = value * 100
+            sign = "+" if pct > 0 else ""
+            parts.append(f"{label}: {sign}{pct:.0f}%")
+
+        net = sum(components.values()) * 100
+        net_sign = "+" if net > 0 else ""
+        parts.append(f"Net: {net_sign}{net:.0f}%")
+
+        return "Forecast breakdown: " + ". ".join(parts) + "."
 
     # ------------------------------------------------------------------
     # Template generators

@@ -63,7 +63,10 @@ test.describe("Signal Convergence", () => {
     });
 
     await page.route(`**/api/v1/stocks/${TICKER}`, async (route) => {
-      if (route.request().url().includes("/signals") || route.request().url().includes("/prices")) return;
+      if (route.request().url().includes("/signals") || route.request().url().includes("/prices")) {
+        await route.continue();
+        return;
+      }
       await route.fulfill({
         status: 200,
         contentType: "application/json",

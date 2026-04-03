@@ -1,7 +1,10 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
+import { axe, toHaveNoViolations } from "jest-axe";
 import { DivergenceAlert } from "@/components/convergence/divergence-alert";
 import type { DivergenceAlert as DivergenceAlertType } from "@/types/api";
+
+expect.extend(toHaveNoViolations);
 
 jest.mock("lucide-react", () => ({
   AlertTriangle: (props: Record<string, unknown>) => (
@@ -70,5 +73,11 @@ describe("DivergenceAlert", () => {
   it("renders alert icon", () => {
     render(<DivergenceAlert divergence={DIVERGENT} />);
     expect(screen.getByTestId("alert-icon")).toBeInTheDocument();
+  });
+
+  it("passes axe a11y checks", async () => {
+    const { container } = render(<DivergenceAlert divergence={DIVERGENT} />);
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });

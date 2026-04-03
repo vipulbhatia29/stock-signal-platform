@@ -485,6 +485,49 @@ export const forecastHandlers = [
 // ── Convergence ─────────────────────────────────────────────────────────────
 
 export const convergenceHandlers = [
+  // Portfolio convergence MUST be before /:ticker to avoid route collision
+  http.get("/api/v1/convergence/portfolio/:id", () => {
+    return HttpResponse.json({
+      portfolio_id: "portfolio-1",
+      date: "2026-04-03",
+      positions: [
+        {
+          ticker: "AAPL",
+          weight: 0.6,
+          convergence_label: "strong_bull",
+          signals_aligned: 5,
+          divergence: { is_divergent: false, forecast_direction: null, technical_majority: null, historical_hit_rate: null, sample_count: null },
+        },
+        {
+          ticker: "MSFT",
+          weight: 0.4,
+          convergence_label: "weak_bear",
+          signals_aligned: 3,
+          divergence: { is_divergent: true, forecast_direction: "bearish", technical_majority: "bullish", historical_hit_rate: 0.55, sample_count: 12 },
+        },
+      ],
+      bullish_pct: 0.6,
+      bearish_pct: 0.4,
+      mixed_pct: 0.0,
+      divergent_positions: ["MSFT"],
+    });
+  }),
+
+  // History MUST be before /:ticker
+  http.get("/api/v1/convergence/:ticker/history", ({ params }) => {
+    const ticker = (params.ticker as string).toUpperCase();
+    return HttpResponse.json({
+      ticker,
+      data: [
+        { date: "2026-04-02", convergence_label: "weak_bull", signals_aligned: 4, composite_score: 7.8, actual_return_90d: null, actual_return_180d: null },
+        { date: "2026-04-01", convergence_label: "strong_bull", signals_aligned: 5, composite_score: 8.2, actual_return_90d: 0.05, actual_return_180d: null },
+      ],
+      total: 2,
+      limit: 50,
+      offset: 0,
+    });
+  }),
+
   http.get("/api/v1/convergence/:ticker", ({ params }) => {
     const ticker = (params.ticker as string).toUpperCase();
     return HttpResponse.json({
@@ -513,30 +556,43 @@ export const convergenceHandlers = [
     });
   }),
 
-  http.get("/api/v1/convergence/portfolio/:id", () => {
+  http.get("/api/v1/sectors/:sector/convergence", ({ params }) => {
+    const sector = params.sector as string;
     return HttpResponse.json({
-      portfolio_id: "portfolio-1",
+      sector,
       date: "2026-04-03",
-      positions: [
-        {
-          ticker: "AAPL",
-          weight: 0.6,
-          convergence_label: "strong_bull",
-          signals_aligned: 5,
-          divergence: { is_divergent: false, forecast_direction: null, technical_majority: null, historical_hit_rate: null, sample_count: null },
-        },
-        {
-          ticker: "MSFT",
-          weight: 0.4,
-          convergence_label: "weak_bear",
-          signals_aligned: 3,
-          divergence: { is_divergent: true, forecast_direction: "bearish", technical_majority: "bullish", historical_hit_rate: 0.55, sample_count: 12 },
-        },
+      tickers: [
+        { ticker: "AAPL", convergence_label: "strong_bull", signals_aligned: 5 },
+        { ticker: "MSFT", convergence_label: "weak_bull", signals_aligned: 4 },
       ],
-      bullish_pct: 0.6,
-      bearish_pct: 0.4,
+      bullish_pct: 1.0,
+      bearish_pct: 0.0,
       mixed_pct: 0.0,
-      divergent_positions: ["MSFT"],
+      ticker_count: 2,
+    });
+  }),
+];
+
+// ── Sentiment ───────────────────────────────────────────────────────────────
+
+export const sentimentHandlers = [
+  http.get("/api/v1/sentiment/bulk", () => {
+    return HttpResponse.json([
+      { date: "2026-04-03", ticker: "AAPL", stock_sentiment: 0.4, sector_sentiment: 0.2, macro_sentiment: 0.1, article_count: 5, confidence: 0.8, dominant_event_type: "earnings", rationale_summary: "Strong Q1", quality_flag: "ok" },
+    ]);
+  }),
+
+  http.get("/api/v1/sentiment/macro", () => {
+    return HttpResponse.json({ data: [], ticker: "__MACRO__" });
+  }),
+
+  http.get("/api/v1/sentiment/:ticker", ({ params }) => {
+    const ticker = (params.ticker as string).toUpperCase();
+    return HttpResponse.json({
+      ticker,
+      data: [
+        { date: "2026-04-03", ticker, stock_sentiment: 0.4, sector_sentiment: 0.2, macro_sentiment: 0.1, article_count: 5, confidence: 0.8, dominant_event_type: "earnings", rationale_summary: "Strong Q1", quality_flag: "ok" },
+      ],
     });
   }),
 ];
@@ -551,4 +607,5 @@ export const handlers = [
   ...newsHandlers,
   ...forecastHandlers,
   ...convergenceHandlers,
+  ...sentimentHandlers,
 ];
