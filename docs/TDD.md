@@ -40,6 +40,10 @@ graph TB
             R_Chat["/chat/stream"]
             R_Forecast["/forecasts"]
             R_Alerts["/alerts"]
+            R_Backtest["/backtests"]
+            R_Convergence["/convergence"]
+            R_Sentiment["/sentiment"]
+            R_Pipelines["/admin/pipelines"]
             R_MCP["/mcp"]
         end
 
@@ -52,6 +56,17 @@ graph TB
             T_Recs["recommendations"]
             T_Divs["dividends"]
             T_Risk["risk_narrative"]
+        end
+
+        subgraph Services["Service Layer"]
+            S_BT["BacktestEngine"]
+            S_Conv["SignalConvergenceService"]
+            S_PF["PortfolioForecastService"]
+            S_News["NewsIngestionService"]
+            S_Sent["SentimentScorer"]
+            S_Cache["CacheInvalidator"]
+            S_Pipe["PipelineRegistry"]
+            S_Rat["RationaleGenerator"]
         end
 
         subgraph Agents["Agent Layer"]
@@ -76,20 +91,33 @@ graph TB
         YF["yfinance"]
         FRED["FRED API"]
         Groq["Groq / Claude API"]
+        Finnhub["Finnhub API"]
+        EDGAR["SEC EDGAR"]
+        FedRSS["Fed RSS / FRED"]
+        GNews["Google News RSS"]
     end
 
     NextJS -->|HTTP/SSE| MW
     MCP_Client -->|Streamable HTTP| R_MCP
     MW --> Routers
     Routers --> Tools
+    Routers --> Services
     Routers --> Agents
     Agents --> TR --> Tools
     Agents --> LLM --> Groq
+    Services --> PG
     Tools --> PG
     Tools --> YF
     Tools --> FRED
+    S_News --> Finnhub
+    S_News --> EDGAR
+    S_News --> FedRSS
+    S_News --> GNews
+    S_Sent --> Groq
+    S_Cache --> Redis
     CB -->|schedule| CW
     CW --> Tools
+    CW --> Services
     CW --> Redis
     Redis -.->|broker + cache| CW
 ```
@@ -118,11 +146,18 @@ erDiagram
     stocks ||--o{ positions : held_in
     stocks ||--o{ forecast_results : predicted
     stocks ||--o{ model_versions : trained
+    stocks ||--o{ backtest_runs : validated
+    stocks ||--o{ signal_convergence_daily : converges
+    stocks ||--o{ news_articles : mentioned_in
+    stocks ||--o{ news_sentiment_daily : sentiment_for
 
     stock_indexes ||--o{ stock_index_memberships : contains
     stocks ||--o{ stock_index_memberships : belongs_to
 
     model_versions ||--o{ forecast_results : generates
+    model_versions ||--o{ backtest_runs : validated_by
+
+    users ||--o{ admin_audit_log : audited
 
     chat_session ||--o{ chat_message : contains
 
@@ -204,9 +239,77 @@ erDiagram
         float alpha_pct
         boolean action_was_correct
     }
+
+    backtest_runs {
+        uuid id PK
+        string ticker FK
+        uuid model_version_id FK
+        string config_label
+        date train_start
+        date train_end
+        date test_start
+        date test_end
+        int horizon_days
+        int num_windows
+        float mape
+        float mae
+        float rmse
+        float direction_accuracy
+        float ci_containment
+        string market_regime "nullable"
+        jsonb metadata_
+    }
+
+    signal_convergence_daily {
+        date date PK
+        string ticker PK
+        string rsi_direction
+        string macd_direction
+        string sma_direction
+        string piotroski_direction
+        string forecast_direction
+        float news_sentiment "nullable"
+        int signals_aligned
+        string convergence_label
+        float composite_score "nullable"
+        float actual_return_90d "nullable"
+        float actual_return_180d "nullable"
+    }
+
+    news_articles {
+        datetime published_at PK
+        uuid id PK
+        string ticker "nullable"
+        text headline
+        string source
+        string source_url "nullable"
+        string event_type "nullable"
+        string dedupe_hash
+        datetime scored_at "nullable"
+    }
+
+    news_sentiment_daily {
+        date date PK
+        string ticker PK
+        float stock_sentiment
+        float sector_sentiment
+        float macro_sentiment
+        int article_count
+        float confidence
+        string dominant_event_type "nullable"
+        string quality_flag "ok|suspect|invalidated"
+    }
+
+    admin_audit_log {
+        uuid id PK
+        uuid user_id FK
+        string action
+        string target "nullable"
+        jsonb metadata_
+    }
 ```
 
-> 25 tables total. Hypertables: `stock_prices`, `signal_snapshots`, `portfolio_snapshots`. Full schema in `docs/data-architecture.md`.
+> 30 tables total. Hypertables: `stock_prices`, `signal_snapshots`, `portfolio_snapshots`, `news_articles`. Full schema in `docs/data-architecture.md`.
 
 ### 2.2 Layer Responsibilities
 
@@ -611,7 +714,147 @@ PATCH /api/v1/alerts/read
   Auth:     Required
 ```
 
-### 3.13 News Endpoints
+### 3.13 Backtest Endpoints
+
+**Router:** `backend/routers/backtesting.py`
+
+```
+GET /api/v1/backtests/summary/all
+  Query:    limit (1-200, default 50), offset (>=0, default 0)
+  Response: BacktestSummaryResponse { items: BacktestSummaryItem[], total }
+  Auth:     Required
+
+POST /api/v1/backtests/run
+  Body:     BacktestTriggerRequest { ticker?: string, horizon_days: int }
+  Response: 202 BacktestTriggerResponse { task_id, status: "queued" }
+  Auth:     Admin required
+
+POST /api/v1/backtests/calibrate
+  Body:     CalibrateTriggerRequest { ticker?: string }
+  Response: 202 CalibrateTriggerResponse { task_id, status: "queued" }
+  Auth:     Admin required
+
+GET /api/v1/backtests/{ticker}
+  Query:    horizon_days (default 90)
+  Response: BacktestRunResponse { id, ticker, model_version_id, config_label, horizon_days, train_start, train_end, test_start, test_end, num_windows, mape, mae, rmse, direction_accuracy, ci_containment, market_regime?, created_at }
+  Auth:     Required
+
+GET /api/v1/backtests/{ticker}/history
+  Query:    horizon_days (default 90), limit (1-50, default 10), offset (>=0, default 0)
+  Response: BacktestRunResponse[]
+  Auth:     Required
+```
+
+Route ordering: literal paths (`/summary/all`, `/run`, `/calibrate`) are defined before path-parameter routes (`/{ticker}`) to avoid FastAPI path conflicts.
+
+### 3.14 Signal Convergence Endpoints
+
+**Router:** `backend/routers/convergence.py`
+
+```
+GET /api/v1/convergence/{ticker}
+  Response: ConvergenceResponse { ticker, date, signals: SignalDirectionDetail[], signals_aligned (0-6), convergence_label (strong_bull|weak_bull|mixed|weak_bear|strong_bear), composite_score?, divergence: DivergenceAlert, rationale? }
+  Auth:     Required
+
+GET /api/v1/convergence/{ticker}/history
+  Query:    days (1-365, default 90), limit (1-200, default 50), offset (>=0, default 0)
+  Response: ConvergenceHistoryResponse { ticker, data: ConvergenceHistoryRow[], total, limit, offset }
+  Auth:     Required
+
+GET /api/v1/convergence/portfolio/{portfolio_id}
+  Response: PortfolioConvergenceResponse { portfolio_id, date, positions: PortfolioPositionConvergence[], bullish_pct, bearish_pct, mixed_pct, divergent_positions }
+  Auth:     Required
+
+GET /api/v1/sectors/{sector}/convergence
+  Response: SectorConvergenceResponse { sector, date, tickers: SectorTickerConvergence[], bullish_pct, bearish_pct, mixed_pct, ticker_count }
+  Auth:     Required
+```
+
+**DivergenceAlert schema:**
+- `is_divergent` (bool) — true when forecast direction opposes technical signal majority
+- `forecast_direction` (bullish|bearish|neutral) — Prophet forecast direction
+- `technical_majority` (bullish|bearish|neutral) — majority of 5 technical signals
+- `historical_hit_rate` (0-1) — how often this divergence pattern was predictive
+- `sample_count` — number of historical observations
+
+**Convergence labels** map signal alignment count: 5-6 aligned bullish = `strong_bull`, 4 = `weak_bull`, 3 = `mixed`, 2 = `weak_bear`, 0-1 = `strong_bear`.
+
+### 3.15 Sentiment Endpoints
+
+**Router:** `backend/routers/sentiment.py`
+
+```
+GET /api/v1/sentiment/{ticker}
+  Query:    days (1-365, default 30)
+  Response: SentimentTimeseriesResponse { ticker, data: DailySentimentResponse[] }
+  Auth:     Required
+
+GET /api/v1/sentiment/{ticker}/articles
+  Query:    limit (1-200, default 50), offset (>=0, default 0), days (1-365, default 30)
+  Response: ArticleListResponse { ticker, articles: ArticleSummaryResponse[], total, limit, offset }
+  Auth:     Required
+
+GET /api/v1/sentiment/bulk
+  Query:    tickers (comma-separated, max 100)
+  Response: BulkSentimentResponse { tickers: DailySentimentResponse[] }
+  Auth:     Required
+
+GET /api/v1/sentiment/macro
+  Query:    days (1-365, default 30)
+  Response: MacroSentimentResponse { data: DailySentimentResponse[] }
+  Auth:     Required
+```
+
+**DailySentimentResponse:** `{ date, ticker, stock_sentiment, sector_sentiment, macro_sentiment, article_count, confidence, dominant_event_type?, rationale_summary?, quality_flag }`
+
+**Quality flags:** `ok` (normal), `suspect` (low confidence / few articles), `invalidated` (manual override).
+
+### 3.16 Admin Pipeline Endpoints
+
+**Router:** `backend/routers/admin_pipelines.py`
+
+```
+GET /api/v1/admin/pipelines/groups
+  Response: PipelineGroupListResponse { groups: PipelineGroupResponse[] }
+  Auth:     Admin required
+
+GET /api/v1/admin/pipelines/groups/{group}
+  Response: PipelineGroupResponse { name, tasks: TaskDefinitionResponse[], execution_plan: string[][] }
+  Auth:     Admin required
+
+POST /api/v1/admin/pipelines/groups/{group}/run
+  Body:     TriggerGroupRequest { failure_mode: "stop_on_failure"|"continue"|"threshold:N" }
+  Response: 202 TriggerGroupResponse { group, status, message }
+  Auth:     Admin required
+  Error:    409 if group already has an active run
+
+GET /api/v1/admin/pipelines/runs/{run_id}
+  Response: PipelineRunResponse { run_id, group, status, started_at, completed_at?, task_names, completed, failed, total, task_statuses, errors }
+  Auth:     Admin required
+
+GET /api/v1/admin/pipelines/groups/{group}/runs
+  Response: PipelineRunResponse | null
+  Auth:     Admin required
+
+GET /api/v1/admin/pipelines/groups/{group}/history
+  Query:    limit (1-50, default 10)
+  Response: RunHistoryResponse { group, runs: PipelineRunResponse[] }
+  Auth:     Admin required
+
+POST /api/v1/admin/pipelines/cache/clear
+  Body:     CacheClearRequest { pattern: string }
+  Response: CacheClearResponse { pattern, keys_deleted, message }
+  Auth:     Admin required
+  Error:    400 if pattern not in whitelist
+
+POST /api/v1/admin/pipelines/cache/clear-all
+  Response: CacheClearResponse { pattern: "*", keys_deleted, message }
+  Auth:     Admin required
+```
+
+**Whitelisted cache patterns:** `app:convergence:*`, `app:forecast:*`, `app:sentiment:*`, `app:bl-forecast:*`, `app:monte-carlo:*`, `app:cvar:*`, `app:sector-forecast:*`, `app:screener:*`, `app:sectors:*`, `app:signals:*`.
+
+### 3.17 News Dashboard Endpoints
 
 **Router:** `backend/routers/news.py`
 
@@ -638,7 +881,7 @@ Aggregates news for user's top 3 portfolio tickers + top 3 BUY/STRONG_BUY recomm
 }
 ```
 
-### 3.14 Observability Endpoints
+### 3.18 Observability Endpoints
 
 **Router:** `backend/routers/observability.py`
 
@@ -709,7 +952,7 @@ GET /api/v1/observability/queries/{query_id}
 - `StepDetail.output_summary`: truncated, PII-sanitised representation of the tool output
 - `langfuse_trace_url`: deep-link to Langfuse trace viewer, constructed from stored `langfuse_trace_id` (null when Langfuse is not configured)
 
-### 3.15 User Profile Endpoint
+### 3.19 User Profile Endpoint
 
 ```
 GET /api/v1/auth/me
@@ -728,7 +971,7 @@ GET /api/v1/auth/me
 
 **Frontend usage:** `useCurrentUser()` hook calls this once on auth, caches with `staleTime: Infinity`. Provides `isAdmin` boolean for role-aware rendering (admin-only sections: assessment history, score column, user/intent chart dimensions).
 
-### 3.16 Health Endpoint
+### 3.20 Health Endpoint
 
 **Router:** `backend/observability/routers/health.py` (re-exported via `backend/routers/health.py`)
 
@@ -738,7 +981,7 @@ GET /api/v1/health
   Auth:     None (public health check)
 ```
 
-### 3.17 Market Endpoint
+### 3.21 Market Endpoint
 
 **Router:** `backend/routers/market.py`
 
@@ -749,7 +992,7 @@ GET /api/v1/market/briefing
   Cache:    Per-user, CacheTier.VOLATILE
 ```
 
-### 3.18 Sectors Endpoints
+### 3.22 Sectors Endpoints
 
 **Router:** `backend/routers/sectors.py`
 
@@ -767,7 +1010,7 @@ GET /api/v1/sectors/{sector}/correlation
   Auth:     Required
 ```
 
-### 3.19 Command Center Endpoints (Admin)
+### 3.23 Command Center Endpoints (Admin)
 
 **Router:** `backend/observability/routers/` (mounted via admin)
 
@@ -803,6 +1046,16 @@ GET /api/v1/admin/command-center/pipeline
 |---------|------|-------------|
 | `EmailService` | `backend/services/email.py` | Transactional email via Resend API. Sends: email verification link, password reset link, account deletion confirmation. Fire-and-forget with error logging. Feature-gated on `RESEND_API_KEY`. |
 | `GoogleOAuthService` | `backend/services/google_oauth.py` | Authorization URL generation (state + nonce), code exchange, JWKS validation via PyJWT, user lookup/creation, OAuthAccount management. JWKS cached in Redis (stable TTL). |
+| `BacktestEngine` | `backend/services/backtesting.py` | Walk-forward validation for Prophet models. Expanding window generation, 5 metrics (MAPE, MAE, RMSE, direction accuracy, CI containment), `_safe_float` NaN/Inf guard. |
+| `CacheInvalidator` | `backend/services/cache_invalidator.py` | Event-driven Redis cache invalidation. 7 event methods (`on_prices_updated`, `on_signals_updated`, `on_forecast_updated`, `on_sentiment_scored`, `on_portfolio_changed`, `on_backtest_completed`, `on_stock_ingested`). Batched deletes, fire-and-forget error handling, SCAN-based pattern clearing. |
+| `SignalConvergenceService` | `backend/services/signal_convergence.py` | Multi-signal convergence analysis. 5 classifiers (RSI, MACD, SMA, Piotroski, forecast) + news sentiment. Divergence detection (forecast vs technical majority). Portfolio and sector aggregation. Historical hit rate computation. |
+| `PortfolioForecastService` | `backend/services/portfolio_forecast.py` | Portfolio-level forecasting. Black-Litterman (Idzorek view confidences), vectorized Monte Carlo (Cholesky decomposition, 10K simulations), CVaR (95th + 99th percentile). Fetches Prophet views as BL opinion inputs. |
+| `RationaleGenerator` | `backend/services/rationale.py` | Natural-language rationale generation for convergence signals. Explains signal alignment, divergence alerts, and forecast context in user-friendly text. |
+| `NewsIngestionService` | `backend/services/news/ingestion.py` | Multi-provider stock + macro news ingestion. Parallel fetching via `asyncio.gather`. Batch dedup (no N+1). Stores to `news_articles` table. |
+| `SentimentScorer` | `backend/services/news/sentiment_scorer.py` | LLM-based article sentiment scoring (GPT-4o-mini). Batch scoring, event_type allowlist, exponential decay daily aggregation. Produces 3 regressor channels (stock, sector, macro). |
+| `PipelineRegistry` | `backend/services/pipeline_registry.py` | Task registry with dependency resolution. TaskDefinition dataclass, topological sort execution plans, 7 task groups. See section 6.4. |
+| `GroupRunManager` | `backend/services/pipeline_registry.py` | Redis-based pipeline run lifecycle. Atomic SET NX for concurrent protection, per-task status tracking, run history (capped at 50). |
+| News Providers | `backend/services/news/` | 4 providers implementing `NewsProvider` ABC: `FinnhubProvider` (premium API), `EdgarProvider` (SEC 8-K/10-K), `FedRssProvider` (Fed RSS + FRED), `GoogleNewsProvider` (RSS fallback). Uses `defusedxml` for XXE safety. |
 
 ### 4.1 Service Pattern
 
@@ -870,11 +1123,21 @@ async def get_signal_service(
 
 | Data | Cache Key | TTL | Invalidation |
 |------|-----------|-----|-------------|
-| Latest signals | `signals:{ticker}` | 1 hour | On new signal computation |
+| Latest signals | `app:signals:{ticker}` | 1 hour | `CacheInvalidator.on_signals_updated()` |
 | Latest price | `price:{ticker}` | 5 minutes | On price fetch |
-| Screener results | `screener:{hash_of_filters}` | 30 minutes | On nightly batch |
+| Screener results | `app:screener:{hash}` | 30 minutes | `CacheInvalidator.on_prices_updated()` |
 | Portfolio positions | `positions:{portfolio_id}` | 0 (no cache) | N/A (always fresh) |
 | Recommendations | `recs:{user_id}:{date}` | Until next computation | On daily batch |
+| Convergence | `app:convergence:{ticker}` | 1 hour | `CacheInvalidator.on_signals_updated()` / `on_forecast_updated()` |
+| Forecast | `app:forecast:{ticker}` | 1 hour | `CacheInvalidator.on_forecast_updated()` |
+| BL forecast | `app:bl-forecast:{portfolio}` | 1 hour | `CacheInvalidator.on_portfolio_changed()` / `on_forecast_updated()` |
+| Monte Carlo | `app:monte-carlo:{portfolio}` | 1 hour | `CacheInvalidator.on_portfolio_changed()` |
+| CVaR | `app:cvar:{portfolio}` | 1 hour | `CacheInvalidator.on_portfolio_changed()` |
+| Sentiment | `app:sentiment:{ticker}` | 1 hour | `CacheInvalidator.on_sentiment_scored()` |
+| Sector forecast | `app:sector-forecast:{sector}` | 1 hour | `CacheInvalidator.on_forecast_updated()` |
+| Sectors list | `app:sectors:*` | 4 hours | `CacheInvalidator.on_prices_updated()` |
+
+Cache invalidation is event-driven via `CacheInvalidator` (see section 4.0.1). All invalidation is fire-and-forget — Redis errors are logged but never propagated. Admin can manually clear patterns via `POST /admin/pipelines/cache/clear`.
 
 ---
 
@@ -1765,11 +2028,13 @@ def stock_factory(db_session):
 
 ### 11.3 Coverage Requirements
 
-- Minimum: 80% line coverage enforced by pytest-cov
-- Critical paths requiring 100%: signal computation, composite scoring,
-  recommendation decision rules, FIFO cost basis, position sizing
+- Minimum: 60% line coverage floor (`fail_under=60`, `--no-cov-on-fail` in CI). Current: ~69%.
+- Critical paths requiring high coverage: signal computation, composite scoring,
+  recommendation decision rules, FIFO cost basis, position sizing, convergence classifiers
 - Integration tests for: price fetch → signal compute → recommendation store pipeline
 - Agent tests (weekly, uses real LLM): verify tool selection and response quality
+- Hypothesis property tests: signal engine, portfolio math, QuantStats, recommendations
+- Current totals: ~1848 backend + ~423 frontend + ~48 E2E = ~2319 tests
 
 ---
 

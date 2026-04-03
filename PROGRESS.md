@@ -42,135 +42,8 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 
 ---
 
-### Sessions 79-84 (archived → `docs/superpowers/archive/progress-full-log.md`)
-**S79:** Command Center MVP (PRs #154-155, +122 tests). **S80:** Live testing, 5 bugs found, Phase 8.5 brainstorm. **S81:** Portfolio Analytics — pandas-ta-openbb, QuantStats, PyPortfolioOpt (PR #158, +38 tests). **S82:** Auth Overhaul — Google OAuth, email verification, account management (30 tickets, 13 endpoints, migration 023). **S83:** Test overhaul spec + JIRA Epic KAN-356. **S84:** Test Sprints 1-2, CI overhaul, 13 Semgrep rules, bug fixes (PRs #162-167).
-
----
-
-## Session 85 — Phase D Sprints 3-4 Parallel Implementation (2026-04-02)
-
-**Branch:** multiple PRs | **PRs #169-170 merged**
-
-### Sprint 3 (KAN-359): Domain + Cache + Regression Tests — PR #169
-- 107 new unit tests (1273 → 1380)
-- Hypothesis property tests: signal engine (11), portfolio math (8), QuantStats (10), recommendations (11)
-- Golden dataset tests: RSI, MACD, Bollinger with hardcoded reference values
-- Cache unit tests (17 fakeredis) + integration (3 real Redis)
-- Syrupy API response snapshots (6) + security header snapshots (6)
-- Celery task tests (21 eager mode)
-- FIFO cost basis correctness tests (6)
-- Opus review: 3 CRITICAL fixed (tautological golden data, pure-math tests removed, concurrency renamed)
-- CI fix: `CI=` inline unset for domain-regression job (no DB needed)
-
-### Sprint 4 (KAN-360): Auth + Security Test Suite — PR #170
-- 78 new tests (57 Python + 21 frontend)
-- Auth endpoint tests: 35 (23 pass, 12 xfail for unimplemented features)
-- IDOR cross-user matrix: 11 tests
-- Token security: 13 tests
-- OAuth CSRF: 4 tests (xfail)
-- Rate limiting: 5 tests
-- Email verification bypass + soft-delete isolation + security logging: 12 tests
-- Frontend: 17 auth page tests + 4 jest-axe a11y tests
-- Opus review: 2 CRITICAL fixed (JWT key palindrome, jest-axe was already installed)
-- Fixed: `jose` → `PyJWT` import (worktree branched from stale main)
-- 4 xfailed tests due to event loop teardown leak (real infra issue in conftest client fixture)
-
-### Infrastructure Issues Discovered
-- Worktree agents can branch from `main` instead of `develop` — documented in memory
-- `domain-regression` CI job had no DB but CI=true activated db_url fixture — fixed with `CI=` inline
-- `pytest-asyncio` 1.x event loop teardown causes cross-test failures in API tests — needs upgrade
-
-### Session 85 Totals
-- 2 PRs merged (#169-170)
-- Tests: 1380 backend unit + 349 frontend = ~1729 (+ Sprint 4 API/xfail tests)
-- Total across all phases: ~1786 tests
-- 2 infrastructure issues documented + fixed
-- Resume: Phase D Sprint 5 (KAN-361) — Playwright E2E Expansion
-
----
-
-## Session 86 — Phase D Sprint 5: Playwright E2E + MSW Integration (2026-04-02)
-
-**Branch:** multiple PRs | **PRs #172-173 merged**
-
-### Sprint 5a+5b (KAN-366, KAN-367): Playwright E2E Expansion — PR #173
-- 4 new page objects: register, portfolio, stock, screener (upgraded with filters)
-- Auth E2E (9): register flow, forgot-password, protected route redirects
-- Dashboard E2E (4): zone rendering, sidebar navigation, refresh trigger
-- Portfolio E2E (6): page load, stat tiles, transaction dialog, positions, chart
-- Stock detail E2E (5): signals, price chart, fundamentals, screener-to-detail nav
-- Admin E2E (2): command center panel rendering, metric cards
-- Cross-cutting (9): no-backend-leaks (5: DOM, sourcemaps, headers, console, external requests), axe accessibility (4: WCAG 2.0 AA sweep)
-- @axe-core/playwright added to E2E project
-- TypeScript: zero errors
-
-### Sprint 5c (KAN-368): MSW Component Integration — PR #172
-- MSW v2 setup: server, handlers, custom jest-env-with-fetch, test-utils lifecycle
-- Dashboard integration (13): all 5 zones with data, loading, error, empty states
-- Portfolio integration (3): positions table, stat tiles, empty state
-- Stock detail integration (4): header, signals, chart, fundamentals
-- Auth integration (5): login/register form submission, validation, error handling
-- Error handling (4): API 500/503 graceful degradation
-- Jest config: custom environment for Node fetch globals, ESM/CJS shims for msw
-
-### Design Decision: App Router Boundary Tests
-- Spec called for loading.tsx/error.tsx boundary tests — N/A: project uses inline TanStack Query loading/error states, no Next.js boundary files exist
-
-### Session 86 Totals
-- 2 PRs merged (#172-173)
-- Tests: 1380 backend + 378 frontend + 35 Playwright E2E = ~1793
-- Frontend: 349 → 378 (+29 msw integration)
-- Playwright: 7 → 42 specs (+35 new across 9 files)
-- JIRA: KAN-361 + subtasks KAN-366/367/368 all Done
-- Resume: Phase D Sprint 6 (KAN-362) — Performance + Memory
-
----
-
-## Session 87 — Phase 8.6+ Forecast Intelligence: Brainstorm + Spec + Plan + JIRA (2026-04-02)
-
-**Branch:** `docs/session-86-closeout` (planning session, no code changes)
-
-### Brainstorm (comprehensive, visual companion)
-- Explored forecast accuracy, signal convergence, news sentiment, portfolio forecasting
-- Decided: transparency is the product differentiator — rationale with every prediction
-- UX model: traffic lights (B) + divergence alerts (C) + rationale (always) — adaptive
-- Three-level forecast: Stock (Prophet + regressors) → Sector (equal-weight aggregation) → Portfolio (Black-Litterman + Monte Carlo + CVaR)
-- News sources: Finnhub (primary, free) + EDGAR 8-K + Fed RSS + FRED + Google News (fallback)
-- News → Prophet: LLM scores (GPT-4o-mini) → 3 regressors (stock, sector, macro sentiment) → `add_regressor()`
-- Seasonality: per-ticker optimization via backtesting (4 configs, winner stored)
-- Drift detection: per-ticker calibrated baseline (MAPE × 1.5), validate-before-promote, experimental demotion (self-healing)
-- Admin pipeline orchestrator: Celery task groups, dependency resolution, seed hydration from UI
-- CacheInvalidator: event-driven, trigger-agnostic service
-- Storage: ~55 MB/year compressed, signal_convergence_daily for historical pattern analysis
-
-### Spec Design — 21 sections, 3 expert review rounds
-- Per-section expert reviews (quant finance, ML/NLP, portfolio analyst, platform engineer)
-- 4-persona staff review (architect, security, QA, PM) — 22 findings, all applied
-- 5-persona comprehensive review (full-stack, middleware, QA, domain, architect) — 25 findings, all applied
-- Frontend design system audit: all new components mapped to existing tokens
-
-### Implementation Plan — 13 sprints
-- 4 specs: A (backtesting) → D (admin pipeline) → B (news sentiment) → C (convergence UX)
-- 107 files (32 modify, 75 create), one branch per spec
-- 6-persona plan review (PM, UI/UX, full-stack, backend, DevOps, spec auditor) — 22 findings applied
-- Sprint 12 split into 12a/12b, router stubs front-loaded, factory-boy factories in Sprint 1
-
-### JIRA Tickets Created
-- Epic: KAN-369 (Phase 8.6+ Forecast Intelligence System)
-- Stories: KAN-370 (Spec A), KAN-371 (Spec D), KAN-372 (Spec B), KAN-373 (Spec C)
-- Subtasks: KAN-374–387 (14 sprint tickets)
-- Dependencies: KAN-373 blocked by KAN-370 + KAN-372
-- 19 tickets total
-
-### Doc Audit + Overhaul
-- Audited TDD (1692 lines), FSD (1061), PRD (699), README (648) — found 20+ undocumented features
-- Fixed: phase status bloat, stale diagrams, missing tools/routers, LLM provider cascade contradiction
-- Updated project-plan.md with Phase 8.6+ ticket map
-
-### Stats
-- 0 code changes (spec + planning + doc overhaul session)
-- Spec: `docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md`
-- Plan: `docs/superpowers/plans/2026-04-02-forecast-intelligence-plan.md`
+### Sessions 79-87 (archived → `docs/superpowers/archive/progress-full-log.md`)
+**S79:** Command Center MVP (PRs #154-155, +122 tests). **S80:** Live testing, 5 bugs found, Phase 8.5 brainstorm. **S81:** Portfolio Analytics — pandas-ta-openbb, QuantStats, PyPortfolioOpt (PR #158, +38 tests). **S82:** Auth Overhaul — Google OAuth, email verification, account management (30 tickets, 13 endpoints, migration 023). **S83:** Test overhaul spec + JIRA Epic KAN-356. **S84:** Test Sprints 1-2, CI overhaul, 13 Semgrep rules, bug fixes (PRs #162-167). **S85:** Phase D Sprints 3-4 — Hypothesis property tests, golden datasets, auth+security tests, 185 new tests (PRs #169-170). **S86:** Playwright E2E (35 specs) + MSW integration (29 tests), PRs #172-173. **S87:** Phase 8.6+ Forecast Intelligence brainstorm + spec (21 sections, 3 review rounds) + plan (13 sprints) + 19 JIRA tickets + doc overhaul.
 
 ---
 
@@ -221,3 +94,80 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 4 Opus expert reviews + 1 composite cross-sprint review
 - 3 new ADRs documenting key architecture decisions
 - Resume: Phase 8.6+ Sprint 5 (KAN-378) — PipelineRegistry + seed tasks
+
+---
+
+## Session 89 — Phase 8.6+ Specs D + B + C Start (2026-04-03)
+
+**Branch:** multiple PRs | **PRs #179-180 merged**
+
+### Spec D (KAN-371): Admin Pipeline Orchestrator — PR #179
+- PipelineRegistry with TaskDefinition, dependency resolution, 7 task groups
+- GroupRunManager: Redis lifecycle with atomic SET NX + Lua script for concurrent safety
+- 10 Celery seed task wrappers (asyncio.run bridge, progress reporting)
+- 8 admin pipeline API endpoints (groups, trigger, runs, history, cache clear)
+- Pipeline Control frontend page (/admin/pipelines) with accordion groups, live polling
+- 133 new tests, 3 Opus reviews (7 CRITICALs fixed)
+
+### Spec B (KAN-372): News Sentiment Pipeline — PR #180
+- 4 news providers: Finnhub, EDGAR 8-K, Fed RSS/FRED, Google News (defusedxml for XXE safety)
+- SentimentScorer: GPT-4o-mini batch scoring, event_type allowlist, exponential decay aggregation
+- NewsIngestionService: parallel fetching via asyncio.gather, batch dedup (no N+1)
+- Prophet regressor integration (3 sentiment regressors, feature-flagged)
+- Celery tasks: ingest 4x/day + score, CacheInvalidator wired, single-transaction
+- 4 sentiment API endpoints with bulk (DISTINCT ON, capped 100), paginated articles
+- 111 new tests, 2 Opus reviews (4 CRITICALs fixed)
+
+### Session 89 Totals
+- 2 PRs merged (#179-180), 41 files changed in Spec D, 22 in Spec B
+- Tests: 1768 backend unit (was 1494, +274 new)
+- 6 Opus expert reviews, 13 CRITICALs found and fixed
+- Orchestration: Sonnet implements, Opus reviews, Haiku documents
+
+---
+
+## Session 90 — Phase 8.6+ Spec C: Convergence UX (Sprints 10-13) (2026-04-03)
+
+**Branch:** `feat/KAN-373-convergence-ux` → develop | **PR merged (squash)**
+
+### Sprint 10 (KAN-383): Portfolio Forecast
+- PortfolioForecastService: Black-Litterman (Idzorek view confidences), vectorized Monte Carlo (Cholesky), CVaR (95%+99%)
+- 8 Pydantic schemas, 2 portfolio forecast endpoints
+- 30 new tests, 1 Opus review (2 CRITICALs fixed: double-vol MC, missing BL confidences)
+
+### Sprint 11 (KAN-384): Convergence Service + Rationale + API
+- SignalConvergenceService: 5 classifiers + news sentiment, divergence detection, portfolio/sector aggregation
+- RationaleGenerator: natural-language explanations for convergence state
+- 4 convergence API endpoints (ticker, history, portfolio, sector)
+- Convergence history snapshots with actual return tracking
+
+### Sprint 12a (KAN-385): Frontend Convergence Components
+- TrafficLightRow: signal-by-signal bullish/bearish/neutral indicators
+- DivergenceAlert: warning banner for forecast/technical divergence
+- AccuracyBadge: MAPE-based model accuracy tier display
+- RationaleSection: collapsible explanation panel
+
+### Sprint 12b (KAN-386): Frontend Portfolio Components + Page Integration
+- BLForecastCard: Black-Litterman expected returns display
+- MonteCarloChart: fan chart visualization (Recharts)
+- CVaRCard: 95th/99th percentile risk metrics
+- ConvergenceSummary: portfolio-level convergence overview
+- Integrated into stock detail + portfolio pages
+
+### Sprint 13 (KAN-387): E2E Tests + Command Center Integration
+- Convergence E2E tests (signal rendering, divergence alerts, history)
+- Portfolio forecast E2E tests (BL card, MC chart, CVaR card)
+- Command center convergence data integration
+
+### 5-Persona Extreme Review
+- PM, Full-Stack, Backend, Tester, JIRA Gap Verifier
+- 7 CRITICALs found, all fixed
+- 7 JIRA bugs created (KAN-388–394), 4 resolved same session
+- 5 follow-up tasks created (KAN-395–399)
+
+### Session 90 Totals
+- 1 PR merged, 44 files changed
+- Tests: 1848 backend + 423 frontend + 48 E2E = ~2319 total
+- Coverage: 68.95% (floor 60%)
+- Phase 8.6+ Epic KAN-369: ALL 4 SPECS COMPLETE (A+D+B+C)
+- Resume: Tech debt (KAN-395-399) or Phase F (Subscriptions)

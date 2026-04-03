@@ -943,6 +943,138 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - Per-task status tracking in run state (task_statuses dict)
 - Failure reason logs in run state (errors dict)
 
+### FR-24: Backtesting & Model Validation — DONE (Sprints 1-4)
+
+> Walk-forward validation for Prophet forecasting models. Expanding window backtesting with 5 accuracy metrics. Per-ticker calibrated drift detection with self-healing demotion.
+
+**FR-24.1: BacktestEngine** (Sprint 2 — DONE)
+- Walk-forward expanding window generation with configurable train/test splits
+- 5 metrics computed per run: MAPE, MAE, RMSE, direction accuracy, CI containment + bias
+- `_safe_float()` guard against NaN/Inf propagation in all metric computations
+- WindowSpec dataclass for clean window boundary management
+- Market regime tagging on backtest results
+
+**FR-24.2: Per-Ticker Calibrated Drift Detection** (Sprint 3 — DONE)
+- Drift threshold = ticker's own `backtest_mape × 1.5` (not global threshold)
+- Consecutive failure tracking: 3 failures → experimental demotion (self-healing)
+- Validate-before-promote: new model must beat incumbent on backtest metrics
+- ADR-010 documents the design rationale
+
+**FR-24.3: Backtest API** (Sprint 4 — DONE)
+- `GET /backtests/summary/all` — paginated summary across all tickers
+- `GET /backtests/{ticker}` — latest backtest for a ticker (with horizon_days filter)
+- `GET /backtests/{ticker}/history` — paginated backtest history
+- `POST /backtests/run` — admin-only trigger for backtest runs (async Celery task)
+- `POST /backtests/calibrate` — admin-only trigger for seasonality calibration
+
+**FR-24.4: AccuracyBadge Component** (Sprint 4 — DONE)
+- Frontend badge showing MAPE-based accuracy tier (Excellent/Good/Fair/Poor)
+- Color-coded: green (MAPE < 5%), yellow (5-10%), orange (10-15%), red (>15%)
+
+### FR-25: News Sentiment Pipeline — DONE (Sprints 7-9)
+
+> Multi-provider news ingestion with LLM-based sentiment scoring. Three sentiment channels (stock, sector, macro) feed Prophet as regressors.
+
+**FR-25.1: News Providers** (Sprint 7 — DONE)
+- 4 providers implementing `NewsProvider` ABC:
+  - **Finnhub** — primary stock + market news (premium API)
+  - **EDGAR** — SEC 8-K/10-K filings for company events
+  - **Fed RSS** — Federal Reserve press releases + FRED economic data releases
+  - **Google News** — RSS fallback for broad coverage
+- Parallel fetching via `asyncio.gather` in `NewsIngestionService`
+- Batch dedup via `dedupe_hash` (no N+1 queries)
+- XML parsing uses `defusedxml` for XXE safety
+
+**FR-25.2: Sentiment Scoring** (Sprint 8 — DONE)
+- LLM-based scoring via GPT-4o-mini with batch processing
+- Event type allowlist classification (earnings, M&A, regulatory, etc.)
+- Exponential decay aggregation for daily sentiment rollup
+- 3 regressor channels: stock sentiment, sector sentiment, macro sentiment
+- Quality flags: `ok`, `suspect` (low confidence), `invalidated` (manual override)
+
+**FR-25.3: Prophet Integration** (Sprint 8 — DONE)
+- 3 sentiment regressors added to Prophet via `add_regressor()` (feature-flagged)
+- Regressors: `news_sentiment_stock`, `news_sentiment_sector`, `news_sentiment_macro`
+- CacheInvalidator wired for sentiment score updates
+
+**FR-25.4: Sentiment API** (Sprint 9 — DONE)
+- `GET /sentiment/{ticker}` — daily sentiment timeseries
+- `GET /sentiment/{ticker}/articles` — paginated articles with scores
+- `GET /sentiment/bulk` — bulk sentiment for multiple tickers (max 100, DISTINCT ON)
+- `GET /sentiment/macro` — macro sentiment timeseries
+
+**FR-25.5: Celery Tasks** (Sprint 8 — DONE)
+- News ingestion: 4x/day schedule
+- Sentiment scoring: runs after ingestion
+- Single-transaction processing with CacheInvalidator wiring
+
+### FR-26: Signal Convergence & Divergence UX — DONE (Sprints 10-13)
+
+> Multi-signal convergence analysis with divergence alerting. Traffic light UX showing agreement/disagreement across 5+ signal sources.
+
+**FR-26.1: Convergence Service** (Sprint 11 — DONE)
+- 5 signal classifiers: RSI, MACD, SMA crossover, Piotroski F-Score, Prophet forecast direction
+- News sentiment as 6th optional signal
+- Convergence labels: `strong_bull` (5-6 aligned), `weak_bull` (4), `mixed` (3), `weak_bear` (2), `strong_bear` (0-1)
+- Divergence detection: triggers when forecast direction opposes technical signal majority
+- Historical hit rate computation for divergence patterns
+- Portfolio-level and sector-level aggregation
+
+**FR-26.2: Rationale Generation** (Sprint 11 — DONE)
+- Natural-language explanations for convergence state
+- Explains signal alignment, divergence context, and forecast rationale
+- User-facing text (no internal jargon)
+
+**FR-26.3: Convergence API** (Sprint 11 — DONE)
+- `GET /convergence/{ticker}` — single ticker convergence with rationale + divergence alert
+- `GET /convergence/{ticker}/history` — historical convergence snapshots
+- `GET /convergence/portfolio/{portfolio_id}` — portfolio convergence summary (bullish/bearish/mixed %)
+- `GET /sectors/{sector}/convergence` — sector convergence summary
+
+**FR-26.4: Convergence Frontend** (Sprints 12a-12b — DONE)
+- `TrafficLightRow` — signal-by-signal bullish/bearish/neutral indicator with color coding
+- `DivergenceAlert` — warning banner when forecast diverges from technical consensus
+- `AccuracyBadge` — MAPE-based model accuracy tier display
+- `RationaleSection` — collapsible natural-language explanation panel
+- `ConvergenceSummary` — portfolio-level convergence overview with position breakdown
+- Integrated into stock detail page and portfolio page
+
+**FR-26.5: E2E Tests** (Sprint 13 — DONE)
+- Convergence page E2E tests (signal rendering, divergence alerts, history)
+- Portfolio forecast E2E tests (BL card, Monte Carlo chart, CVaR card)
+- Command center integration (convergence data in pipeline monitoring)
+
+### FR-27: Portfolio Forecast (BL + Monte Carlo + CVaR) — DONE (Sprint 10)
+
+> Portfolio-level forecasting combining Black-Litterman, Monte Carlo simulation, and Conditional Value at Risk.
+
+**FR-27.1: Black-Litterman** (Sprint 10 — DONE)
+- Idzorek method for view confidence calibration
+- Prophet forecast views as BL opinion inputs
+- Market-implied equilibrium returns from covariance matrix
+- Posterior expected returns blending prior + views
+
+**FR-27.2: Monte Carlo Simulation** (Sprint 10 — DONE)
+- 10,000 simulations using Cholesky decomposition for correlated returns
+- 1-year horizon with daily steps
+- Probability of loss, expected return, volatility metrics
+- Vectorized implementation for performance
+
+**FR-27.3: CVaR Analysis** (Sprint 10 — DONE)
+- 95th and 99th percentile Conditional Value at Risk
+- Terminal portfolio value and annualized return
+- Based on Monte Carlo terminal distribution
+
+**FR-27.4: Portfolio Forecast API** (Sprint 10 — DONE)
+- `GET /portfolio/{portfolio_id}/forecast` — BL + Monte Carlo + CVaR combined response
+- `GET /portfolio/{portfolio_id}/forecast/health` — forecast data freshness check
+
+**FR-27.5: Portfolio Forecast Frontend** (Sprint 12b — DONE)
+- `BLForecastCard` — Black-Litterman expected returns with confidence intervals
+- `MonteCarloChart` — fan chart visualization of simulation paths (Recharts)
+- `CVaRCard` — risk metrics display (95th/99th percentile losses)
+- Integrated into portfolio page
+
 ---
 
 ## 4. Non-Functional Requirements
@@ -1088,3 +1220,7 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 | FR-21 | Extended Agent Tools (geopolitical, stock intelligence, market briefing) | ✅ IMPLEMENTED |
 | FR-22 | Recommendation Evaluation Scorecard | ✅ IMPLEMENTED |
 | FR-23 | Admin Pipeline Control (PipelineRegistry, seed hydration, manual triggers, run history) | ✅ IMPLEMENTED |
+| FR-24 | Backtesting & Model Validation (walk-forward, 5 metrics, calibrated drift, AccuracyBadge) | ✅ IMPLEMENTED |
+| FR-25 | News Sentiment Pipeline (4 providers, LLM scoring, Prophet regressors, API) | ✅ IMPLEMENTED |
+| FR-26 | Signal Convergence & Divergence UX (5 classifiers, traffic lights, rationale, E2E) | ✅ IMPLEMENTED |
+| FR-27 | Portfolio Forecast (Black-Litterman, Monte Carlo, CVaR, frontend cards) | ✅ IMPLEMENTED |
