@@ -117,14 +117,26 @@ Completed features in `docs/superpowers/archive/`. Never read archived files.
 - `project-plan.md` — phased build plan
 - `PROGRESS.md` — session log
 
+## Doc Sync Rules
+
+Docs must be updated **incrementally with each implementation session**, not in batch retroactive reviews.
+
+- **New endpoints?** → Update `docs/TDD.md` (API section + architecture diagram if new router)
+- **New user-facing feature?** → Update `docs/FSD.md` (add FR-XX + update status table)
+- **New architectural decision?** → Write ADR in `docs/ADR.md` (during spec review, not after)
+- **Feature shipped?** → Update `README.md` feature sections + `docs/PRD.md` if product scope changed
+- **JIRA tickets completed?** → Transition to Done, update `project-plan.md` with ticket refs
+
 ## End-of-Session Checklist
 
 1. `PROGRESS.md` — session entry added
 2. `CLAUDE.md` — update if architecture changed (rare — use Serena memories instead)
-3. `project-plan.md` — mark completed deliverables with checkmark and session number
-4. `docs/FSD.md` — update if functional requirements changed
-5. `docs/TDD.md` — update if API contracts changed
-6. Serena memories — update `project/state` (ALWAYS), other memories as needed
-7. `MEMORY.md` — update Project State section
-8. **If sprint complete** — run `uv run pytest --cov=backend --cov-report=term-missing -q` and report coverage delta + uncovered files. Get PM approval before shipping.
-9. Run `/ship` — promote session memories and open PR
+3. `project-plan.md` — mark completed deliverables with checkmark, session number, and JIRA ticket refs
+4. `docs/FSD.md` — update if functional requirements changed (add FRs for new features)
+5. `docs/TDD.md` — update if API contracts changed (add endpoints, services, models)
+6. `docs/ADR.md` — add ADR if architectural decision was made this session
+7. Serena memories — update `project/state` (ALWAYS), other memories as needed
+8. `MEMORY.md` — update Project State section
+9. **JIRA reconciliation** — transition completed tickets to Done, verify board reflects reality
+10. **If sprint complete** — run `uv run pytest --cov=backend --cov-report=term-missing -q` and report coverage delta + uncovered files. Get PM approval before shipping.
+11. Run `/ship` — promote session memories and open PR
