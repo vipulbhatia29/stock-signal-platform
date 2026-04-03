@@ -18,6 +18,7 @@ from backend.schemas.convergence import (
     ConvergenceHistoryResponse,
     ConvergenceHistoryRow,
     ConvergenceResponse,
+    DirectionEnum,
     DivergenceAlert,
     PortfolioConvergenceResponse,
     PortfolioPositionConvergence,
@@ -45,10 +46,12 @@ def _build_divergence_alert(div: DivergenceInfo) -> DivergenceAlert:
     Returns:
         DivergenceAlert Pydantic schema.
     """
+    fc_dir = DirectionEnum(div.forecast_direction) if div.forecast_direction else None
+    tech_dir = DirectionEnum(div.technical_majority) if div.technical_majority else None
     return DivergenceAlert(
         is_divergent=div.is_divergent,
-        forecast_direction=div.forecast_direction,
-        technical_majority=div.technical_majority,
+        forecast_direction=fc_dir,
+        technical_majority=tech_dir,
         historical_hit_rate=div.historical_hit_rate,
         sample_count=div.sample_count,
     )
