@@ -2811,3 +2811,106 @@ Full implementation of KAN-232 (BU-6). Brainstorm → spec → 3-expert spec rev
 - Tech debt: TimescaleDB teardown, Next.js Suspense, pyright config
 - Bug fixes: KAN-364 (6x str(e)), KAN-365 (Semgrep false positives)
 - Tests: 1601, CI: 13 checks (12 green)
+
+---
+
+## Session 85 — Phase D Sprints 3-4 Parallel Implementation (2026-04-02)
+
+**Branch:** multiple PRs | **PRs #169-170 merged**
+
+### Sprint 3 (KAN-359): Domain + Cache + Regression Tests — PR #169
+- 107 new unit tests (1273 → 1380)
+- Hypothesis property tests: signal engine (11), portfolio math (8), QuantStats (10), recommendations (11)
+- Golden dataset tests: RSI, MACD, Bollinger with hardcoded reference values
+- Cache unit tests (17 fakeredis) + integration (3 real Redis)
+- Syrupy API response snapshots (6) + security header snapshots (6)
+- Celery task tests (21 eager mode)
+- FIFO cost basis correctness tests (6)
+- Opus review: 3 CRITICAL fixed (tautological golden data, pure-math tests removed, concurrency renamed)
+- CI fix: `CI=` inline unset for domain-regression job (no DB needed)
+
+### Sprint 4 (KAN-360): Auth + Security Test Suite — PR #170
+- 78 new tests (57 Python + 21 frontend)
+- Auth endpoint tests: 35 (23 pass, 12 xfail for unimplemented features)
+- IDOR cross-user matrix: 11 tests
+- Token security: 13 tests
+- OAuth CSRF: 4 tests (xfail)
+- Rate limiting: 5 tests
+- Email verification bypass + soft-delete isolation + security logging: 12 tests
+- Frontend: 17 auth page tests + 4 jest-axe a11y tests
+- Opus review: 2 CRITICAL fixed (JWT key palindrome, jest-axe was already installed)
+- Fixed: `jose` → `PyJWT` import (worktree branched from stale main)
+- 4 xfailed tests due to event loop teardown leak (real infra issue in conftest client fixture)
+
+### Infrastructure Issues Discovered
+- Worktree agents can branch from `main` instead of `develop` — documented in memory
+- `domain-regression` CI job had no DB but CI=true activated db_url fixture — fixed with `CI=` inline
+- `pytest-asyncio` 1.x event loop teardown causes cross-test failures in API tests — needs upgrade
+
+### Session 85 Totals
+- 2 PRs merged (#169-170)
+- Tests: 1380 backend unit + 349 frontend = ~1729 (+ Sprint 4 API/xfail tests)
+- Total across all phases: ~1786 tests
+- 2 infrastructure issues documented + fixed
+
+---
+
+## Session 86 — Phase D Sprint 5: Playwright E2E + MSW Integration (2026-04-02)
+
+**Branch:** multiple PRs | **PRs #172-173 merged**
+
+### Sprint 5a+5b (KAN-366, KAN-367): Playwright E2E Expansion — PR #173
+- 4 new page objects: register, portfolio, stock, screener (upgraded with filters)
+- Auth E2E (9): register flow, forgot-password, protected route redirects
+- Dashboard E2E (4): zone rendering, sidebar navigation, refresh trigger
+- Portfolio E2E (6): page load, stat tiles, transaction dialog, positions, chart
+- Stock detail E2E (5): signals, price chart, fundamentals, screener-to-detail nav
+- Admin E2E (2): command center panel rendering, metric cards
+- Cross-cutting (9): no-backend-leaks (5), axe accessibility (4: WCAG 2.0 AA)
+- @axe-core/playwright added to E2E project
+
+### Sprint 5c (KAN-368): MSW Component Integration — PR #172
+- MSW v2 setup: server, handlers, custom jest-env-with-fetch, test-utils lifecycle
+- Dashboard integration (13): all 5 zones with data, loading, error, empty states
+- Portfolio integration (3): positions table, stat tiles, empty state
+- Stock detail integration (4): header, signals, chart, fundamentals
+- Auth integration (5): login/register form submission, validation, error handling
+- Error handling (4): API 500/503 graceful degradation
+
+### Session 86 Totals
+- 2 PRs merged (#172-173)
+- Tests: 1380 backend + 378 frontend + 35 Playwright E2E = ~1793
+- Playwright: 7 → 42 specs (+35 new)
+- JIRA: KAN-361 + subtasks KAN-366/367/368 all Done
+
+---
+
+## Session 87 — Phase 8.6+ Forecast Intelligence: Brainstorm + Spec + Plan + JIRA (2026-04-02)
+
+**Branch:** `docs/session-86-closeout` (planning session, no code changes)
+
+### Brainstorm
+- Explored forecast accuracy, signal convergence, news sentiment, portfolio forecasting
+- Decided: transparency is the product differentiator — rationale with every prediction
+- UX model: traffic lights + divergence alerts + rationale — adaptive
+- Three-level forecast: Stock → Sector → Portfolio (BL + Monte Carlo + CVaR)
+- News sources: Finnhub + EDGAR 8-K + Fed RSS + FRED + Google News
+- Seasonality: per-ticker optimization via backtesting (4 configs)
+- Drift detection: calibrated baseline (MAPE × 1.5), self-healing
+
+### Spec Design — 21 sections, 3 expert review rounds
+- 4-persona staff review — 22 findings applied
+- 5-persona comprehensive review — 25 findings applied
+- Frontend design system audit: all new components mapped to existing tokens
+
+### Implementation Plan — 13 sprints, 4 specs
+- A (backtesting) → D (admin pipeline) → B (news sentiment) → C (convergence UX)
+- 107 files (32 modify, 75 create)
+- 6-persona plan review — 22 findings applied
+
+### JIRA Tickets Created
+- Epic KAN-369, Stories KAN-370–373, Subtasks KAN-374–387 (19 tickets total)
+
+### Doc Audit + Overhaul
+- Audited TDD, FSD, PRD, README — found 20+ undocumented features
+- Fixed stale diagrams, missing tools/routers, contradictions

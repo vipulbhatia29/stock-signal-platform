@@ -151,7 +151,7 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 | 8 | KAN-381 | Sentiment scorer + Prophet integration + Celery tasks | ✅ Session 89 |
 | 9 | KAN-382 | Sentiment API + tests | ✅ Session 89 |
 | **Spec C: Convergence UX (KAN-373)** | | Branch: `feat/KAN-373-convergence-ux` | **✅ Session 90** |
-| 10 | KAN-383 | Portfolio forecast (BL + Monte Carlo + CVaR) | ✅ Session 89 (uncommitted) |
+| 10 | KAN-383 | Portfolio forecast (BL + Monte Carlo + CVaR) | ✅ Session 89-90 |
 | 11 | KAN-384 | Convergence service + rationale + API | ✅ Session 90 |
 | 12a | KAN-385 | Frontend convergence components | ✅ Session 90 |
 | 12b | KAN-386 | Frontend portfolio components + page integration | ✅ Session 90 |
