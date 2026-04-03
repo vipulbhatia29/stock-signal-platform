@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Federal Reserve Board - Press Releases</title>
+    <item>
+      <title>Federal Reserve issues FOMC statement on rate decision</title>
+      <link>https://www.federalreserve.gov/newsevents/pressreleases/monetary20240320a.htm</link>
+      <description>The Federal Reserve maintained the target range for the federal funds rate at 5-1/4 to 5-1/2 percent.</description>
+      <pubDate>Wed, 20 Mar 2024 14:00:00 EST</pubDate>
+    </item>
+    <item>
+      <title>Federal Reserve releases employment data report</title>
+      <link>https://www.federalreserve.gov/newsevents/pressreleases/other20240315.htm</link>
+      <description>Nonfarm payroll employment rose by 275,000 in February.</description>
+      <pubDate>Fri, 15 Mar 2024 08:30:00 EST</pubDate>
+    </item>
+    <item>
+      <title>Federal Reserve Board announces annual CPI inflation update</title>
+      <link>https://www.federalreserve.gov/newsevents/pressreleases/other20240301.htm</link>
+      <description>Consumer prices rose 3.2 percent over the past 12 months.</description>
+      <pubDate>Fri, 01 Mar 2024 10:00:00 EST</pubDate>
+    </item>
+  </channel>
+</rss>

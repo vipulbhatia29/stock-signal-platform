@@ -1,0 +1,35 @@
+[
+  {
+    "category": "company news",
+    "datetime": 1711929600,
+    "headline": "Apple Reports Record Q1 Revenue of $119.6B",
+    "id": 12345,
+    "image": "https://example.com/img.jpg",
+    "related": "AAPL",
+    "source": "MarketWatch",
+    "summary": "Apple Inc. reported record first-quarter revenue driven by iPhone and Services growth.",
+    "url": "https://www.marketwatch.com/story/apple-q1-2024"
+  },
+  {
+    "category": "company news",
+    "datetime": 1711843200,
+    "headline": "Apple Announces New AI Features at WWDC",
+    "id": 12346,
+    "image": "",
+    "related": "AAPL",
+    "source": "TechCrunch",
+    "summary": "Apple unveiled its artificial intelligence strategy including on-device processing.",
+    "url": "https://techcrunch.com/apple-wwdc-ai"
+  },
+  {
+    "category": "company news",
+    "datetime": 1711756800,
+    "headline": "Apple Acquires AI Startup for $1B in Largest Deal This Year",
+    "id": 12347,
+    "image": "",
+    "related": "AAPL",
+    "source": "Reuters",
+    "summary": null,
+    "url": "https://reuters.com/apple-acquisition"
+  }
+]
