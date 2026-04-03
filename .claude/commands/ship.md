@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git push:*), Bash(git commit:*), Bash(gh pr create:*), Bash(gh pr view:*), mcp__plugin_serena_serena__list_memories, mcp__plugin_serena_serena__read_memory, mcp__plugin_serena_serena__write_memory, mcp__plugin_serena_serena__delete_memory
+allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git push:*), Bash(git commit:*), Bash(gh pr create:*), Bash(gh pr view:*), Bash(git log:*), Bash(git branch:*), mcp__plugin_serena_serena__list_memories, mcp__plugin_serena_serena__read_memory, mcp__plugin_serena_serena__write_memory, mcp__plugin_serena_serena__delete_memory, mcp__plugin_atlassian_atlassian__getJiraIssue, mcp__plugin_atlassian_atlassian__transitionJiraIssue
 description: Promote session memories, commit, push, and open a PR
 ---
 
@@ -40,12 +40,42 @@ Memory promotions and code changes go in the same commit.
 
 Push the branch to origin with `-u` flag if first push.
 
+### Step 3.5 — Scan for JIRA tickets
+
+1. Extract KAN-XXX patterns from:
+   - Branch name: `git branch --show-current`
+   - All commit messages: `git log develop..HEAD --oneline`
+2. Deduplicate the ticket list
+3. If tickets found, store them for the PR body `## Ships` section
+
 ### Step 4 — Create PR
 
 Create a PR using `gh pr create` with:
 - Title: short (under 70 chars), conventional commit style
-- Body: summary bullets + test plan checklist
+- Body format (use HEREDOC):
+
+```
+## Summary
+<1-3 bullet points>
+
+## Ships
+- KAN-XXX
+- KAN-YYY
+
+## Test plan
+- [ ] <verification steps>
+```
+
 - Base branch: `develop` (not `main`)
+- If no KAN-XXX tickets found, omit the `## Ships` section entirely
+
+### Step 4.5 — JIRA transition prompt
+
+If tickets were found in Step 3.5:
+1. Present: "PR ships [ticket list]. Transition to Done? (y/n)"
+2. WAIT for user approval
+3. On approval: transition each ticket to Done (transition ID: 31) using `transitionJiraIssue`
+4. Report results: "Transitioned: [list]. Failed: [list]."
 
 ### Step 5 — Confirm
 
