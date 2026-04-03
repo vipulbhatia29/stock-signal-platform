@@ -2,7 +2,7 @@
 
 ## Stock Signal Platform
 
-**Version:** 4.0
+**Version:** 5.0
 **Author:** Vipul Bhatia
 **Date:** April 2026
 
@@ -71,20 +71,14 @@ A **Daily Intelligence Briefing** dashboard with 5 information zones, a stock sc
 
 ### Near-term Vision
 
-- **Phase D:** Test suite overhaul (visual regression, nightly CI, Playwright E2E) -- in progress
-- **Phase 8.6+:** Forecast Intelligence (see Section 5 below)
-- **Stripe subscriptions** with tiered pricing (Free/Pro/Premium)
-- **Cloud deployment** (containerized, managed DB, production observability)
+- **Phase F:** Stripe subscriptions with tiered pricing (Free/Pro/Premium)
+- **Phase G:** Cloud deployment (containerized, managed DB, production observability)
+- **Tech debt:** KAN-395-399 (convergence task wiring, SQL integration tests, router extraction)
 
-### Phase 8.6+ -- Forecast Intelligence
+### Recently Completed
 
-Advanced forecasting and signal convergence capabilities. 19 JIRA tickets (KAN-369 Epic, KAN-370-387):
-
-- **Walk-forward backtesting** -- rolling-window backtests with anchored/expanding variants, regime-aware evaluation
-- **News sentiment pipeline** -- real-time sentiment scoring integrated into signal computation
-- **Black-Litterman portfolio forecasting** -- Bayesian portfolio optimization combining market equilibrium with investor views
-- **Signal convergence UX** -- multi-signal agreement visualization, confluence scoring in dashboard
-- **Admin pipeline orchestrator** -- manual pipeline triggers, step-level monitoring, retry controls
+- **Phase D:** Test suite overhaul ✅ — tiered architecture (T0-T5), 14 CI checks, 13 Semgrep rules, Playwright E2E, MSW integration, nightly Lighthouse. ~2,319 total tests.
+- **Phase 8.6+: Forecast Intelligence** ✅ — 13 sprints across 4 specs (A/D/B/C), 19 JIRA tickets (KAN-369 Epic). See sections 5.20-5.23 below.
 
 ### Long-term Vision
 
@@ -98,7 +92,7 @@ Detailed functional specifications, acceptance criteria, and API contracts are i
 
 ### 5.1 Signal Engine (P0)
 
-Computes 7 technical signals (RSI, MACD, SMA crossover, Bollinger Bands, Sharpe, annualized return, volatility) and 11 fundamental signals (P/E, PEG, FCF yield, D/E, Piotroski F-Score, growth metrics, margins, ROE, beta, dividend yield, forward P/E). Synthesizes into a 0-10 composite score (50% technical, 50% fundamental). See [FSD.md Section 1](FSD.md) for signal parameters and thresholds.
+Computes 7 technical signals (RSI, MACD, SMA crossover, Bollinger Bands, Sharpe, annualized return, volatility) plus per-stock QuantStats risk analytics (Sortino, max drawdown, alpha, beta via `pandas-ta-openbb`). Fundamental scoring via Piotroski F-Score (0-9, scaled to 0-5 points). Synthesizes into a 0-10 composite score (50% technical, 50% fundamental). Additional fundamental data (P/E, PEG, margins, ROE, analyst targets) is materialized to DB during ingestion and accessible via API + agent tools, but not yet scored. See [FSD.md FR-3](FSD.md) for signal parameters and thresholds.
 
 ### 5.2 Recommendation Engine (P0)
 
@@ -150,11 +144,11 @@ AI-synthesized market overview combining sector performance, top movers, and mac
 
 ### 5.14 Forecast Engine (P1)
 
-Prophet-based price forecasting for stocks (90/180/270-day), 11 sector ETFs, and portfolio-level weighted aggregation. Biweekly retrain, daily predict-only refresh, drift-triggered retrain. Recommendation evaluation at 30/90/180 days vs SPY. See [FSD.md Section 12](FSD.md).
+Prophet-based price forecasting for stocks (90/180/270-day), 11 sector ETFs, and portfolio-level weighted aggregation. Biweekly retrain, daily predict-only refresh. **Per-ticker calibrated drift detection** (threshold = `backtest_mape × 1.5`, 3-failure self-healing demotion). News sentiment regressors (stock, sector, macro — feature-flagged). Recommendation evaluation at 30/90/180 days vs SPY. See [FSD.md FR-11](FSD.md).
 
 ### 5.15 Admin Command Center (P1)
 
-4-zone operational dashboard: LLM metrics (call counts, latency, cost by model/tier), tier health monitoring (healthy/degraded/down/disabled per provider), query analytics (per-query cost breakdown), and user management (verification status, account recovery). Admin API for model config CRUD + reload without redeploy.
+**5-zone** operational dashboard: System Health (DB, Redis, Celery, Langfuse, MCP), API Traffic (RPS, latency percentiles, error rate), LLM Operations (tier health, costs, cascade rate, token budgets), Pipeline (run history, watermarks, next run), and **Forecast Health** (backtest accuracy %, sentiment coverage %). 3 drill-down sheets, 15s auto-polling, per-zone circuit breakers. Admin API for model config CRUD + reload without redeploy, chat session audit with full transcripts.
 
 ### 5.16 Observability Platform (P0)
 
@@ -171,12 +165,29 @@ Google OAuth 2.0, email verification (Resend API), self-service password reset, 
 ### 5.19 Supporting Features (P1-P2)
 
 - **Redis Cache Service:** 3-tier namespace (app/user/session), 4 TTL tiers, agent tool session caching, warmup + nightly invalidation.
-- **News Aggregation:** Per-user news from Google RSS with sentiment classification. Portfolio + recommendation ticker scoping.
-- **Sectors & Correlation:** Sector accordion, drill-down stocks, correlation matrix heatmap.
+- **News Aggregation:** Per-user news from Google RSS (dashboard) + 4-provider news sentiment pipeline (Finnhub, EDGAR, Fed RSS, Google News) with LLM scoring.
+- **Sectors & Correlation:** Sector accordion, drill-down stocks, correlation matrix heatmap, sector convergence.
 - **Search Autocomplete:** DB-first with Yahoo Finance supplementation for unknown tickers.
-- **Background Processing & Alerts:** 9-step nightly pipeline, in-app alerts with deduplication, gap recovery via watermarks.
+- **Background Processing & Alerts:** 11-step nightly pipeline + 4x/day news ingestion, in-app alerts with deduplication, gap recovery via watermarks.
 - **Input/Output Guardrails:** PII detection, injection blocking, evidence verification, disclaimer injection, decline tracking.
+- **Event-Driven Cache Invalidation:** `CacheInvalidator` with 7 event methods, batched Redis deletes, fire-and-forget. Admin can clear patterns via API.
 - **Macro Overlay (partial):** FRED adapter for macro data. Market regime indicator planned but not yet surfaced.
+
+### 5.20 Backtesting Engine (P1) ✅
+
+Walk-forward validation for Prophet models. Expanding window generation with 5 accuracy metrics (MAPE, MAE, RMSE, direction accuracy, CI containment). Per-ticker calibrated drift thresholds (backtest_mape × 1.5) with self-healing demotion after 3 consecutive failures. AccuracyBadge component showing model tier (Excellent/Good/Fair/Poor). Admin-triggered backtest runs and seasonality calibration. See [FSD.md FR-24](FSD.md).
+
+### 5.21 News Sentiment Pipeline (P1) ✅
+
+4-provider news ingestion (Finnhub, SEC EDGAR, Fed RSS/FRED, Google News) with LLM-based sentiment scoring (GPT-4o-mini). 3 sentiment channels (stock, sector, macro) feeding Prophet as regressors. Exponential decay daily aggregation, quality flags, event type classification. 4x/day Celery ingestion + scoring. XML parsing uses `defusedxml` for XXE safety. See [FSD.md FR-25](FSD.md).
+
+### 5.22 Signal Convergence & Divergence UX (P1) ✅
+
+Multi-signal convergence analysis across 5+ indicators (RSI, MACD, SMA, Piotroski, Prophet forecast, news sentiment). Traffic light UX with signal-by-signal bullish/bearish/neutral display. Divergence alerts when forecast direction opposes technical signal majority. Historical hit rate computation. Natural-language rationale generation. Portfolio-level and sector-level aggregation. See [FSD.md FR-26](FSD.md).
+
+### 5.23 Portfolio Forecast — BL + Monte Carlo + CVaR (P1) ✅
+
+Portfolio-level forecasting combining Black-Litterman allocation (Idzorek view confidences, Prophet views as inputs), vectorized Monte Carlo simulation (10K paths, Cholesky decomposition), and Conditional Value at Risk (95th + 99th percentile). Frontend: BLForecastCard, MonteCarloChart (fan chart), CVaRCard. See [FSD.md FR-27](FSD.md).
 
 ---
 
@@ -257,14 +268,17 @@ AI analyst: ~$0.03-0.05 per comprehensive analysis (2-4 LLM calls). Model tierin
 See **[TDD.md](TDD.md)** for detailed technical design and API contracts.
 
 - **Monolith-first**, microservice-ready (clean domain boundaries via service layer)
-- **PostgreSQL + TimescaleDB** for operational and time-series data
-- **Redis** for caching, token budgeting, refresh token blocklist, and Celery brokering
-- **FastAPI** (async) -- 16 router modules
-- **Next.js** App Router with Tailwind v4 + shadcn/base-ui
+- **PostgreSQL + TimescaleDB** for operational and time-series data (30 tables, 4 hypertables)
+- **Redis** for caching (event-driven invalidation), token budgeting, refresh token blocklist, pipeline state, and Celery brokering
+- **FastAPI** (async) -- 19 router modules + service layer (12 services)
+- **Next.js** App Router with Tailwind v4 + shadcn/base-ui (16 hooks, 29 components)
 - **ReAct agent** with rule-based intent classification, LLM Factory (DB-driven model configs), and 25+4 tools
-- **Celery Beat** nightly 9-step pipeline with self-healing gap recovery
-- **Prophet** forecasting with drift detection and biweekly retrain
-- **Langfuse** tracing + ObservabilityCollector + assessment framework
+- **Celery Beat** nightly 11-step pipeline + 4x/day news sentiment + weekly warm data, with self-healing gap recovery
+- **Prophet** forecasting with per-ticker calibrated drift detection, walk-forward backtesting, news sentiment regressors
+- **Black-Litterman + Monte Carlo + CVaR** portfolio forecasting
+- **4-provider news pipeline** (Finnhub, EDGAR, Fed RSS, Google News) with LLM-based sentiment scoring
+- **Signal convergence** analysis across 5+ indicators with divergence alerting and rationale generation
+- **Langfuse** tracing + ObservabilityCollector + HttpMetricsMiddleware + assessment framework
 
 ---
 
@@ -307,3 +321,4 @@ See **[TDD.md](TDD.md)** for detailed technical design and API contracts.
 | March 2026 | 2.0 | AI analyst architecture, enriched data layer, search, data materialization (Session 38) |
 | March 2026 | 3.0 | Full platform refresh: ReAct agent, LLM Factory, observability, MCP, Redis cache, forecast engine, dashboard redesign, news, sectors (Session 75) |
 | April 2026 | 4.0 | Audit cleanup: removed inline phase status, deduplicated FSD content (link instead), fixed LLM provider description to reflect DB-driven model configs, added missing features (geopolitical events, stock intelligence, AI recommendations, portfolio health, recommendation scorecard, market briefing, admin command center), added Phase 8.6+ Forecast Intelligence roadmap, added concrete success metrics (Session 87) |
+| April 2026 | 5.0 | Phase 8.6+ COMPLETE: added sections 5.20-5.23 (backtesting, news sentiment, convergence UX, portfolio forecast). Updated vision (Phase D + 8.6+ done). Fixed: signal engine (Piotroski is active fundamental), forecast engine (calibrated drift), command center (4→5 zones), pipeline (9→11 steps), architecture (16→19 routers, 12 services). Added cache invalidation to supporting features. (Session 90) |
