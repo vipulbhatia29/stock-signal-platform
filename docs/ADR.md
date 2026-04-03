@@ -352,6 +352,311 @@ Use a single `CacheInvalidator` service with event-driven methods (`on_prices_up
 
 ---
 
+## ADR-012: DB-Driven LLM Model Cascade (Not Hardcoded)
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase 6 (Epic KAN-139), llm-factory-cascade spec
+
+### Decision
+LLM provider cascade is configured via `llm_model_config` database table, not hardcoded in `config.py`. Admin can rebalance models and costs at runtime without code deploy.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) DB-driven config** | Runtime rebalancing without deploy, per-tier model configs (cheap/quality/reason), cost tracking per model, easy A/B testing | Additional DB lookup on every model call (cached) |
+| **B) Hardcoded cascade** | No DB dependency, simple | Code deploy required for any model change, no per-tier tuning |
+
+### Rationale
+- Admin observes cost or latency spikes and rebalances models in minutes, not hours (code deploy).
+- Per-tier pricing: `tier="cheap"` might use Groq ($/1M lower), `tier="quality"` uses Anthropic, `tier="reason"` uses o1-preview. Database enables this flexibility.
+- Cost tracking per model tier enables accurate per-feature cost attribution to users.
+- Cached reads prevent N+1 lookups — `llm_model_config` is hydrated once per request and stored in request-scoped cache.
+
+### Consequences
+- `llm_model_config` table is a critical dependency. Migration must create default rows at init time.
+- Hot-reload endpoint exists for admins (requires `role="admin"`). No app restart needed.
+- All LLM factory calls pass through `get_model_config(tier)`, which reads from cache.
+
+---
+
+## ADR-013: Three-Tier Redis Cache Namespace with SCAN
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase 7 (KAN-170), redis-cache spec
+
+### Decision
+Cache keys use `app:`, `user:`, `session:` prefixes for namespacing. Pattern clearing uses Redis `SCAN` (never `KEYS *`).
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Flat keys + KEYS *** | Simple namespace detection | KEYS blocks Redis in production (~500ms on 1M keys), prevents cache operations during clearing |
+| **B) Namespaced prefixes + SCAN** | Non-blocking pattern iteration, prevents cross-user cache leaks, clear by prefix | Requires consistent prefix discipline across all code |
+
+### Rationale
+- `KEYS` is a synchronous blocking operation — using it in production violates observability SLAs.
+- SCAN is O(N) but non-blocking: it iterates in batches and yields control to other clients.
+- Namespace tiers prevent accidents: `user:alice:*` never leaks into `user:bob:*` if patterns are enforced.
+- `app:` tier for global caches (schema, config), `user:` for user-scoped (portfolio, forecast), `session:` for request-scoped.
+- TTL jitter (±10%) on all tiers prevents thundering herd after mass expiry.
+
+### Consequences
+- All new cache code must follow the naming convention. Code review enforces this.
+- `CacheInvalidator.clear_user_caches(user_id)` uses `SCAN app:*`, `SCAN user:{user_id}:*` patterns.
+- Monitoring alerts if SCAN takes >100ms (indicates Redis memory pressure).
+
+---
+
+## ADR-014: httpOnly Cookies + Dual-Mode Auth
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase 2 (Sessions 4-7), auth-overhaul spec
+
+### Decision
+JWT tokens are stored in httpOnly Secure SameSite=Lax cookies. Server reads tokens from cookies OR Authorization header (dual-mode) for compatibility.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) localStorage** | Client can read token in JS | Vulnerable to XSS attacks (attacker JS exfiltrates token) |
+| **B) Cookie-only** | XSS-safe | Breaks API clients, browser doesn't send cookies for cross-origin requests without credentials |
+| **C) Dual-mode (cookie + header)** | XSS-safe + API clients work, CORS-friendly | Requires CORS allow_credentials=True |
+
+### Rationale
+- httpOnly cookies prevent XSS attacks from accessing tokens via `document.cookie`.
+- Dual-mode supports both browser clients (cookie auto-sent) and programmatic clients (pass header manually).
+- SameSite=Lax blocks accidental CSRF while allowing cross-site top-level navigations.
+- Secure flag ensures cookies only sent over HTTPS (enforced in production, skipped in local dev with `os.getenv`).
+
+### Consequences
+- CORS configuration must allow credentials: `allow_credentials=True` with explicit origin list (no wildcard).
+- Frontend never accesses the token — no `localStorage.getItem('token')` pattern.
+- API clients must be documented: "Pass `Authorization: Bearer <token>` header OR set the cookie via `credentials: 'include'` in fetch."
+
+---
+
+## ADR-015: User-Level Token Revocation (Not Per-Token JTI)
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase C Auth Overhaul (KAN-325), Session 82
+
+### Decision
+On sensitive actions (password change, account delete), set Redis key `auth:revoke:{user_id}` to current Unix timestamp. Any JWT with `iat < revoke_timestamp` is rejected on every request.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Per-token JTI blocklist** | Revokes exactly one token | Scales O(N) — one Redis entry per revoked token, huge for active users |
+| **B) User-level revocation** | Revokes ALL sessions in O(1) lookup | Logs out all devices simultaneously |
+
+### Rationale
+- Password change or account deletion requires revocation of all sessions for security. Per-token revocation defeats this purpose.
+- Redis `GET auth:revoke:{user_id}` is O(1) — scales to millions of users.
+- Every JWT must include `iat` claim (standard RFC 7519). Verification compares `token.iat < redis_revoke_timestamp`.
+- On first login after revocation, new JWT has fresh `iat > revoke_timestamp`, so it passes.
+- Fire-and-forget: if Redis is down, we skip the revocation check but log a warning (don't fail the request).
+
+### Consequences
+- All user-modifying endpoints (change password, delete account) must call `set_user_revocation(user_id)`.
+- `get_current_user` adds one Redis lookup per request (cached via middleware).
+- Admins cannot revoke individual sessions — by design.
+
+---
+
+## ADR-016: Soft-Delete with 30-Day Grace Period
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase C Auth Overhaul (KAN-343), Session 82
+
+### Decision
+Account deletion sets `deleted_at` timestamp. Celery Beat task purges accounts where `deleted_at + 30d < now` with hard delete + cascading FK deletes.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Immediate hard delete** | Clean, no soft-deleted rows | Irreversible if accidental, blocks GDPR requests |
+| **B) Soft-delete with grace period** | Recovery window, GDPR-compliant, audit trail | Requires cleanup task, deleted accounts still in DB temporarily |
+
+### Rationale
+- 30-day grace period allows accidental recovery and gives GDPR requests time to verify user identity.
+- Admin recovery endpoint exists: `POST /admin/restore/{user_id}` (requires 2FA + audit log).
+- Hard delete after 30d is automatic and non-reversible — users accept this in confirmation dialog.
+- Soft deletion is transparent to queries: `WHERE deleted_at IS NULL` filters automatically in `get_user(user_id)`.
+
+### Consequences
+- `User` model has `deleted_at` nullable timestamp column.
+- All user queries add implicit `deleted_at IS NULL` filter (enforced via SQLAlchemy hybrid property or query base class).
+- Celery Beat task `purge_deleted_accounts` runs daily at 03:00 UTC. ON DELETE CASCADE must exist on all FK relationships.
+
+---
+
+## ADR-017: Tiered Test Pyramid — xdist Only for Unit Tests
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase D Test Overhaul (Epic KAN-356), test-suite-overhaul spec
+
+### Decision
+pytest-xdist parallel execution (`-n auto`) is enabled ONLY for `tests/unit/`. API and integration tests run sequentially on a single worker.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) xdist everywhere** | Faster overall CI time | Race conditions on shared test database, timing-dependent failures, hard to debug |
+| **B) Sequential all** | Deterministic, reproducible | Slow CI — API tests alone take 6 min single-threaded |
+| **C) Tiered parallelism** | Unit tests parallelized (pure functions), API/integration sequential (shared DB) | Two job types to maintain |
+
+### Rationale
+- Unit tests are pure functions with no I/O — parallelizing them is safe and fast.
+- API and integration tests share a single test database. Parallel writes cause race conditions (`IntegrityError` on duplicate key inserts, `RowNotFound` on concurrent deletes).
+- `tests/unit/` runs with `-n auto` (~8s), `tests/api/` and `tests/integration/` run sequentially (~6m).
+- Total CI time with filtering: ~4 min (backend only) or ~8 min (both backend + frontend).
+
+### Consequences
+- CI splits into two jobs: `test-unit-parallel` and `test-api-sequential`.
+- New tests are marked `@pytest.mark.unit`, `@pytest.mark.api`, or `@pytest.mark.integration` via conftest.
+- Developers run locally: `uv run pytest tests/unit/ -n auto` for speed, `uv run pytest tests/api/` sequentially before push.
+
+---
+
+## ADR-018: Path-Based CI Routing (dorny/paths-filter)
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase D Sprint 2 (KAN-358), Session 84
+
+### Decision
+GitHub Actions jobs only run when relevant files change. Backend jobs skip on frontend-only PRs. Frontend jobs skip on backend-only PRs. Uses `dorny/paths-filter` action.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Run all checks on every PR** | Simple, no conditional logic | ~8 min per PR, 14 checks × 2 languages = wasteful |
+| **B) Path-based filtering** | Backend PR takes ~3 min (backend tests + lint), frontend PR takes ~2 min (frontend tests + lint) | Requires filter config, aggregator job needed |
+
+### Rationale
+- Full CI suite (all 14 checks) takes ~8 minutes. Path filtering reduces median PR time to ~3 min.
+- Developers expect instant feedback — 8 min is too slow.
+- `ci-gate` aggregator job ensures "all relevant checks pass" before merge is allowed.
+- Filter config is declarative YAML — easy to update when directories change.
+
+### Consequences
+- `.github/workflows/ci-gate.yml` includes path-filter step + conditional job runs via `needs: test-backend` syntax.
+- New directories require updating the paths-filter config (e.g., new backend service directory).
+- Developers running locally: `uv run pytest tests/ -q && uv run ruff check && uv run pyright`.
+
+---
+
+## ADR-019: Three-Level Forecast Hierarchy (Stock → Sector → Portfolio)
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase 8.6+ (Epic KAN-369), forecast-intelligence spec
+
+### Decision
+Stock-level Prophet forecasts aggregate upward via equal-weighting. Sector forecasts equal-weight their stock constituents (not independent models). Portfolio forecasts use Black-Litterman optimization with Prophet views + Monte Carlo + CVaR.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Independent models per level** | Precise sector/portfolio models | High compute cost, hard to explain why sector model disagrees with stocks |
+| **B) Sector = equal-weight, Portfolio = BL** | Transparent aggregation, BL handles correlations, lower compute | Sector accuracy depends entirely on stock accuracy |
+| **C) Portfolio-only (skip sector)** | Simpler | Users lose sector-level insights |
+
+### Rationale
+- Equal-weight sector aggregation is transparent: "Sector forecast = average of its stocks' forecasts." Users understand this.
+- Black-Litterman is the industry standard for combining market priors with views. Prophet views (expected returns) feed naturally into BL.
+- Stock-level accuracy >> sector/portfolio accuracy in forecasting. Aggregating up preserves this advantage.
+- Portfolio forecast requires ≥2 positions with 1yr price history — it's not computed for new users until history exists.
+
+### Consequences
+- `forecast_sector` view reads `forecast_stock` and aggregates via SQL `GROUP BY sector, date`. No separate Prophet model for sectors.
+- `get_portfolio_forecast` runs Black-Litterman on holdings. Requires covariance matrix (computed from historical prices) and expected returns (from Prophet).
+- Sector forecast is deterministic and cacheable (`user:*:sector_forecast:SPX` cached for 1d).
+
+---
+
+## ADR-020: Template-Based Rationale (LLM Only for Complex Divergences)
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase 8.6+ Spec C (KAN-384), Session 90
+
+### Decision
+~90% of convergence rationales are generated via Python string templates. LLM-generated rationale is reserved for complex divergence cases (e.g., BUY signal but 3+ indicators bearish, contradictory news sentiment).
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) LLM for all rationales** | Flexible, always novel | $0.001–0.01 per rationale, 500ms latency, ~500 tickers × 2 nightly runs = $5/day + 4 min compute |
+| **B) Templates only** | Zero cost, instant, deterministic | Limited flexibility, static text feels canned |
+| **C) Templates + LLM fallback** | 90% instant + cheap, 10% flexible for edge cases | Template library must be comprehensive |
+
+### Rationale
+- At 500 tickers × 2 daily convergence snapshots = 1,000 rationales/day. LLM cost adds up fast ($5/day = $150/month).
+- Template generation is O(1) per rationale — instant response.
+- Complex divergences are rare (~5–10% of tickers) and genuinely benefit from LLM reasoning.
+- Template library covers all common patterns: price near MA, RSI overbought, strong divergence alignment, weak signals, etc.
+- LLM fallback prevents users seeing "rationale not available" for edge cases.
+
+### Consequences
+- Create comprehensive template library in `backend/convergers/rationale_templates.py`. Add templates as new divergence patterns emerge.
+- LLM calls to `anthropic.beta.messages.create()` only for divergences matching 3+ specific conditions (tagged `needs_llm_reasoning=True`).
+- Monitor template coverage: if >20% of rationales fall back to LLM, add new templates.
+
+---
+
+## ADR-021: Observability as Bounded Package (backend/observability/)
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase B.5 BU-7 Command Center (KAN-233), command-center spec
+
+### Decision
+Extract all observability code into `backend/observability/` package with a single public API. Re-export shims at old import paths for backward compatibility during migration.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Observability scattered** | No extra indirection | Hard to maintain, unclear ownership, difficult to extract as service later |
+| **B) Bounded observability package** | Clear ownership, enables future extraction as microservice, centralized config, single entry point | Requires minor refactoring, backward-compat shims needed |
+
+### Rationale
+- Current observability code spans `agents/`, `routers/`, `services/` — ownership is diffuse.
+- Bounded package enables future microservice extraction (Phase 9B) without major refactoring.
+- Single entry point for metrics, tracing, health checks, and admin routers makes onboarding easier.
+- Clean dependency graph: routers call `backend.observability.collector`, not `backend.agents.observer`.
+
+### Consequences
+- Create `backend/observability/` with 8 modules: `collector.py`, `writer.py`, `langfuse.py`, `context.py`, `token_budget.py`, `queries.py`, `models.py`, and `metrics/` subpackage.
+- Old imports like `from backend.agents import observer` still work via shims in `backend/agents/__init__.py`.
+- Gradual migration: new code imports from `backend.observability`, old code imports from shims.
+
+---
+
+## ADR-022: Redis-Backed HTTP Metrics (Not In-Memory Counters)
+
+**Date:** 2026-04-03 | **Status:** Implemented | **Context:** Phase B.5 BU-7 (KAN-290), command-center spec
+
+### Decision
+HttpMetricsMiddleware stores request metrics in Redis sorted sets with 5-minute sliding windows. Path normalization prevents high cardinality.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) In-memory counters** | Simple, no external dependency | Uvicorn spawns N workers — counters are 1/N of actual traffic per worker. Totals are wrong. |
+| **B) Redis-backed metrics** | Accurate aggregate across all workers, queryable per-path, sliding-window TTL | Redis latency (~1ms per request) |
+| **C) Prometheus client library** | Standard observability format | Still has the N-worker problem without a shared backend |
+
+### Rationale
+- Uvicorn with `--workers 4` spawns 4 processes. In-memory counters in each worker show 25% of actual traffic — dashboards are wrong.
+- Redis sorted sets with timestamp scores enable sliding-window queries: `ZCOUNT path:method:path_name now-5min now` = requests in last 5 min.
+- Path normalization (`/users/{user_id}` → `/users/{id}`) prevents cardinality explosion (no per-user metrics).
+- Excluded paths (`/health`, `/admin/command-center`) prevent self-monitoring loops.
+
+### Consequences
+- Add `HttpMetricsMiddleware` to FastAPI app startup. Increments Redis counters on every request (fire-and-forget via background task).
+- Admin endpoint `GET /admin/metrics/http` queries Redis and returns per-path stats (top 10 slow endpoints, error rates by path, etc.).
+- Metric retention: 24hr TTL on sorted sets (no manual cleanup needed, TTL expires old entries).
+
+---
+
 ## ADR Index
 
 | # | Decision | Phase | Date |
@@ -367,3 +672,14 @@ Use a single `CacheInvalidator` service with event-driven methods (`on_prices_up
 | 009 | Prophet train-once-predict-many + convergence layer | 8.6+ | 2026-04-02 |
 | 010 | Per-ticker calibrated drift detection (MAPE × 1.5) | 8.6+ | 2026-04-02 |
 | 011 | Event-driven cache invalidation (hybrid TTL) | 8.6+ | 2026-04-02 |
+| 012 | DB-driven LLM model cascade (not hardcoded) | 6 | 2026-04-03 |
+| 013 | Three-tier Redis cache namespace with SCAN | 7 | 2026-04-03 |
+| 014 | httpOnly cookies + dual-mode auth | 2 | 2026-04-03 |
+| 015 | User-level token revocation (not per-token JTI) | C | 2026-04-03 |
+| 016 | Soft-delete with 30-day grace period | C | 2026-04-03 |
+| 017 | Tiered test pyramid — xdist only for unit tests | D | 2026-04-03 |
+| 018 | Path-based CI routing (dorny/paths-filter) | D | 2026-04-03 |
+| 019 | Three-level forecast hierarchy (stock → sector → portfolio) | 8.6+ | 2026-04-03 |
+| 020 | Template-based rationale (LLM only for complex divergences) | 8.6+ | 2026-04-03 |
+| 021 | Observability as bounded package (backend/observability/) | B.5 | 2026-04-03 |
+| 022 | Redis-backed HTTP metrics (not in-memory counters) | B.5 | 2026-04-03 |
