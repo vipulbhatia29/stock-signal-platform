@@ -2,7 +2,7 @@
 
 ## Stock Signal Platform
 
-**Version:** 2.0
+**Version:** 2.1
 **Date:** April 2026
 **Status:** Living Document
 **Prerequisite reading:** docs/PRD.md
@@ -330,26 +330,21 @@ calculate_position_size(ticker, portfolio):
 - "Action Required" panel on dashboard shows only BUY and SELL with HIGH confidence
 - User can acknowledge a recommendation (marks acknowledged=True)
 
-### FR-5: Fundamental Analysis (not implemented)
+### FR-5: Fundamental Analysis ✅ PARTIALLY IMPLEMENTED
 
-**FR-5.1: Fundamental Signals**
+**FR-5.1: Piotroski F-Score** ✅ IMPLEMENTED
+- Piotroski F-Score (0-9) computed from yfinance financials, scaled to 0-5 points
+- Blended 50/50 with technical score in composite calculation
+- Score stored per `signal_snapshot` with `composite_weights` JSONB for audit
 
-| Metric | Source | Scoring |
-|--------|--------|---------|
-| P/E vs 5Y avg | yfinance | Below avg: +1, Above: 0 |
-| PEG < 1 | yfinance | Yes: +1, No: 0 |
-| FCF Yield > 5% | yfinance | Yes: +1, No: 0 |
-| Debt/Equity < 1 | yfinance | Yes: +1, No: 0 |
-| Interest Coverage > 3x | yfinance | Yes: +1, No: 0 |
-| Piotroski F-Score | Computed from financials | 7-9: +3, 5-6: +1, <5: 0 |
-
-Fundamental sub-score: 0 to 8 points, normalized to 0-10.
-
-**FR-5.2: Combined Composite Score (not implemented)**
+**FR-5.2: Combined Composite Score** ✅ IMPLEMENTED
 ```
-composite = (technical_score * 0.5) + (fundamental_score * 0.5)
+composite = (technical_score * 0.5) + (piotroski_score_scaled * 0.5)
 ```
-Users can override weights via UserPreference.composite_weights.
+Users can override weights via `UserPreference.composite_weights`.
+
+**FR-5.3: Extended Fundamentals** (not implemented)
+Remaining fundamental signals (P/E, PEG, FCF Yield, Debt/Equity, Interest Coverage) are not yet implemented as scoring inputs. However, the data is materialized to the Stock model during ingestion (revenue_growth, gross_margins, operating_margins, ROE) and accessible via `GET /stocks/{ticker}/fundamentals`.
 
 ### FR-6: Portfolio Management ✅ IMPLEMENTED
 
@@ -699,12 +694,23 @@ flowchart TD
         J -->|no| N["Not yet matured"]
     end
 
-    subgraph Drift["Drift Detection"]
-        M --> O{"MAPE > 20%?"}
-        O -->|yes| P["Mark DEGRADED + queue retrain"]
-        O -->|no| Q["Model healthy"]
+    subgraph Drift["Drift Detection (per-ticker calibrated)"]
+        M --> O{"MAPE > ticker_threshold?"}
+        O -->|yes| P["Increment failure count"]
+        P --> P2{"3 consecutive?"}
+        P2 -->|yes| P3["Demote to EXPERIMENTAL"]
+        P2 -->|no| P4["Flag DEGRADED + queue retrain"]
+        O -->|no| Q["Model healthy — reset counter"]
     end
 ```
+
+**FR-11.0: Drift Detection (updated Phase 8.6+)**
+- Drift threshold is **per-ticker calibrated**: `backtest_mape × 1.5` (not a flat 20%)
+- Fallback threshold: 20% when no backtest data exists for a ticker
+- Consecutive failure tracking: 3 failures → experimental demotion (self-healing)
+- Validate-before-promote: new model must beat incumbent on backtest metrics before activation
+- VIX regime check: high volatility periods exempt from strict drift enforcement
+- ADR-010 documents the rationale
 
 **FR-11.1: Forecast Card (Stock Detail Page)**
 - 3 horizon pills (90d/180d/270d) showing predicted price, % change from current, confidence range
@@ -869,7 +875,13 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - Data watermarks per pipeline with gap status
 - Drill-down: run history (7 days), expandable rows with step durations and error summaries
 
-**FR-20.6: Drill-Down Sheets**
+**FR-20.6: Forecast Health Zone (Zone 5)** ✅ IMPLEMENTED (Phase 8.6+)
+- Backtest accuracy: % of tickers passing ≥60% direction accuracy threshold
+- Sentiment coverage: % of tracked tickers with sentiment data in last 7 days
+- Data sourced from `BacktestRun` and `NewsSentimentDaily` models
+- Added in Phase 8.6+ Sprint 13 (Spec C)
+
+**FR-20.7: Drill-Down Sheets**
 - Slide-out panels (right side, 640px max)
 - Manual refresh button, scrollable content
 - Each panel opened via "View Details" button on the corresponding zone
@@ -1075,6 +1087,54 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - `CVaRCard` — risk metrics display (95th/99th percentile losses)
 - Integrated into portfolio page
 
+### FR-28: Observability Instrumentation — DONE (Phases 6-8)
+
+> Backend observability stack that powers the admin dashboards (FR-18, FR-19, FR-20). Langfuse for LLM tracing, Redis-backed HTTP metrics, and multi-dimensional agent assessment.
+
+**FR-28.1: Langfuse LLM Tracing** ✅ IMPLEMENTED
+- `LangfuseService` wrapper (`backend/observability/langfuse.py`) — fire-and-forget design
+- Feature-flagged on `LANGFUSE_SECRET_KEY` (no-op when absent)
+- Trace per chat query, generation per LLM call, span per ReAct iteration
+- All errors caught and logged — never propagated to user response
+- Deep-link URL construction for admin trace inspection
+
+**FR-28.2: ObservabilityCollector** ✅ IMPLEMENTED
+- In-memory + DB state tracking for tier health, cost aggregation, cascade rate
+- `backend/observability/writer.py` — fire-and-forget event writer to `llm_call_log` table
+- `backend/observability/token_budget.py` — Redis sorted-set tracking per model with budget alerts
+- `backend/observability/queries.py` — 695 lines of DB queries for stats, tier health, traces
+
+**FR-28.3: HttpMetricsMiddleware** ✅ IMPLEMENTED
+- Redis-backed sorted sets with 5-minute sliding window
+- Path normalization: UUIDs → `{id}`, tickers → `{param}` (prevents high cardinality)
+- Excluded paths: `/admin/command-center`, `/health` (avoid self-monitoring loops)
+- Metrics: RPS, latency percentiles (p50/p95/p99), error rate, daily totals
+
+**FR-28.4: Agent Assessment Framework** ✅ IMPLEMENTED
+- `backend/tasks/scoring_engine.py` — multi-dimensional agent scoring:
+  - Tool selection alignment (expected vs actual tools called)
+  - Grounding score (response references tool data, not hallucinations)
+  - Termination criterion (efficient loop exit)
+  - External resilience (graceful degradation on API failures)
+  - Reasoning coherence (async LLM-based evaluation)
+- `backend/tasks/assessment_runner.py` — runs against golden dataset
+- `backend/tasks/golden_dataset.py` — curated query set with expected behaviors
+
+**FR-28.5: Context Variables** ✅ IMPLEMENTED
+- 5 ContextVars in `backend/observability/context.py`: `user_id`, `session_id`, `query_id`, `agent_type`, `agent_instance_id`
+- Propagated through middleware → router → agent → tool chain for full request attribution
+
+**FR-28.6: Admin LLM Model Management** ✅ IMPLEMENTED
+- `GET /admin/llm-models` — list all model configs (provider, tier, priority, cost)
+- `PATCH /admin/llm-models/{model_id}` — update priority, enabled, cost_per_1k_tokens
+- `POST /admin/llm-models/reload` — hot-reload configs from DB without restart
+- Model cascade loaded from DB at startup, per-provider tier configs with priority ordering
+
+**FR-28.7: Admin Chat Audit** ✅ IMPLEMENTED
+- `GET /admin/chat-sessions` — paginated list of all user sessions (filterable by user, date)
+- `GET /admin/chat-sessions/{session_id}` — full transcript with tool calls, costs, latency per step
+- `GET /admin/chat-stats` — aggregate usage (sessions/day, avg cost, top tools, error rate)
+
 ---
 
 ## 4. Non-Functional Requirements
@@ -1089,7 +1149,11 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 | Chat first token | < 2s | SSE first byte |
 | Chat full response (multi-tool) | < 15s | Last token |
 | API response (cached) | < 200ms | P95 latency |
+| Convergence computation (single ticker) | < 500ms | 4-5 DB queries + classification |
+| Portfolio forecast (BL + MC + CVaR) | < 5s | 10K Monte Carlo simulations |
+| Sentiment scoring batch (50 articles) | < 10s | LLM batch call |
 | Nightly batch (500 tickers) | < 30 min | Celery task completion |
+| News ingestion (4 providers) | < 2 min | Parallel asyncio.gather |
 
 ### NFR-2: Scalability
 
@@ -1131,13 +1195,17 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - Stock splits adjust positions atomically (single transaction)
 - FIFO cost basis is deterministic and reproducible
 
-### NFR-6: Observability
+### NFR-6: Observability ✅ IMPLEMENTED
 
-- Structured logging: `logging.getLogger(__name__)` (stdlib; structlog for production later)
-- Request tracing: correlation ID on every API request
-- Background job monitoring: TaskLog table + dashboard widget
-- LLM usage tracking: tokens_used and model_used on every ChatMessage
-- Error alerting: log ERROR level → future integration with monitoring
+- **Logging:** stdlib `logging.getLogger(__name__)` with structured key-value pairs
+- **LLM Tracing:** Langfuse integration — trace per query, generation per call, span per iteration (feature-flagged on `LANGFUSE_SECRET_KEY`)
+- **HTTP Metrics:** `HttpMetricsMiddleware` — Redis-backed RPS, latency percentiles, error rate with 5-min sliding window
+- **Request Attribution:** 5 ContextVars propagated through full request chain (user_id, session_id, query_id, agent_type, agent_instance_id)
+- **LLM Cost Tracking:** per-call cost_usd, token counts, provider, model stored in `llm_call_log`
+- **Token Budget:** Redis sorted-set per-model TPM/RPM tracking with alerting thresholds
+- **Agent Assessment:** multi-dimensional scoring engine (tool selection, grounding, termination, resilience, reasoning coherence) against golden dataset
+- **Command Center:** 5-zone admin dashboard with 15s auto-polling (see FR-20)
+- **Background Job Monitoring:** Pipeline run history with step durations, watermarks, next-run countdown
 
 ### NFR-7: Developer Experience ✅ IMPLEMENTED
 
@@ -1168,6 +1236,17 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 | Alert dedup window | 24 hours | AlertLog |
 | Max chat tool calls per turn | 15 | Agent loop (25+ tools + 4 MCP adapters available) |
 | LLM fallback order | Groq → Claude → LM Studio | Agent config |
+| Convergence: strong_bull threshold | ≥5 signals aligned bullish | SignalConvergenceService |
+| Convergence: strong_bear threshold | ≤1 signal aligned bullish | SignalConvergenceService |
+| Divergence trigger | Forecast direction opposes technical majority | DivergenceAlert |
+| Drift threshold | Per-ticker: backtest_mape × 1.5 (fallback 20%) | Calibrated drift (ADR-010) |
+| Drift demotion | 3 consecutive failures → experimental | Self-healing demotion |
+| Sentiment quality: suspect | article_count < 3 or confidence < 0.3 | SentimentScorer |
+| Monte Carlo simulations | 10,000 | PortfolioForecastService |
+| CVaR percentiles | 95th + 99th | PortfolioForecastService |
+| BL risk aversion | Configurable via `BL_RISK_AVERSION` | Settings |
+| News ingestion frequency | 4x/day (6, 10, 14, 18 ET) | Celery Beat |
+| Cache invalidation | Event-driven (CacheInvalidator) + TTL hybrid | ADR-011 |
 
 ---
 
@@ -1206,7 +1285,7 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 | FR-2 | Stock Universe & Watchlist (indexes, on-demand ingestion) | ✅ IMPLEMENTED |
 | FR-3 | Signal Engine (technical signals, composite score, risk analytics) | ✅ IMPLEMENTED |
 | FR-4 | Recommendation Engine (score-threshold rules) | ✅ IMPLEMENTED |
-| FR-5 | Fundamental Analysis (Piotroski, combined composite) | Not implemented |
+| FR-5 | Fundamental Analysis (Piotroski F-Score 50/50 blend; extended fundamentals pending) | ✅ PARTIAL |
 | FR-6 | Portfolio Management (FIFO, dividends, snapshots, analytics, rebalancing) | ✅ IMPLEMENTED |
 | FR-7 | Screener (filters, grid view, density, shell layout) | ✅ IMPLEMENTED |
 | FR-8 | AI Chatbot (ReAct agent, 25+ tools, 4 MCP adapters, streaming, evidence) | ✅ IMPLEMENTED |
@@ -1224,3 +1303,4 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 | FR-25 | News Sentiment Pipeline (4 providers, LLM scoring, Prophet regressors, API) | ✅ IMPLEMENTED |
 | FR-26 | Signal Convergence & Divergence UX (5 classifiers, traffic lights, rationale, E2E) | ✅ IMPLEMENTED |
 | FR-27 | Portfolio Forecast (Black-Litterman, Monte Carlo, CVaR, frontend cards) | ✅ IMPLEMENTED |
+| FR-28 | Observability Instrumentation (Langfuse, HttpMetrics, assessment, admin audit) | ✅ IMPLEMENTED |

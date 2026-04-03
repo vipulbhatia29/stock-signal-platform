@@ -2,8 +2,8 @@
 
 ## Stock Signal Platform
 
-**Version:** 1.1
-**Date:** March 2026
+**Version:** 2.0
+**Date:** April 2026
 **Status:** Living Document
 **Prerequisite reading:** docs/PRD.md, docs/FSD.md, docs/data-architecture.md
 
@@ -31,7 +31,7 @@ graph TB
 
     subgraph FastAPI["FastAPI Application :8181"]
         direction TB
-        MW["Middleware<br/>CORS | JWT Auth | Rate Limit | Request ID"]
+        MW["Middleware Stack<br/>CORS | JWT Auth | Rate Limit<br/>HttpMetrics | Request ID"]
 
         subgraph Routers
             R_Auth["/auth"]
@@ -44,6 +44,9 @@ graph TB
             R_Convergence["/convergence"]
             R_Sentiment["/sentiment"]
             R_Pipelines["/admin/pipelines"]
+            R_Admin["/admin<br/>LLM models | Chat audit"]
+            R_CC["/admin/command-center<br/>5-zone dashboard"]
+            R_Obs["/observability"]
             R_MCP["/mcp"]
         end
 
@@ -59,6 +62,8 @@ graph TB
         end
 
         subgraph Services["Service Layer"]
+            S_Email["EmailService"]
+            S_OAuth["GoogleOAuthService"]
             S_BT["BacktestEngine"]
             S_Conv["SignalConvergenceService"]
             S_PF["PortfolioForecastService"]
@@ -67,6 +72,14 @@ graph TB
             S_Cache["CacheInvalidator"]
             S_Pipe["PipelineRegistry"]
             S_Rat["RationaleGenerator"]
+        end
+
+        subgraph Observability["Observability Layer"]
+            LF["LangfuseService<br/>(traces, spans, generations)"]
+            OC["ObservabilityCollector<br/>(tier health, stats, costs)"]
+            HM["HttpMetricsMiddleware<br/>(RPS, latency, errors)"]
+            TB["TokenBudget<br/>(Redis sorted sets)"]
+            EV["Assessment Framework<br/>(scoring engine, golden dataset)"]
         end
 
         subgraph Agents["Agent Layer"]
@@ -95,6 +108,9 @@ graph TB
         EDGAR["SEC EDGAR"]
         FedRSS["Fed RSS / FRED"]
         GNews["Google News RSS"]
+        GoogleOIDC["Google OIDC<br/>(OAuth 2.0 + JWKS)"]
+        Resend["Resend<br/>(transactional email)"]
+        LangfuseCloud["Langfuse<br/>:3001"]
     end
 
     NextJS -->|HTTP/SSE| MW
@@ -105,6 +121,8 @@ graph TB
     Routers --> Agents
     Agents --> TR --> Tools
     Agents --> LLM --> Groq
+    LLM -.->|traces| LF
+    LF -->|export| LangfuseCloud
     Services --> PG
     Tools --> PG
     Tools --> YF
@@ -114,7 +132,12 @@ graph TB
     S_News --> FedRSS
     S_News --> GNews
     S_Sent --> Groq
+    S_OAuth --> GoogleOIDC
+    S_Email --> Resend
     S_Cache --> Redis
+    HM --> Redis
+    TB --> Redis
+    OC --> PG
     CB -->|schedule| CW
     CW --> Tools
     CW --> Services
@@ -1012,12 +1035,13 @@ GET /api/v1/sectors/{sector}/correlation
 
 ### 3.23 Command Center Endpoints (Admin)
 
-**Router:** `backend/observability/routers/` (mounted via admin)
+**Router:** `backend/observability/routers/command_center.py` (mounted via admin)
 
 ```
 GET /api/v1/admin/command-center
-  Response: CommandCenterResponse — 4-zone aggregate (system health, API traffic,
-            LLM operations, pipeline status). asyncio.gather with 3s per-zone timeout.
+  Response: CommandCenterResponse — 5-zone aggregate (system health, API traffic,
+            LLM operations, pipeline status, forecast health).
+            asyncio.gather with 3s per-zone timeout.
   Auth:     Admin role required
   Cache:    10s Redis cache (skipped when degraded)
 
@@ -1034,11 +1058,58 @@ GET /api/v1/admin/command-center/pipeline
   Auth:     Admin role required
 ```
 
+### 3.24 Admin LLM & Chat Audit Endpoints
+
+**Router:** `backend/observability/routers/admin.py`
+
+```
+GET /api/v1/admin/llm-models
+  Response: List all LLM model configs (provider, tier, priority, cost)
+  Auth:     Admin required
+
+PATCH /api/v1/admin/llm-models/{model_id}
+  Body:     Partial update (priority, enabled, cost_per_1k_tokens)
+  Response: Updated model config
+  Auth:     Admin required
+
+POST /api/v1/admin/llm-models/reload
+  Response: Reload model configs from database (hot-reload without restart)
+  Auth:     Admin required
+
+GET /api/v1/admin/chat-sessions
+  Query:    limit, offset, user_id?, date_from?, date_to?
+  Response: Paginated list of all user chat sessions
+  Auth:     Admin required
+
+GET /api/v1/admin/chat-sessions/{session_id}
+  Response: Full transcript with tool calls, costs, latency per step
+  Auth:     Admin required
+
+GET /api/v1/admin/chat-stats
+  Response: Aggregate chat usage (sessions/day, avg cost, top tools, error rate)
+  Auth:     Admin required
+```
+
+### 3.25 User Observability Endpoints
+
+**Router:** `backend/observability/routers/user_observability.py`
+
+```
+GET /api/v1/observability/my-queries
+  Query:    limit, offset, sort_by, sort_order
+  Response: User's own query history (scoped by JWT user_id)
+  Auth:     Required (non-admin users see only their own data)
+
+GET /api/v1/observability/my-queries/{query_id}
+  Response: Query detail with step breakdown
+  Auth:     Required (ownership check)
+```
+
 ---
 
 ## 4. Service Layer Design
 
-> **Note:** The service layer is partially implemented. Many routers still call tools directly. The full service-layer pattern and Redis caching strategy described below are the target architecture.
+> **Note:** The service layer is largely implemented for Phase 8.6+ features (convergence, forecast, sentiment, pipelines). Older routers (stocks, portfolio CRUD) still call tools directly. New features follow the service-layer pattern below.
 
 ### 4.0.1 Implemented Services
 
@@ -1326,15 +1397,18 @@ flowchart TB
         W["Task Executor"]
     end
 
-    subgraph Chain["Nightly Pipeline (8 steps)"]
+    subgraph Chain["Nightly Pipeline (11 steps)"]
         direction TB
         S1["1. Price Refresh"] --> S2["2. Forecast Refresh"]
         S2 --> S3["3. Recommendations"]
         S3 --> S4["4. Forecast Eval"]
         S4 --> S5["5. Rec Eval"]
         S5 --> S6["6. Drift Detection"]
-        S6 --> S7["7. Alerts"]
-        S7 --> S8["8. Portfolio Snapshots"]
+        S6 --> S7["7. Convergence Snapshot"]
+        S7 --> S8["8. Alerts"]
+        S8 --> S9["9. Health Snapshots"]
+        S9 --> S10["10. Rebalancing"]
+        S10 --> S11["11. Portfolio Snapshots"]
     end
 
     subgraph Infra["Infrastructure"]
@@ -1354,18 +1428,22 @@ flowchart TB
 
 ### 6.2 Beat Schedule (US/Eastern)
 
-| Time | Task | Frequency |
-|------|------|-----------|
-| 2:00 AM Sun | `model_retrain_all_task` | Biweekly (filtered at task level) |
-| 2:00 AM Sun | `sync_institutional_holders_task` | Weekly |
-| 3:00 AM | `purge_login_attempts_task` | Daily |
-| 3:15 AM | `purge_deleted_accounts_task` | Daily |
-| 6:00 AM | `sync_analyst_consensus_task` | Daily |
-| 7:00 AM | `sync_fred_indicators_task` | Daily |
-| Every 30 min | `refresh_all_watchlist_tickers_task` | Intraday |
-| 4:30 PM | `snapshot_all_portfolios_task` | Daily |
-| 4:45 PM | `snapshot_health_task` | Daily |
-| 9:30 PM | `nightly_pipeline_chain_task` (8 steps) | Daily |
+| Time | Task | Frequency | Group |
+|------|------|-----------|-------|
+| 2:00 AM Sun | `model_retrain_all_task` | Biweekly | model_training |
+| 2:00 AM Sun | `sync_institutional_holders_task` | Weekly | warm_data |
+| 3:00 AM | `purge_login_attempts_task` | Daily | maintenance |
+| 3:15 AM | `purge_deleted_accounts_task` | Daily | maintenance |
+| 6:00 AM | `sync_analyst_consensus_task` | Daily | warm_data |
+| 6:00, 10:00, 14:00, 18:00 | `news_ingest_task` | 4x/day | news_sentiment |
+| 7:00, 11:00, 15:00, 19:00 | `news_sentiment_scoring_task` | 4x/day (1hr after ingest) | news_sentiment |
+| 7:00 AM | `sync_fred_indicators_task` | Daily | warm_data |
+| Every 30 min | `refresh_all_watchlist_tickers_task` | Intraday | intraday |
+| 4:00 PM | `snapshot_all_portfolios_task` | Daily | nightly |
+| 4:15 PM | `snapshot_health_task` | Daily | nightly |
+| 9:30 PM | `nightly_pipeline_chain_task` (11 steps) | Daily | nightly |
+
+**Task files** (15 in `backend/tasks/`): `market_data`, `portfolio`, `forecasting`, `evaluation`, `convergence`, `alerts`, `recommendations`, `news_sentiment`, `audit`, `warm_data`, `assessment_runner`, `scoring_engine`, `pipeline`, `golden_dataset`, `seed_tasks`.
 
 Timezone: `US/Eastern`. Tasks use `asyncio.run()` bridge for async code.
 
@@ -1592,6 +1670,20 @@ graph TD
         AB["AlertBell"]
     end
 
+    subgraph ConvComp["Convergence Components"]
+        TLR["TrafficLightRow"]
+        DA["DivergenceAlert"]
+        ABG["AccuracyBadge"]
+        RS["RationaleSection"]
+        CS["ConvergenceSummary"]
+    end
+
+    subgraph PortFComp["Portfolio Forecast Components"]
+        BLC["BLForecastCard"]
+        MCC["MonteCarloChart"]
+        CVAR["CVaRCard"]
+    end
+
     subgraph ChatComp["Chat Components"]
         CI["ChatInput"]
         MB["MessageBubble"]
@@ -1616,6 +1708,9 @@ graph TD
 
     Shell --> Pages
     DASH --> DashComp
+    DETAIL --> ConvComp
+    PORT --> PortFComp
+    PORT --> ConvComp
     CP --> ChatComp
     Pages --> Shared
     Pages --> Data
@@ -1655,15 +1750,38 @@ The authenticated layout is a client component that composes three side-by-side 
 | `StatTile` | Dashboard KPI tile with accent gradient top border |
 | `AllocationDonut` | CSS conic-gradient pie; no chart library |
 | `PortfolioDrawer` | Bottom slide-up with PortfolioValueChart |
+| `TrafficLightRow` | Signal-by-signal bullish/bearish/neutral indicator with color coding |
+| `DivergenceAlert` | Warning banner when forecast diverges from technical consensus |
+| `AccuracyBadge` | MAPE-based model accuracy tier (Excellent/Good/Fair/Poor) |
+| `RationaleSection` | Collapsible natural-language explanation panel |
+| `ConvergenceSummary` | Portfolio-level convergence overview with position breakdown |
+| `BLForecastCard` | Black-Litterman expected returns with confidence intervals |
+| `MonteCarloChart` | Fan chart visualization of MC simulation paths (Recharts) |
+| `CVaRCard` | Risk metrics display (95th/99th percentile losses) |
 
-**Hook Locations:**
+**Hook Locations (16 files in `hooks/`):**
 
-| Hook | File | Source |
-|------|------|--------|
-| `usePositions()` | `hooks/use-stocks.ts` | Extracted from portfolio-client |
-| `usePortfolioSummary()` | `hooks/use-stocks.ts` | Extracted from portfolio-client |
-| `usePortfolioHistory()` | `hooks/use-stocks.ts` | Extracted from portfolio-client |
-| `useWatchlist()` | `hooks/use-stocks.ts` | Existing |
+| Hook | File | Purpose |
+|------|------|---------|
+| `usePositions()` | `hooks/use-stocks.ts` | Portfolio positions |
+| `usePortfolioSummary()` | `hooks/use-stocks.ts` | Portfolio aggregate stats |
+| `usePortfolioHistory()` | `hooks/use-stocks.ts` | Portfolio value timeseries |
+| `useWatchlist()` | `hooks/use-stocks.ts` | User watchlist |
+| `useStockConvergence()` | `hooks/use-convergence.ts` | Single ticker convergence |
+| `usePortfolioConvergence()` | `hooks/use-convergence.ts` | Portfolio convergence summary |
+| `useConvergenceHistory()` | `hooks/use-convergence.ts` | Historical convergence data |
+| `useSectorConvergence()` | `hooks/use-convergence.ts` | Sector convergence summary |
+| `useSentiment()` | `hooks/use-sentiment.ts` | Ticker sentiment timeseries |
+| `useBulkSentiment()` | `hooks/use-sentiment.ts` | Multi-ticker sentiment |
+| `useMacroSentiment()` | `hooks/use-sentiment.ts` | Macro sentiment data |
+| `useForecast()` | `hooks/use-forecasts.ts` | Single ticker forecast |
+| `usePortfolioForecast()` | `hooks/use-forecasts.ts` | Portfolio BL + MC + CVaR |
+| `useScorecard()` | `hooks/use-forecasts.ts` | Recommendation scorecard |
+| `useCommandCenter()` | `hooks/use-command-center.ts` | Admin 5-zone dashboard |
+| `useAdminPipelines()` | `hooks/use-admin-pipelines.ts` | Pipeline control |
+| `useStreamChat()` | `hooks/use-stream-chat.ts` | NDJSON streaming chat |
+| `useCurrentUser()` | `hooks/use-current-user.ts` | Auth state + isAdmin |
+| `useObservability()` | `hooks/use-observability.ts` | User query analytics |
 
 **localStorage Keys** (all in `lib/storage-keys.ts` with `stocksignal:` namespace prefix):
 
@@ -1746,7 +1864,58 @@ async def fetch_macro_indicators() -> dict:
         store_macro_snapshot(name, data)
 ```
 
-### 8.3 Telegram Integration
+### 8.3 Google OAuth 2.0 Integration
+
+**Service:** `backend/services/google_oauth.py`
+
+```
+Flow:
+  1. GET /auth/google/authorize
+     → Generate state + nonce, store in Redis (5-min TTL)
+     → Return Google OAuth consent URL (scope: openid email profile)
+
+  2. GET /auth/google/callback?code=...&state=...
+     → Validate state from Redis (single-use, deleted after read)
+     → Exchange code for id_token + access_token via HTTPS POST
+     → Validate id_token: PyJWT + Google JWKS (RS256, cached via PyJWKClient)
+     → Verify: signature, expiry, audience, issuer, nonce
+     → Lookup/create user via OAuthAccount model
+     → Set httpOnly cookies, redirect to /dashboard (or next_url from state)
+```
+
+**Security:**
+- JWKS cached via `PyJWKClient(cache_keys=True)` — automatic refresh on key rotation
+- State is signed UUID stored in Redis (CSRF protection)
+- Open redirect prevention: `next_url` must start with `/` and not `//`
+- Email collision handling: if Google email matches a password account, return 409
+
+**Config:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`
+
+### 8.4 News Provider Integration
+
+**Package:** `backend/services/news/` — 4 providers implementing `NewsProvider` ABC.
+
+| Provider | Source | Stock News | Macro News | Auth | Safety |
+|----------|--------|-----------|------------|------|--------|
+| `FinnhubProvider` | Finnhub API | General + sector + earnings | Economic calendar | `FINNHUB_API_KEY` | HTTPS |
+| `EdgarProvider` | SEC EDGAR | 8-K/10-K filings | N/A | `EDGAR_USER_AGENT` | HTTPS |
+| `FedRssProvider` | Federal Reserve | N/A | Press releases + FRED | None (public RSS) | `defusedxml` |
+| `GoogleNewsProvider` | Google News RSS | Company + sector | Broad market | None (public RSS) | `defusedxml` |
+
+- **Parallel fetching:** `asyncio.gather()` across providers with per-provider timeout
+- **Dedup:** SHA-256 hash of (headline + source + ticker) stored as `dedupe_hash`
+- **XML safety:** All RSS/XML parsing uses `defusedxml` (prevents XXE attacks)
+
+### 8.5 Resend Email Integration
+
+**Service:** `backend/services/email.py` — transactional email via Resend API.
+
+- Feature-gated on `RESEND_API_KEY` (no-op when absent)
+- Fire-and-forget: errors logged, never propagated to users
+- Templates: email verification, password reset, account deletion confirmation
+- Config: `RESEND_API_KEY`, `EMAIL_FROM_ADDRESS`, `FRONTEND_BASE_URL`
+
+### 8.6 Telegram Integration
 
 **Status:** DEFERRED — removed from active roadmap. In-app alerts cover notification needs. May revisit post-launch.
 
@@ -1820,8 +1989,12 @@ sequenceDiagram
     API-->>B: Set httpOnly cookies, redirect /dashboard
 ```
 
-**Implementation:** `backend/services/google_oauth.py` (httpx + PyJWT, JWKS cached in Redis).
-State is a signed UUID stored in a short-lived cookie (CSRF protection). Nonce embedded in id_token claim.
+**Implementation:** `backend/services/google_oauth.py` (httpx + PyJWT).
+- JWKS cached via `PyJWKClient(cache_keys=True)` — automatic refresh on Google key rotation
+- State is a signed UUID stored in Redis with 5-minute TTL (CSRF protection, single-use)
+- Nonce embedded in id_token claim, verified on callback
+- Open redirect prevention: `next_url` must start with `/` and not `//`
+- See section 8.3 for full integration details
 
 ### 9.1.2 User-Level Token Revocation
 
@@ -1926,37 +2099,96 @@ GitHub Actions:
 
 ### 10.3 Monitoring & Observability
 
+The observability stack spans 4 layers: logging, tracing, metrics, and assessment.
+
+**Package:** `backend/observability/` — bounded package (8 files, ~1500 lines).
+
+#### 10.3.1 Logging
+
 ```python
-# Structured logging throughout
 import logging
-
 logger = logging.getLogger(__name__)
-
-@router.get("/stocks/{ticker}/signals")
-async def get_signals(ticker: str, request: Request):
-    logger.info("signal_request", ticker=ticker, user_id=request.state.user_id)
-    ...
-    logger.info("signal_response", ticker=ticker, composite_score=result.composite_score,
-                duration_ms=elapsed)
 ```
 
-- **Logs:** stdlib `logging` → stdout → Azure Monitor (production); structlog migration for later
-- **Metrics:** OpenTelemetry instrumentation on FastAPI + Celery
-- **Traces:** Correlation ID on every request (X-Request-ID header)
-- **Alerts:** Azure Monitor alerts on error rate > 5%, P95 latency > 5s
-- **Job health:** TaskLog table queried by dashboard widget
+- stdlib `logging` → stdout → Azure Monitor (production)
+- Structured key-value pairs on every log: `ticker=`, `user_id=`, `duration_ms=`
+- `backend/observability/context.py` — 5 ContextVars for request attribution: `user_id`, `session_id`, `query_id`, `agent_type`, `agent_instance_id`
+
+#### 10.3.2 Langfuse Integration
+
+```python
+# backend/observability/langfuse.py — fire-and-forget wrapper
+class LangfuseService:
+    def create_trace(trace_id, name, user_id, session_id, metadata) -> TraceRef
+    def record_generation(trace_ref, model, prompt_tokens, completion_tokens, cost_usd)
+    def create_span(trace_ref, name) -> SpanRef
+    def end_span(span_ref, output_metadata)
+    def flush() / shutdown()
+```
+
+- **Feature-flagged** on `LANGFUSE_SECRET_KEY` — no-op when absent
+- **Integration points:** chat router (trace per query), LLMClient (generation per call), ReAct loop (span per iteration)
+- **Error handling:** fire-and-forget — all Langfuse errors are caught and logged, never propagated
+- **Eval framework:** `backend/tasks/assessment_runner.py` + `scoring_engine.py` with golden dataset. 5 dimensions: tool selection, grounding, termination, resilience, reasoning coherence.
+
+#### 10.3.3 HttpMetricsMiddleware
+
+```python
+# backend/observability/metrics/http_middleware.py
+class HttpMetricsMiddleware:
+    # Redis-backed sorted sets with 5-minute sliding window
+    # Path normalization: UUIDs → {id}, tickers → {param}
+    # Excluded paths: /admin/command-center, /health
+    # Metrics: RPS, latency p50/p95/p99, error rate, daily totals
+```
+
+#### 10.3.4 ObservabilityCollector
+
+```python
+# backend/observability/collector.py — in-memory + DB state
+class ObservabilityCollector:
+    # Tier health tracking (per-provider stats)
+    # Cost aggregation (today/yesterday/week)
+    # Cascade rate (% of queries using fallback provider)
+    # Tool execution tracking (per-tool call counts, durations)
+```
+
+- `backend/observability/writer.py` — fire-and-forget event writer to `llm_call_log` table
+- `backend/observability/token_budget.py` — Redis sorted-set tracking per model, with budget alerts
+- `backend/observability/queries.py` — DB queries for stats, tier health, traces (695 lines)
+
+#### 10.3.5 Health Checks
+
+| Component | Check Method | Endpoint |
+|-----------|-------------|----------|
+| PostgreSQL | Connection pool stats + latency probe | `/health` |
+| Redis | `PING` + memory/key count | `/health` |
+| Celery | Worker count + queue depth (via `app.control.inspect`) | `/health` |
+| Langfuse | Auth probe + trace count | `/health` |
+| MCP Server | Process alive check | `/health` |
+| TokenBudget | Usage % per model tier | Command Center |
 
 ### 10.4 Platform Operations Command Center
 
-Admin-only dashboard providing single-pane-of-glass observability across 4 zones.
+Admin-only dashboard providing single-pane-of-glass observability across **5 zones**.
 
-**Package:** `backend/observability/` (bounded package with re-export shims at old paths)
+**Package:** `backend/observability/routers/command_center.py` (658 lines)
 
 **API Endpoints:**
-- `GET /admin/command-center` — aggregate endpoint, 4 zones assembled via `asyncio.gather` with 3s per-zone timeout circuit breakers, 10s Redis cache (skipped when degraded)
+- `GET /admin/command-center` — aggregate endpoint, 5 zones assembled via `asyncio.gather` with 3s per-zone timeout circuit breakers, 10s Redis cache (skipped when degraded)
 - `GET /admin/command-center/api-traffic` — endpoint breakdown drill-down
 - `GET /admin/command-center/llm` — per-model cost, cascade log, token consumption
 - `GET /admin/command-center/pipeline` — run history with step durations
+
+**5 Zones:**
+
+| Zone | Key Metrics | Data Source |
+|------|-------------|-------------|
+| **System Health** | DB latency, pool stats, Redis memory/keys, MCP health, Celery workers, Langfuse status | DB queries + app state |
+| **API Traffic** | RPS, latency p50/p95/p99, error rate, top endpoints, daily totals | `HttpMetricsMiddleware` (Redis) |
+| **LLM Operations** | Tier health, cost (today/yesterday/week), cascade rate %, token budgets | `ObservabilityCollector` + DB |
+| **Pipeline** | Last run status/duration, watermarks, next run time | PipelineRun model + Celery Beat |
+| **Forecast Health** | Backtest % passing (≥60% accuracy), sentiment coverage % (last 7 days) | `BacktestRun` + `NewsSentimentDaily` models |
 
 **Backend Instrumentation:**
 - `HttpMetricsMiddleware` — Redis-backed HTTP request metrics (sorted sets, sliding window, path normalization)
@@ -1965,11 +2197,11 @@ Admin-only dashboard providing single-pane-of-glass observability across 4 zones
 - `LoginAttempt` model — fire-and-forget audit trail with 90-day Celery Beat purge
 - Health checks — Celery (worker count + queue depth), Langfuse (auth probe + trace count), TokenBudget (usage %)
 
-**Schemas:** 15 Pydantic models in `backend/schemas/command_center.py` (CommandCenterResponse, SystemHealthZone, ApiTrafficZone, LlmOperationsZone, PipelineZone, etc.)
+**Schemas:** 17 Pydantic models in `backend/schemas/command_center.py` (CommandCenterResponse, SystemHealthZone, ApiTrafficZone, LlmOperationsZone, PipelineZone, ForecastHealthZone, etc.)
 
 **Frontend:**
-- Page: `/admin/command-center` — 2x2 grid, admin role-gated, 15s auto-polling via TanStack Query
-- 4 zone panels + 5 shared primitives (StatusDot, GaugeBar, MetricCard, LastRefreshed, DegradedBadge)
+- Page: `/admin/command-center` — 2x2+1 grid, admin role-gated, 15s auto-polling via TanStack Query
+- 5 zone panels + 5 shared primitives (StatusDot, GaugeBar, MetricCard, LastRefreshed, DegradedBadge)
 - 3 drill-down detail sheets (shadcn Sheet) with "View Details" buttons on panels
 
 **Migration 021:** `login_attempts` table + `pipeline_runs.step_durations` JSONB + `total_duration_seconds`
@@ -2098,6 +2330,17 @@ FastAPI (port 8181)
 | `Sparkline` | Inline mini chart | `data, width, height, sentiment` |
 | `SignalMeter` | Score bar (0-10) | `score, size` |
 | `MetricCard` | KPI block | `label, value, change?, sentiment?` |
+| `TrafficLightRow` | Signal direction indicator | `signal, direction, label` |
+| `DivergenceAlert` | Forecast/technical divergence warning | `divergence: DivergenceAlert` |
+| `AccuracyBadge` | MAPE-based accuracy tier | `mape, onClick?` |
+| `RationaleSection` | Collapsible explanation | `rationale: string, isOpen?` |
+| `ConvergenceSummary` | Portfolio convergence overview | `positions, bullishPct, bearishPct` |
+| `BLForecastCard` | Black-Litterman returns | `expectedReturn, lower, upper` |
+| `MonteCarloChart` | Fan chart (Recharts) | `simulations, percentiles` |
+| `CVaRCard` | Risk metrics | `cvar95, cvar99, var95, var99` |
+| `StatusDot` | Health indicator dot | `status: ok\|warning\|error` |
+| `GaugeBar` | Progress gauge | `value, max, label` |
+| `DegradedBadge` | Service degraded indicator | `reason?` |
 
 ### 12a.4 Animation System
 - CSS keyframes: `fade-in` (opacity) and `fade-slide-up` (opacity + translateY)
