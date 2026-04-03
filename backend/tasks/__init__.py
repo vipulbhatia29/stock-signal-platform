@@ -19,6 +19,7 @@ celery_app = Celery(
         "backend.tasks.pipeline",
         "backend.tasks.audit",
         "backend.tasks.convergence",
+        "backend.tasks.seed_tasks",
     ],
 )
 

@@ -1120,6 +1120,114 @@ def refresh_ticker(self, ticker: str):
 
 All tasks use `celery_app.task()` (not the deprecated `@app.task()`). Async code is bridged via `asyncio.run()`.
 
+### 6.4 PipelineRegistry & Pipeline Orchestration
+
+Pipeline orchestration is managed by the `PipelineRegistry` service in `backend/services/pipeline_registry.py`. This decouples task definitions from scheduling, allowing administrators to modify execution plans without code changes.
+
+#### TaskDefinition
+
+```python
+@dataclass(frozen=True)
+class TaskDefinition:
+    name: str                      # Celery task name (e.g. "backend.tasks.seed_tasks.seed_sp500_task")
+    display_name: str              # Human-readable label (e.g. "Sync S&P 500")
+    group: str                     # Task group name (e.g. "seed", "nightly", "warm_data")
+    order: int                     # Execution order within group; same order = parallel
+    depends_on: list[str]          # Task names that must complete first (default: [])
+    is_seed: bool                  # True if this is a seed/setup task (default: False)
+    schedule: str                  # Cron description, informational only (default: "")
+    estimated_duration: str        # Human-readable time estimate (default: "")
+    idempotent: bool               # Safe to re-run (default: True)
+    incremental: bool              # Supports incremental updates (default: False)
+    rationale: str                 # WHY this schedule/ordering (default: "")
+```
+
+#### PipelineRegistry API
+
+**Register a task:**
+```python
+registry = PipelineRegistry()
+registry.register(admin_user_def)
+registry.register(sp500_def)
+registry.register(indexes_def)
+# ... repeat for all tasks
+```
+
+**Query a task:**
+```python
+task = registry.get_task("backend.tasks.seed_tasks.seed_sp500_task")
+```
+
+**Query a group:**
+```python
+tasks = registry.get_group("seed")
+# Returns list of TaskDefinitions sorted by order
+```
+
+**Get all groups:**
+```python
+all_groups = registry.get_groups()
+# Returns dict: {group_name → sorted task list}
+```
+
+**Resolve execution plan:**
+```python
+phases = registry.resolve_execution_plan("seed")
+# Returns list of phases; each phase is a list of task names
+# Example: [["task_a"], ["task_b", "task_c"], ["task_d"]]
+# Tasks with same order value run in parallel
+```
+
+**Validate registry:**
+```python
+errors = registry.validate()
+# Returns list of error messages (empty if valid)
+# Checks: depends_on refs exist, no circular deps
+```
+
+**Run a group:**
+```python
+run_id = await run_group(
+    registry=registry,
+    group="seed",
+    redis_client=redis_conn,
+    failure_mode="stop_on_failure",  # or "continue" or "threshold:80"
+)
+# Returns UUID for tracking; run state stored in Redis
+```
+
+#### Task Groups (7 total)
+
+| Group | Tasks | Purpose | Failure Mode | Timeout |
+|-------|-------|---------|--------------|---------|
+| **seed** | 9 tasks: admin_user → sp500 → [indexes, etfs] → [prices, dividends, fundamentals] → [forecasts, reason_tier] | First-run data hydration | stop_on_failure | 14,400 (4 hrs) |
+| **nightly** | 11 tasks: price_refresh → [forecasts, evals] → [drift, convergence] → [alerts, health, rebalancing] | Daily EOD refresh | continue | 10,800 (3 hrs) |
+| **intraday** | 1 task: watchlist_refresh | 30-minute incremental refresh | continue | 1,800 (30 min) |
+| **warm_data** | 3 parallel tasks: analyst_consensus, fred_indicators, institutional_holders | 7 AM daily | continue | 3,600 (1 hr) |
+| **maintenance** | 2 sequential: purge_login_attempts, purge_deleted_accounts | 3-3:15 AM daily | continue | 1,800 (30 min) |
+| **model_training** | 3 sequential: retrain_all → [backtest, calibrate] | Sunday 2 AM biweekly | stop_on_failure | 7,200 (2 hrs) |
+| **news_sentiment** | 2 placeholder tasks (Spec B) | News ingestion pipeline | continue | 3,600 (1 hr) |
+
+#### Failure Modes
+
+- **stop_on_failure** — If any task fails, cancel remaining tasks in group. Used for critical seed operations.
+- **continue** — Fail task individually, continue with remaining tasks. Used for nightly operations where missing one ticker doesn't block others.
+- **threshold:N** — If N or more tasks fail, cancel group. Used for intraday operations where high failure count indicates infrastructure issue.
+
+#### Redis Key Patterns
+
+- `pipeline:active:{group}` → String containing active run_id (SET NX for atomic lock; TTL: 24 hrs)
+- `pipeline:run:{run_id}` → JSON blob with full run state (group, status, started_at, completed_at, task_statuses dict, errors dict; TTL: 24 hrs)
+- `pipeline:history:{group}` → List of JSON blobs (capped at 50 entries, newest first)
+
+#### Seed Task Configuration
+
+Seed tasks read the following from `.env`:
+- `ADMIN_EMAIL` — Email for initial admin user (must be non-empty)
+- `ADMIN_PASSWORD` — Initial admin password (must be at least 8 chars)
+
+Seed is idempotent: running twice will skip already-completed tasks (checked via database state).
+
 ---
 
 ## 7. Frontend Architecture

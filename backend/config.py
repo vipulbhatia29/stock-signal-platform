@@ -104,6 +104,10 @@ class Settings(BaseSettings):
     # --- Pipeline ---
     PIPELINE_FAILURE_MODE: str = "continue"
 
+    # --- Admin Seed ---
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: str = ""
+
     # --- Langfuse (optional — tracing + assessment) ---
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_PUBLIC_KEY: str = ""
