@@ -138,11 +138,11 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 
 | Sprint | Ticket | Summary | Status |
 |--------|--------|---------|--------|
-| **Spec A: Backtesting Engine (KAN-370)** | | Branch: `feat/KAN-370-backtesting` | |
-| 1 | KAN-374 | Migration 024 + config + shared models + factories + router stubs | ⏳ |
-| 2 | KAN-375 | BacktestEngine + walk-forward + metrics + DB integration | ⏳ |
-| 3 | KAN-376 | CacheInvalidator + drift upgrade + convergence snapshot | ⏳ |
-| 4 | KAN-377 | Backtest API + tests + frontend accuracy badge | ⏳ |
+| **Spec A: Backtesting Engine (KAN-370)** | | Branch: `feat/KAN-370-backtesting` | **✅ Session 88, PR #177** |
+| 1 | KAN-374 | Migration 024 + config + shared models + factories + router stubs | ✅ Session 88 |
+| 2 | KAN-375 | BacktestEngine + walk-forward + metrics + DB integration | ✅ Session 88 |
+| 3 | KAN-376 | CacheInvalidator + drift upgrade + convergence snapshot | ✅ Session 88 |
+| 4 | KAN-377 | Backtest API + tests + frontend accuracy badge | ✅ Session 88 |
 | **Spec D: Admin Pipeline Orchestrator (KAN-371)** | | Branch: `feat/KAN-371-admin-pipelines` | |
 | 5 | KAN-378 | PipelineRegistry + seed tasks + admin user | ⏳ |
 | 6 | KAN-379 | Pipeline API + admin frontend page | ⏳ |

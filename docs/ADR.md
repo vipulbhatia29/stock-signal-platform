@@ -240,6 +240,118 @@ Portfolio queries use the same ReAct loop with portfolio-filtered tool set. The 
 
 ---
 
+## ADR-009: Prophet Train-Once-Predict-Many Architecture
+
+**Date:** 2026-04-02 | **Status:** Implemented (Session 88, PR #177) | **Context:** Phase 8.6+ Forecast Intelligence (KAN-370)
+
+### Decision
+Prophet models are trained on a weekly schedule (or on-demand via drift detection). Forecasts are generated for all future dates at training time and stored in `forecast_results`. Daily changes in news and signals are reflected through the convergence layer, not through Prophet retraining.
+
+### Problem
+Stock prices change daily and news changes every few hours. Naively, this suggests retraining Prophet daily. But Prophet fitting is expensive (~5s/ticker × 500 tickers = ~42 min), and daily retraining provides marginal accuracy improvement for a curve-fitting model.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Retrain daily** | Freshest possible forecast | ~42 min compute nightly, marginal accuracy gain for a trend+seasonality model |
+| **B) Train weekly + convergence layer** | 6x less compute, daily freshness via convergence, drift detection handles exceptions | Stored forecast is stale between retrains |
+| **C) Train monthly** | Minimal compute | Too stale for volatile tickers, drift detection would trigger constant retrains |
+
+### Rationale (Option B chosen)
+- **Prophet is a curve-fitting model**, not a neural network. It decomposes time series into trend + seasonality + regressors. The trend doesn't change meaningfully day-to-day.
+- **The convergence layer provides daily freshness** without retraining: it combines the stored forecast direction with fresh RSI, MACD, SMA, Piotroski, and news sentiment signals. This is what users actually see (traffic lights + divergence alerts).
+- **Drift detection auto-triggers retrains** when a model's rolling MAPE exceeds its per-ticker calibrated threshold (backtest MAPE × 1.5). No manual intervention needed.
+- **News sentiment impacts two layers**: (1) convergence view updates within hours (no retrain), (2) Prophet regressors update at next weekly retrain via `add_regressor()`.
+- **Admin can force retrain** for specific tickers via `POST /backtests/run` when market events warrant it.
+
+### How the Layers Work
+
+```
+WEEKLY (Prophet retrain):
+  Historical prices + sentiment → fit model → store forecast_results
+  ↳ Static until next retrain
+
+NIGHTLY (convergence snapshot, <1 min):
+  Stored forecast direction + fresh RSI + fresh MACD + fresh SMA
+  + fresh Piotroski + fresh news sentiment → convergence label
+  ↳ Updates every night, reflects daily changes
+
+EVERY 4 HOURS (news pipeline):
+  Ingest articles → LLM scoring → news_sentiment_daily
+  ↳ Feeds into next convergence snapshot
+
+ON DRIFT (automatic):
+  Rolling MAPE > calibrated threshold → queue retrain → validate → promote
+  ↳ Self-healing: experimental models auto-recover when passing
+```
+
+### Consequences
+- Users see daily-fresh convergence signals even though Prophet trains weekly.
+- Divergence alerts ("forecast says bullish but 3 signals say bearish") are the primary user-facing value — they don't require retraining.
+- The admin pipeline dashboard must clearly communicate this architecture — "Why weekly?" explanation on the Prophet retrain task card.
+- Pipeline scheduling is editable by admins (stored in Redis, validated with min-interval guards).
+
+---
+
+## ADR-010: Per-Ticker Calibrated Drift Detection
+
+**Date:** 2026-04-02 | **Status:** Implemented (Session 88, PR #177) | **Context:** Phase 8.6+ (KAN-376)
+
+### Decision
+Replace the flat 20% MAPE drift threshold with per-ticker calibrated baselines: `backtest_mape × 1.5`. Models that fail 3 consecutive drift checks are demoted to "experimental" status. Models self-heal when they pass again.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Flat 20% threshold** | Simple | TSLA at 15% might be great; JNJ at 15% might be terrible |
+| **B) Per-ticker calibrated** | Tight thresholds for stable stocks, permissive for volatile ones | Requires backtest data; falls back to 20% if none |
+| **C) Percentile-based** | Statistical rigor | Requires many backtest runs to establish percentiles |
+
+### Rationale (Option B chosen)
+- Calibrated thresholds reflect each ticker's inherent predictability. A utility stock with 5% MAPE should alert at 7.5%, not 20%.
+- Falls back gracefully to 20% when no backtest data exists (new tickers, pre-backtest state).
+- The 1.5× multiplier provides a buffer — normal variance doesn't trigger false alarms.
+- Experimental demotion (3 consecutive failures) prevents unreliable models from being used in convergence alignment counts.
+- Self-healing means temporary market shocks don't permanently sideline a model.
+
+### Consequences
+- `BacktestRun` table must exist and be populated before calibrated thresholds kick in.
+- `ModelVersion.metrics` stores `consecutive_drift_failures` and `drift_threshold_used` for observability.
+- Admin dashboard shows the calibrated threshold alongside the actual MAPE for transparency.
+
+---
+
+## ADR-011: Event-Driven Cache Invalidation (Not TTL-Only)
+
+**Date:** 2026-04-02 | **Status:** Implemented (Session 88, PR #177) | **Context:** Phase 8.6+ (KAN-376)
+
+### Decision
+Use a single `CacheInvalidator` service with event-driven methods (`on_prices_updated`, `on_forecast_updated`, etc.) rather than relying solely on TTL expiry.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) TTL-only** | Zero coordination code | Stale data served until TTL expires (up to 1hr for some caches) |
+| **B) Event-driven invalidation** | Immediate freshness after data changes | Requires wiring into all data-write sites |
+| **C) Hybrid** | Immediate for critical paths, TTL for expensive recomputation | Two mechanisms to reason about |
+
+### Rationale (Option C — hybrid chosen)
+- **Per-ticker caches** (convergence, forecast, signals) use event-driven invalidation — stale convergence data after a signal update is confusing for users.
+- **User-scoped caches** (BL forecast, Monte Carlo, CVaR) use 1hr TTL — these are expensive to compute and don't change frequently. Portfolio changes trigger explicit invalidation.
+- **Sector caches** use pattern-based SCAN clearing when forecasts update (can't efficiently map ticker→sector in the invalidator).
+- All methods are fire-and-forget with try/except — Redis failures log warnings but never crash the caller.
+- Batched `delete(*keys)` instead of per-key calls for performance at scale.
+
+### Consequences
+- Every data-write site (Celery tasks, API endpoints) must call the appropriate `CacheInvalidator` method.
+- Cache keys follow a namespaced convention: `app:{domain}:{identifier}` (e.g., `app:convergence:AAPL`).
+- Admin can clear caches manually via the pipeline dashboard, with audit logging.
+
+---
+
 ## ADR Index
 
 | # | Decision | Phase | Date |
@@ -252,3 +364,6 @@ Portfolio queries use the same ReAct loop with portfolio-filtered tool set. The 
 | 006 | Scratchpad truncation for token cost management | 8B | 2026-03-27 |
 | 007 | Observability wiring — loop_step + tier="reason" | 8B | 2026-03-27 |
 | 008 | Portfolio queries use ReAct with adaptive drill-down | 8B | 2026-03-27 |
+| 009 | Prophet train-once-predict-many + convergence layer | 8.6+ | 2026-04-02 |
+| 010 | Per-ticker calibrated drift detection (MAPE × 1.5) | 8.6+ | 2026-04-02 |
+| 011 | Event-driven cache invalidation (hybrid TTL) | 8.6+ | 2026-04-02 |

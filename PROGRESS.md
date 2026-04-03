@@ -171,4 +171,53 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 0 code changes (spec + planning + doc overhaul session)
 - Spec: `docs/superpowers/specs/2026-04-02-forecast-intelligence-design.md`
 - Plan: `docs/superpowers/plans/2026-04-02-forecast-intelligence-plan.md`
-- Resume: Phase 8.6+ Sprint 1 (KAN-374) — Migration 024 + config + shared models
+
+---
+
+## Session 88 — Phase 8.6+ Spec A: Backtesting Engine (Sprints 1-4) (2026-04-02)
+
+**Branch:** `feat/KAN-370-backtesting` → develop | **PR #177 merged (squash)**
+
+### Sprint 1 (KAN-374): Foundation
+- Migration 024: 5 tables (backtest_runs, signal_convergence_daily, news_articles, news_sentiment_daily, admin_audit_log), 3 TimescaleDB hypertables, custom indexes
+- 11 config settings (backtesting, BL, Monte Carlo, pipeline, sentiment)
+- 5 factory-boy factories, 4 router stubs, 10 TypeScript interfaces
+- Fixed: NewsArticle dedupe_hash unique constraint needs partitioning column for TimescaleDB
+
+### Sprint 2 (KAN-375): BacktestEngine
+- 7 Pydantic schemas, BacktestEngine with expanding window generation
+- 5 metric functions: MAPE, MAE, RMSE, direction accuracy, CI containment + bias
+- WindowSpec dataclass, `_safe_float` NaN/Inf guard, `strict=True` on all zips
+- Opus fix: all-zero MAPE returns NaN, boundary condition documented
+
+### Sprint 3 (KAN-376): CacheInvalidator + Convergence + Drift
+- CacheInvalidator: 8 event methods, batched Redis deletes, fire-and-forget error handling, SCAN-based pattern clearing
+- 5 convergence classifiers (RSI, MACD, SMA, Piotroski, forecast) + label computation
+- Per-ticker calibrated drift: backtest_mape × 1.5 threshold, consecutive failure tracking, experimental demotion after 3 failures, self-healing
+- Opus fixes: BL cache clear on forecast update, sector cache clear on price update, typed Redis param, boundary tests
+
+### Sprint 4 (KAN-377): Backtest API
+- 5 endpoints: GET /summary/all, POST /run (admin), POST /calibrate (admin), GET /{ticker}, GET /{ticker}/history
+- Celery task stubs: run_backtest_task, calibrate_seasonality_task
+- Opus fixes: route ordering (literal before path-param), summary count mismatch, None→404
+
+### CI Fixes
+- Line length in migration (ruff format)
+- Pyright: `from __future__ import annotations` for date column self-reference in convergence + news_sentiment models
+
+### Composite Review (Opus, cross-sprint)
+- 0 critical, 3 warnings fixed: batched Redis deletes, model_version_id in schema, TS type sync
+- All 4 pre-existing pyright errors unchanged (advisory check)
+
+### ADR Updates
+- ADR-009: Prophet train-once-predict-many architecture
+- ADR-010: Per-ticker calibrated drift detection
+- ADR-011: Event-driven cache invalidation (hybrid TTL)
+
+### Session 88 Totals
+- 1 PR merged (#177), 33 files changed, +2643 lines
+- Tests: 1494 backend unit (was 1380, +114 new)
+- Alembic head: `b2351fa2d293` (migration 024)
+- 4 Opus expert reviews + 1 composite cross-sprint review
+- 3 new ADRs documenting key architecture decisions
+- Resume: Phase 8.6+ Sprint 5 (KAN-378) — PipelineRegistry + seed tasks
