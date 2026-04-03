@@ -919,19 +919,29 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 **FR-22.3: Agent Access**
 - `get_scorecard` agent tool for conversational queries ("how accurate are your calls?")
 
-### FR-23: Admin Pipeline Control — PLANNED
+### FR-23: Admin Pipeline Control — DONE (Sprints 5-6)
 
-**FR-23.1: Manual Pipeline Triggers**
-- Admin UI to manually trigger nightly pipeline phases (price ingestion, signal computation, recommendation generation, forecast refresh)
-- Individual ticker re-processing
+> Pipeline orchestration service (PipelineRegistry) decouples task definitions from Celery Beat, enabling dynamic modification of execution plans and admin-triggered runs without code changes.
 
-**FR-23.2: Seed Hydration**
-- Admin-triggered bulk data hydration for new index additions
-- Progress tracking with ticker-level status
+**FR-23.1: PipelineRegistry Backend** (Sprint 5 — DONE)
+- `backend/services/pipeline_registry.py` — TaskDefinition dataclass with dependency graph
+- `resolve_execution_plan()` — topological sort with parallelization hints
+- `run_group()` async function — Celery dispatch with 3 failure modes (stop_on_failure, continue, threshold:N)
+- `GroupRunManager` — Redis-based run lifecycle tracking with atomic SET NX for concurrent protection
+- 7 task groups: seed (9 tasks), nightly (11), intraday (1), warm_data (3), maintenance (2), model_training (3), news_sentiment (2)
+- Seed tasks idempotent via database state checks; admin_user reads ADMIN_EMAIL + ADMIN_PASSWORD from .env
 
-**FR-23.3: Task Groups**
-- Celery task group management: view active/queued tasks, cancel stuck tasks
-- Pipeline run history with per-phase timing
+**FR-23.2: Manual Pipeline Triggers UI** (Sprint 6 — DONE)
+- `/admin/pipelines` page — admin-only route with group cards
+- Trigger buttons for each task group with run state (success/failure/in-progress)
+- Real-time run monitor with per-task status and phase visualization
+- Backend endpoints: `POST /admin/pipelines/groups/{group}/run` with failure_mode control
+
+**FR-23.3: Pipeline Run History & Metrics** (Sprint 6 — DONE)
+- Run history table via `GET /admin/pipelines/groups/{group}/history` endpoint
+- Active run tracking via `GET /admin/pipelines/groups/{group}/runs`
+- Per-task status tracking in run state (task_statuses dict)
+- Failure reason logs in run state (errors dict)
 
 ---
 
@@ -1077,4 +1087,4 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 | FR-20 | Platform Operations Command Center | ✅ IMPLEMENTED |
 | FR-21 | Extended Agent Tools (geopolitical, stock intelligence, market briefing) | ✅ IMPLEMENTED |
 | FR-22 | Recommendation Evaluation Scorecard | ✅ IMPLEMENTED |
-| FR-23 | Admin Pipeline Control (manual triggers, seed hydration, task groups) | PLANNED |
+| FR-23 | Admin Pipeline Control (PipelineRegistry, seed hydration, manual triggers, run history) | ✅ IMPLEMENTED |
