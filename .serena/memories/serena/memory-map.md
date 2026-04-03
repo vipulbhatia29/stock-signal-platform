@@ -33,7 +33,8 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | architecture/celery-patterns | Celery entry points, asyncio.run() bridge, beat schedule, task naming |
 | domain/signals-and-screener | Signal computation, screener, market hours UTC gotcha |
 | domain/portfolio-tracker | Portfolio tools, API double-prefix, patch() helper |
-| domain/agent-tools | 24 internal tools, EntityRegistry, ReAct loop (Phase 8B), MCP adapters, LLM tier routing |
+| domain/agent-tools | 25 internal tools, EntityRegistry, ReAct loop (Phase 8B), MCP adapters, LLM tier routing |
+| domain/convergence-and-forecast | Phase 8.6+: signal convergence (5 classifiers), divergence detection, BL+MC+CVaR portfolio forecast, news sentiment pipeline, backtesting, CacheInvalidator |
 | debugging/backend-gotchas | asyncpg, UserRole enum, circular imports, Alembic, yfinance |
 | debugging/frontend-gotchas | ESLint hooks, Recharts colors, API prefix, next/image |
 | serena/tool-usage | MCP prefix, tool priority, symbolic reading, editing |
