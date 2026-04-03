@@ -8,6 +8,8 @@ import { SectorPerformanceBars } from "@/components/sector-performance-bars";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePortfolioSummary, usePortfolioHealth, useMarketBriefing, usePortfolioAnalytics } from "@/hooks/use-stocks";
+import { usePortfolioConvergence } from "@/hooks/use-convergence";
+import { usePortfolioForecastFull } from "@/hooks/use-forecasts";
 import { formatCurrency } from "@/lib/format";
 
 /** Zone 3 — Portfolio KPIs + health grade + sector performance. */
@@ -16,6 +18,9 @@ export function PortfolioZone() {
   const { data: health, isLoading: healthLoading } = usePortfolioHealth();
   const { data: briefing } = useMarketBriefing();
   const { data: analytics } = usePortfolioAnalytics();
+  const portfolioId = summary?.portfolio_id ?? null;
+  const { data: convergence } = usePortfolioConvergence(portfolioId, !!summary);
+  const { data: forecast } = usePortfolioForecastFull(portfolioId);
 
   const isLoading = summaryLoading || healthLoading;
 
@@ -95,6 +100,30 @@ export function PortfolioZone() {
         <div className="mt-3">
           <div className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Sector Performance</div>
           <SectorPerformanceBars sectors={sectorBars} />
+        </div>
+      )}
+
+      {/* Convergence indicator + BL return */}
+      {(convergence || forecast) && (
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          {convergence && (
+            <PortfolioKPITile
+              label="Convergence"
+              value={`${Math.round(convergence.bullish_pct * 100)}% bullish`}
+              subtext={convergence.divergent_positions.length > 0
+                ? `${convergence.divergent_positions.length} divergent`
+                : undefined}
+              accent={convergence.bullish_pct >= 0.5 ? "gain" : convergence.bearish_pct >= 0.5 ? "loss" : "neutral"}
+            />
+          )}
+          {forecast && (
+            <PortfolioKPITile
+              label="BL Return"
+              value={`${forecast.bl.portfolio_expected_return >= 0 ? "+" : ""}${(forecast.bl.portfolio_expected_return * 100).toFixed(1)}%`}
+              subtext="annualized"
+              accent={forecast.bl.portfolio_expected_return >= 0 ? "gain" : "loss"}
+            />
+          )}
         </div>
       )}
     </section>

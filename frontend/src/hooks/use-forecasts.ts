@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { get } from "@/lib/api";
 import type {
   ForecastResponse,
+  PortfolioForecastFullResponse,
   PortfolioForecastResponse,
   ScorecardResponse,
 } from "@/types/api";
@@ -25,6 +26,19 @@ export function usePortfolioForecast(enabled = true) {
     queryFn: () => get<PortfolioForecastResponse>("/forecasts/portfolio"),
     staleTime: 30 * 60 * 1000,
     enabled,
+  });
+}
+
+/** Fetch full portfolio forecast (BL + Monte Carlo + CVaR). */
+export function usePortfolioForecastFull(portfolioId: string | null) {
+  return useQuery({
+    queryKey: ["portfolio-forecast-full", portfolioId],
+    queryFn: () =>
+      get<PortfolioForecastFullResponse>(
+        `/portfolio/${portfolioId}/forecast`,
+      ),
+    enabled: !!portfolioId,
+    staleTime: 30 * 60 * 1000,
   });
 }
 

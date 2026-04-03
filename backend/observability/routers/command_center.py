@@ -38,6 +38,7 @@ from backend.schemas.command_center import (
     CommandCenterMeta,
     CommandCenterResponse,
     DatabaseHealth,
+    ForecastHealthZone,
     LangfuseHealth,
     LlmOperationsZone,
     McpHealth,
@@ -397,6 +398,56 @@ async def _get_pipeline_safe() -> PipelineZone:
         return await _get_pipeline(db)
 
 
+async def _get_forecast_health_safe() -> ForecastHealthZone:
+    """Collect backtest health and sentiment coverage metrics."""
+    from datetime import date, timedelta
+
+    from sqlalchemy import func, select
+
+    from backend.database import async_session_factory
+    from backend.models.backtest import BacktestRun
+    from backend.models.news_sentiment import NewsSentimentDaily
+    from backend.models.stock import Stock
+
+    async with async_session_factory() as db:
+        # Backtest health: % of model versions with direction_accuracy >= 60%
+        total_stmt = select(func.count(func.distinct(BacktestRun.model_version_id)))
+        models_total = (await db.execute(total_stmt)).scalar() or 0
+
+        passing_stmt = select(func.count(func.distinct(BacktestRun.model_version_id))).where(
+            BacktestRun.direction_accuracy >= 0.60
+        )
+        models_passing = (await db.execute(passing_stmt)).scalar() or 0
+
+        backtest_pct = round(models_passing / models_total * 100, 1) if models_total > 0 else 0.0
+
+        # Sentiment coverage: % of active tickers with sentiment in last 7 days
+        cutoff = date.today() - timedelta(days=7)
+        total_tickers_stmt = select(func.count(func.distinct(Stock.ticker))).where(
+            Stock.is_active.is_(True)
+        )
+        tickers_total = (await db.execute(total_tickers_stmt)).scalar() or 0
+
+        covered_stmt = select(func.count(func.distinct(NewsSentimentDaily.ticker))).where(
+            NewsSentimentDaily.date >= cutoff,
+            NewsSentimentDaily.ticker != "__MACRO__",
+        )
+        tickers_covered = (await db.execute(covered_stmt)).scalar() or 0
+
+        sentiment_pct = (
+            round(tickers_covered / tickers_total * 100, 1) if tickers_total > 0 else 0.0
+        )
+
+        return ForecastHealthZone(
+            backtest_health_pct=backtest_pct,
+            models_passing=models_passing,
+            models_total=models_total,
+            sentiment_coverage_pct=sentiment_pct,
+            tickers_with_sentiment=tickers_covered,
+            tickers_total=tickers_total,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Aggregate endpoint
 # ---------------------------------------------------------------------------
@@ -406,7 +457,7 @@ async def _get_pipeline_safe() -> PipelineZone:
     "",
     response_model=CommandCenterResponse,
     summary="Command Center aggregate",
-    description="Returns all 4 dashboard zones in a single call with per-zone timeouts.",
+    description="Returns all 5 dashboard zones in a single call with per-zone timeouts.",
 )
 async def get_command_center(
     request: Request,
@@ -441,6 +492,7 @@ async def get_command_center(
         _collect_zone("api_traffic", _get_api_traffic(request)),
         _collect_zone("llm_operations", _get_llm_operations_safe(request)),
         _collect_zone("pipeline", _get_pipeline_safe()),
+        _collect_zone("forecast_health", _get_forecast_health_safe()),
         return_exceptions=True,
     )
 
@@ -468,6 +520,7 @@ async def get_command_center(
         api_traffic=zone_data.get("api_traffic"),
         llm_operations=zone_data.get("llm_operations"),
         pipeline=zone_data.get("pipeline"),
+        forecast_health=zone_data.get("forecast_health"),
     )
 
     # --- Cache result (skip if any zones degraded — don't cache partial data) ---

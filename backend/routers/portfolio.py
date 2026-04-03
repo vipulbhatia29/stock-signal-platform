@@ -28,6 +28,15 @@ from backend.schemas.portfolio import (
     TransactionListResponse,
     TransactionResponse,
 )
+from backend.schemas.portfolio_forecast import (
+    BLExpectedReturn,
+    BLSummary,
+    CVaRSummary,
+    MonteCarloPercentileBands,
+    MonteCarloSummary,
+    PortfolioForecastComponentsResponse,
+    PortfolioForecastFullResponse,
+)
 from backend.services.exceptions import PortfolioNotFoundError
 from backend.services.portfolio import (
     _get_transactions_for_ticker,
@@ -41,6 +50,7 @@ from backend.services.portfolio import (
 from backend.services.portfolio import delete_transaction as svc_delete_transaction
 from backend.services.portfolio import get_health_history as svc_get_health_history
 from backend.services.portfolio import list_transactions as svc_list_transactions
+from backend.services.portfolio_forecast import PortfolioForecastResult, PortfolioForecastService
 from backend.services.recommendations import calculate_position_size
 from backend.services.stock_data import get_latest_price
 from backend.tools.divestment import check_divestment_rules
@@ -571,4 +581,180 @@ async def get_portfolio_analytics(
         var_95=snapshot.var_95,
         cagr=snapshot.cagr,
         data_days=snapshot.data_days,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Portfolio Forecast (BL + Monte Carlo + CVaR)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _build_forecast_response(
+    portfolio_id: str,
+    forecast: PortfolioForecastResult,
+) -> PortfolioForecastFullResponse:
+    """Map PortfolioForecastResult service dataclasses to Pydantic response schema.
+
+    Args:
+        portfolio_id: The portfolio UUID string.
+        forecast: Service-layer result containing BL, Monte Carlo, and CVaR data.
+
+    Returns:
+        PortfolioForecastFullResponse with all sub-sections populated.
+    """
+    import statistics
+
+    bl = forecast.bl
+    mc = forecast.monte_carlo
+    cvar = forecast.cvar
+
+    # BL per-ticker list
+    per_ticker = [
+        BLExpectedReturn(
+            ticker=ticker,
+            expected_return=ret,
+            view_confidence=bl.view_confidences.get(ticker),
+        )
+        for ticker, ret in bl.expected_returns.items()
+    ]
+
+    # Monte Carlo terminal percentiles from raw terminal_values
+    terminal_values = mc.terminal_values
+    if terminal_values:
+        sorted_tv = sorted(terminal_values)
+        n = len(sorted_tv)
+        terminal_p5 = sorted_tv[max(0, int(n * 0.05) - 1)]
+        terminal_median = statistics.median(sorted_tv)
+        terminal_p95 = sorted_tv[min(n - 1, int(n * 0.95))]
+    else:
+        terminal_p5 = mc.initial_value
+        terminal_median = mc.initial_value
+        terminal_p95 = mc.initial_value
+
+    bands = MonteCarloPercentileBands(
+        p5=mc.percentile_bands.get("p5", []),
+        p25=mc.percentile_bands.get("p25", []),
+        p50=mc.percentile_bands.get("p50", []),
+        p75=mc.percentile_bands.get("p75", []),
+        p95=mc.percentile_bands.get("p95", []),
+    )
+
+    # CVaR expressed as percentages for display
+    cvar_95_pct = round(cvar.cvar_95 * 100, 1)
+    cvar_99_pct = round(cvar.cvar_99 * 100, 1)
+
+    return PortfolioForecastFullResponse(
+        portfolio_id=portfolio_id,
+        forecast_date=forecast.forecast_date,
+        horizon_days=forecast.horizon_days,
+        bl=BLSummary(
+            portfolio_expected_return=bl.portfolio_expected_return,
+            risk_free_rate=bl.risk_free_rate,
+            per_ticker=per_ticker,
+        ),
+        monte_carlo=MonteCarloSummary(
+            simulation_days=mc.simulation_days,
+            initial_value=mc.initial_value,
+            terminal_median=terminal_median,
+            terminal_p5=terminal_p5,
+            terminal_p95=terminal_p95,
+            bands=bands,
+        ),
+        cvar=CVaRSummary(
+            cvar_95_pct=cvar_95_pct,
+            cvar_99_pct=cvar_99_pct,
+            var_95_pct=round(cvar.var_95 * 100, 1),
+            var_99_pct=round(cvar.var_99 * 100, 1),
+            description_95=f"In a bad month (1-in-20): {cvar_95_pct:+.1f}%",
+            description_99=f"In a very bad month (1-in-100): {cvar_99_pct:+.1f}%",
+        ),
+    )
+
+
+@router.get(
+    "/{portfolio_id}/forecast",
+    response_model=PortfolioForecastFullResponse,
+    summary="Get portfolio forecast",
+    description=(
+        "Black-Litterman expected returns, Monte Carlo simulation bands, and CVaR risk metrics."
+    ),
+    responses={
+        401: {"description": "Not authenticated"},
+        404: {"description": "Portfolio not found or insufficient data"},
+        500: {"description": "Forecast computation failed"},
+    },
+)
+async def get_portfolio_forecast(
+    portfolio_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+    horizon_days: int = Query(default=90, ge=30, le=365),
+) -> PortfolioForecastFullResponse:
+    """Compute and return full portfolio forecast.
+
+    Verifies portfolio ownership before computation. Returns 404 if the
+    portfolio does not exist, belongs to another user, or has no positions.
+    """
+    from backend.models.portfolio import Portfolio
+
+    result = await db.execute(
+        select(Portfolio).where(
+            Portfolio.id == portfolio_id,
+            Portfolio.user_id == user.id,
+        )
+    )
+    portfolio = result.scalar_one_or_none()
+    if portfolio is None:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    try:
+        service = PortfolioForecastService()
+        forecast = await service.compute_forecast(portfolio_id, db, horizon_days)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Insufficient data for forecast")
+    except Exception:
+        logger.exception("Portfolio forecast computation failed")
+        raise HTTPException(status_code=500, detail="Forecast computation failed")
+
+    return _build_forecast_response(portfolio_id, forecast)
+
+
+@router.get(
+    "/{portfolio_id}/forecast/components",
+    response_model=PortfolioForecastComponentsResponse,
+    summary="Get Prophet component breakdown per ticker",
+    description=(
+        "Returns trend, sentiment, and net forecast percentage contribution "
+        "per ticker. Populated by Prophet in Sprint 12."
+    ),
+    responses={
+        401: {"description": "Not authenticated"},
+        404: {"description": "Portfolio not found"},
+    },
+)
+async def get_portfolio_forecast_components(
+    portfolio_id: str,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> PortfolioForecastComponentsResponse:
+    """Return Prophet component breakdown per ticker (placeholder).
+
+    Sprint 12 will populate real Prophet component data. This endpoint
+    returns an empty components list until then so the API contract is stable.
+    """
+    from backend.models.portfolio import Portfolio
+
+    result = await db.execute(
+        select(Portfolio).where(
+            Portfolio.id == portfolio_id,
+            Portfolio.user_id == user.id,
+        )
+    )
+    portfolio = result.scalar_one_or_none()
+    if portfolio is None:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    return PortfolioForecastComponentsResponse(
+        portfolio_id=portfolio_id,
+        components=[],
     )
