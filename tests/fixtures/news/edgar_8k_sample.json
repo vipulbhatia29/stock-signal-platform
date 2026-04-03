@@ -1,0 +1,25 @@
+{
+  "hits": {
+    "total": {"value": 2},
+    "hits": [
+      {
+        "_source": {
+          "file_date": "2024-03-28",
+          "display_names": ["Apple Inc."],
+          "entity_id": "320193",
+          "file_num": "0000320193-24-000065",
+          "items": "2.02,9.01"
+        }
+      },
+      {
+        "_source": {
+          "file_date": "2024-03-15",
+          "display_names": ["Apple Inc."],
+          "entity_id": "320193",
+          "file_num": "0000320193-24-000050",
+          "items": "5.02"
+        }
+      }
+    ]
+  }
+}

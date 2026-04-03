@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <title>Google News - AAPL</title>
+    <link>https://news.google.com</link>
+    <description>Google News search results for AAPL</description>
+    <item>
+      <title>Apple Stock Hits All-Time High After Strong Earnings Beat</title>
+      <link>https://news.google.com/rss/articles/article1</link>
+      <description>Apple Inc. shares surged to a new all-time high after the company reported quarterly earnings that significantly exceeded analyst expectations.</description>
+      <pubDate>Thu, 28 Mar 2024 09:00:00 GMT</pubDate>
+      <source url="https://www.bloomberg.com">Bloomberg</source>
+    </item>
+    <item>
+      <title>Apple Vision Pro Sales Disappoint in First Quarter</title>
+      <link>https://news.google.com/rss/articles/article2</link>
+      <description>Apple's mixed-reality headset sold fewer units than expected in its debut quarter, analysts say.</description>
+      <pubDate>Wed, 27 Mar 2024 15:30:00 GMT</pubDate>
+      <source url="https://www.wsj.com">Wall Street Journal</source>
+    </item>
+  </channel>
+</rss>

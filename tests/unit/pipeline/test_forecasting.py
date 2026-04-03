@@ -108,7 +108,13 @@ class TestTrainProphetModel:
         version_result = MagicMock()
         version_result.scalar_one_or_none.return_value = None  # First version
 
-        db.execute = AsyncMock(side_effect=[price_result, version_result, MagicMock()])
+        # Call order: prices, sentiment regressors, version lookup, retire update
+        sentiment_result = MagicMock()
+        sentiment_result.all.return_value = []  # No sentiment data — regressors skipped
+
+        db.execute = AsyncMock(
+            side_effect=[price_result, sentiment_result, version_result, MagicMock()]
+        )
 
         with patch("backend.tools.forecasting.model_to_json", return_value='{"mock": true}'):
             with patch("builtins.open", MagicMock()):
@@ -151,7 +157,13 @@ class TestTrainProphetModel:
         version_result = MagicMock()
         version_result.scalar_one_or_none.return_value = 1  # Existing v1
 
-        db.execute = AsyncMock(side_effect=[price_result, version_result, MagicMock()])
+        # Call order: prices, sentiment regressors, version lookup, retire update
+        sentiment_result = MagicMock()
+        sentiment_result.all.return_value = []  # No sentiment data — regressors skipped
+
+        db.execute = AsyncMock(
+            side_effect=[price_result, sentiment_result, version_result, MagicMock()]
+        )
 
         with patch("backend.tools.forecasting.model_to_json", return_value="{}"):
             with patch("builtins.open", MagicMock()):

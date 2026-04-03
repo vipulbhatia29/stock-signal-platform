@@ -12,6 +12,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.forecast import ForecastResult, ModelVersion
+from backend.models.news_sentiment import NewsSentimentDaily
 from backend.models.price import StockPrice
 from backend.models.signal import SignalSnapshot
 
@@ -73,6 +74,20 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
 
     # Configure and fit
     model = Prophet(**PROPHET_CONFIG)
+
+    # ── Sentiment regressors (feature-flagged: only if data exists) ──
+    sentiment_df = await _fetch_sentiment_regressors(ticker, df["ds"].min(), df["ds"].max(), db)
+    if sentiment_df is not None and not sentiment_df.empty:
+        df = df.merge(sentiment_df, on="ds", how="left").fillna(0.0)
+        model.add_regressor("stock_sentiment")
+        model.add_regressor("sector_sentiment")
+        model.add_regressor("macro_sentiment")
+        logger.info(
+            "Added 3 sentiment regressors for %s (%d data points)",
+            ticker,
+            len(sentiment_df),
+        )
+
     model.fit(df)
 
     # Determine next version number
@@ -164,10 +179,25 @@ def predict_forecast(
     now = datetime.now(timezone.utc)
     results: list[ForecastResult] = []
 
+    # Determine if model was trained with sentiment regressors
+    sentiment_regressor_names = ["stock_sentiment", "sector_sentiment", "macro_sentiment"]
+    has_sentiment_regressors = any(r in model.extra_regressors for r in sentiment_regressor_names)
+
     for horizon in horizons:
         # Create future dataframe for the specific target date
         target_date = today + timedelta(days=horizon)
         future = model.make_future_dataframe(periods=horizon, freq="D")
+
+        # Add sentiment regressor columns to future DataFrame if model uses them.
+        # KNOWN LIMITATION: Historical dates also get 0.0 instead of the actual
+        # sentiment used during training. This underestimates the regressor effect
+        # in Prophet's predictions. Future work: fetch historical sentiment from DB
+        # (requires making predict_forecast async) or cache in model artifact.
+        if has_sentiment_regressors:
+            future["stock_sentiment"] = 0.0
+            future["sector_sentiment"] = 0.0
+            future["macro_sentiment"] = 0.0
+
         forecast = model.predict(future)
 
         # Get the prediction for the target date
@@ -199,6 +229,51 @@ def predict_forecast(
         [f"+{h}d" for h in horizons],
     )
     return results
+
+
+async def _fetch_sentiment_regressors(
+    ticker: str,
+    start_date: datetime | pd.Timestamp,
+    end_date: datetime | pd.Timestamp,
+    db: AsyncSession,
+) -> pd.DataFrame | None:
+    """Fetch daily sentiment data as Prophet regressors.
+
+    Args:
+        ticker: Stock ticker symbol.
+        start_date: Training data start date.
+        end_date: Training data end date.
+        db: Async database session.
+
+    Returns:
+        DataFrame with columns [ds, stock_sentiment, sector_sentiment, macro_sentiment],
+        or None if no sentiment data exists for this ticker.
+    """
+    start_d = start_date.date() if hasattr(start_date, "date") else start_date
+    end_d = end_date.date() if hasattr(end_date, "date") else end_date
+
+    result = await db.execute(
+        select(
+            NewsSentimentDaily.date,
+            NewsSentimentDaily.stock_sentiment,
+            NewsSentimentDaily.sector_sentiment,
+            NewsSentimentDaily.macro_sentiment,
+        ).where(
+            NewsSentimentDaily.ticker == ticker,
+            NewsSentimentDaily.date >= start_d,
+            NewsSentimentDaily.date <= end_d,
+        )
+    )
+    rows = result.all()
+    if not rows:
+        return None
+
+    df = pd.DataFrame(
+        rows,
+        columns=["ds", "stock_sentiment", "sector_sentiment", "macro_sentiment"],
+    )
+    df["ds"] = pd.to_datetime(df["ds"]).dt.tz_localize(None)
+    return df
 
 
 async def compute_sharpe_direction(ticker: str, db: AsyncSession) -> str:

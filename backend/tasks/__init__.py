@@ -20,6 +20,7 @@ celery_app = Celery(
         "backend.tasks.audit",
         "backend.tasks.convergence",
         "backend.tasks.seed_tasks",
+        "backend.tasks.news_sentiment",
     ],
 )
 
@@ -79,5 +80,14 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.forecasting.model_retrain_all_task",
         "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET
         # Biweekly filtering handled at task level (check last retrain date)
+    },
+    # ── News sentiment pipeline (4x daily during market hours) ──
+    "news-ingest": {
+        "task": "backend.tasks.news_sentiment.news_ingest_task",
+        "schedule": crontab(hour="6,10,14,18", minute=0),  # ET
+    },
+    "news-sentiment-scoring": {
+        "task": "backend.tasks.news_sentiment.news_sentiment_scoring_task",
+        "schedule": crontab(hour="7,11,15,19", minute=0),  # 1h after ingest
     },
 }
