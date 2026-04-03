@@ -136,6 +136,23 @@ class PipelineZone(BaseModel):
     next_run_at: str | None = None
 
 
+class ForecastHealthZone(BaseModel):
+    """Zone 5: Forecast model health + sentiment coverage."""
+
+    backtest_health_pct: float = Field(
+        default=0.0,
+        description="% of model versions with direction_accuracy >= 60%",
+    )
+    models_passing: int = 0
+    models_total: int = 0
+    sentiment_coverage_pct: float = Field(
+        default=0.0,
+        description="% of active tickers with sentiment data in last 7 days",
+    )
+    tickers_with_sentiment: int = 0
+    tickers_total: int = 0
+
+
 class CommandCenterMeta(BaseModel):
     """Assembly metadata."""
 
@@ -152,3 +169,4 @@ class CommandCenterResponse(BaseModel):
     api_traffic: ApiTrafficZone | dict | None = None
     llm_operations: LlmOperationsZone | dict | None = None
     pipeline: PipelineZone | dict | None = None
+    forecast_health: ForecastHealthZone | dict | None = None

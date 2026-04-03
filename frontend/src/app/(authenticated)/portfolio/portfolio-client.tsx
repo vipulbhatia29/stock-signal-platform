@@ -3,6 +3,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { get, post, del } from "@/lib/api";
 import { useRebalancing, usePositions, usePortfolioSummary, usePortfolioHistory } from "@/hooks/use-stocks";
+import { usePortfolioForecastFull } from "@/hooks/use-forecasts";
+import { usePortfolioConvergence } from "@/hooks/use-convergence";
 import { toast } from "sonner";
 import { Trash2Icon, AlertOctagon, AlertTriangle } from "lucide-react";
 import {
@@ -29,6 +31,10 @@ import { LogTransactionDialog } from "@/components/log-transaction-dialog";
 import { PortfolioValueChart } from "@/components/portfolio-value-chart";
 import { PortfolioSettingsSheet } from "@/components/portfolio-settings-sheet";
 import { RebalancingPanel } from "@/components/rebalancing-panel";
+import { BLForecastCard } from "@/components/portfolio/bl-forecast-card";
+import { MonteCarloChart } from "@/components/portfolio/monte-carlo-chart";
+import { CVaRCard } from "@/components/portfolio/cvar-card";
+import { ConvergenceSummary } from "@/components/portfolio/convergence-summary";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { PageTransition } from "@/components/motion-primitives";
 import type {
@@ -345,6 +351,11 @@ export function PortfolioClient() {
   const { data: positions } = usePositions();
   const { data: history } = usePortfolioHistory();
   const { data: rebalancing } = useRebalancing();
+  const portfolioId = summary?.portfolio_id ?? null;
+  const { data: forecast, isLoading: forecastLoading } =
+    usePortfolioForecastFull(portfolioId);
+  const { data: convergence, isLoading: convergenceLoading } =
+    usePortfolioConvergence(portfolioId);
   const logTransaction = useLogTransaction();
   const deleteTransaction = useDeleteTransaction();
 
@@ -373,6 +384,33 @@ export function PortfolioClient() {
           <PortfolioValueChart snapshots={history ?? []} />
         </div>
       </div>
+
+      {/* Forecast Intelligence */}
+      {portfolioId && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Forecast Intelligence
+          </h2>
+          <div className="grid gap-4 md:grid-cols-2">
+            <BLForecastCard
+              data={forecast?.bl}
+              isLoading={forecastLoading}
+            />
+            <CVaRCard
+              data={forecast?.cvar}
+              isLoading={forecastLoading}
+            />
+          </div>
+          <MonteCarloChart
+            data={forecast?.monte_carlo}
+            isLoading={forecastLoading}
+          />
+          <ConvergenceSummary
+            data={convergence}
+            isLoading={convergenceLoading}
+          />
+        </div>
+      )}
 
       {/* Positions + allocation */}
       <div className="grid gap-6 lg:grid-cols-[3fr_2fr]">

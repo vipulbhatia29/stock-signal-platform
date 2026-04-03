@@ -236,6 +236,7 @@ export const marketHandlers = [
 export const portfolioHandlers = [
   http.get("/api/v1/portfolio/summary", () => {
     return HttpResponse.json({
+      portfolio_id: "portfolio-1",
       total_value: 52340.0,
       total_cost_basis: 45000.0,
       unrealized_pnl: 7340.0,
@@ -438,6 +439,164 @@ export const newsHandlers = [
   }),
 ];
 
+// ── Portfolio Forecast (BL + MC + CVaR) ─────────────────────────────────────
+
+export const forecastHandlers = [
+  http.get("/api/v1/portfolio/:id/forecast", () => {
+    return HttpResponse.json({
+      portfolio_id: "portfolio-1",
+      forecast_date: "2026-04-03",
+      horizon_days: 90,
+      bl: {
+        portfolio_expected_return: 0.125,
+        risk_free_rate: 0.05,
+        per_ticker: [
+          { ticker: "AAPL", expected_return: 0.18, view_confidence: 0.8 },
+          { ticker: "MSFT", expected_return: 0.15, view_confidence: 0.7 },
+          { ticker: "GOOGL", expected_return: 0.12, view_confidence: 0.6 },
+        ],
+      },
+      monte_carlo: {
+        simulation_days: 90,
+        initial_value: 100000,
+        terminal_median: 103200,
+        terminal_p5: 88500,
+        terminal_p95: 118900,
+        bands: {
+          p5: [100000, 97000, 94000, 88500],
+          p25: [100000, 99000, 98000, 96500],
+          p50: [100000, 101000, 102000, 103200],
+          p75: [100000, 103000, 106000, 110000],
+          p95: [100000, 106000, 112000, 118900],
+        },
+      },
+      cvar: {
+        cvar_95_pct: -12.5,
+        cvar_99_pct: -18.3,
+        var_95_pct: -8.2,
+        var_99_pct: -14.1,
+        description_95: "In a bad month (1-in-20): -12.5%",
+        description_99: "In a very bad month (1-in-100): -18.3%",
+      },
+    });
+  }),
+];
+
+// ── Convergence ─────────────────────────────────────────────────────────────
+
+export const convergenceHandlers = [
+  // Portfolio convergence MUST be before /:ticker to avoid route collision
+  http.get("/api/v1/convergence/portfolio/:id", () => {
+    return HttpResponse.json({
+      portfolio_id: "portfolio-1",
+      date: "2026-04-03",
+      positions: [
+        {
+          ticker: "AAPL",
+          weight: 0.6,
+          convergence_label: "strong_bull",
+          signals_aligned: 5,
+          divergence: { is_divergent: false, forecast_direction: null, technical_majority: null, historical_hit_rate: null, sample_count: null },
+        },
+        {
+          ticker: "MSFT",
+          weight: 0.4,
+          convergence_label: "weak_bear",
+          signals_aligned: 3,
+          divergence: { is_divergent: true, forecast_direction: "bearish", technical_majority: "bullish", historical_hit_rate: 0.55, sample_count: 12 },
+        },
+      ],
+      bullish_pct: 0.6,
+      bearish_pct: 0.4,
+      mixed_pct: 0.0,
+      divergent_positions: ["MSFT"],
+    });
+  }),
+
+  // History MUST be before /:ticker
+  http.get("/api/v1/convergence/:ticker/history", ({ params }) => {
+    const ticker = (params.ticker as string).toUpperCase();
+    return HttpResponse.json({
+      ticker,
+      data: [
+        { date: "2026-04-02", convergence_label: "weak_bull", signals_aligned: 4, composite_score: 7.8, actual_return_90d: null, actual_return_180d: null },
+        { date: "2026-04-01", convergence_label: "strong_bull", signals_aligned: 5, composite_score: 8.2, actual_return_90d: 0.05, actual_return_180d: null },
+      ],
+      total: 2,
+      limit: 50,
+      offset: 0,
+    });
+  }),
+
+  http.get("/api/v1/convergence/:ticker", ({ params }) => {
+    const ticker = (params.ticker as string).toUpperCase();
+    return HttpResponse.json({
+      ticker,
+      date: "2026-04-03",
+      signals: [
+        { signal: "rsi", direction: "bullish", value: 35.0 },
+        { signal: "macd", direction: "bullish", value: 0.05 },
+        { signal: "sma", direction: "bullish", value: 200.0 },
+        { signal: "piotroski", direction: "bullish", value: 7 },
+        { signal: "forecast", direction: "bearish", value: -0.04 },
+        { signal: "news", direction: "neutral", value: 0.1 },
+      ],
+      signals_aligned: 4,
+      convergence_label: "weak_bull",
+      composite_score: 7.8,
+      divergence: {
+        is_divergent: true,
+        forecast_direction: "bearish",
+        technical_majority: "bullish",
+        historical_hit_rate: 0.61,
+        sample_count: 23,
+      },
+      rationale:
+        "4 of 6 signals are bullish. However, 90-day forecast is bearish (Forecast predicts -4.0%). When the forecast disagreed with technicals like this, the forecast was right 61% of the time (23 cases).",
+    });
+  }),
+
+  http.get("/api/v1/sectors/:sector/convergence", ({ params }) => {
+    const sector = params.sector as string;
+    return HttpResponse.json({
+      sector,
+      date: "2026-04-03",
+      tickers: [
+        { ticker: "AAPL", convergence_label: "strong_bull", signals_aligned: 5 },
+        { ticker: "MSFT", convergence_label: "weak_bull", signals_aligned: 4 },
+      ],
+      bullish_pct: 1.0,
+      bearish_pct: 0.0,
+      mixed_pct: 0.0,
+      ticker_count: 2,
+    });
+  }),
+];
+
+// ── Sentiment ───────────────────────────────────────────────────────────────
+
+export const sentimentHandlers = [
+  http.get("/api/v1/sentiment/bulk", () => {
+    return HttpResponse.json([
+      { date: "2026-04-03", ticker: "AAPL", stock_sentiment: 0.4, sector_sentiment: 0.2, macro_sentiment: 0.1, article_count: 5, confidence: 0.8, dominant_event_type: "earnings", rationale_summary: "Strong Q1", quality_flag: "ok" },
+    ]);
+  }),
+
+  http.get("/api/v1/sentiment/macro", () => {
+    return HttpResponse.json({ data: [], ticker: "__MACRO__" });
+  }),
+
+  http.get("/api/v1/sentiment/:ticker", ({ params }) => {
+    const ticker = (params.ticker as string).toUpperCase();
+    return HttpResponse.json({
+      ticker,
+      data: [
+        { date: "2026-04-03", ticker, stock_sentiment: 0.4, sector_sentiment: 0.2, macro_sentiment: 0.1, article_count: 5, confidence: 0.8, dominant_event_type: "earnings", rationale_summary: "Strong Q1", quality_flag: "ok" },
+      ],
+    });
+  }),
+];
+
 // ── All handlers ──────────────────────────────────────────────────────────────
 
 export const handlers = [
@@ -446,4 +605,7 @@ export const handlers = [
   ...portfolioHandlers,
   ...alertHandlers,
   ...newsHandlers,
+  ...forecastHandlers,
+  ...convergenceHandlers,
+  ...sentimentHandlers,
 ];

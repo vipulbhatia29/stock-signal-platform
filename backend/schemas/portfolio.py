@@ -78,6 +78,7 @@ class SectorAllocation(BaseModel):
 class PortfolioSummaryResponse(BaseModel):
     """Portfolio KPI totals + sector breakdown."""
 
+    portfolio_id: str
     total_value: float
     total_cost_basis: float
     unrealized_pnl: float

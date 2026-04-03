@@ -351,6 +351,7 @@ async def get_portfolio_summary(
     sectors = [SectorAllocation(**s) for s in sector_data]
 
     return PortfolioSummaryResponse(
+        portfolio_id=str(portfolio_id),
         total_value=total_value,
         total_cost_basis=total_cost,
         unrealized_pnl=unrealized_pnl,

@@ -303,6 +303,7 @@ export interface SectorAllocation {
 }
 
 export interface PortfolioSummary {
+  portfolio_id: string;
   total_value: number;
   total_cost_basis: number;
   unrealized_pnl: number;
@@ -1030,21 +1031,6 @@ export interface BacktestResult {
   created_at: string;
 }
 
-export interface SignalLight {
-  name: string;
-  direction: 'bullish' | 'bearish' | 'neutral';
-  value: number | null;
-}
-
-export interface StockConvergence {
-  ticker: string;
-  lights: SignalLight[];
-  aligned_count: number;
-  total_signals: number;
-  convergence_label: string;
-  divergence: { pattern: string; hit_rate: number; sample_count: number } | null;
-  model_status: string;
-}
 
 export interface NewsSentiment {
   date: string;
@@ -1057,31 +1043,137 @@ export interface NewsSentiment {
   dominant_event_type: string | null;
 }
 
-export interface BLForecastResult {
+// ── Portfolio Forecast (BL + Monte Carlo + CVaR) ───────────────────
+
+export interface BLExpectedReturn {
+  ticker: string;
+  expected_return: number;
+  view_confidence: number | null;
+}
+
+export interface BLSummary {
   portfolio_expected_return: number;
-  per_position_returns: Record<string, number>;
-  view_contributions: Record<string, number>;
-  confidence_level: string;
+  risk_free_rate: number;
+  per_ticker: BLExpectedReturn[];
 }
 
-export interface MonteCarloResult {
+export interface MonteCarloPercentileBands {
+  p5: number[];
+  p25: number[];
+  p50: number[];
+  p75: number[];
+  p95: number[];
+}
+
+export interface MonteCarloSummary {
+  simulation_days: number;
+  initial_value: number;
+  terminal_median: number;
+  terminal_p5: number;
+  terminal_p95: number;
+  bands: MonteCarloPercentileBands;
+}
+
+export interface CVaRSummary {
+  cvar_95_pct: number;
+  cvar_99_pct: number;
+  var_95_pct: number;
+  var_99_pct: number;
+  description_95: string;
+  description_99: string;
+}
+
+export interface PortfolioForecastFullResponse {
+  portfolio_id: string;
+  forecast_date: string;
   horizon_days: number;
-  bands: {
-    day: number;
-    p5: number;
-    p25: number;
-    median: number;
-    p75: number;
-    p95: number;
+  bl: BLSummary;
+  monte_carlo: MonteCarloSummary;
+  cvar: CVaRSummary;
+}
+
+// ── Signal Convergence ──────────────────────────────────────────────
+
+export type SignalDirectionType = 'bullish' | 'bearish' | 'neutral';
+export type ConvergenceLabelType =
+  | 'strong_bull'
+  | 'weak_bull'
+  | 'mixed'
+  | 'weak_bear'
+  | 'strong_bear';
+
+export interface SignalDirectionDetail {
+  signal: string;
+  direction: SignalDirectionType;
+  value: number | null;
+}
+
+export interface DivergenceAlert {
+  is_divergent: boolean;
+  forecast_direction: SignalDirectionType | null;
+  technical_majority: SignalDirectionType | null;
+  historical_hit_rate: number | null;
+  sample_count: number | null;
+}
+
+export interface ConvergenceResponse {
+  ticker: string;
+  date: string;
+  signals: SignalDirectionDetail[];
+  signals_aligned: number;
+  convergence_label: ConvergenceLabelType;
+  composite_score: number | null;
+  divergence: DivergenceAlert;
+  rationale: string | null;
+}
+
+export interface PortfolioPositionConvergence {
+  ticker: string;
+  weight: number;
+  convergence_label: ConvergenceLabelType;
+  signals_aligned: number;
+  divergence: DivergenceAlert;
+}
+
+export interface PortfolioConvergenceResponse {
+  portfolio_id: string;
+  date: string;
+  positions: PortfolioPositionConvergence[];
+  bullish_pct: number;
+  bearish_pct: number;
+  mixed_pct: number;
+  divergent_positions: string[];
+}
+
+export interface ConvergenceHistoryRow {
+  date: string;
+  convergence_label: ConvergenceLabelType;
+  signals_aligned: number;
+  composite_score: number | null;
+  actual_return_90d: number | null;
+  actual_return_180d: number | null;
+}
+
+export interface ConvergenceHistoryResponse {
+  ticker: string;
+  data: ConvergenceHistoryRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface SectorConvergenceResponse {
+  sector: string;
+  date: string;
+  tickers: {
+    ticker: string;
+    convergence_label: ConvergenceLabelType;
+    signals_aligned: number;
   }[];
-}
-
-export interface CVaRResult {
-  var_pct_95: number;
-  cvar_pct_95: number;
-  var_pct_99: number;
-  cvar_pct_99: number;
-  horizon_days: number;
+  bullish_pct: number;
+  bearish_pct: number;
+  mixed_pct: number;
+  ticker_count: number;
 }
 
 export interface PipelineTask {

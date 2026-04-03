@@ -331,6 +331,7 @@ app.include_router(observability.router, prefix="/api/v1")
 app.include_router(backtesting.router, prefix="/api/v1")
 app.include_router(sentiment.router, prefix="/api/v1")
 app.include_router(convergence.router, prefix="/api/v1")
+app.include_router(convergence.sector_router, prefix="/api/v1")
 app.include_router(admin_pipelines.router, prefix="/api/v1")
 
 from backend.observability.routers.command_center import (  # noqa: E402

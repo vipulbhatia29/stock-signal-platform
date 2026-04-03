@@ -143,19 +143,23 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 | 2 | KAN-375 | BacktestEngine + walk-forward + metrics + DB integration | ✅ Session 88 |
 | 3 | KAN-376 | CacheInvalidator + drift upgrade + convergence snapshot | ✅ Session 88 |
 | 4 | KAN-377 | Backtest API + tests + frontend accuracy badge | ✅ Session 88 |
-| **Spec D: Admin Pipeline Orchestrator (KAN-371)** | | Branch: `feat/KAN-371-admin-pipelines` | |
-| 5 | KAN-378 | PipelineRegistry + seed tasks + admin user | ⏳ |
-| 6 | KAN-379 | Pipeline API + admin frontend page | ⏳ |
-| **Spec B: News Sentiment Pipeline (KAN-372)** | | Branch: `feat/KAN-372-news-sentiment` | |
-| 7 | KAN-380 | NewsProvider interface + Finnhub + EDGAR + Fed + Google | ⏳ |
-| 8 | KAN-381 | Sentiment scorer + Prophet integration + Celery tasks | ⏳ |
-| 9 | KAN-382 | Sentiment API + tests | ⏳ |
-| **Spec C: Convergence UX (KAN-373, blocked by KAN-370+372)** | | Branch: `feat/KAN-373-convergence-ux` | |
-| 10 | KAN-383 | Portfolio forecast (BL + Monte Carlo + CVaR) | ⏳ |
-| 11 | KAN-384 | Convergence service + rationale + API | ⏳ |
-| 12a | KAN-385 | Frontend convergence components | ⏳ |
-| 12b | KAN-386 | Frontend portfolio components + page integration | ⏳ |
-| 13 | KAN-387 | E2E tests + command center integration + final regression | ⏳ |
+| **Spec D: Admin Pipeline Orchestrator (KAN-371)** | | Branch: `feat/KAN-371-admin-pipelines` | **✅ Session 89, PR #179** |
+| 5 | KAN-378 | PipelineRegistry + seed tasks + admin user | ✅ Session 89 |
+| 6 | KAN-379 | Pipeline API + admin frontend page | ✅ Session 89 |
+| **Spec B: News Sentiment Pipeline (KAN-372)** | | Branch: `feat/KAN-372-news-sentiment` | **✅ Session 89, PR #180** |
+| 7 | KAN-380 | NewsProvider interface + Finnhub + EDGAR + Fed + Google | ✅ Session 89 |
+| 8 | KAN-381 | Sentiment scorer + Prophet integration + Celery tasks | ✅ Session 89 |
+| 9 | KAN-382 | Sentiment API + tests | ✅ Session 89 |
+| **Spec C: Convergence UX (KAN-373)** | | Branch: `feat/KAN-373-convergence-ux` | **✅ Session 90** |
+| 10 | KAN-383 | Portfolio forecast (BL + Monte Carlo + CVaR) | ✅ Session 89 (uncommitted) |
+| 11 | KAN-384 | Convergence service + rationale + API | ✅ Session 90 |
+| 12a | KAN-385 | Frontend convergence components | ✅ Session 90 |
+| 12b | KAN-386 | Frontend portfolio components + page integration | ✅ Session 90 |
+| 13 | KAN-387 | E2E tests + command center integration + final regression | ✅ Session 90 |
+
+**Session 90 — 5-persona extreme review:** PM, Full-Stack, Backend, Tester, JIRA Gap Verifier. 7 CRITICALs found, all fixed. 7 JIRA bugs created (KAN-388–394), 4 resolved same session. 5 follow-up tasks created (KAN-395–399).
+
+**Tests:** 1848 backend + 423 frontend + 48 E2E = ~2319 total. Coverage: 68.95% (floor 60%).
 
 ---
 
@@ -168,6 +172,31 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 | KAN-320 | HIGH | Intelligence endpoint intermittent 500 | Open |
 | KAN-321 | MEDIUM | Chat tool args char-by-char display | Open |
 | KAN-322 | LOW | 63 stocks show "Unknown" sector | Open |
+
+## Phase 8.6+ Tech Debt (from 5-persona review, Session 90)
+
+**MUST do before production load testing:**
+
+| Ticket | Priority | Item | Rationale | Files |
+|--------|----------|------|-----------|-------|
+| KAN-395 | HIGH | Wire convergence snapshot Celery task | `signal_convergence_daily` table is EMPTY — convergence history + hit rate features are non-functional. Stub at `backend/tasks/convergence.py:142`. All data sources exist (signals, sentiment, forecasts). | `backend/tasks/convergence.py`, `backend/tasks/market_data.py` |
+| KAN-397 | HIGH | Integration tests for SQL queries (testcontainers) | 7 SQL methods in SignalConvergenceService + refactored `_fetch_prophet_views` have zero DB test coverage. DISTINCT ON + window functions not validated against real Postgres. | `tests/api/test_convergence_integration.py`, `tests/api/test_portfolio_forecast_integration.py` |
+| KAN-390 | HIGH | Extract portfolio forecast sub-router | `portfolio.py` at 760 lines (rule: <500). Forecast endpoints (lines 587-761) + health endpoints (469-540) are natural extraction candidates. | `backend/routers/portfolio.py` → `backend/routers/portfolio_forecast.py` |
+
+**Should do before GA:**
+
+| Ticket | Priority | Item | Rationale | Files |
+|--------|----------|------|-----------|-------|
+| KAN-396 | MEDIUM | Add CacheService to convergence + forecast endpoints | Read-heavy endpoints with nightly data updates. `/convergence/{ticker}` = 4-5 DB queries, `/portfolio/{id}/forecast` = BL + 10K MC per request. No caching. | `backend/routers/convergence.py`, `backend/routers/portfolio.py` |
+| KAN-393 | MEDIUM | Remaining JIRA acceptance gaps | AccuracyBadge not wired into pages, forecast-card.tsx missing MAPE badge. Partially fixed S90. | `frontend/src/components/forecast-card.tsx` |
+| KAN-394 | MEDIUM | Remaining review medium findings | date.today() timezone (7 locations), BL price pivot validation, frontend error-state tests, LLM prompt inspection tests. Partially fixed S90. | Multiple files |
+
+**Nice to have:**
+
+| Ticket | Priority | Item | Rationale | Files |
+|--------|----------|------|-----------|-------|
+| KAN-398 | LOW | Wire AccuracyBadge DrillDownSheet + forecast-card integration | Component has `onClick` prop but no page passes it. Needs MAPE data from backtest API. | `frontend/src/components/forecast-card.tsx` |
+| KAN-399 | LOW | UTC-aware dates in services | `date.today()` depends on server TZ. Use `datetime.now(timezone.utc).date()`. Only matters in cloud deployment. | `backend/services/signal_convergence.py`, `backend/routers/convergence.py`, `backend/services/portfolio_forecast.py` |
 
 ## Backlog (JIRA tickets, not yet scheduled)
 
