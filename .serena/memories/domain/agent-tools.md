@@ -1,40 +1,46 @@
 ---
 scope: project
 category: domain
-updated_by: session-67
-phase: Phase 7 KAN-158/159/160 COMPLETE — 24 internal tools, guardrails, enriched data, response_type routing
+updated_by: session-91
+phase: Phase 8.6+ COMPLETE — 25 internal tools, convergence/sentiment as data source (not direct agent access), guardrails, enriched data, response_type routing
 ---
 
 # Agent Tools Domain
 
-## Architecture — ReAct Loop (Phase 8B, Session 63 — replaced Plan->Execute->Synthesize)
+## Architecture — ReAct Loop (Phase 8B, Session 63 — single LLM reason-act cycle)
 
 Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design.md`
 
-### ReAct Loop (single LLM reason-act cycle, replaced three-phase pipeline)
-- **Planner (Sonnet):** Scope enforcement, intent classification, tool plan generation, pronoun resolution via EntityRegistry, response_type routing (Phase 7)
-- **Executor (mechanical, no LLM):** Calls tools via ToolRegistry, $PREV_RESULT resolution, retries, circuit breaker, 45s timeout. Tool param validation (ticker format, query sanitization — Phase 7 guardrails).
-- **Synthesizer (Sonnet):** Confidence scoring (>=65%), bull/base/bear scenarios, evidence tree, portfolio personalization. Output validation: unsupported high-confidence claims downgraded (Phase 7 guardrails).
+### ReAct Graph (simplified, no multi-phase planner/executor/synthesizer roles)
+- Single LLM invocation (Sonnet for planning, Opus for edge cases)
+- Tool orchestration: scope enforcement, intent classification, tool plan generation
+- Pronoun resolution via EntityRegistry (session-scoped)
+- response_type routing (stock_analysis | portfolio_health | market_briefing | recommendation | comparison)
+- Confidence scoring (>=65%), bull/base/bear scenarios, evidence tree, portfolio personalization
+- Tool param validation: ticker format regex, query sanitization, length guards (2000 chars)
+- Output validation: unsupported high-confidence claims downgraded
+- Financial disclaimer auto-appended to every substantive response
 
-### Internal Tools (24 total — Session 56, short interest added Session 66)
+### Internal Tools (25 total)
 **Original (9):** analyze_stock, compute_signals, get_recommendations, get_portfolio_exposure, screen_stocks, search_stocks, ingest_stock, web_search, get_geopolitical_events
 
 **Phase 4D (4):** get_fundamentals, get_analyst_targets, get_earnings_history, get_company_profile — all read from DB
 
 **Phase 5 (7):** get_forecast, get_sector_forecast, get_portfolio_forecast, compare_stocks, get_recommendation_scorecard, dividend_sustainability, risk_narrative
 
-**Phase 7 (4 — Session 56):**
+**Phase 7 (4):**
 - `portfolio_health` — HHI diversification, signal quality, Sharpe risk, income, sector balance -> 0-10 score + grade
 - `market_briefing` — S&P 500/NASDAQ/Dow/VIX + 10 sector ETFs + portfolio news + upcoming earnings
 - `get_stock_intelligence` — analyst upgrades/downgrades, insider transactions, earnings calendar, EPS revisions (wraps intelligence.py)
 - `recommend_stocks` — multi-signal consensus (signals 35%, fundamentals 25%, momentum 20%, portfolio fit 20%)
 
-### Phase 7 Guardrails (KAN-158)
-- Input guard: length (2000 chars), control char stripping, PII detection (SSN/CC/phone), injection detection (10 patterns)
-- Output guard: validate_synthesis_output (downgrade unsupported high confidence)
-- Financial disclaimer auto-appended to every substantive response
-- decline_count on ChatSession — session flagged after 5 declines
-- Tool param validation: ticker format regex, search query URL rejection
+**Phase 8.6+ (1 — Session 89):**
+- `get_signal_convergence` — 5 technical classifiers (RSI, MACD, SMA, Piotroski, forecast) + sentiment alignment, divergence detection, historical hit rate from signal_convergence_daily
+
+### Phase 8.6+ Data Access Patterns
+- **Convergence & Sentiment:** Available via dedicated API endpoints (`GET /api/v1/signals/{ticker}/convergence`, `GET /api/v1/signals/{ticker}/sentiment`)
+- **Agent access:** Agent does NOT directly call convergence/sentiment services — users access via API endpoints
+- **Forecast tools available to agent:** get_forecast, get_portfolio_forecast (Black-Litterman + Monte Carlo)
 
 ### Phase 7 Data Enrichment (KAN-159)
 - Stock model: beta, dividend_yield, forward_pe (migration 014, extracted during ingest)
