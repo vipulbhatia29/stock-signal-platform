@@ -41,5 +41,32 @@
   },
   "env": {
     "UV_PYTHON": "3.12"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/stale-state-check.sh",
+            "timeout": 5000,
+            "statusMessage": "Checking project state freshness..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/doc-delta-reminder.sh",
+            "timeout": 2000
+          }
+        ]
+      }
+    ]
   }
 }
