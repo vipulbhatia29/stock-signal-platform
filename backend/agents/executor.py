@@ -238,7 +238,7 @@ async def execute_plan(
                     extra={
                         "tool": tool_name,
                         "attempt": attempt + 1,
-                        "error": str(e),
+                        "error_type": type(e).__name__,
                     },
                 )
                 if attempt == MAX_RETRIES:

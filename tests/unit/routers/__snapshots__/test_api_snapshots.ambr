@@ -1,5 +1,5 @@
 # serializer version: 1
-# name: TestHealthSnapshot.test_health_response_shape
+# name: TestHealthSnapshot.test_health_detail_response_shape
   dict({
     'database': dict({
       'error': None,
@@ -21,6 +21,12 @@
       'healthy': 'bool',
       'latency_ms': 'float',
     }),
+    'status': 'str',
+    'version': 'str',
+  })
+# ---
+# name: TestHealthSnapshot.test_health_public_response_shape
+  dict({
     'status': 'str',
     'version': 'str',
   })

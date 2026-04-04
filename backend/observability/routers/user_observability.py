@@ -124,7 +124,7 @@ async def grouped_queries(
     result = await get_query_groups(
         db,
         group_by=group_by.value,
-        user_id=_user_scope(user) if group_by != GroupByEnum.intent_category else None,
+        user_id=_user_scope(user),
         date_from=date_from,
         date_to=date_to,
         bucket=bucket.value,

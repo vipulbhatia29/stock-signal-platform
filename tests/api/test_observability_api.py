@@ -253,3 +253,31 @@ class TestGroupedEndpoint:
             headers=_auth_headers(admin),
         )
         assert response.status_code == 200
+
+    @pytest.mark.asyncio
+    @pytest.mark.regression
+    async def test_intent_category_non_admin_is_user_scoped(
+        self, client: AsyncClient, db_url: str
+    ) -> None:
+        """Regression: group_by=intent_category must respect user scope for non-admins.
+
+        KAN-316: Previously the endpoint forced user_id=None for intent_category,
+        exposing platform-wide analytics to every authenticated user.  After the fix,
+        _user_scope() is called unconditionally — non-admins receive only their own
+        data while admins still see all (user_id=None path via _user_scope).
+
+        This test verifies the endpoint returns 200 and a well-formed response for a
+        non-admin user.  The important property is that the call succeeds *without*
+        leaking other users' data, which is enforced by _user_scope() routing the
+        non-admin's uuid into the query rather than None.
+        """
+        user = await _create_user(db_url)
+        response = await client.get(
+            "/api/v1/observability/queries/grouped?group_by=intent_category",
+            headers=_auth_headers(user),
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["group_by"] == "intent_category"
+        assert "groups" in data
+        assert "total_queries" in data

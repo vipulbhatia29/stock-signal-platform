@@ -1,5 +1,7 @@
 """Tests for mechanical executor."""
 
+from unittest.mock import patch
+
 import pytest
 
 from backend.agents.executor import (
@@ -136,6 +138,40 @@ class TestExecutePlan:
 
         assert result["needs_replan"] is True
         assert result["tool_calls"] == 1  # stopped after search
+
+    @pytest.mark.asyncio
+    @pytest.mark.regression
+    async def test_tool_exception_logging_does_not_expose_str_e(self) -> None:
+        """Regression: executor warning log must use error_type, not str(e).
+
+        Verifies that when a tool raises an exception, the structured logging
+        extra dict contains 'error_type' (the exception class name) and NOT
+        'error' (the raw str(e) message), preventing internal detail leakage.
+        """
+        error_message = "internal db connection string: user=admin pass=secret"
+
+        async def raising_executor(tool_name: str, params: dict) -> ToolResult:
+            raise ValueError(error_message)
+
+        steps = [{"tool": "analyze_stock", "params": {"ticker": "AAPL"}}]
+
+        with patch("backend.agents.executor.logger") as mock_logger:
+            await execute_plan(steps, raising_executor)
+
+        # Collect all warning calls' extra dicts
+        warning_extras = [
+            call.kwargs.get("extra", {})
+            for call in mock_logger.warning.call_args_list
+            if call.args and call.args[0] == "executor_tool_error"
+        ]
+
+        assert warning_extras, "Expected at least one executor_tool_error warning"
+        for extra in warning_extras:
+            assert "error_type" in extra, "extra dict must have 'error_type' key"
+            assert "error" not in extra, "extra dict must NOT have raw 'error' key"
+            assert extra["error_type"] == "ValueError"
+            # Confirm raw error message is not present anywhere in the extra dict
+            assert error_message not in str(extra)
 
     @pytest.mark.asyncio
     async def test_calls_on_step_callback(self) -> None:

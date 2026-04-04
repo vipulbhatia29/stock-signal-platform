@@ -52,10 +52,10 @@ def _shape(data: object) -> object:
 
 @pytest.mark.regression
 class TestHealthSnapshot:
-    """Snapshot tests for GET /api/v1/health response shape."""
+    """Snapshot tests for GET /api/v1/health and /api/v1/health/detail response shapes."""
 
-    async def test_health_response_shape(self, client: AsyncClient, snapshot) -> None:
-        """Health endpoint response shape must match snapshot."""
+    async def test_health_public_response_shape(self, client: AsyncClient, snapshot) -> None:
+        """Public health endpoint returns only status and version."""
         from backend.schemas.health import DependencyStatus
 
         _healthy = DependencyStatus(healthy=True, latency_ms=0.1)
@@ -64,6 +64,23 @@ class TestHealthSnapshot:
             patch("backend.observability.routers.health._check_database", return_value=_healthy),
         ):
             response = await client.get("/api/v1/health")
+        assert response.status_code == 200
+        data = response.json()
+        shape = _shape(data)
+        assert shape == snapshot
+
+    async def test_health_detail_response_shape(
+        self, authenticated_client: AsyncClient, snapshot
+    ) -> None:
+        """Authenticated detail health endpoint returns full dependency details."""
+        from backend.schemas.health import DependencyStatus
+
+        _healthy = DependencyStatus(healthy=True, latency_ms=0.1)
+        with (
+            patch("backend.observability.routers.health._check_redis", return_value=_healthy),
+            patch("backend.observability.routers.health._check_database", return_value=_healthy),
+        ):
+            response = await authenticated_client.get("/api/v1/health/detail")
         assert response.status_code == 200
         data = response.json()
         shape = _shape(data)
