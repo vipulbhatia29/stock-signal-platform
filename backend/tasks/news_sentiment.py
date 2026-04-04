@@ -136,7 +136,8 @@ async def _score_sentiment(lookback_days: int) -> dict:
 
     # Single transaction: mark articles as scored + upsert daily sentiment
     scored_hashes = {s.dedupe_hash for s in scores}
-    now = datetime.now(timezone.utc)
+    # scored_at is TIMESTAMP WITHOUT TIME ZONE — strip tzinfo
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
     async with async_session_factory() as session:
         # Mark articles as scored
         await session.execute(
