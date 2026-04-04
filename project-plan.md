@@ -139,6 +139,18 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 
 **Tests:** 1848 backend + 423 frontend + 48 E2E = ~2319 total. Coverage: 68.95% (floor 60%).
 
+### Workflow Optimization ✅ (Session 92, PR #188)
+
+> 5 rules (R1-R5), 2 hooks (H1-H2), 3 skills (S1-S3). Brainstorm routing, review scoring, doc-delta tracking, phase-end dimensions.
+
+### Bug Sweep + Tech Debt Clearout ✅ (Session 94, PR #189)
+
+> Resolved all 10 open bugs and tech debt: KAN-314, 315, 316, 317, 320, 321, 322, 393, 394, 399.
+> Zero open bugs remaining. Intelligent review-config scoring system implemented.
+> **Tests:** 1860 backend + 439 frontend + 38 API = ~2337 total.
+
+---
+
 ### Phase E: UI Overhaul (Epic KAN-400) — To Do
 
 > Surface all backend data that has no frontend representation. Prerequisite for visual regression baseline (KAN-363) and Playwright E2E refresh (KAN-217).
@@ -147,11 +159,10 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 - Stock detail: revenue/margins/growth card, analyst price targets viz, earnings history chart, company profile section, analyst consensus chart, candlestick toggle (KAN-150), benchmark chart (KAN-151)
 - Portfolio: strategy picker UI for 3 rebalancing strategies
 - Chat: artifact bar enhancements (tool buttons, scroll pill, agent badge, auto-retry)
-- AccuracyBadge drill-down + forecast-card MAPE badge (absorbs KAN-398)
 - Final design polish + accessibility audit
 
 **Blocks:** KAN-363 (Visual Regression), KAN-217 (Playwright E2E Refresh), KAN-216 (Frontend component tests)
-**Plan after:** Security bugs (KAN-314, 316, 317) + tech debt (KAN-393, 394)
+**Note:** AccuracyBadge + ForecastCard MAPE badge already wired in Session 94 (KAN-393/398). Security bugs + tech debt cleared.
 
 ### Phase F: Subscriptions + Monetization (~5 days) — No JIRA tickets yet
 
@@ -185,24 +196,11 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 
 ## Open Bugs
 
-| Ticket | Severity | Bug | Status |
-|--------|----------|-----|--------|
-| KAN-314 | MEDIUM | [Security] Health endpoint exposes internal state without auth | Open |
-| KAN-316 | MEDIUM | [Security] Non-admin users see platform-wide intent_category analytics | Open |
-| KAN-317 | MEDIUM | [Rule #10] executor.py:245 passes str(e) to ToolResult.error | Open |
-| KAN-320 | MEDIUM | Intelligence endpoint intermittent 500 on first call | Open |
-| KAN-321 | MEDIUM | Chat tool args char-by-char display | Open |
-| KAN-315 | MEDIUM | duration_ms is tool latency only, not wall-clock | Open |
-| KAN-322 | LOW | 63 stocks show "Unknown" sector | Open |
+All bugs resolved in Session 94 (PR #189).
 
 ## Tech Debt
 
-| Ticket | Priority | Item | Status |
-|--------|----------|------|--------|
-| KAN-393 | MEDIUM | JIRA acceptance gaps — AccuracyBadge, forecast-card MAPE badge | Open |
-| KAN-394 | MEDIUM | Review medium findings — timezone, BL validation, error tests | Open |
-| KAN-398 | LOW | AccuracyBadge DrillDownSheet wiring (→ absorb into KAN-400) | Open |
-| KAN-399 | LOW | UTC-aware dates in services | Open |
+All tech debt resolved in Session 94 (PR #189). KAN-398 absorbed into KAN-393.
 
 ## Backlog (JIRA tickets, not yet scheduled)
 
