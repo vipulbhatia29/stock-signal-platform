@@ -42,132 +42,60 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 
 ---
 
-### Sessions 79-87 (archived → `docs/superpowers/archive/progress-full-log.md`)
-**S79:** Command Center MVP (PRs #154-155, +122 tests). **S80:** Live testing, 5 bugs found, Phase 8.5 brainstorm. **S81:** Portfolio Analytics — pandas-ta-openbb, QuantStats, PyPortfolioOpt (PR #158, +38 tests). **S82:** Auth Overhaul — Google OAuth, email verification, account management (30 tickets, 13 endpoints, migration 023). **S83:** Test overhaul spec + JIRA Epic KAN-356. **S84:** Test Sprints 1-2, CI overhaul, 13 Semgrep rules, bug fixes (PRs #162-167). **S85:** Phase D Sprints 3-4 — Hypothesis property tests, golden datasets, auth+security tests, 185 new tests (PRs #169-170). **S86:** Playwright E2E (35 specs) + MSW integration (29 tests), PRs #172-173. **S87:** Phase 8.6+ Forecast Intelligence brainstorm + spec (21 sections, 3 review rounds) + plan (13 sprints) + 19 JIRA tickets + doc overhaul.
+### Sessions 79-91 (archived → `docs/superpowers/archive/progress-full-log.md`)
+**S79:** Command Center MVP (PRs #154-155, +122 tests). **S80:** Live testing, 5 bugs found, Phase 8.5 brainstorm. **S81:** Portfolio Analytics — pandas-ta-openbb, QuantStats, PyPortfolioOpt (PR #158, +38 tests). **S82:** Auth Overhaul — Google OAuth, email verification, account management (30 tickets, 13 endpoints, migration 023). **S83:** Test overhaul spec + JIRA Epic KAN-356. **S84:** Test Sprints 1-2, CI overhaul, 13 Semgrep rules, bug fixes (PRs #162-167). **S85:** Phase D Sprints 3-4 — Hypothesis property tests, golden datasets, auth+security tests, 185 new tests (PRs #169-170). **S86:** Playwright E2E (35 specs) + MSW integration (29 tests), PRs #172-173. **S87:** Phase 8.6+ Forecast Intelligence brainstorm + spec + plan + 19 JIRA tickets. **S88:** Spec A Backtesting Engine — 4 sprints, migration 024, BacktestEngine, CacheInvalidator, convergence classifiers, 3 ADRs (PR #177, +114 tests). **S89:** Specs D+B — Admin Pipeline Orchestrator + News Sentiment Pipeline (PRs #179-180, +274 tests, 13 CRITICALs fixed). **S90:** Spec C Convergence UX — BL, Monte Carlo, CVaR, 12 frontend components, 5-persona review (PR merged, +80 tests). **S91:** SESSION_INDEX regenerated, CLAUDE.md updated (PR #186).
 
 ---
 
-## Session 88 — Phase 8.6+ Spec A: Backtesting Engine (Sprints 1-4) (2026-04-02)
+## Session 92 — Workflow Optimization System (2026-04-04)
 
-**Branch:** `feat/KAN-370-backtesting` → develop | **PR #177 merged (squash)**
+**Branch:** `feat/workflow-optimization` → develop | **PR #188 merged**
 
-### Sprint 1 (KAN-374): Foundation
-- Migration 024: 5 tables (backtest_runs, signal_convergence_daily, news_articles, news_sentiment_daily, admin_audit_log), 3 TimescaleDB hypertables, custom indexes
-- 11 config settings (backtesting, BL, Monte Carlo, pipeline, sentiment)
-- 5 factory-boy factories, 4 router stubs, 10 TypeScript interfaces
-- Fixed: NewsArticle dedupe_hash unique constraint needs partitioning column for TimescaleDB
-
-### Sprint 2 (KAN-375): BacktestEngine
-- 7 Pydantic schemas, BacktestEngine with expanding window generation
-- 5 metric functions: MAPE, MAE, RMSE, direction accuracy, CI containment + bias
-- WindowSpec dataclass, `_safe_float` NaN/Inf guard, `strict=True` on all zips
-- Opus fix: all-zero MAPE returns NaN, boundary condition documented
-
-### Sprint 3 (KAN-376): CacheInvalidator + Convergence + Drift
-- CacheInvalidator: 8 event methods, batched Redis deletes, fire-and-forget error handling, SCAN-based pattern clearing
-- 5 convergence classifiers (RSI, MACD, SMA, Piotroski, forecast) + label computation
-- Per-ticker calibrated drift: backtest_mape × 1.5 threshold, consecutive failure tracking, experimental demotion after 3 failures, self-healing
-- Opus fixes: BL cache clear on forecast update, sector cache clear on price update, typed Redis param, boundary tests
-
-### Sprint 4 (KAN-377): Backtest API
-- 5 endpoints: GET /summary/all, POST /run (admin), POST /calibrate (admin), GET /{ticker}, GET /{ticker}/history
-- Celery task stubs: run_backtest_task, calibrate_seasonality_task
-- Opus fixes: route ordering (literal before path-param), summary count mismatch, None→404
-
-### CI Fixes
-- Line length in migration (ruff format)
-- Pyright: `from __future__ import annotations` for date column self-reference in convergence + news_sentiment models
-
-### Composite Review (Opus, cross-sprint)
-- 0 critical, 3 warnings fixed: batched Redis deletes, model_version_id in schema, TS type sync
-- All 4 pre-existing pyright errors unchanged (advisory check)
-
-### ADR Updates
-- ADR-009: Prophet train-once-predict-many architecture
-- ADR-010: Per-ticker calibrated drift detection
-- ADR-011: Event-driven cache invalidation (hybrid TTL)
-
-### Session 88 Totals
-- 1 PR merged (#177), 33 files changed, +2643 lines
-- Tests: 1494 backend unit (was 1380, +114 new)
-- Alembic head: `b2351fa2d293` (migration 024)
-- 4 Opus expert reviews + 1 composite cross-sprint review
-- 3 new ADRs documenting key architecture decisions
-- Resume: Phase 8.6+ Sprint 5 (KAN-378) — PipelineRegistry + seed tasks
+- 5 rules: 1-round review (R1), brainstorm routing by design complexity (R2), domain persona auto-select (R3), doc-delta tracking (R4), phase-end review dimensions (R5)
+- 2 hooks: stale-state-check (H1), doc-delta-reminder (H2)
+- 3 skills: `/sprint-closeout` (S1), `/phase-closeout` (S2), `/spec-plan` (S3)
+- Updated `/ship` with ## Ships section + JIRA transition prompt
 
 ---
 
-## Session 89 — Phase 8.6+ Specs D + B + C Start (2026-04-03)
+## Session 93 — LLM Benchmark Research (2026-04-04)
 
-**Branch:** multiple PRs | **PRs #179-180 merged**
-
-### Spec D (KAN-371): Admin Pipeline Orchestrator — PR #179
-- PipelineRegistry with TaskDefinition, dependency resolution, 7 task groups
-- GroupRunManager: Redis lifecycle with atomic SET NX + Lua script for concurrent safety
-- 10 Celery seed task wrappers (asyncio.run bridge, progress reporting)
-- 8 admin pipeline API endpoints (groups, trigger, runs, history, cache clear)
-- Pipeline Control frontend page (/admin/pipelines) with accordion groups, live polling
-- 133 new tests, 3 Opus reviews (7 CRITICALs fixed)
-
-### Spec B (KAN-372): News Sentiment Pipeline — PR #180
-- 4 news providers: Finnhub, EDGAR 8-K, Fed RSS/FRED, Google News (defusedxml for XXE safety)
-- SentimentScorer: GPT-4o-mini batch scoring, event_type allowlist, exponential decay aggregation
-- NewsIngestionService: parallel fetching via asyncio.gather, batch dedup (no N+1)
-- Prophet regressor integration (3 sentiment regressors, feature-flagged)
-- Celery tasks: ingest 4x/day + score, CacheInvalidator wired, single-transaction
-- 4 sentiment API endpoints with bulk (DISTINCT ON, capped 100), paginated articles
-- 111 new tests, 2 Opus reviews (4 CRITICALs fixed)
-
-### Session 89 Totals
-- 2 PRs merged (#179-180), 41 files changed in Spec D, 22 in Spec B
-- Tests: 1768 backend unit (was 1494, +274 new)
-- 6 Opus expert reviews, 13 CRITICALs found and fixed
-- Orchestration: Sonnet implements, Opus reviews, Haiku documents
+- Built tooling for local LLM evaluation (qwen2.5-coder:14b)
+- Findings: model fails tool use — cannot call MCP tools reliably
+- Documented in `docs/superpowers/specs/2026-04-04-llm-benchmark-session-93-findings.md`
+- Resume: try larger models or different tool-use approach
 
 ---
 
-## Session 90 — Phase 8.6+ Spec C: Convergence UX (Sprints 10-13) (2026-04-03)
+## Session 94 — Bug Sweep + Tech Debt Clearout (2026-04-04)
 
-**Branch:** `feat/KAN-373-convergence-ux` → develop | **PR merged (squash)**
+**Branch:** `fix/security-bugs-314-316-317` → develop | **PR #189 merged**
 
-### Sprint 10 (KAN-383): Portfolio Forecast
-- PortfolioForecastService: Black-Litterman (Idzorek view confidences), vectorized Monte Carlo (Cholesky), CVaR (95%+99%)
-- 8 Pydantic schemas, 2 portfolio forecast endpoints
-- 30 new tests, 1 Opus review (2 CRITICALs fixed: double-vol MC, missing BL confidences)
+### Security Bugs (KAN-314, KAN-316, KAN-317)
+- KAN-314: Split `/health` into public (status+version) + `/health/detail` (auth required)
+- KAN-316: Removed intent_category exception — analytics now user-scoped for all dimensions
+- KAN-317: Replaced `str(e)` with `type(e).__name__` in executor logging
 
-### Sprint 11 (KAN-384): Convergence Service + Rationale + API
-- SignalConvergenceService: 5 classifiers + news sentiment, divergence detection, portfolio/sector aggregation
-- RationaleGenerator: natural-language explanations for convergence state
-- 4 convergence API endpoints (ticker, history, portfolio, sector)
-- Convergence history snapshots with actual return tracking
+### Tech Debt (KAN-393, KAN-394, KAN-399)
+- KAN-399 + KAN-394-M1: Replaced all 22 `date.today()` with `datetime.now(timezone.utc).date()` across 13 files
+- KAN-394-M2: Ticker validation after BL price pivot
+- KAN-394-M3: 5 `type:ignore[arg-type]` → explicit enum casts in convergence router
+- KAN-394-M5/M6/M7: Error-state tests, LLM prompt inspection tests, convergence edge case
+- KAN-393: AccuracyBadge + DrillDownSheet in ForecastCard, Prophet breakdown in rationale, axe-core a11y checks
 
-### Sprint 12a (KAN-385): Frontend Convergence Components
-- TrafficLightRow: signal-by-signal bullish/bearish/neutral indicators
-- DivergenceAlert: warning banner for forecast/technical divergence
-- AccuracyBadge: MAPE-based model accuracy tier display
-- RationaleSection: collapsible explanation panel
+### Remaining Bugs (KAN-320, KAN-321, KAN-322, KAN-315)
+- KAN-320: Intelligence endpoint 500 on cold start — `asyncio.gather(return_exceptions=True)` + per-tool fault isolation
+- KAN-321: Chat tool args char-by-char display — parse JSON string before `Object.entries()`
+- KAN-322: 63 stocks missing sector — `seed_portfolio.py` now fetches sector from yfinance + `--backfill-sectors`
+- KAN-315: `duration_ms` now includes LLM + tool latency (was tool-only)
 
-### Sprint 12b (KAN-386): Frontend Portfolio Components + Page Integration
-- BLForecastCard: Black-Litterman expected returns display
-- MonteCarloChart: fan chart visualization (Recharts)
-- CVaRCard: 95th/99th percentile risk metrics
-- ConvergenceSummary: portfolio-level convergence overview
-- Integrated into stock detail + portfolio pages
+### Process Improvement
+- Rewrote `.claude/rules/review-config.md` with scoring-based review routing (skip ≤6 / quick 7-10 / full 11+)
+- Change-type → persona mapping (11 categories, prioritized reviewers)
 
-### Sprint 13 (KAN-387): E2E Tests + Command Center Integration
-- Convergence E2E tests (signal rendering, divergence alerts, history)
-- Portfolio forecast E2E tests (BL card, MC chart, CVaR card)
-- Command center convergence data integration
-
-### 5-Persona Extreme Review
-- PM, Full-Stack, Backend, Tester, JIRA Gap Verifier
-- 7 CRITICALs found, all fixed
-- 7 JIRA bugs created (KAN-388–394), 4 resolved same session
-- 5 follow-up tasks created (KAN-395–399)
-
-### Session 90 Totals
-- 1 PR merged, 44 files changed
-- Tests: 1848 backend + 423 frontend + 48 E2E = ~2319 total
-- Coverage: 68.95% (floor 60%)
-- Phase 8.6+ Epic KAN-369: ALL 4 SPECS COMPLETE (A+D+B+C)
-- Resume: Tech debt (KAN-395-399) or Phase F (Subscriptions)
+### Session 94 Totals
+- 1 PR merged (#189), 41 files changed, +1361 lines
+- Tests: 1860 backend + 439 frontend + 38 API = ~2337 total
+- 10 JIRA tickets resolved — **zero open bugs/tech debt remaining**
+- All 11 Sonnet agents ran in parallel (3 batches), Opus orchestrated + reviewed
+- Resume: Phase E (UI Overhaul, KAN-400) or Phase F (Subscriptions + Monetization)
