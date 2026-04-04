@@ -88,7 +88,7 @@ class RationaleGenerator:
             # 2+ signals disagree — try LLM, fall back to template
             try:
                 rationale = await self._llm_rationale(
-                    signals, convergence_label, divergence, ticker
+                    signals, convergence_label, divergence, ticker, prophet_components
                 )
             except Exception:
                 logger.exception(
@@ -311,6 +311,7 @@ class RationaleGenerator:
         label: str,
         divergence: DivergenceInfo,
         ticker: str,
+        prophet_components: dict[str, float] | None = None,
     ) -> str:
         """Generate rationale via LLM for complex divergence patterns.
 
@@ -319,6 +320,7 @@ class RationaleGenerator:
             label: Convergence label.
             divergence: Divergence info.
             ticker: Stock ticker.
+            prophet_components: Optional Prophet forecast component breakdown.
 
         Returns:
             LLM-generated rationale string.
@@ -340,11 +342,19 @@ class RationaleGenerator:
                 f"({divergence.sample_count} cases)."
             )
 
+        prophet_ctx = ""
+        if prophet_components:
+            prophet_ctx = "\nProphet forecast component breakdown:\n" + "\n".join(
+                f"- {key.replace('_', ' ').title()}: {value * 100:+.1f}%"
+                for key, value in prophet_components.items()
+            )
+
         prompt = (
             f"You are a financial analyst writing a brief convergence rationale for {ticker}.\n"
             f"The convergence label is: {label}\n\n"
             f"Signal directions:\n{signal_summary}\n"
-            f"{hit_rate_ctx}\n\n"
+            f"{hit_rate_ctx}"
+            f"{prophet_ctx}\n\n"
             f"Write 2-3 sentences explaining why signals disagree and what it means "
             f"for the investor. Be factual and concise. Do not give investment advice."
         )

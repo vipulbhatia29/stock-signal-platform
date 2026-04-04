@@ -79,7 +79,7 @@ async def _evaluate_forecasts_async() -> dict:
     from backend.models.forecast import ForecastResult
     from backend.models.price import StockPrice
 
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     evaluated = 0
     errors = 0
 

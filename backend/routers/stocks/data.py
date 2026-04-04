@@ -19,6 +19,7 @@ from backend.dependencies import get_current_user
 from backend.models.price import StockPrice
 from backend.models.user import User
 from backend.routers.stocks._helpers import require_stock
+from backend.schemas.intelligence import StockIntelligenceResponse
 from backend.schemas.stock import (
     BenchmarkComparisonResponse,
     BenchmarkSeries,
@@ -41,6 +42,13 @@ from backend.services.stock_data import (
     ensure_stock_exists,
     fetch_fundamentals,
     fetch_prices_delta,
+)
+from backend.tools.intelligence import (
+    fetch_eps_revisions,
+    fetch_insider_transactions,
+    fetch_next_earnings_date,
+    fetch_short_interest,
+    fetch_upgrades_downgrades,
 )
 from backend.validation import TickerPath
 
@@ -324,20 +332,16 @@ async def get_stock_intelligence(
     request: Request,
     db: AsyncSession = Depends(get_async_session),
     current_user: User = Depends(get_current_user),
-):
-    """Get analyst upgrades, insider transactions, earnings calendar, EPS revisions."""
-    import asyncio
-    from datetime import datetime, timezone
+) -> StockIntelligenceResponse:
+    """Get analyst upgrades, insider transactions, earnings calendar, EPS revisions.
 
-    from backend.schemas.intelligence import StockIntelligenceResponse
+    Fetches five data sources from Yahoo Finance in parallel. Each source is
+    independently fault-tolerant — if one fails (e.g. network timeout, Yahoo
+    rate-limit on cold start), it is replaced by a safe empty default so the
+    other sources are still returned. This prevents intermittent 500 errors on
+    the first request when the yfinance HTTP session is not yet warmed up.
+    """
     from backend.services.cache import CacheTier
-    from backend.tools.intelligence import (
-        fetch_eps_revisions,
-        fetch_insider_transactions,
-        fetch_next_earnings_date,
-        fetch_short_interest,
-        fetch_upgrades_downgrades,
-    )
 
     await require_stock(ticker, db)
     t = ticker.upper()
@@ -349,21 +353,46 @@ async def get_stock_intelligence(
         if cached:
             return StockIntelligenceResponse.model_validate_json(cached)
 
-    upgrades, insider, earnings, eps, short = await asyncio.gather(
+    # Fetch all five sources concurrently.
+    # return_exceptions=True ensures a failure in one source does not cancel
+    # the others and does not propagate as an unhandled 500 to the caller.
+    results = await asyncio.gather(
         asyncio.to_thread(fetch_upgrades_downgrades, t),
         asyncio.to_thread(fetch_insider_transactions, t),
         asyncio.to_thread(fetch_next_earnings_date, t),
         asyncio.to_thread(fetch_eps_revisions, t),
         asyncio.to_thread(fetch_short_interest, t),
+        return_exceptions=True,
     )
+
+    upgrades_raw, insider_raw, earnings_raw, eps_raw, short_raw = results
+
+    # Resolve each result: if an exception escaped the tool's own try/except
+    # (e.g. yfinance network failure on cold start), substitute a safe default
+    # and log the error so it can be investigated.
+    if isinstance(upgrades_raw, BaseException):
+        logger.error("fetch_upgrades_downgrades failed for %s", t, exc_info=upgrades_raw)
+        upgrades_raw = []
+    if isinstance(insider_raw, BaseException):
+        logger.error("fetch_insider_transactions failed for %s", t, exc_info=insider_raw)
+        insider_raw = []
+    if isinstance(earnings_raw, BaseException):
+        logger.error("fetch_next_earnings_date failed for %s", t, exc_info=earnings_raw)
+        earnings_raw = None
+    if isinstance(eps_raw, BaseException):
+        logger.error("fetch_eps_revisions failed for %s", t, exc_info=eps_raw)
+        eps_raw = None
+    if isinstance(short_raw, BaseException):
+        logger.error("fetch_short_interest failed for %s", t, exc_info=short_raw)
+        short_raw = None
 
     response = StockIntelligenceResponse(
         ticker=t,
-        upgrades_downgrades=upgrades,
-        insider_transactions=insider,
-        next_earnings_date=earnings,
-        eps_revisions=eps,
-        short_interest=short,
+        upgrades_downgrades=upgrades_raw,
+        insider_transactions=insider_raw,
+        next_earnings_date=earnings_raw,
+        eps_revisions=eps_raw,
+        short_interest=short_raw,
         fetched_at=datetime.now(timezone.utc).isoformat(),
     )
     if cache:

@@ -5,6 +5,13 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+class HealthStatusResponse(BaseModel):
+    """Minimal public health response — safe for unauthenticated callers."""
+
+    status: Literal["ok", "degraded"]
+    version: str
+
+
 class MCPToolsStatus(BaseModel):
     """MCP tool server subprocess status."""
 

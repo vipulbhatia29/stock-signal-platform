@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.observability.routers.health import _check_database, _check_redis, health_check
+from backend.observability.routers.health import (
+    _check_database,
+    _check_redis,
+    health_check,
+    health_check_detail,
+)
 from backend.schemas.health import DependencyStatus
 
 
@@ -98,14 +103,13 @@ async def test_check_database_connection_error() -> None:
     assert status.error == "Database connection failed"
 
 
-# --- health_check endpoint ---
+# --- health_check public endpoint ---
 
 
-async def test_health_all_services_ok() -> None:
-    """All services healthy — status is 'ok'."""
+async def test_health_public_returns_status_and_version() -> None:
+    """Public health_check returns only status and version."""
     request = MagicMock()
     request.app.state.mcp_manager = None
-    request.app.state.registry = None
     request.app.state.cache = MagicMock()
 
     redis_ok = DependencyStatus(healthy=True, latency_ms=0.5)
@@ -120,13 +124,42 @@ async def test_health_all_services_ok() -> None:
         response = await health_check(request)
 
     assert response.status == "ok"
+    assert response.version == "0.1.0"
+    # Public response must not expose dependency details
+    assert not hasattr(response, "redis")
+    assert not hasattr(response, "database")
+    assert not hasattr(response, "mcp_tools")
+
+
+# --- health_check_detail endpoint (auth bypassed — direct call) ---
+
+
+async def test_health_detail_all_services_ok() -> None:
+    """All services healthy — detail status is 'ok' with full fields."""
+    request = MagicMock()
+    request.app.state.mcp_manager = None
+    request.app.state.registry = None
+    request.app.state.cache = MagicMock()
+
+    redis_ok = DependencyStatus(healthy=True, latency_ms=0.5)
+    db_ok = DependencyStatus(healthy=True, latency_ms=1.0)
+
+    with (
+        patch("backend.observability.routers.health._check_redis", return_value=redis_ok),
+        patch("backend.observability.routers.health._check_database", return_value=db_ok),
+        patch("backend.observability.routers.health.settings") as mock_settings,
+    ):
+        mock_settings.MCP_TOOLS = False
+        response = await health_check_detail(request, _current_user=None)
+
+    assert response.status == "ok"
     assert response.redis.healthy is True
     assert response.database.healthy is True
     assert response.mcp_tools.healthy is True
 
 
-async def test_health_redis_down_returns_degraded() -> None:
-    """Redis unhealthy — overall status is 'degraded'."""
+async def test_health_detail_redis_down_returns_degraded() -> None:
+    """Redis unhealthy — detail status is 'degraded'."""
     request = MagicMock()
     request.app.state.mcp_manager = None
     request.app.state.registry = None
@@ -140,15 +173,15 @@ async def test_health_redis_down_returns_degraded() -> None:
         patch("backend.observability.routers.health.settings") as mock_settings,
     ):
         mock_settings.MCP_TOOLS = False
-        response = await health_check(request)
+        response = await health_check_detail(request, _current_user=None)
 
     assert response.status == "degraded"
     assert response.redis.healthy is False
     assert response.database.healthy is True
 
 
-async def test_health_db_down_returns_degraded() -> None:
-    """Database unhealthy — overall status is 'degraded'."""
+async def test_health_detail_db_down_returns_degraded() -> None:
+    """Database unhealthy — detail status is 'degraded'."""
     request = MagicMock()
     request.app.state.mcp_manager = None
     request.app.state.registry = None
@@ -162,15 +195,15 @@ async def test_health_db_down_returns_degraded() -> None:
         patch("backend.observability.routers.health.settings") as mock_settings,
     ):
         mock_settings.MCP_TOOLS = False
-        response = await health_check(request)
+        response = await health_check_detail(request, _current_user=None)
 
     assert response.status == "degraded"
     assert response.redis.healthy is True
     assert response.database.healthy is False
 
 
-async def test_health_both_down_returns_degraded() -> None:
-    """Both Redis and DB unhealthy — status is 'degraded'."""
+async def test_health_detail_both_down_returns_degraded() -> None:
+    """Both Redis and DB unhealthy — detail status is 'degraded'."""
     request = MagicMock()
     request.app.state.mcp_manager = None
     request.app.state.registry = None
@@ -184,15 +217,15 @@ async def test_health_both_down_returns_degraded() -> None:
         patch("backend.observability.routers.health.settings") as mock_settings,
     ):
         mock_settings.MCP_TOOLS = False
-        response = await health_check(request)
+        response = await health_check_detail(request, _current_user=None)
 
     assert response.status == "degraded"
     assert response.redis.healthy is False
     assert response.database.healthy is False
 
 
-async def test_health_response_includes_version() -> None:
-    """Health response always includes the app version."""
+async def test_health_detail_response_includes_version() -> None:
+    """Detail response includes the app version."""
     request = MagicMock()
     request.app.state.mcp_manager = None
     request.app.state.registry = None
@@ -206,6 +239,6 @@ async def test_health_response_includes_version() -> None:
         patch("backend.observability.routers.health.settings") as mock_settings,
     ):
         mock_settings.MCP_TOOLS = False
-        response = await health_check(request)
+        response = await health_check_detail(request, _current_user=None)
 
     assert response.version == "0.1.0"

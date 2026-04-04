@@ -51,7 +51,7 @@ class EdgarProvider(NewsProvider):
             "q": f'"{ticker.upper()}"',
             "dateRange": "custom",
             "startdt": since.isoformat(),
-            "enddt": date.today().isoformat(),
+            "enddt": datetime.now(timezone.utc).date().isoformat(),
             "forms": "8-K",
         }
         headers = {"User-Agent": self._user_agent}

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -147,7 +147,7 @@ async def get_macro_sentiment(
     Returns:
         MacroSentimentResponse with sentiment rows ordered newest first.
     """
-    since = date.today() - timedelta(days=days)
+    since = datetime.now(timezone.utc).date() - timedelta(days=days)
 
     stmt = (
         select(NewsSentimentDaily)
@@ -207,7 +207,7 @@ async def get_ticker_sentiment(
         SentimentTimeseriesResponse with sentiment rows ordered newest first.
     """
     ticker_upper = ticker.upper()
-    since = date.today() - timedelta(days=days)
+    since = datetime.now(timezone.utc).date() - timedelta(days=days)
 
     stmt = (
         select(NewsSentimentDaily)
@@ -275,7 +275,7 @@ async def get_ticker_articles(
         ArticleListResponse with articles and total count for pagination.
     """
     ticker_upper = ticker.upper()
-    since = date.today() - timedelta(days=days)
+    since = datetime.now(timezone.utc).date() - timedelta(days=days)
 
     base_filter = [
         NewsArticle.ticker == ticker_upper,

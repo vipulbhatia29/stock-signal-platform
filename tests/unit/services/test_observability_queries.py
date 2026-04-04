@@ -390,6 +390,26 @@ class TestGetQueryListSort:
         result = await get_query_list(mock_db, sort_by="duration_ms")
         assert len(result["items"]) == 2
 
+    @pytest.mark.asyncio
+    @pytest.mark.regression
+    async def test_pure_llm_query_duration_ms_nonzero(self, mock_db):
+        """Pure-LLM query with no tool calls must show LLM latency, not 0.
+
+        Regression for KAN-315: duration_ms was computed as sum of tool latency
+        only, so a query with no tool calls always returned 0 ms even when the
+        LLM call took several seconds.
+        """
+        # row.duration_ms comes from the SQL expression
+        # coalesce(sum(LLMCallLog.latency_ms), 0) + tool_duration_sq
+        # When there are no tool calls that evaluates to e.g. 4200 ms (LLM only).
+        rows = [_make_query_row(duration_ms=4200)]
+        _setup_query_list_mock(mock_db, rows)
+
+        result = await get_query_list(mock_db)
+        assert result["items"][0]["duration_ms"] == 4200, (
+            "duration_ms must reflect LLM latency when no tool calls are present"
+        )
+
 
 class TestGetQueryListStatusFilter:
     """Tests for get_query_list status derivation and filtering."""

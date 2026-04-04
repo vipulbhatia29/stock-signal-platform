@@ -335,9 +335,12 @@ class TestDetectGap:
         mock_result.scalar_one_or_none.return_value = watermark
         mock_session.execute.return_value = mock_result
 
-        with patch("backend.tasks.pipeline.date") as mock_date:
-            mock_date.today.return_value = date(2026, 3, 20)  # Friday
-            mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
+        fake_now = datetime(2026, 3, 20, 12, 0, 0, tzinfo=timezone.utc)  # Friday
+        with patch("backend.tasks.pipeline.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.combine = datetime.combine
+            mock_dt.min = datetime.min
+            mock_dt.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
             missing = await detect_gap("price_refresh")
 
@@ -365,9 +368,12 @@ class TestDetectGap:
         mock_result.scalar_one_or_none.return_value = watermark
         mock_session.execute.return_value = mock_result
 
-        with patch("backend.tasks.pipeline.date") as mock_date:
-            mock_date.today.return_value = today
-            mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
+        fake_now = datetime(2026, 3, 20, 12, 0, 0, tzinfo=timezone.utc)
+        with patch("backend.tasks.pipeline.datetime") as mock_dt:
+            mock_dt.now.return_value = fake_now
+            mock_dt.combine = datetime.combine
+            mock_dt.min = datetime.min
+            mock_dt.side_effect = lambda *args, **kw: datetime(*args, **kw)
 
             missing = await detect_gap("price_refresh")
 

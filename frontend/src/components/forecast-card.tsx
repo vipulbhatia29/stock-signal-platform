@@ -1,8 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { ForecastHorizon } from "@/types/api";
+import { AccuracyBadge } from "@/components/convergence/accuracy-badge";
+import { DrillDownSheet } from "@/components/command-center/drill-down-sheet";
 
 const CONFIDENCE_COLORS = {
   high: "bg-gain/15 text-gain border-gain/25",
@@ -20,6 +23,8 @@ interface ForecastCardProps {
   horizons: ForecastHorizon[] | undefined;
   isLoading: boolean;
   currentPrice?: number;
+  /** Model MAPE from the forecast response — drives the AccuracyBadge. */
+  modelMape?: number | null;
 }
 
 function HorizonPill({
@@ -70,7 +75,9 @@ export function ForecastCard({
   horizons,
   isLoading,
   currentPrice,
+  modelMape,
 }: ForecastCardProps) {
+  const [drillOpen, setDrillOpen] = useState(false);
   if (isLoading) {
     return (
       <div className="rounded-lg border border-border bg-card p-4">
@@ -117,6 +124,10 @@ export function ForecastCard({
           Price Forecast
         </div>
         <div className="flex items-center gap-2">
+          {/* Forecast accuracy badge — click opens backtest detail */}
+          {modelMape != null && (
+            <AccuracyBadge mape={modelMape} onClick={() => setDrillOpen(true)} />
+          )}
           {/* Confidence badge */}
           <span
             className={cn(
@@ -144,6 +155,27 @@ export function ForecastCard({
           />
         ))}
       </div>
+
+      {/* Backtest detail drill-down */}
+      {modelMape != null && (
+        <DrillDownSheet
+          open={drillOpen}
+          onClose={() => setDrillOpen(false)}
+          title="Forecast Backtest Detail"
+        >
+          <div className="space-y-4 text-sm text-foreground">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <span className="text-subtle">Model MAPE</span>
+              <AccuracyBadge mape={modelMape} />
+            </div>
+            <p className="text-subtle text-[13px] leading-relaxed">
+              MAPE (Mean Absolute Percentage Error) measures how far off the
+              forecast was from actual prices in historical backtesting. Lower
+              is better — under 5% is considered high accuracy.
+            </p>
+          </div>
+        </DrillDownSheet>
+      )}
     </div>
   );
 }

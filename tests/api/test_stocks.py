@@ -577,3 +577,206 @@ class TestRecommendations:
         msft_recs = [r for r in recs if r["ticker"] == "MSFT"]
         assert len(msft_recs) >= 1
         assert msft_recs[0]["name"] == "MSFT Inc"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Stock Intelligence Tests — KAN-320 regression
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestStockIntelligence:
+    """Tests for GET /api/v1/stocks/{ticker}/intelligence.
+
+    KAN-320: Endpoint returned 500 on first call due to missing
+    return_exceptions=True on asyncio.gather() — any exception escaping a
+    yfinance tool (e.g. network timeout on cold start) propagated as an
+    unhandled 500 instead of being caught and replaced with a safe default.
+    """
+
+    @pytest.mark.asyncio
+    async def test_intelligence_requires_auth(self, client: AsyncClient) -> None:
+        """Intelligence endpoint should return 401 without a JWT token."""
+        response = await client.get("/api/v1/stocks/AAPL/intelligence")
+        assert response.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_intelligence_not_found(self, authenticated_client: AsyncClient) -> None:
+        """Should return 404 or 422 for a ticker not in the database."""
+        response = await authenticated_client.get("/api/v1/stocks/DOESNOTEXIST/intelligence")
+        assert response.status_code in (404, 422)
+
+    @pytest.mark.asyncio
+    @pytest.mark.regression
+    async def test_intelligence_happy_path_all_tools_succeed(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """Happy path: all yfinance tools return data, response is 200.
+
+        Regression for KAN-320 — verifies the endpoint returns 200 even when
+        all tools succeed and return realistic data.
+        """
+        from unittest.mock import patch
+
+        await _insert_stock(db_url, ticker="AAPL", name="Apple Inc")
+
+        mock_upgrades = [
+            {
+                "firm": "UBS",
+                "to_grade": "Buy",
+                "from_grade": "Neutral",
+                "action": "up",
+                "date": "2026-03-20",
+            }
+        ]
+        mock_insider = [
+            {
+                "insider_name": "Tim Cook",
+                "relation": "CEO",
+                "transaction_type": "Sale",
+                "shares": 50000,
+                "value": 8500000.0,
+                "date": "2026-03-01",
+            }
+        ]
+
+        with (
+            patch(
+                "backend.routers.stocks.data.fetch_upgrades_downgrades",
+                return_value=mock_upgrades,
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_insider_transactions",
+                return_value=mock_insider,
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_next_earnings_date",
+                return_value="2026-04-28",
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_eps_revisions",
+                return_value=None,
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_short_interest",
+                return_value={
+                    "short_percent_of_float": 4.23,
+                    "short_ratio": 2.5,
+                    "shares_short": 15_000_000,
+                },
+            ),
+        ):
+            response = await authenticated_client.get("/api/v1/stocks/AAPL/intelligence")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ticker"] == "AAPL"
+        assert len(data["upgrades_downgrades"]) == 1
+        assert data["upgrades_downgrades"][0]["firm"] == "UBS"
+        assert len(data["insider_transactions"]) == 1
+        assert data["insider_transactions"][0]["insider_name"] == "Tim Cook"
+        assert data["next_earnings_date"] == "2026-04-28"
+        assert data["short_interest"]["short_percent_of_float"] == 4.23
+        assert "fetched_at" in data
+
+    @pytest.mark.asyncio
+    @pytest.mark.regression
+    async def test_intelligence_survives_partial_tool_failure(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """KAN-320 regression: endpoint must return 200 when some tools raise.
+
+        Before the fix, asyncio.gather() lacked return_exceptions=True.
+        Any exception escaping a tool's own try/except (e.g. a network
+        timeout on cold start, a yfinance BaseException on first call)
+        propagated directly as an unhandled 500.
+
+        After the fix, exceptions are caught per-tool and replaced with safe
+        empty defaults so the remaining tools' data is still returned.
+        """
+        from unittest.mock import patch
+
+        await _insert_stock(db_url, ticker="TSLA", name="Tesla Inc")
+
+        # Two tools raise, three succeed — endpoint must still return 200
+        with (
+            patch(
+                "backend.routers.stocks.data.fetch_upgrades_downgrades",
+                side_effect=RuntimeError("Yahoo Finance cold-start timeout"),
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_insider_transactions",
+                side_effect=ConnectionError("network unavailable on first call"),
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_next_earnings_date",
+                return_value="2026-07-22",
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_eps_revisions",
+                return_value=None,
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_short_interest",
+                return_value=None,
+            ),
+        ):
+            response = await authenticated_client.get("/api/v1/stocks/TSLA/intelligence")
+
+        # Must be 200, not 500
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ticker"] == "TSLA"
+        # Failed tools fall back to empty defaults
+        assert data["upgrades_downgrades"] == []
+        assert data["insider_transactions"] == []
+        # Successful tools still return their data
+        assert data["next_earnings_date"] == "2026-07-22"
+        assert "fetched_at" in data
+
+    @pytest.mark.asyncio
+    @pytest.mark.regression
+    async def test_intelligence_survives_all_tools_failing(
+        self, authenticated_client: AsyncClient, db_url: str
+    ) -> None:
+        """KAN-320 regression: endpoint returns 200 with empty data when all tools fail.
+
+        If all five yfinance tools raise (e.g. Yahoo Finance is down), the
+        response should be a valid 200 with all fields at their empty defaults
+        rather than a 500.
+        """
+        from unittest.mock import patch
+
+        await _insert_stock(db_url, ticker="NVDA", name="NVIDIA Corp")
+
+        with (
+            patch(
+                "backend.routers.stocks.data.fetch_upgrades_downgrades",
+                side_effect=Exception("all tools down"),
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_insider_transactions",
+                side_effect=Exception("all tools down"),
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_next_earnings_date",
+                side_effect=Exception("all tools down"),
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_eps_revisions",
+                side_effect=Exception("all tools down"),
+            ),
+            patch(
+                "backend.routers.stocks.data.fetch_short_interest",
+                side_effect=Exception("all tools down"),
+            ),
+        ):
+            response = await authenticated_client.get("/api/v1/stocks/NVDA/intelligence")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["ticker"] == "NVDA"
+        assert data["upgrades_downgrades"] == []
+        assert data["insider_transactions"] == []
+        assert data["next_earnings_date"] is None
+        assert data["eps_revisions"] is None
+        assert data["short_interest"] is None

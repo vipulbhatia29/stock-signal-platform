@@ -260,7 +260,7 @@ async def detect_gap(pipeline_name: str) -> list[date]:
         return []
 
     last_date = watermark.last_completed_date
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
 
     # Generate all business days between last_completed_date and yesterday
     # (today's data may not be available yet)
