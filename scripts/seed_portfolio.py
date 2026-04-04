@@ -3,6 +3,9 @@
 Usage:
     uv run python -m scripts.seed_portfolio --csv /path/to/positions.csv \
         --email user@example.com --password Password123
+
+    # Backfill sector data for existing stocks with missing sectors:
+    uv run python -m scripts.seed_portfolio --backfill-sectors
 """
 
 import argparse
@@ -12,7 +15,9 @@ import logging
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from typing import Any
 
+import yfinance as yf
 from sqlalchemy import select, text
 
 from backend.database import async_session_factory
@@ -23,6 +28,27 @@ from backend.models.user import User
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)-8s %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def _fetch_sector_info(ticker: str) -> dict[str, Any]:
+    """Fetch sector, industry, and name from yfinance for a single ticker.
+
+    Args:
+        ticker: Stock ticker symbol.
+
+    Returns:
+        Dict with keys ``sector``, ``industry``, and ``name`` (all may be None
+        if yfinance has no data or the request fails).
+    """
+    result: dict[str, Any] = {"sector": None, "industry": None, "name": None}
+    try:
+        info = yf.Ticker(ticker).info
+        result["sector"] = info.get("sector") or None
+        result["industry"] = info.get("industry") or None
+        result["name"] = info.get("longName") or info.get("shortName") or None
+    except Exception:
+        logger.warning("yfinance lookup failed for %s — sector left empty", ticker)
+    return result
 
 
 def _parse_decimal(val: str) -> Decimal | None:
@@ -131,15 +157,27 @@ async def seed(csv_path: str, email: str, password: str) -> None:
         missing_tickers = tickers_needed - existing_tickers
 
         if missing_tickers:
-            logger.info("Creating %d missing stock records", len(missing_tickers))
+            logger.info(
+                "Creating %d missing stock records (fetching sector info from yfinance)",
+                len(missing_tickers),
+            )
             ticker_to_desc = {p["ticker"]: p["description"] for p in positions_data}
             for ticker in sorted(missing_tickers):
+                yf_info = await asyncio.to_thread(_fetch_sector_info, ticker)
                 stock = Stock(
                     ticker=ticker,
-                    name=ticker_to_desc.get(ticker, ticker),
+                    name=yf_info["name"] or ticker_to_desc.get(ticker, ticker),
+                    sector=yf_info["sector"],
+                    industry=yf_info["industry"],
                     is_active=True,
                 )
                 db.add(stock)
+                logger.info(
+                    "  %s — sector=%s industry=%s",
+                    ticker,
+                    yf_info["sector"] or "unknown",
+                    yf_info["industry"] or "unknown",
+                )
             await db.flush()
             logger.info("Created stocks: %s", sorted(missing_tickers))
 
@@ -213,13 +251,74 @@ async def seed(csv_path: str, email: str, password: str) -> None:
         )
 
 
+async def backfill_missing_sectors() -> None:
+    """Backfill sector and industry for existing Stock rows where sector is NULL.
+
+    Queries all stocks with a missing sector, fetches info from yfinance in
+    sequence (to avoid hammering the API), and updates only the null fields.
+    Existing non-null sector/industry values are never overwritten.
+    """
+    async with async_session_factory() as db:
+        result = await db.execute(select(Stock).where(Stock.sector.is_(None)))
+        stocks_missing = result.scalars().all()
+
+        if not stocks_missing:
+            logger.info("No stocks with missing sector — nothing to backfill")
+            return
+
+        logger.info("Backfilling sector for %d stocks", len(stocks_missing))
+        updated = 0
+        skipped = 0
+
+        for stock in stocks_missing:
+            yf_info = await asyncio.to_thread(_fetch_sector_info, stock.ticker)
+
+            if yf_info["sector"] is None and yf_info["industry"] is None:
+                logger.warning("No sector data from yfinance for %s — skipping", stock.ticker)
+                skipped += 1
+                continue
+
+            if yf_info["sector"]:
+                stock.sector = yf_info["sector"]
+            if yf_info["industry"] and stock.industry is None:
+                stock.industry = yf_info["industry"]
+            if yf_info["name"] and stock.name in (stock.ticker, "", None):
+                stock.name = yf_info["name"]
+
+            logger.info(
+                "  %s → sector=%s industry=%s",
+                stock.ticker,
+                stock.sector or "unknown",
+                stock.industry or "unknown",
+            )
+            updated += 1
+
+        await db.commit()
+        logger.info(
+            "Backfill complete: %d updated, %d skipped (no yfinance data)",
+            updated,
+            skipped,
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed portfolio from Fidelity CSV")
-    parser.add_argument("--csv", required=True, help="Path to Fidelity positions CSV")
+    parser.add_argument("--csv", help="Path to Fidelity positions CSV")
     parser.add_argument("--email", default="vipul@example.com", help="User email")
     parser.add_argument("--password", default="TestPass123!", help="User password")
+    parser.add_argument(
+        "--backfill-sectors",
+        action="store_true",
+        help="Backfill sector/industry for existing stocks with missing sector data",
+    )
     args = parser.parse_args()
 
+    if args.backfill_sectors:
+        asyncio.run(backfill_missing_sectors())
+        return
+
+    if not args.csv:
+        parser.error("--csv is required unless --backfill-sectors is specified")
     if not Path(args.csv).exists():
         parser.error(f"CSV file not found: {args.csv}")
 

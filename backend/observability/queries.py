@@ -128,8 +128,8 @@ async def get_query_list(
     Returns:
         Dict with items (list of QueryRow-shaped dicts), total, page, size.
     """
-    # Correlated subquery for tool duration
-    duration_sq = (
+    # Correlated subquery for tool duration only (used in total duration below)
+    tool_duration_sq = (
         select(func.coalesce(func.sum(ToolExecutionLog.latency_ms), 0))
         .where(ToolExecutionLog.query_id == LLMCallLog.query_id)
         .correlate(LLMCallLog)
@@ -170,6 +170,10 @@ async def get_query_list(
         )
     ).label("status_code")
 
+    # Total wall-clock duration = LLM latency + tool execution latency.
+    # A pure-LLM query with no tool calls must not show 0 ms.
+    total_duration_expr = func.coalesce(func.sum(LLMCallLog.latency_ms), 0) + tool_duration_sq
+
     # Get distinct query_ids with aggregation from llm_call_log
     base = (
         select(
@@ -179,7 +183,7 @@ async def get_query_list(
             func.count().label("llm_calls"),
             func.sum(LLMCallLog.cost_usd).label("total_cost_usd"),
             func.max(LLMCallLog.agent_type).label("agent_type"),
-            duration_sq.label("duration_ms"),
+            total_duration_expr.label("duration_ms"),
             status_col,
             func.max(eval_sq.c.eval_score).label("eval_score"),
         )
@@ -290,7 +294,6 @@ async def get_query_list(
         db_calls = sum(t.cnt for t in tool_rows if t.tool_name not in _EXTERNAL_TOOLS)
         external_calls = sum(t.cnt for t in tool_rows if t.tool_name in _EXTERNAL_TOOLS)
         external_sources = [t.tool_name for t in tool_rows if t.tool_name in _EXTERNAL_TOOLS]
-        tool_latency = sum(t.total_latency or 0 for t in tool_rows)
         query_text = text_by_qid.get(qid, "")
 
         # Derive status string from status_code
@@ -309,7 +312,7 @@ async def get_query_list(
                 "external_calls": external_calls,
                 "external_sources": external_sources,
                 "total_cost_usd": round(float(row.total_cost_usd or 0), 6),
-                "duration_ms": tool_latency,
+                "duration_ms": int(row.duration_ms or 0),
                 "score": float(row.eval_score) if row.eval_score is not None else None,
                 "status": derived_status,
             }

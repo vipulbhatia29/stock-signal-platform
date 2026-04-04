@@ -33,10 +33,29 @@ function getToolSummary(tool: string, result: unknown): string {
   }
 }
 
+function parseParams(raw: Record<string, unknown>): Record<string, unknown> {
+  // Guard: if the NDJSON stream delivered params as a JSON string instead of
+  // a parsed object, Object.entries() would iterate chars with numeric indices.
+  // Parse the string here so callers always receive a proper object.
+  if (typeof (raw as unknown) === "string") {
+    try {
+      const parsed: unknown = JSON.parse(raw as unknown as string);
+      if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      // Unparseable string — display it verbatim as a single entry
+      return { args: raw };
+    }
+  }
+  return raw;
+}
+
 export function ToolCard({ tool, params, status, result }: ToolCardProps) {
   const [expanded, setExpanded] = useState(false);
 
-  const paramStr = Object.entries(params)
+  const resolvedParams = parseParams(params);
+  const paramStr = Object.entries(resolvedParams)
     .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
     .join(", ");
 
