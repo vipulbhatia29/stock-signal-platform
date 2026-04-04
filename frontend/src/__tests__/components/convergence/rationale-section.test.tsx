@@ -1,6 +1,9 @@
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { axe, toHaveNoViolations } from "jest-axe";
 import { RationaleSection } from "@/components/convergence/rationale-section";
+
+expect.extend(toHaveNoViolations);
 
 jest.mock("lucide-react", () => ({
   ChevronDown: (props: Record<string, unknown>) => (
@@ -52,5 +55,19 @@ describe("RationaleSection", () => {
     expect(button).toHaveAttribute("aria-expanded", "false");
     fireEvent.click(button);
     expect(button).toHaveAttribute("aria-expanded", "true");
+  });
+
+  it("passes axe a11y checks when collapsed", async () => {
+    const { container } = render(<RationaleSection rationale={RATIONALE} />);
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it("passes axe a11y checks when expanded", async () => {
+    const { container } = render(
+      <RationaleSection rationale={RATIONALE} defaultOpen />,
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });

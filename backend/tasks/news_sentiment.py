@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 from backend.tasks import celery_app
 
@@ -42,7 +42,7 @@ async def _ingest_news(lookback_days: int) -> dict:
     from backend.models.stock import Stock
     from backend.services.news.ingestion import NewsIngestionService
 
-    since = date.today() - timedelta(days=lookback_days)
+    since = datetime.now(timezone.utc).date() - timedelta(days=lookback_days)
     service = NewsIngestionService()
 
     # Get active tickers from the universe
@@ -96,7 +96,7 @@ async def _score_sentiment(lookback_days: int) -> dict:
     from backend.services.news.ingestion import NewsIngestionService
     from backend.services.news.sentiment_scorer import SentimentScorer
 
-    since = date.today() - timedelta(days=lookback_days)
+    since = datetime.now(timezone.utc).date() - timedelta(days=lookback_days)
     ingestion_svc = NewsIngestionService()
     scorer = SentimentScorer()
 
@@ -131,7 +131,7 @@ async def _score_sentiment(lookback_days: int) -> dict:
         }
 
     # Aggregate daily sentiment
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     daily = scorer.aggregate_daily(scores, raw_articles, today)
 
     # Single transaction: mark articles as scored + upsert daily sentiment

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import date
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -231,7 +231,7 @@ async def _nightly_price_refresh_async() -> dict:
             logger.exception("Failed to refresh %s in nightly pipeline", ticker)
 
     status = await _runner.complete_run(run_id)
-    await _runner.update_watermark("price_refresh", date.today())
+    await _runner.update_watermark("price_refresh", datetime.now(timezone.utc).date())
 
     return {"status": status, "run_id": str(run_id), "tickers_total": len(tickers)}
 

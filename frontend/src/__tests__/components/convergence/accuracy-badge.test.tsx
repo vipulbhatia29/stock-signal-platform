@@ -1,6 +1,9 @@
 import React from "react";
 import { render, screen } from "@testing-library/react";
+import { axe, toHaveNoViolations } from "jest-axe";
 import { AccuracyBadge } from "@/components/convergence/accuracy-badge";
+
+expect.extend(toHaveNoViolations);
 
 describe("AccuracyBadge", () => {
   it("renders nothing when mape is null", () => {
@@ -43,5 +46,19 @@ describe("AccuracyBadge", () => {
     render(<AccuracyBadge mape={8.5} />);
     const badge = screen.getByLabelText(/Forecast accuracy: Medium/);
     expect(badge).toBeInTheDocument();
+  });
+
+  it("passes axe a11y checks for span variant", async () => {
+    const { container } = render(<AccuracyBadge mape={8.5} />);
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it("passes axe a11y checks for button variant", async () => {
+    const { container } = render(
+      <AccuracyBadge mape={8.5} onClick={() => undefined} />,
+    );
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -17,6 +17,7 @@ from backend.models.user import User
 from backend.schemas.convergence import (
     ConvergenceHistoryResponse,
     ConvergenceHistoryRow,
+    ConvergenceLabelEnum,
     ConvergenceResponse,
     DirectionEnum,
     DivergenceAlert,
@@ -107,7 +108,7 @@ async def get_portfolio_convergence(
     if not position_convergences:
         return PortfolioConvergenceResponse(
             portfolio_id=portfolio_id,
-            date=date.today(),
+            date=datetime.now(timezone.utc).date(),
             positions=[],
             bullish_pct=0.0,
             bearish_pct=0.0,
@@ -127,7 +128,7 @@ async def get_portfolio_convergence(
             PortfolioPositionConvergence(
                 ticker=conv.ticker,
                 weight=round(weight, 4),
-                convergence_label=conv.convergence_label,  # type: ignore[arg-type]
+                convergence_label=ConvergenceLabelEnum(conv.convergence_label),
                 signals_aligned=conv.signals_aligned,
                 divergence=_build_divergence_alert(conv.divergence),
             )
@@ -145,7 +146,7 @@ async def get_portfolio_convergence(
 
     return PortfolioConvergenceResponse(
         portfolio_id=portfolio_id,
-        date=date.today(),
+        date=datetime.now(timezone.utc).date(),
         positions=positions,
         bullish_pct=round(bullish_weight, 4),
         bearish_pct=round(bearish_weight, 4),
@@ -216,7 +217,7 @@ async def get_convergence_history(
         data=[
             ConvergenceHistoryRow(
                 date=row.date,
-                convergence_label=row.convergence_label,  # type: ignore[arg-type]
+                convergence_label=ConvergenceLabelEnum(row.convergence_label),
                 signals_aligned=row.signals_aligned,
                 composite_score=row.composite_score,
                 actual_return_90d=row.actual_return_90d,
@@ -296,13 +297,13 @@ async def get_ticker_convergence(
         signals=[
             SignalDirectionDetail(
                 signal=s.signal,
-                direction=s.direction,  # type: ignore[arg-type]
+                direction=DirectionEnum(s.direction),
                 value=s.value,
             )
             for s in convergence.signals
         ],
         signals_aligned=convergence.signals_aligned,
-        convergence_label=convergence.convergence_label,  # type: ignore[arg-type]
+        convergence_label=ConvergenceLabelEnum(convergence.convergence_label),
         composite_score=convergence.composite_score,
         divergence=_build_divergence_alert(convergence.divergence),
         rationale=rationale,
@@ -344,7 +345,7 @@ async def get_sector_convergence(
     if not convergences:
         return SectorConvergenceResponse(
             sector=sector,
-            date=date.today(),
+            date=datetime.now(timezone.utc).date(),
             tickers=[],
             bullish_pct=0.0,
             bearish_pct=0.0,
@@ -361,7 +362,7 @@ async def get_sector_convergence(
         tickers_out.append(
             SectorTickerConvergence(
                 ticker=conv.ticker,
-                convergence_label=conv.convergence_label,  # type: ignore[arg-type]
+                convergence_label=ConvergenceLabelEnum(conv.convergence_label),
                 signals_aligned=conv.signals_aligned,
             )
         )
@@ -375,7 +376,7 @@ async def get_sector_convergence(
     total = len(convergences)
     return SectorConvergenceResponse(
         sector=sector,
-        date=date.today(),
+        date=datetime.now(timezone.utc).date(),
         tickers=tickers_out,
         bullish_pct=round(bullish_count / total, 4) if total else 0.0,
         bearish_pct=round(bearish_count / total, 4) if total else 0.0,

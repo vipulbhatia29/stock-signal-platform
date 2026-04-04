@@ -68,8 +68,44 @@ describe("TrafficLightRow", () => {
 
 describe("TrafficLightRowSkeleton", () => {
   it("renders 6 skeleton placeholders", () => {
+    /** Skeleton shows at least 6 animated pulse placeholders. */
     const { container } = render(<TrafficLightRowSkeleton />);
     const pulses = container.querySelectorAll(".animate-pulse");
     expect(pulses.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Error / empty-state rendering
+// ---------------------------------------------------------------------------
+
+describe("TrafficLightRow — error and empty states", () => {
+  it("renders empty list when signals array is empty", () => {
+    /** Empty signals array should render an accessible list with no items. */
+    render(<TrafficLightRow signals={[]} />);
+    expect(screen.getByRole("list")).toBeInTheDocument();
+    expect(screen.queryAllByRole("listitem")).toHaveLength(0);
+  });
+
+  it("renders partial signal list without crashing when fewer than 6 signals", () => {
+    /** Partial signal data (e.g. API partially populated) renders what is available. */
+    const partialSignals: SignalDirectionDetail[] = [
+      { signal: "rsi", direction: "bullish", value: 35.0 },
+      { signal: "macd", direction: "bearish", value: -0.03 },
+    ];
+    render(<TrafficLightRow signals={partialSignals} />);
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+  });
+
+  it("handles neutral direction for all signals without any colored circles", () => {
+    /** All-neutral signals produce no gain/loss colored circles. */
+    const neutralSignals: SignalDirectionDetail[] = MOCK_SIGNALS.map((s) => ({
+      ...s,
+      direction: "neutral" as const,
+    }));
+    const { container } = render(<TrafficLightRow signals={neutralSignals} />);
+    expect(container.querySelectorAll(".bg-gain")).toHaveLength(0);
+    expect(container.querySelectorAll(".bg-loss")).toHaveLength(0);
   });
 });

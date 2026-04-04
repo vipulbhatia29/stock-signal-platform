@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -54,7 +54,7 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
         ValueError: If insufficient price data for training.
     """
     # Fetch 2 years of adjusted close prices
-    two_years_ago = date.today() - timedelta(days=730)
+    two_years_ago = datetime.now(timezone.utc).date() - timedelta(days=730)
     result = await db.execute(
         select(StockPrice.time, StockPrice.adj_close)
         .where(StockPrice.ticker == ticker, StockPrice.time >= two_years_ago)
@@ -175,7 +175,7 @@ def predict_forecast(
     with open(artifact_path) as f:
         model: Prophet = model_from_json(f.read())
 
-    today = date.today()
+    today = datetime.now(timezone.utc).date()
     now = datetime.now(timezone.utc)
     results: list[ForecastResult] = []
 

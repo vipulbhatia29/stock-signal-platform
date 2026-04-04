@@ -400,8 +400,6 @@ async def _get_pipeline_safe() -> PipelineZone:
 
 async def _get_forecast_health_safe() -> ForecastHealthZone:
     """Collect backtest health and sentiment coverage metrics."""
-    from datetime import date, timedelta
-
     from sqlalchemy import func, select
 
     from backend.database import async_session_factory
@@ -422,7 +420,7 @@ async def _get_forecast_health_safe() -> ForecastHealthZone:
         backtest_pct = round(models_passing / models_total * 100, 1) if models_total > 0 else 0.0
 
         # Sentiment coverage: % of active tickers with sentiment in last 7 days
-        cutoff = date.today() - timedelta(days=7)
+        cutoff = datetime.now(timezone.utc).date() - timedelta(days=7)
         total_tickers_stmt = select(func.count(func.distinct(Stock.ticker))).where(
             Stock.is_active.is_(True)
         )

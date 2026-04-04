@@ -77,10 +77,44 @@ describe("ConvergenceSummary", () => {
   });
 
   it("renders stacked bar segments", () => {
+    /** Stacked bar shows gain and loss colored segments for bullish/bearish pct. */
     const { container } = render(
       <ConvergenceSummary data={MOCK_DATA} isLoading={false} />,
     );
     expect(container.querySelector(".bg-gain")).toBeInTheDocument();
     expect(container.querySelector(".bg-loss")).toBeInTheDocument();
+  });
+
+  it("renders nothing when data is undefined and not loading", () => {
+    /** Component returns null when API returns no data and loading is false. */
+    const { container } = render(
+      <ConvergenceSummary data={undefined} isLoading={false} />,
+    );
+    expect(container.firstChild).toBeNull();
+  });
+
+  it("renders empty-state gracefully when all percentages are zero", () => {
+    /** All-zero percentages should not crash — renders label row with 0% values. */
+    const emptyData: PortfolioConvergenceResponse = {
+      ...MOCK_DATA,
+      bullish_pct: 0,
+      bearish_pct: 0,
+      mixed_pct: 0,
+      divergent_positions: [],
+    };
+    render(<ConvergenceSummary data={emptyData} isLoading={false} />);
+    expect(screen.getByText(/Bullish 0%/)).toBeInTheDocument();
+    expect(screen.getByText(/Bearish 0%/)).toBeInTheDocument();
+    expect(screen.queryByText(/Divergent/)).not.toBeInTheDocument();
+  });
+
+  it("omits divergent-positions section when list is empty", () => {
+    /** No divergent positions → warning row is hidden. */
+    const noDivData: PortfolioConvergenceResponse = {
+      ...MOCK_DATA,
+      divergent_positions: [],
+    };
+    render(<ConvergenceSummary data={noDivData} isLoading={false} />);
+    expect(screen.queryByText(/Divergent/)).not.toBeInTheDocument();
   });
 });

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -227,7 +227,7 @@ class SignalConvergenceService:
         Returns:
             Tuple of (rows, total_count).
         """
-        since = date.today() - timedelta(days=days)
+        since = datetime.now(timezone.utc).date() - timedelta(days=days)
         base_filter = [
             SignalConvergenceDaily.ticker == ticker,
             SignalConvergenceDaily.date >= since,
@@ -387,7 +387,7 @@ class SignalConvergenceService:
 
         return TickerConvergence(
             ticker=ticker,
-            date=date.today(),
+            date=datetime.now(timezone.utc).date(),
             signals=directions_list,
             signals_aligned=aligned,
             convergence_label=label,

@@ -189,6 +189,7 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
           horizons={forecast?.horizons}
           isLoading={forecastLoading}
           currentPrice={undefined}
+          modelMape={forecast?.model_mape}
         />
       </section>
 

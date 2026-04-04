@@ -331,3 +331,224 @@ class TestSignalDetail:
         gen = RationaleGenerator()
         detail = gen._signal_detail(SignalDirection("rsi", "neutral", None))
         assert detail == ""
+
+
+# ---------------------------------------------------------------------------
+# LLM prompt content inspection
+# ---------------------------------------------------------------------------
+
+
+class TestLlmPromptContent:
+    """Tests that the prompt sent to the LLM contains the expected content.
+
+    These tests assert that ticker symbol, signal names, and score values
+    are all present in the prompt — ensuring the LLM has full context.
+    """
+
+    @pytest.mark.asyncio()
+    @pytest.mark.regression
+    async def test_llm_prompt_contains_ticker_symbol(self) -> None:
+        """Prompt sent to LLM includes the ticker symbol for context."""
+        captured_messages: list[list[dict]] = []
+
+        mock_response = MagicMock()
+        mock_response.content = "LLM rationale."
+        mock_llm = AsyncMock()
+
+        async def capture_chat(messages, **_kwargs):
+            captured_messages.append(messages)
+            return mock_response
+
+        mock_llm.chat = capture_chat
+
+        gen = RationaleGenerator(llm_client=mock_llm)
+        signals = _make_signals(
+            rsi="bullish",
+            macd="bullish",
+            sma="bearish",
+            piotroski="bearish",
+            forecast="neutral",
+            news="neutral",
+        )
+        div = DivergenceInfo()
+        await gen.generate(signals, "mixed", div, "MSFT")
+
+        assert len(captured_messages) == 1
+        prompt_text = captured_messages[0][0]["content"]
+        assert "MSFT" in prompt_text
+
+    @pytest.mark.asyncio()
+    @pytest.mark.regression
+    async def test_llm_prompt_contains_all_signal_names(self) -> None:
+        """Prompt sent to LLM lists all 6 signal names so the model can reason about each."""
+        captured_messages: list[list[dict]] = []
+
+        mock_response = MagicMock()
+        mock_response.content = "LLM rationale."
+        mock_llm = AsyncMock()
+
+        async def capture_chat(messages, **_kwargs):
+            captured_messages.append(messages)
+            return mock_response
+
+        mock_llm.chat = capture_chat
+
+        gen = RationaleGenerator(llm_client=mock_llm)
+        signals = _make_signals(
+            rsi="bullish",
+            macd="bullish",
+            sma="bearish",
+            piotroski="bearish",
+            forecast="neutral",
+            news="neutral",
+        )
+        div = DivergenceInfo()
+        await gen.generate(signals, "mixed", div, "AAPL")
+
+        prompt_text = captured_messages[0][0]["content"]
+        # All six signal display names must appear in the prompt
+        expected_names = (
+            "RSI",
+            "MACD",
+            "SMA-200",
+            "Piotroski F-Score",
+            "90-day forecast",
+            "News sentiment",
+        )
+        for expected_name in expected_names:
+            assert expected_name in prompt_text, f"Expected '{expected_name}' in prompt"
+
+    @pytest.mark.asyncio()
+    @pytest.mark.regression
+    async def test_llm_prompt_contains_convergence_label(self) -> None:
+        """Prompt sent to LLM includes the convergence label so model understands overall state."""
+        captured_messages: list[list[dict]] = []
+
+        mock_response = MagicMock()
+        mock_response.content = "LLM rationale."
+        mock_llm = AsyncMock()
+
+        async def capture_chat(messages, **_kwargs):
+            captured_messages.append(messages)
+            return mock_response
+
+        mock_llm.chat = capture_chat
+
+        gen = RationaleGenerator(llm_client=mock_llm)
+        signals = _make_signals(
+            rsi="bullish",
+            macd="bullish",
+            sma="bearish",
+            piotroski="bearish",
+            forecast="neutral",
+            news="neutral",
+        )
+        div = DivergenceInfo()
+        await gen.generate(signals, "mixed", div, "AAPL")
+
+        prompt_text = captured_messages[0][0]["content"]
+        assert "mixed" in prompt_text
+
+    @pytest.mark.asyncio()
+    @pytest.mark.regression
+    async def test_llm_prompt_contains_signal_directions(self) -> None:
+        """Prompt includes per-signal direction labels (bullish/bearish/neutral) for each signal."""
+        captured_messages: list[list[dict]] = []
+
+        mock_response = MagicMock()
+        mock_response.content = "LLM rationale."
+        mock_llm = AsyncMock()
+
+        async def capture_chat(messages, **_kwargs):
+            captured_messages.append(messages)
+            return mock_response
+
+        mock_llm.chat = capture_chat
+
+        gen = RationaleGenerator(llm_client=mock_llm)
+        signals = _make_signals(
+            rsi="bullish",
+            macd="bullish",
+            sma="bearish",
+            piotroski="bearish",
+            forecast="neutral",
+            news="neutral",
+        )
+        div = DivergenceInfo()
+        await gen.generate(signals, "mixed", div, "AAPL")
+
+        prompt_text = captured_messages[0][0]["content"]
+        assert "bullish" in prompt_text
+        assert "bearish" in prompt_text
+
+    @pytest.mark.asyncio()
+    @pytest.mark.regression
+    async def test_llm_prompt_contains_signal_values(self) -> None:
+        """Prompt includes raw signal values so model can cite specific numbers."""
+        captured_messages: list[list[dict]] = []
+
+        mock_response = MagicMock()
+        mock_response.content = "LLM rationale."
+        mock_llm = AsyncMock()
+
+        async def capture_chat(messages, **_kwargs):
+            captured_messages.append(messages)
+            return mock_response
+
+        mock_llm.chat = capture_chat
+
+        gen = RationaleGenerator(llm_client=mock_llm)
+        # Use distinctive values that can be verified in the prompt
+        signals = [
+            SignalDirection("rsi", "bullish", 42.0),
+            SignalDirection("macd", "bullish", 0.03),
+            SignalDirection("sma", "bearish", 195.0),
+            SignalDirection("piotroski", "bearish", 2),
+            SignalDirection("forecast", "neutral", 0.01),
+            SignalDirection("news", "neutral", 0.0),
+        ]
+        div = DivergenceInfo()
+        await gen.generate(signals, "mixed", div, "AAPL")
+
+        prompt_text = captured_messages[0][0]["content"]
+        # The prompt includes "value: X" for signals with non-None values
+        assert "42.0" in prompt_text or "42" in prompt_text
+        assert "0.03" in prompt_text
+
+    @pytest.mark.asyncio()
+    @pytest.mark.regression
+    async def test_llm_prompt_contains_historical_hit_rate_when_divergent(self) -> None:
+        """Prompt includes historical hit-rate context when forecast diverges from technicals."""
+        captured_messages: list[list[dict]] = []
+
+        mock_response = MagicMock()
+        mock_response.content = "LLM rationale."
+        mock_llm = AsyncMock()
+
+        async def capture_chat(messages, **_kwargs):
+            captured_messages.append(messages)
+            return mock_response
+
+        mock_llm.chat = capture_chat
+
+        gen = RationaleGenerator(llm_client=mock_llm)
+        signals = _make_signals(
+            rsi="bullish",
+            macd="bullish",
+            sma="bearish",
+            piotroski="bearish",
+            forecast="neutral",
+            news="neutral",
+        )
+        div = DivergenceInfo(
+            is_divergent=True,
+            forecast_direction="neutral",
+            technical_majority="bullish",
+            historical_hit_rate=0.72,
+            sample_count=31,
+        )
+        await gen.generate(signals, "mixed", div, "AAPL")
+
+        prompt_text = captured_messages[0][0]["content"]
+        assert "72%" in prompt_text
+        assert "31" in prompt_text

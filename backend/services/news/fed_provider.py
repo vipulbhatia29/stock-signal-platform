@@ -66,7 +66,7 @@ class FedRssProvider(NewsProvider):
             "api_key": self._fred_api_key,
             "file_type": "json",
             "realtime_start": since.isoformat(),
-            "realtime_end": date.today().isoformat(),
+            "realtime_end": datetime.now(timezone.utc).date().isoformat(),
         }
 
         try:

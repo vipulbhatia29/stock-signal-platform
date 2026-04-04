@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -134,7 +134,7 @@ class PortfolioForecastService:
             bl=bl_result,
             monte_carlo=mc_result,
             cvar=cvar_result,
-            forecast_date=date.today(),
+            forecast_date=datetime.now(timezone.utc).date(),
             horizon_days=horizon_days,
             tickers=tickers,
         )
@@ -384,7 +384,8 @@ class PortfolioForecastService:
         """
         from backend.models.price import StockPrice
 
-        since = datetime.combine(date.today() - timedelta(days=400), datetime.min.time())
+        lookback_start = datetime.now(timezone.utc).date() - timedelta(days=400)
+        since = datetime.combine(lookback_start, datetime.min.time())
         result = await db.execute(
             select(StockPrice.ticker, StockPrice.time, StockPrice.adj_close)
             .where(
@@ -401,6 +402,22 @@ class PortfolioForecastService:
         df["adj_close"] = df["adj_close"].astype(float)
         pivot = df.pivot_table(index="date", columns="ticker", values="adj_close")
         pivot = pivot.dropna(axis=0, how="any").tail(TRADING_DAYS)
+
+        # Validate that all requested tickers survived the pivot + dropna.
+        # A ticker is dropped when it has no price data in the lookback window
+        # or when its prices have gaps that cause the row-wise dropna to remove
+        # every date where it appeared.
+        available = set(pivot.columns.tolist())
+        missing = set(tickers) - available
+        if missing:
+            logger.warning(
+                "Tickers dropped from price pivot (no data or gaps): %s — "
+                "BL computation will proceed with %d/%d tickers",
+                sorted(missing),
+                len(available),
+                len(tickers),
+            )
+
         return pivot
 
     async def _fetch_prophet_views(

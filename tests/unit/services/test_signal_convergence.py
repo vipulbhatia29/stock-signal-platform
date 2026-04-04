@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
 from backend.services.signal_convergence import (
     SignalConvergenceService,
     classify_news_sentiment,
@@ -256,6 +258,35 @@ class TestComputeConvergenceLabel:
         """4 bullish + 2 bearish → mixed (bearish > 0, not strong_bull)."""
         dirs = ["bullish", "bullish", "bullish", "bullish", "bearish", "bearish"]
         assert _compute_convergence_label(dirs) == "mixed"
+
+    @pytest.mark.regression
+    def test_mixed_4_bullish_2_bearish_edge_case_not_strong_bull(self) -> None:
+        """Regression: 4 bullish + 2 bearish must produce 'mixed', NOT 'strong_bull'.
+
+        strong_bull requires 4+ bullish AND 0 bearish. Two bearish signals prevent
+        the strong_bull classification even though bullish count meets the threshold.
+        This edge case was identified in KAN-394 (M7) as lacking explicit test coverage.
+        """
+        dirs = ["bullish", "bullish", "bullish", "bullish", "bearish", "bearish"]
+        label = _compute_convergence_label(dirs)
+        assert label == "mixed", (
+            f"Expected 'mixed' for 4 bullish + 2 bearish but got '{label}'. "
+            "strong_bull requires 0 bearish signals."
+        )
+
+    @pytest.mark.regression
+    def test_mixed_4_bullish_2_bearish_order_independent(self) -> None:
+        """Regression: label is order-independent — bearish signals anywhere produce mixed.
+
+        The classification function must count directions, not depend on their order.
+        """
+        for dirs in [
+            ["bearish", "bearish", "bullish", "bullish", "bullish", "bullish"],
+            ["bullish", "bearish", "bullish", "bearish", "bullish", "bullish"],
+            ["bullish", "bullish", "bearish", "bullish", "bullish", "bearish"],
+        ]:
+            label = _compute_convergence_label(dirs)
+            assert label == "mixed", f"Expected 'mixed' for dirs={dirs} but got '{label}'"
 
 
 # ---------------------------------------------------------------------------

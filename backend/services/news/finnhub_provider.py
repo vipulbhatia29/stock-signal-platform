@@ -34,7 +34,7 @@ class FinnhubProvider(NewsProvider):
             logger.warning("FINNHUB_API_KEY not set — skipping Finnhub fetch")
             return []
 
-        today = date.today()
+        today = datetime.now(timezone.utc).date()
         url = f"{self._base_url}/company-news"
         params = {
             "symbol": ticker.upper(),
