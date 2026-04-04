@@ -99,3 +99,44 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 10 JIRA tickets resolved — **zero open bugs/tech debt remaining**
 - All 11 Sonnet agents ran in parallel (3 batches), Opus orchestrated + reviewed
 - Resume: Phase E (UI Overhaul, KAN-400) or Phase F (Subscriptions + Monetization)
+
+---
+
+## Session 95 — Full Data Reseed + DQ Analysis (2026-04-04)
+
+**Branch:** `fix/news-pipeline-hotfixes-kan-401-402` → develop
+
+### Reseed Execution
+Full database reseed (preserving portfolio/user/watchlist) to validate backend with real data:
+- Stock universe: 580 stocks (S&P 500 + NASDAQ-100 + Dow 30 + 12 ETFs)
+- Stock prices: 1,241,547 rows (10y history for 505 tickers + 2y ETFs)
+- Signals: 505 snapshots computed inline during price seed
+- Forecasts: 1,548 results (516 tickers × 3 horizons), 516 Prophet models trained
+- Dividends: 52,137 rows (472 tickers)
+- Earnings: 2,225 snapshots (558 tickers)
+- News: 1,985 articles (4 providers: Finnhub, Google News, EDGAR, Fed RSS)
+- Sentiment: 394 articles scored via GPT-4o-mini, 4 daily sentiment rows
+
+### Bugs Found (3 pipeline bugs + 1 DQ critical)
+- **KAN-401** (High): NewsArticle tz mismatch — tz-aware datetimes vs naive columns. Hotfix applied.
+- **KAN-402** (Medium): Google News RSS source_url > VARCHAR(500). Hotfix applied.
+- **KAN-403** (High): Prophet predicts negative stock prices for 6 tickers (FISV, HUM, ELV, SMCI, IT, CSGP)
+- **KAN-404** (High): seed_prices --universe misses 61 portfolio/watchlist tickers not in indexes
+
+### DQ Analysis
+- Stock prices: 0 nulls, 0 non-positive, 0 negative volume — clean
+- Signals: RSI [0,100], composite [0,10], 0 Bollinger violations — clean
+- Forecasts: 10 negative predicted prices — **KAN-403**
+- 61 positions without price/signal/forecast data — **KAN-404**
+- Score distribution: 405 AVOID, 100 WATCH, 0 BUY — market conditions
+- No orphan records, no duplicate signals, no duplicate news
+
+### Enhancements Filed
+- **KAN-405** (Medium): Sentiment scoring concurrent batching (9 min → 30 sec)
+- **KAN-406** (Low): SPY ETF 2y history misaligned with 10y universe
+
+### Session 95 Totals
+- 6 JIRA tickets created (KAN-401–406): 4 bugs, 2 enhancements
+- 2 hotfixes applied (ingestion.py, news_sentiment.py)
+- No new tests (DQ suite recommended as future work)
+- Resume: Fix KAN-401–404 properly, then Phase E or Phase F

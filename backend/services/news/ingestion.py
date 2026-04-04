@@ -123,13 +123,16 @@ class NewsIngestionService:
                 if article.dedupe_hash in existing_hashes:
                     continue
 
+                # Strip tzinfo — column is TIMESTAMP WITHOUT TIME ZONE
+                pub = article.published_at
+                naive_pub = pub.replace(tzinfo=None) if pub.tzinfo else pub
                 row = NewsArticle(
-                    published_at=article.published_at,
+                    published_at=naive_pub,
                     ticker=article.ticker,
                     headline=article.headline,
                     summary=article.summary,
                     source=article.source,
-                    source_url=article.source_url,
+                    source_url=article.source_url[:500] if article.source_url else None,
                     event_type=article.event_type,
                     dedupe_hash=article.dedupe_hash,
                 )

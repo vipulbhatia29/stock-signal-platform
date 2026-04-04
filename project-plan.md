@@ -194,13 +194,25 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 
 ---
 
-## Open Bugs
+## Open Bugs (Session 95 — Data Reseed DQ Findings)
 
-All bugs resolved in Session 94 (PR #189).
+| Ticket | Priority | Summary | Status |
+|--------|----------|---------|--------|
+| KAN-401 | High | News pipeline: tz mismatch on NewsArticle timestamps (published_at + scored_at) | Hotfix applied, proper migration needed |
+| KAN-402 | Medium | Google News RSS source_url exceeds VARCHAR(500) | Hotfix applied, column migration needed |
+| KAN-403 | High | Prophet forecast produces negative stock prices for 6 tickers | To Do |
+| KAN-404 | High | seed_prices --universe misses 61 portfolio/watchlist tickers | To Do |
+
+## Enhancements (Session 95)
+
+| Ticket | Priority | Summary | Status |
+|--------|----------|---------|--------|
+| KAN-405 | Medium | Sentiment scoring: concurrent batch dispatch + larger batch size (9 min → 30 sec) | To Do |
+| KAN-406 | Low | SPY ETF 2y history misaligned with 10y universe for QuantStats | To Do |
 
 ## Tech Debt
 
-All tech debt resolved in Session 94 (PR #189). KAN-398 absorbed into KAN-393.
+All prior tech debt resolved in Session 94 (PR #189). KAN-398 absorbed into KAN-393.
 
 ## Backlog (JIRA tickets, not yet scheduled)
 
