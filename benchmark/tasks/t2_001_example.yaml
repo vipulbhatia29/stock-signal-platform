@@ -1,0 +1,31 @@
+id: "t2_001"
+jira_ticket: "N/A"
+tier: "T2"
+name: "Add health check timestamp to /health endpoint"
+description: |
+  Extend the existing /health endpoint to include a `checked_at` ISO timestamp
+  and a `database_connected` boolean that does a simple SELECT 1 against the DB.
+  Update the HealthResponse schema and add tests.
+requirements:
+  - Add `checked_at: datetime` field to HealthResponse schema
+  - Add `database_connected: bool` field to HealthResponse
+  - Implement async DB connectivity check (SELECT 1) in the health router
+  - Handle DB connection failure gracefully (database_connected=False, don't crash)
+  - Unit test for schema fields
+  - Unit test for DB check (mock the session)
+acceptance_criteria:
+  - uv run pytest tests/unit/ -q passes with no new failures
+  - uv run ruff check backend/ passes
+context: |
+  Health router is at backend/routers/health.py.
+  HealthResponse schema is at backend/schemas/health.py.
+  Use get_async_session dependency for DB access (see other routers for pattern).
+  IMPORTANT: The health endpoint must not require authentication.
+complexity:
+  context_span: 2
+  reasoning_depth: 2
+  integration_surface: 2
+  convention_density: 3
+  implicit_knowledge: 2
+  verification_difficulty: 2
+  failure_cost: 2
