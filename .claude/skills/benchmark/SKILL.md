@@ -13,13 +13,13 @@ Run a coding task across multiple LLM models and compare results.
 
 ```bash
 # Single task
-python3 -m benchmark.harness --task benchmark/tasks/t1_001_example.yaml
+uv run python3 -m benchmark.harness --task benchmark/tasks/t1_001_example.yaml
 
 # All tasks
-python3 -m benchmark.harness --batch benchmark/tasks/
+uv run python3 -m benchmark.harness --batch benchmark/tasks/
 
 # Regenerate reports from existing data
-python3 -m benchmark.harness --report
+uv run python3 -m benchmark.harness --report
 ```
 
 ## Prerequisites
