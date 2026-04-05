@@ -200,8 +200,8 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 |--------|----------|---------|--------|
 | KAN-401 | High | News pipeline: tz mismatch on NewsArticle timestamps (published_at + scored_at) | Hotfix applied, proper migration needed |
 | KAN-402 | Medium | Google News RSS source_url exceeds VARCHAR(500) | Hotfix applied, column migration needed |
-| KAN-403 | High | Prophet forecast produces negative stock prices for 6 tickers | To Do |
-| KAN-404 | High | seed_prices --universe misses 61 portfolio/watchlist tickers | To Do |
+| KAN-403 | High | Prophet forecast produces negative stock prices for 6 tickers | In Progress — spec + plan written (Session 96) |
+| KAN-404 | High | Pipeline integrity: non-universe tickers missing data (7 gaps) | In Progress — spec + plan written (Session 96) |
 
 ## Enhancements (Session 95)
 

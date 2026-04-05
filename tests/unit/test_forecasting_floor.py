@@ -264,7 +264,7 @@ class TestPredictForecastPriceFloor:
 
         warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warning_records) == 1, (
-            f"Expected exactly 1 warning (only horizon 90 triggers floor), got {len(warning_records)}"
+            f"Expected 1 warning (horizon 90 triggers floor), got {len(warning_records)}"
         )
 
         msg = warning_records[0].message
@@ -275,7 +275,10 @@ class TestPredictForecastPriceFloor:
         assert "1.0" in msg  # floor value (1.00) present
 
     @pytest.mark.regression
-    def test_no_warning_logged_when_no_flooring_occurs(self, caplog: pytest.LogCaptureFixture) -> None:
+    def test_no_warning_logged_when_no_flooring_occurs(
+        self,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
         """No WARNING is emitted when all predicted values are above the price floor.
 
         Verifies that the warning is only produced when clamping is actually applied,
