@@ -1,0 +1,63 @@
+models:
+  claude-sonnet-4-6:
+    provider: anthropic
+    base_url: "https://api.anthropic.com"
+    env_key: ANTHROPIC_API_KEY
+    model_id: "claude-sonnet-4-6"
+    role: implementor
+    pricing:
+      input_per_m: 3.00
+      output_per_m: 15.00
+    max_output_tokens: 128000
+    context_window: 200000
+
+  MiniMax-M2.5:
+    provider: minimax
+    base_url: "https://api.minimax.io/anthropic"
+    env_key: MINIMAX_API_KEY
+    model_id: "MiniMax-M2.5"
+    role: implementor
+    pricing:
+      input_per_m: 0.30
+      output_per_m: 1.20
+    max_output_tokens: 64000
+    context_window: 200000
+
+  qwen3-32b:
+    provider: groq
+    base_url: "http://localhost:4000"
+    env_key: LITELLM_MASTER_KEY
+    auth_header: ANTHROPIC_AUTH_TOKEN
+    model_id: "qwen3-32b"
+    role: implementor
+    pricing:
+      input_per_m: 0.29
+      output_per_m: 0.59
+    max_output_tokens: 40960
+    context_window: 131000
+
+  claude-opus-4-6:
+    provider: anthropic
+    base_url: "https://api.anthropic.com"
+    env_key: ANTHROPIC_API_KEY
+    model_id: "claude-opus-4-6"
+    role: judge
+    pricing:
+      input_per_m: 5.00
+      output_per_m: 25.00
+
+benchmark:
+  implementors:
+    - claude-sonnet-4-6
+    - MiniMax-M2.5
+    - qwen3-32b
+  reviewer: claude-opus-4-6
+  timeout_seconds: 600
+  worktree_dir: .benchmark
+  results_dir: benchmark/results
+  env_file: backend/.env
+  budget_cap_usd: 15.00
+
+staff_engineer:
+  hourly_rate_usd: 95.00
+  review_overhead_pct: 0.20
