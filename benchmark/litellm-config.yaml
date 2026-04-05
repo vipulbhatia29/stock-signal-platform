@@ -1,0 +1,12 @@
+model_list:
+  - model_name: qwen3-32b
+    litellm_params:
+      model: groq/qwen/qwen3-32b
+      api_key: os.environ/GROQ_API_KEY
+      max_tokens: 40960
+
+general_settings:
+  master_key: sk-benchmark-local-key
+
+litellm_settings:
+  drop_params: true

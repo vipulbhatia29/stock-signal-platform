@@ -1,0 +1,34 @@
+id: "t3_001"
+jira_ticket: "N/A"
+tier: "T3"
+name: "Add API usage tracking service"
+description: |
+  Create a new service that tracks API usage per user: endpoint called,
+  timestamp, response time. Store in a new api_usage_log table.
+  Expose via a new GET /api/v1/admin/usage endpoint (admin-only).
+requirements:
+  - New SQLAlchemy model: ApiUsageLog (user_id FK, endpoint, method, response_time_ms, created_at)
+  - New Pydantic schemas: ApiUsageLogResponse, ApiUsageListResponse
+  - New service function: log_api_usage(user_id, endpoint, method, response_time_ms)
+  - New service function: get_usage_stats(user_id=None, limit=100) -> list
+  - New admin router endpoint: GET /admin/usage (requires admin role)
+  - Alembic migration for api_usage_log table
+  - Unit tests for service functions
+  - Unit test for admin endpoint (auth + happy path + forbidden for non-admin)
+acceptance_criteria:
+  - uv run pytest tests/unit/ -q passes with no new failures
+  - uv run ruff check backend/ passes
+  - Migration applies cleanly (alembic upgrade head)
+context: |
+  Follow existing patterns in backend/models/, backend/schemas/, backend/services/,
+  and backend/routers/admin.py. Use async session. Admin routes use
+  require_admin dependency. See backend/routers/admin.py for examples.
+  Migration must NOT drop TimescaleDB indexes (known Alembic autogenerate bug).
+complexity:
+  context_span: 4
+  reasoning_depth: 2
+  integration_surface: 3
+  convention_density: 4
+  implicit_knowledge: 3
+  verification_difficulty: 3
+  failure_cost: 3

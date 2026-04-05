@@ -1,0 +1,26 @@
+id: "t1_001"
+jira_ticket: "N/A"
+tier: "T1"
+name: "Add is_premium field to UserResponse schema"
+description: |
+  Add a computed boolean field `is_premium` to the UserResponse Pydantic schema.
+  The field should be True if the user's role is 'admin' or 'premium', False otherwise.
+  Add a unit test for the new field.
+requirements:
+  - Add `is_premium: bool` field to UserResponse in backend/schemas/user.py
+  - Compute from user.role using a @computed_field or model_validator
+  - Unit test verifying is_premium=True for admin role, False for 'user' role
+acceptance_criteria:
+  - uv run pytest tests/unit/ -q passes with no new failures
+  - uv run ruff check backend/schemas/user.py passes
+context: |
+  Look at existing UserResponse schema in backend/schemas/user.py for patterns.
+  UserRole enum is in backend/models/user.py (values: user, admin, premium).
+complexity:
+  context_span: 1
+  reasoning_depth: 1
+  integration_surface: 1
+  convention_density: 2
+  implicit_knowledge: 1
+  verification_difficulty: 1
+  failure_cost: 1
