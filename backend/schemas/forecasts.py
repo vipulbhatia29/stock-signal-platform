@@ -45,6 +45,7 @@ class PortfolioForecastResponse(BaseModel):
     horizons: list[PortfolioForecastHorizon]
     ticker_count: int
     vix_regime: str = "normal"
+    missing_tickers: list[str] = Field(default_factory=list)
 
 
 class SectorForecastResponse(BaseModel):
