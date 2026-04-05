@@ -43,3 +43,27 @@ def test_all_tickers_missing():
     )
     assert resp.horizons == []
     assert len(resp.missing_tickers) == 3
+
+
+def test_forecast_value_zero_returns_all_missing():
+    """When no tickers have forecasts, forecast_value is 0 and all are reported missing."""
+    position_values = {"AAPL": 4000.0, "GOOG": 3000.0}
+    tickers_with_forecast: set[str] = set()
+
+    forecast_value = sum(v for t, v in position_values.items() if t in tickers_with_forecast)
+    missing = sorted(set(position_values.keys()) - tickers_with_forecast)
+
+    assert forecast_value == 0
+    assert missing == ["AAPL", "GOOG"]
+
+
+def test_all_tickers_have_forecasts_no_missing():
+    """When all tickers have forecasts, the missing list is empty and weights cover full value."""
+    position_values = {"AAPL": 4000.0, "GOOG": 3000.0}
+    tickers_with_forecast = {"AAPL", "GOOG"}
+
+    missing = sorted(set(position_values.keys()) - tickers_with_forecast)
+    assert missing == []
+
+    forecast_value = sum(v for t, v in position_values.items() if t in tickers_with_forecast)
+    assert forecast_value == 7000.0

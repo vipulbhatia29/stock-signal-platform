@@ -212,3 +212,37 @@ class TestAnalyzeStockAutoIngest:
 
         assert result.status == "error"
         assert "after ingestion" in result.error
+
+    @pytest.mark.asyncio
+    async def test_unexpected_exception_in_compute_signals_returns_generic_error(
+        self,
+    ) -> None:
+        """Unexpected exception from compute_signals triggers the outer catch-all.
+
+        The outer except block must return the generic 'Stock analysis failed'
+        message rather than leaking stack trace or raw exception text to the caller.
+        """
+        tool = AnalyzeStockTool()
+        session = AsyncMock()
+
+        load_prices_df_mock = AsyncMock(return_value=_non_empty_df())
+        compute_signals_mock = MagicMock(side_effect=RuntimeError("unexpected internal error"))
+
+        with (
+            patch(
+                "backend.database.async_session_factory",
+                return_value=_make_session_cm(session),
+            ),
+            patch(
+                "backend.tools.market_data.load_prices_df",
+                load_prices_df_mock,
+            ),
+            patch(
+                "backend.tools.signals.compute_signals",
+                compute_signals_mock,
+            ),
+        ):
+            result = await tool.execute({"ticker": "AAPL"})
+
+        assert result.status == "error"
+        assert result.error == "Stock analysis failed. Please try again."

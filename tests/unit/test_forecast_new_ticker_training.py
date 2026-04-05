@@ -208,3 +208,48 @@ class TestForecastNewTickerDispatch:
         dispatched_tickers = {call.args[0] for call in mock_retrain_task.delay.call_args_list}
         assert dispatched_tickers.issubset(set(new_tickers))
         assert result["status"] == "ok"
+
+    @pytest.mark.asyncio
+    async def test_phase2_exception_does_not_break_phase1_results(self) -> None:
+        """Phase 2 exception in get_all_referenced_tickers is caught — Phase 1 results preserved.
+
+        If get_all_referenced_tickers raises during Phase 2, the outer except block
+        swallows the exception and the function returns Phase 1 results intact.
+        """
+        existing_mv = _make_model_version("AAPL")
+        mock_session_ctx, _ = _make_db_session([existing_mv])
+
+        with (
+            patch(
+                "backend.tasks.forecasting.async_session_factory",
+                return_value=mock_session_ctx,
+            ),
+            patch(
+                "backend.tasks.forecasting._runner.start_run",
+                new_callable=AsyncMock,
+                return_value="run-1",
+            ),
+            patch(
+                "backend.tasks.forecasting._runner.record_ticker_success",
+                new_callable=AsyncMock,
+            ),
+            patch(
+                "backend.tasks.forecasting._runner.complete_run",
+                new_callable=AsyncMock,
+                return_value="ok",
+            ),
+            patch("backend.tools.forecasting.predict_forecast", return_value=[]),
+            patch(
+                "backend.services.ticker_universe.get_all_referenced_tickers",
+                new_callable=AsyncMock,
+                side_effect=Exception("DB connection lost"),
+            ),
+            patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
+        ):
+            # Should NOT raise — Phase 2 exceptions are caught internally
+            result = await _forecast_refresh_async()
+
+        # Phase 1 completed normally; Phase 2 failure did not propagate
+        assert result["status"] == "ok"
+        # No new-ticker dispatch should have occurred
+        mock_retrain_task.delay.assert_not_called()
