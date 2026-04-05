@@ -1,6 +1,6 @@
 ---
-name: benchmark
-description: Run side-by-side benchmark — local Ollama vs Sonnet on same task. Opus judges quality. Generates comparison report.
+name: benchmarking-models
+description: Runs side-by-side benchmark comparing local LLM vs Sonnet on a JIRA task. Opus judges quality and generates a comparison report. Use when user says "benchmark", "compare models", "test local vs cloud", or "run benchmark on KAN-XXX".
 disable-model-invocation: true
 argument-hint: "KAN-XXX"
 effort: high

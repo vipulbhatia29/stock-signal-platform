@@ -1,12 +1,12 @@
 ---
-name: implement-local
-description: Implement a task using a local LLM as full Claude Code agent. Opus reviews output.
+name: implementing-locally
+description: Delegates implementation to a local LLM (Ollama) with Opus review. Use when LLM triage scores ≤8 and user approves local delegation, or when user says "use local model", "delegate to local", or "implement-local".
 disable-model-invocation: true
 argument-hint: "[task-description or KAN-XXX]"
 effort: medium
 ---
 
-# Implement via Ollama — $ARGUMENTS
+# Implement via Local LLM — $ARGUMENTS
 
 ## Prerequisites Check
 

@@ -1,6 +1,6 @@
 ---
-name: benchmark-suite
-description: Run full benchmark suite across multiple JIRA tickets. Generates aggregate CTO assessment report with quality-by-tier analysis.
+name: benchmarking-suite
+description: Runs a full benchmark suite across multiple JIRA tickets and generates an aggregate CTO assessment report. Use when user says "run benchmark suite", "benchmark multiple tickets", or "full model comparison".
 disable-model-invocation: true
 argument-hint: "[KAN-XXX KAN-YYY ...] or [T1 T2 T3 T4]"
 effort: high

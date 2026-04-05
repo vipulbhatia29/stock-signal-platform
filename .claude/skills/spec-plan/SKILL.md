@@ -1,6 +1,6 @@
 ---
-name: spec-plan
-description: Generate spec and plan with one review cycle. Invokes brainstorming (if needed) and writing-plans in sequence, then runs combined review.
+name: speccing-and-planning
+description: Generates a spec and implementation plan with one review cycle. Invokes brainstorming (if needed), then writing-plans, then a combined review. Use when user says "write spec and plan", "spec this out", "create a plan for", or invokes /spec-plan.
 disable-model-invocation: true
 argument-hint: "[feature-topic]"
 ---
