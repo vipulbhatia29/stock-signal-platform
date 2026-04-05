@@ -119,13 +119,7 @@ Completed features in `docs/superpowers/archive/`. Never read archived files.
 
 ## Doc Sync Rules
 
-Docs must be updated **incrementally with each implementation session**, not in batch retroactive reviews.
-
-- **New endpoints?** → Update `docs/TDD.md` (API section + architecture diagram if new router)
-- **New user-facing feature?** → Update `docs/FSD.md` (add FR-XX + update status table)
-- **New architectural decision?** → Write ADR in `docs/ADR.md` (during spec review, not after)
-- **Feature shipped?** → Update `README.md` feature sections + `docs/PRD.md` if product scope changed
-- **JIRA tickets completed?** → Transition to Done, update `project-plan.md` with ticket refs
+Doc changes are tracked via `session/doc-delta` Serena memory during implementation and applied in batch at phase end via `/phase-closeout`. See `.claude/rules/doc-delta.md` for the tracking format.
 
 ## End-of-Session Checklist
 

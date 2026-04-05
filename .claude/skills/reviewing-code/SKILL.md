@@ -1,5 +1,6 @@
 ---
-description: Intelligent review routing — score changes, auto-select depth and personas, present recommendation to PM
+name: reviewing-code
+description: Score code changes and route to appropriate review depth with auto-selected personas. Use when completing tasks, before committing, or when user asks for code review.
 ---
 
 # Review Configuration
@@ -91,7 +92,7 @@ Personas: [list, or "none — automated checks sufficient"]
 
 - PM can always force a higher depth ("force review" on a skip, "full review" on a quick)
 - PM can always force a lower depth ("skip review" on a full) — but Opus should flag if risk_surface ≥ 4
-- Phase-end review (via `/phase-closeout`) always runs Full regardless of score — it includes additional dimensions from `phase-end-review.md`
+- Phase-end review (via `/phase-closeout`) always runs Full regardless of score — it includes additional dimensions from the phase-closeout skill
 
 ## Examples
 
