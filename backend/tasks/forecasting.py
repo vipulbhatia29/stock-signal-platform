@@ -12,47 +12,17 @@ logger = logging.getLogger(__name__)
 _runner = PipelineRunner()
 
 
-async def _get_all_forecast_tickers() -> list[str]:
-    """Get all tickers that need forecasting: watchlist + portfolio + ETFs.
-
-    Returns:
-        Sorted list of unique ticker symbols.
-    """
-    from sqlalchemy import distinct, select
-
-    from backend.models.portfolio import Position
-    from backend.models.stock import Stock, Watchlist
-
-    async with async_session_factory() as db:
-        tickers: set[str] = set()
-
-        # Watchlist tickers
-        wl_result = await db.execute(select(distinct(Watchlist.ticker)))
-        for row in wl_result.all():
-            tickers.add(row[0])
-
-        # Portfolio position tickers
-        pos_result = await db.execute(select(distinct(Position.ticker)).where(Position.shares > 0))
-        for row in pos_result.all():
-            tickers.add(row[0])
-
-        # ETF tickers
-        etf_result = await db.execute(select(Stock.ticker).where(Stock.is_etf.is_(True)))
-        for row in etf_result.all():
-            tickers.add(row[0])
-
-        return sorted(tickers)
-
-
 async def _model_retrain_all_async() -> dict:
     """Retrain Prophet models for all tickers and generate forecasts.
 
     Returns:
         Dict with run status and counts.
     """
+    from backend.services.ticker_universe import get_all_referenced_tickers
     from backend.tools.forecasting import predict_forecast, train_prophet_model
 
-    tickers = await _get_all_forecast_tickers()
+    async with async_session_factory() as db:
+        tickers = await get_all_referenced_tickers(db)
     if not tickers:
         logger.info("No tickers to retrain")
         return {"status": "no_tickers", "trained": 0}

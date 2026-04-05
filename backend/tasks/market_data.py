@@ -163,19 +163,16 @@ async def _load_spy_closes() -> "pd.Series":
     return pd.Series(prices, index=idx, dtype=float)
 
 
-async def _get_all_watchlist_tickers() -> list[str]:
-    """Query DB for all distinct tickers currently in any user's watchlist.
+async def _get_all_referenced_tickers() -> list[str]:
+    """Get all referenced tickers using the canonical universe query.
 
     Returns:
         Sorted list of unique ticker symbols.
     """
-    from sqlalchemy import distinct, select
-
-    from backend.models.stock import Watchlist
+    from backend.services.ticker_universe import get_all_referenced_tickers
 
     async with async_session_factory() as db:
-        result = await db.execute(select(distinct(Watchlist.ticker)))
-        return sorted(row[0] for row in result.all())
+        return await get_all_referenced_tickers(db)
 
 
 async def _nightly_price_refresh_async() -> dict:
@@ -197,7 +194,7 @@ async def _nightly_price_refresh_async() -> dict:
         # Gap backfill is best-effort — log but don't block the nightly run
 
     # Get all tickers to refresh
-    tickers = await _get_all_watchlist_tickers()
+    tickers = await _get_all_referenced_tickers()
     if not tickers:
         logger.warning("No watchlisted tickers to refresh")
         return {"status": "no_tickers", "tickers_total": 0}
@@ -406,7 +403,7 @@ def refresh_all_watchlist_tickers_task() -> dict:
     Returns:
         A dict with the count of tasks dispatched.
     """
-    tickers = asyncio.run(_get_all_watchlist_tickers())
+    tickers = asyncio.run(_get_all_referenced_tickers())
     dispatched = 0
     for ticker in tickers:
         refresh_ticker_task.delay(ticker)
