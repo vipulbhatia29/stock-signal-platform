@@ -196,7 +196,7 @@ async def _nightly_price_refresh_async() -> dict:
     # Get all tickers to refresh
     tickers = await _get_all_referenced_tickers()
     if not tickers:
-        logger.warning("No watchlisted tickers to refresh")
+        logger.warning("No referenced tickers to refresh")
         return {"status": "no_tickers", "tickers_total": 0}
 
     # Ensure SPY has fresh price data before loading closes for QuantStats

@@ -97,9 +97,9 @@ class TestForecastNewTickerDispatch:
                 return_value=["AAPL", new_ticker],
             ),
             patch(
-                "backend.tasks.forecasting._get_price_data_count",
+                "backend.tasks.forecasting._get_price_data_counts",
                 new_callable=AsyncMock,
-                return_value=250,  # Above MIN_DATA_POINTS=200
+                return_value={new_ticker: 250},  # Above MIN_DATA_POINTS=200
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
         ):
@@ -145,9 +145,9 @@ class TestForecastNewTickerDispatch:
                 return_value=["AAPL", new_ticker],
             ),
             patch(
-                "backend.tasks.forecasting._get_price_data_count",
+                "backend.tasks.forecasting._get_price_data_counts",
                 new_callable=AsyncMock,
-                return_value=50,  # Below MIN_DATA_POINTS=200
+                return_value={new_ticker: 50},  # Below MIN_DATA_POINTS=200
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
         ):
@@ -196,9 +196,9 @@ class TestForecastNewTickerDispatch:
                 return_value=all_tickers,
             ),
             patch(
-                "backend.tasks.forecasting._get_price_data_count",
+                "backend.tasks.forecasting._get_price_data_counts",
                 new_callable=AsyncMock,
-                return_value=300,  # All tickers have sufficient data
+                return_value={t: 300 for t in new_tickers},  # All tickers have sufficient data
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
         ):

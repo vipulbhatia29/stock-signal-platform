@@ -121,14 +121,15 @@ async def ingest_ticker(
     # ── Step 6: Update last_fetched_at ────────────────────────────────
     await update_last_fetched_at(ticker, db)
 
-    # ── Step 7b: Dispatch forecast training (fire-and-forget) ──────────
-    try:
-        from backend.tasks.forecasting import retrain_single_ticker_task
+    # ── Step 7b: Dispatch forecast training for new tickers (fire-and-forget) ──
+    if is_new:
+        try:
+            from backend.tasks.forecasting import retrain_single_ticker_task
 
-        retrain_single_ticker_task.delay(ticker)
-        logger.info("Dispatched forecast training for %s", ticker)
-    except Exception:
-        logger.warning("Failed to dispatch forecast for %s", ticker, exc_info=True)
+            retrain_single_ticker_task.delay(ticker)
+            logger.info("Dispatched forecast training for %s", ticker)
+        except Exception:
+            logger.warning("Failed to dispatch forecast for %s", ticker, exc_info=True)
 
     # ── Step 7: Generate portfolio-aware recommendation ───────────────
     recommendation = None

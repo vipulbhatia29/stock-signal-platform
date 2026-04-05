@@ -68,7 +68,7 @@ class AnalyzeStockTool(BaseTool):
                         await ensure_stock_exists(ticker, session)
                         await fetch_prices_delta(ticker, session)
                         await session.commit()
-                    except (ValueError, Exception):
+                    except Exception:
                         logger.warning("Auto-ingest failed for %s", ticker, exc_info=True)
                         return ToolResult(
                             status="error",

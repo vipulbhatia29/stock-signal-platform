@@ -11,9 +11,9 @@ class ForecastHorizon(BaseModel):
     """Forecast at a single horizon."""
 
     horizon_days: int
-    predicted_price: float = Field(gt=0)
-    predicted_lower: float = Field(gt=0)
-    predicted_upper: float = Field(gt=0)
+    predicted_price: float = Field(ge=0.01)
+    predicted_lower: float = Field(ge=0.01)
+    predicted_upper: float = Field(ge=0.01)
     target_date: date
     confidence_level: str = "medium"
     sharpe_direction: str = "flat"

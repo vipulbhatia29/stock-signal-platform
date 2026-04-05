@@ -76,8 +76,11 @@ async def create_transaction(
 ) -> TransactionResponse:
     """Log a BUY or SELL trade and recompute positions via FIFO.
 
-    Returns the created transaction. Returns 422 if:
-    - Ticker not found in stocks table
+    Returns the created transaction. The ticker is automatically ingested
+    if not yet known (stock record + price history created on demand).
+    Returns 422 if:
+    - Ticker format is invalid (must be 1-5 uppercase letters)
+    - Ticker is not recognized by the data provider
     - SELL exceeds available shares
     """
     require_verified_email(current_user)
@@ -116,7 +119,7 @@ async def create_transaction(
 
     txn = Transaction(
         portfolio_id=portfolio.id,
-        ticker=body.ticker,
+        ticker=ticker_upper,
         transaction_type=body.transaction_type,
         shares=body.shares,
         price_per_share=body.price_per_share,
@@ -132,10 +135,7 @@ async def create_transaction(
         if "foreign key" in str(exc.orig).lower() and "ticker" in str(exc.orig).lower():
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=(
-                    f"Ticker '{body.ticker}' not found. "
-                    "Add it to your watchlist first to ingest it."
-                ),
+                detail="Stock record could not be created. Try again or contact support.",
             ) from exc
         raise
 
