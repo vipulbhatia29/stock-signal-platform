@@ -1,15 +1,48 @@
 """Celery tasks for Prophet model training and forecast refresh."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from datetime import datetime, timezone
+
+from sqlalchemy import select
 
 from backend.database import async_session_factory
 from backend.tasks import celery_app
 from backend.tasks.pipeline import PipelineRunner
+from backend.tools.forecasting import MIN_DATA_POINTS
 
 logger = logging.getLogger(__name__)
 
 _runner = PipelineRunner()
+
+MAX_NEW_MODELS_PER_NIGHT = 20
+
+
+async def _get_price_data_count(ticker: str, db) -> int:
+    """Count price data points for a ticker (last 2 years).
+
+    Args:
+        ticker: Stock ticker symbol.
+        db: Async database session.
+
+    Returns:
+        Number of price data points.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import func
+
+    from backend.models.price import StockPrice
+
+    two_years_ago = datetime.now(timezone.utc).date() - timedelta(days=730)
+    result = await db.execute(
+        select(func.count())
+        .select_from(StockPrice)
+        .where(StockPrice.ticker == ticker, StockPrice.time >= two_years_ago)
+    )
+    return result.scalar() or 0
 
 
 async def _model_retrain_all_async() -> dict:
@@ -58,8 +91,6 @@ async def _forecast_refresh_async() -> dict:
     Returns:
         Dict with refresh status and counts.
     """
-    from sqlalchemy import select
-
     from backend.models.forecast import ModelVersion
     from backend.tools.forecasting import predict_forecast
 
@@ -93,6 +124,39 @@ async def _forecast_refresh_async() -> dict:
                 logger.exception("Failed to refresh forecast for %s", model_version.ticker)
 
         status = await _runner.complete_run(run_id)
+
+        # ── Phase 2: Dispatch training for new tickers without models ──
+        try:
+            from backend.services.ticker_universe import get_all_referenced_tickers
+
+            all_tickers = await get_all_referenced_tickers(db)
+            modeled_tickers = {mv.ticker for mv in active_models}
+            new_tickers = [t for t in all_tickers if t not in modeled_tickers]
+
+            dispatched = 0
+            for ticker in new_tickers[:MAX_NEW_MODELS_PER_NIGHT]:
+                count = await _get_price_data_count(ticker, db)
+                if count >= MIN_DATA_POINTS:
+                    retrain_single_ticker_task.delay(ticker)
+                    dispatched += 1
+                    logger.info(
+                        "Dispatched first-time training for %s (%d data points)",
+                        ticker,
+                        count,
+                    )
+                else:
+                    logger.debug(
+                        "Skipping %s: only %d data points (need %d)",
+                        ticker,
+                        count,
+                        MIN_DATA_POINTS,
+                    )
+
+            if dispatched:
+                logger.info("Dispatched training for %d new tickers", dispatched)
+        except Exception:
+            logger.warning("Failed to dispatch new-ticker training", exc_info=True)
+
         return {"status": status, "refreshed": refreshed, "total": len(active_models)}
 
 
