@@ -41,6 +41,7 @@ Detect which file categories changed and map to the right reviewers. When multip
 | **Schemas / Types** | `backend/schemas/`, `frontend/src/types/` | 1. API Designer (contract stability, backwards compat), 2. Staff Full-Stack Engineer (serialization, validation) |
 | **CI / Infra / Docker** | `.github/workflows/`, `docker-compose*`, `Dockerfile*` | 1. DevOps Engineer (pipeline correctness), 2. Security Engineer (secret handling, image hardening) |
 | **Celery / Tasks** | `backend/tasks/` | 1. Staff Backend Architect (idempotency, retry, ordering), 2. Reliability Engineer (failure modes, monitoring) |
+| **Tests** | `tests/` (new or significantly modified test files) | 1. Test Engineer (coverage gaps, mock overuse, edge cases, assertion quality) |
 | **Spec / Plan docs** | `docs/superpowers/specs/`, `docs/superpowers/plans/` | 1. PM (requirements coverage, acceptance criteria), 2. Staff Architect (feasibility, scope) |
 | **Config / Settings** | `backend/config.py`, `.env*`, `pyproject.toml` | 1. DevOps Engineer (env parity), 2. Security Engineer (secret exposure) |
 
@@ -66,9 +67,25 @@ Personas: [list, or "none — automated checks sufficient"]
 
 ## Round Control
 
-- Default: **1 round** always
-- Second round: only if first round found **Critical-severity** issues AND PM approves
-- Never run 3+ rounds
+### Initial review
+- Default: **1 round** of initial review
+- Never run multiple escalating initial rounds — one round catches 95% of issues
+
+### Post-fix verification (MANDATORY)
+- After fixing HIGH+ findings: **always** re-review the changed files
+- Re-review is focused (only personas that flagged issues, only files that changed)
+- This is NOT a "second round" — it is fix verification, a distinct step
+- Skip re-review ONLY if all findings were LOW/MEDIUM and fixes were trivial (rename, typo)
+
+### The distinction
+- **Initial review** = "What's wrong with this code?" → 1 round
+- **Fix verification** = "Did the fix actually address the finding? Did it introduce new issues?" → always after HIGH+ fixes
+- Skipping fix verification was the source of a real bug in Session 96 (ticker case mismatch fix was applied but never verified)
+
+### Per-task reviews (subagent-driven development)
+- When using subagent-driven-development, each task gets its own spec + quality review loop per the skill's process
+- The final holistic review (this config) runs AFTER all tasks complete — it is the capstone, not the only review
+- Do not skip per-task reviews and defer everything to the final review
 
 ## Override Rules
 
