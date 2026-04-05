@@ -234,6 +234,80 @@ class TestPredictForecastPriceFloor:
         assert results[0].predicted_price == round(5.0, 2)
 
     @pytest.mark.regression
+    def test_warning_logged_when_flooring_occurs(self, caplog: pytest.LogCaptureFixture) -> None:
+        """logger.warning() is emitted with ticker, horizon, raw values, and floor when clamping.
+
+        Verifies that when any of yhat/yhat_lower/yhat_upper falls below the price
+        floor, a WARNING-level log entry is produced containing the ticker symbol,
+        the horizon in days, the raw predicted values, and the floor value.
+        """
+        import logging
+
+        last_price = 100.0  # floor = max(0.01, 100.0 * 0.01) = 1.00
+
+        model = _make_mock_model(
+            last_training_price=last_price,
+            yhat_values={90: -5.0, 180: 150.0, 270: 160.0},
+            yhat_lower_values={90: -20.0, 180: 130.0, 270: 140.0},
+            yhat_upper_values={90: 5.0, 180: 170.0, 270: 180.0},
+        )
+
+        mv = _make_model_version(ticker="TSLA")
+
+        with (
+            patch("builtins.open", MagicMock()),
+            patch("backend.tools.forecasting.model_from_json", return_value=model),
+            patch("backend.tools.forecasting.Path.exists", return_value=True),
+            caplog.at_level(logging.WARNING, logger="backend.tools.forecasting"),
+        ):
+            predict_forecast(mv, horizons=[90, 180, 270])
+
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) == 1, (
+            f"Expected exactly 1 warning (only horizon 90 triggers floor), got {len(warning_records)}"
+        )
+
+        msg = warning_records[0].message
+        assert "TSLA" in msg
+        assert "90" in msg
+        assert "-5.0" in msg or "-5." in msg  # raw yhat value present
+        assert "-20.0" in msg or "-20." in msg  # raw yhat_lower value present
+        assert "1.0" in msg  # floor value (1.00) present
+
+    @pytest.mark.regression
+    def test_no_warning_logged_when_no_flooring_occurs(self, caplog: pytest.LogCaptureFixture) -> None:
+        """No WARNING is emitted when all predicted values are above the price floor.
+
+        Verifies that the warning is only produced when clamping is actually applied,
+        not for normal predictions that stay above the floor threshold.
+        """
+        import logging
+
+        last_price = 200.0  # floor = max(0.01, 200.0 * 0.01) = 2.00
+
+        model = _make_mock_model(
+            last_training_price=last_price,
+            yhat_values={90: 210.0, 180: 220.0, 270: 230.0},
+            yhat_lower_values={90: 195.0, 180: 205.0, 270: 215.0},
+            yhat_upper_values={90: 225.0, 180: 235.0, 270: 245.0},
+        )
+
+        mv = _make_model_version(ticker="AAPL")
+
+        with (
+            patch("builtins.open", MagicMock()),
+            patch("backend.tools.forecasting.model_from_json", return_value=model),
+            patch("backend.tools.forecasting.Path.exists", return_value=True),
+            caplog.at_level(logging.WARNING, logger="backend.tools.forecasting"),
+        ):
+            predict_forecast(mv, horizons=[90, 180, 270])
+
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert len(warning_records) == 0, (
+            f"Expected no warnings when all values exceed floor, got {len(warning_records)}"
+        )
+
+    @pytest.mark.regression
     def test_model_without_history_uses_absolute_minimum_floor(self) -> None:
         """Model with no history attribute falls back to absolute minimum floor (0.01)."""
         model = _make_mock_model(
