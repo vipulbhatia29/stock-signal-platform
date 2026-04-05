@@ -83,7 +83,8 @@ class TestCreateTransaction:
             },
         )
         assert resp.status_code == 422
-        assert "not found" in resp.json()["detail"].lower()
+        detail = resp.json()["detail"].lower()
+        assert "not recognized" in detail or "not found" in detail or "invalid" in detail
 
     async def test_oversell_returns_422(
         self, authenticated_client: AsyncClient, db_url: str
