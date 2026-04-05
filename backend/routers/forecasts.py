@@ -115,16 +115,29 @@ async def get_portfolio_forecast(
     for fc in fc_query.scalars().all():
         forecasts_by_ticker[fc.ticker].append(fc)
 
-    # Weighted forecast aggregation per horizon using batch-fetched data
+    # Track tickers without forecasts (KAN-404)
+    tickers_with_forecast = set(forecasts_by_ticker.keys())
+    missing_tickers = sorted(set(position_values.keys()) - tickers_with_forecast)
+
+    # Recompute total using only tickers with forecasts
+    forecast_value = sum(v for t, v in position_values.items() if t in tickers_with_forecast)
+    if forecast_value == 0:
+        return PortfolioForecastResponse(
+            horizons=[], ticker_count=0, missing_tickers=sorted(position_values.keys())
+        )
+
+    # Weighted forecast aggregation — weights sum to 1.0 across covered tickers
     horizon_agg: dict[int, dict] = {}
 
     for ticker, value in position_values.items():
-        weight = value / total_value
+        if ticker not in tickers_with_forecast:
+            continue
+        weight = value / forecast_value  # KEY FIX: use forecast_value not total_value
         current_price = price_map.get(ticker)
         if not current_price:
             continue
 
-        forecasts = forecasts_by_ticker.get(ticker, [])
+        forecasts = forecasts_by_ticker[ticker]
         for fc in forecasts:
             if fc.horizon_days not in horizon_agg:
                 horizon_agg[fc.horizon_days] = {
@@ -155,6 +168,7 @@ async def get_portfolio_forecast(
     return PortfolioForecastResponse(
         horizons=horizons,
         ticker_count=len(position_values),
+        missing_tickers=missing_tickers,
     )
 
 

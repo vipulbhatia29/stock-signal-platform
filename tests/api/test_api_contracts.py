@@ -97,7 +97,7 @@ class TestSchemaValidation:
         engine = create_async_engine(db_url, echo=False)
         factory_ = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with factory_() as session:
-            stock = StockFactory.build(ticker="TXN1", name="Transaction Corp")
+            stock = StockFactory.build(ticker="TXNCO", name="Transaction Corp")
             session.add(stock)
             await session.commit()
         await engine.dispose()
@@ -105,7 +105,7 @@ class TestSchemaValidation:
         resp = await ac.post(
             "/api/v1/portfolio/transactions",
             json={
-                "ticker": "TXN1",
+                "ticker": "TXNCO",
                 "transaction_type": "BUY",
                 "shares": 10,
                 "price_per_share": 100.0,

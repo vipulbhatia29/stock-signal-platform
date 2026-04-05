@@ -175,6 +175,17 @@ def predict_forecast(
     with open(artifact_path) as f:
         model: Prophet = model_from_json(f.read())
 
+    # Extract last training price for scale-appropriate price floor.
+    # Prophet can extrapolate to negative values for volatile/declining stocks;
+    # equities cannot trade below $0, so we clamp to 1% of last known price
+    # (minimum $0.01) to prevent negative prices from poisoning downstream math.
+    last_known_price = (
+        float(model.history["y"].iloc[-1])
+        if hasattr(model, "history") and len(model.history) > 0
+        else 0.0
+    )
+    price_floor = max(0.01, last_known_price * 0.01)
+
     today = datetime.now(timezone.utc).date()
     now = datetime.now(timezone.utc)
     results: list[ForecastResult] = []
@@ -207,15 +218,32 @@ def predict_forecast(
             target_row = forecast.tail(1)
 
         row = target_row.iloc[0]
+        raw_price = float(row["yhat"])
+        raw_lower = float(row["yhat_lower"])
+        raw_upper = float(row["yhat_upper"])
+
+        # Apply price floor — log a warning when clamping occurs
+        if raw_price < price_floor or raw_lower < price_floor or raw_upper < price_floor:
+            logger.warning(
+                "Prophet predicted non-positive price for %s horizon=%dd "
+                "(yhat=%.4f, lower=%.4f, upper=%.4f); flooring to %.4f",
+                model_version.ticker,
+                horizon,
+                raw_price,
+                raw_lower,
+                raw_upper,
+                price_floor,
+            )
+
         results.append(
             ForecastResult(
                 forecast_date=today,
                 ticker=model_version.ticker,
                 horizon_days=horizon,
                 model_version_id=model_version.id,
-                predicted_price=round(float(row["yhat"]), 2),
-                predicted_lower=round(float(row["yhat_lower"]), 2),
-                predicted_upper=round(float(row["yhat_upper"]), 2),
+                predicted_price=round(max(raw_price, price_floor), 2),
+                predicted_lower=round(max(raw_lower, price_floor), 2),
+                predicted_upper=round(max(raw_upper, price_floor), 2),
                 target_date=target_date,
                 created_at=now,
             )

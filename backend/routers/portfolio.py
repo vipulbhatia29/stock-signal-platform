@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -52,7 +53,7 @@ from backend.services.portfolio import get_health_history as svc_get_health_hist
 from backend.services.portfolio import list_transactions as svc_list_transactions
 from backend.services.portfolio_forecast import PortfolioForecastResult, PortfolioForecastService
 from backend.services.recommendations import calculate_position_size
-from backend.services.stock_data import get_latest_price
+from backend.services.stock_data import ensure_stock_exists, get_latest_price
 from backend.tools.divestment import check_divestment_rules
 from backend.tools.dividends import get_dividend_summary
 from backend.validation import TickerPath
@@ -75,8 +76,11 @@ async def create_transaction(
 ) -> TransactionResponse:
     """Log a BUY or SELL trade and recompute positions via FIFO.
 
-    Returns the created transaction. Returns 422 if:
-    - Ticker not found in stocks table
+    Returns the created transaction. The ticker is automatically ingested
+    if not yet known (stock record + price history created on demand).
+    Returns 422 if:
+    - Ticker format is invalid (must be 1-5 uppercase letters)
+    - Ticker is not recognized by the data provider
     - SELL exceeds available shares
     """
     require_verified_email(current_user)
@@ -98,9 +102,24 @@ async def create_transaction(
                 f"only {current.get('shares', 0)} shares held.",
             )
 
+    # Auto-create stock record if ticker is unknown (KAN-404)
+    ticker_upper = body.ticker.upper().strip()
+    if not re.match(r"^[A-Z]{1,5}$", ticker_upper):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid ticker format. Use 1-5 uppercase letters.",
+        )
+    try:
+        await ensure_stock_exists(ticker_upper, db)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Ticker '{ticker_upper}' not recognized. Verify the symbol is correct.",
+        )
+
     txn = Transaction(
         portfolio_id=portfolio.id,
-        ticker=body.ticker,
+        ticker=ticker_upper,
         transaction_type=body.transaction_type,
         shares=body.shares,
         price_per_share=body.price_per_share,
@@ -116,10 +135,7 @@ async def create_transaction(
         if "foreign key" in str(exc.orig).lower() and "ticker" in str(exc.orig).lower():
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=(
-                    f"Ticker '{body.ticker}' not found. "
-                    "Add it to your watchlist first to ingest it."
-                ),
+                detail="Stock record could not be created. Try again or contact support.",
             ) from exc
         raise
 

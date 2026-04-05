@@ -1,47 +1,49 @@
 """Celery tasks for Prophet model training and forecast refresh."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from datetime import datetime, timezone
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import async_session_factory
 from backend.tasks import celery_app
 from backend.tasks.pipeline import PipelineRunner
+from backend.tools.forecasting import MIN_DATA_POINTS
 
 logger = logging.getLogger(__name__)
 
 _runner = PipelineRunner()
 
+MAX_NEW_MODELS_PER_NIGHT = 20
 
-async def _get_all_forecast_tickers() -> list[str]:
-    """Get all tickers that need forecasting: watchlist + portfolio + ETFs.
+
+async def _get_price_data_counts(tickers: list[str], db: AsyncSession) -> dict[str, int]:
+    """Count price data points per ticker (last 2 years) in a single query.
+
+    Args:
+        tickers: List of ticker symbols to check.
+        db: Async database session.
 
     Returns:
-        Sorted list of unique ticker symbols.
+        Dict mapping ticker to count of price data points.
     """
-    from sqlalchemy import distinct, select
+    from datetime import timedelta
 
-    from backend.models.portfolio import Position
-    from backend.models.stock import Stock, Watchlist
+    from sqlalchemy import func
 
-    async with async_session_factory() as db:
-        tickers: set[str] = set()
+    from backend.models.price import StockPrice
 
-        # Watchlist tickers
-        wl_result = await db.execute(select(distinct(Watchlist.ticker)))
-        for row in wl_result.all():
-            tickers.add(row[0])
-
-        # Portfolio position tickers
-        pos_result = await db.execute(select(distinct(Position.ticker)).where(Position.shares > 0))
-        for row in pos_result.all():
-            tickers.add(row[0])
-
-        # ETF tickers
-        etf_result = await db.execute(select(Stock.ticker).where(Stock.is_etf.is_(True)))
-        for row in etf_result.all():
-            tickers.add(row[0])
-
-        return sorted(tickers)
+    two_years_ago = datetime.now(timezone.utc).date() - timedelta(days=730)
+    result = await db.execute(
+        select(StockPrice.ticker, func.count().label("cnt"))
+        .where(StockPrice.ticker.in_(tickers), StockPrice.time >= two_years_ago)
+        .group_by(StockPrice.ticker)
+    )
+    return {row.ticker: row.cnt for row in result.all()}
 
 
 async def _model_retrain_all_async() -> dict:
@@ -50,9 +52,11 @@ async def _model_retrain_all_async() -> dict:
     Returns:
         Dict with run status and counts.
     """
+    from backend.services.ticker_universe import get_all_referenced_tickers
     from backend.tools.forecasting import predict_forecast, train_prophet_model
 
-    tickers = await _get_all_forecast_tickers()
+    async with async_session_factory() as db:
+        tickers = await get_all_referenced_tickers(db)
     if not tickers:
         logger.info("No tickers to retrain")
         return {"status": "no_tickers", "trained": 0}
@@ -88,8 +92,6 @@ async def _forecast_refresh_async() -> dict:
     Returns:
         Dict with refresh status and counts.
     """
-    from sqlalchemy import select
-
     from backend.models.forecast import ModelVersion
     from backend.tools.forecasting import predict_forecast
 
@@ -123,6 +125,42 @@ async def _forecast_refresh_async() -> dict:
                 logger.exception("Failed to refresh forecast for %s", model_version.ticker)
 
         status = await _runner.complete_run(run_id)
+
+        # ── Phase 2: Dispatch training for new tickers without models ──
+        try:
+            from backend.services.ticker_universe import get_all_referenced_tickers
+
+            all_tickers = await get_all_referenced_tickers(db)
+            modeled_tickers = {mv.ticker for mv in active_models}
+            new_tickers = [t for t in all_tickers if t not in modeled_tickers]
+
+            if new_tickers:
+                counts = await _get_price_data_counts(new_tickers, db)
+                dispatched = 0
+                for ticker in new_tickers:
+                    if dispatched >= MAX_NEW_MODELS_PER_NIGHT:
+                        break
+                    if counts.get(ticker, 0) >= MIN_DATA_POINTS:
+                        retrain_single_ticker_task.delay(ticker)
+                        dispatched += 1
+                        logger.info(
+                            "Dispatched first-time training for %s (%d data points)",
+                            ticker,
+                            counts[ticker],
+                        )
+                    else:
+                        logger.debug(
+                            "Skipping %s: only %d data points (need %d)",
+                            ticker,
+                            counts.get(ticker, 0),
+                            MIN_DATA_POINTS,
+                        )
+
+                if dispatched:
+                    logger.info("Dispatched training for %d new tickers", dispatched)
+        except Exception:
+            logger.warning("Failed to dispatch new-ticker training", exc_info=True)
+
         return {"status": status, "refreshed": refreshed, "total": len(active_models)}
 
 

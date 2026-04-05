@@ -20,7 +20,7 @@ class TestNightlyPriceRefresh:
     @pytest.mark.asyncio
     @patch("backend.tasks.market_data._runner")
     @patch("backend.tasks.market_data._load_spy_closes", new_callable=AsyncMock)
-    @patch("backend.tasks.market_data._get_all_watchlist_tickers", new_callable=AsyncMock)
+    @patch("backend.tasks.market_data._get_all_referenced_tickers", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.detect_gap", new_callable=AsyncMock)
     @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
     async def test_full_success(
@@ -53,7 +53,7 @@ class TestNightlyPriceRefresh:
     @pytest.mark.asyncio
     @patch("backend.tasks.market_data._runner")
     @patch("backend.tasks.market_data._load_spy_closes", new_callable=AsyncMock)
-    @patch("backend.tasks.market_data._get_all_watchlist_tickers", new_callable=AsyncMock)
+    @patch("backend.tasks.market_data._get_all_referenced_tickers", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.detect_gap", new_callable=AsyncMock)
     @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
     async def test_partial_failure(
@@ -90,7 +90,7 @@ class TestNightlyPriceRefresh:
 
     @pytest.mark.asyncio
     @patch("backend.tasks.market_data._runner")
-    @patch("backend.tasks.market_data._get_all_watchlist_tickers", new_callable=AsyncMock)
+    @patch("backend.tasks.market_data._get_all_referenced_tickers", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.detect_gap", new_callable=AsyncMock)
     async def test_no_tickers(self, mock_gap, mock_tickers, mock_runner) -> None:
         """Nightly run with no tickers should return early."""
@@ -105,7 +105,7 @@ class TestNightlyPriceRefresh:
 
     @pytest.mark.asyncio
     @patch("backend.tasks.market_data._runner")
-    @patch("backend.tasks.market_data._get_all_watchlist_tickers", new_callable=AsyncMock)
+    @patch("backend.tasks.market_data._get_all_referenced_tickers", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.detect_gap", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.set_watermark_status", new_callable=AsyncMock)
     @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)

@@ -140,3 +140,45 @@ Full database reseed (preserving portfolio/user/watchlist) to validate backend w
 - 2 hotfixes applied (ingestion.py, news_sentiment.py)
 - No new tests (DQ suite recommended as future work)
 - Resume: Fix KAN-401–404 properly, then Phase E or Phase F
+
+---
+
+## Session 96 — Pipeline Integrity + Skills Audit (2026-04-05)
+
+**Branch:** `fix/KAN-403-404-pipeline-integrity` → develop | **PR #192**
+
+### KAN-403: Prophet Negative Price Floor
+- Scale-appropriate floor: `max(0.01, last_price * 0.01)` in `predict_forecast()`
+- `Field(ge=0.01)` validation on `ForecastHorizon` schema
+- Warning logged with ticker, horizon, raw values when flooring applied
+
+### KAN-404: Pipeline Integrity — 6 Fixes for Non-Universe Tickers
+- **Canonical ticker universe** (`backend/services/ticker_universe.py`): single UNION query (index + watchlist + portfolio)
+- **Nightly forecast trains new tickers**: dispatch `retrain_single_ticker_task` for up to 20/night with ≥200 data points
+- **Chat auto-ingest**: `analyze_stock` tool does lightweight ingest (ensure_stock + price fetch) instead of erroring
+- **Portfolio auto-ingest**: `ensure_stock_exists` before transaction, ticker format validation
+- **No silent skip**: `missing_tickers` field in `PortfolioForecastResponse`, weight denominator fix
+- **On-ingest forecast dispatch**: fire-and-forget `retrain_single_ticker_task.delay()` for new tickers only
+
+### 5-Persona Review Findings Fixed
+- Ticker case mismatch (`body.ticker` → `ticker_upper`)
+- `Field(gt=0)` → `Field(ge=0.01)` (prevents 500s on stale data)
+- N+1 `_get_price_data_count` → batch GROUP BY query
+- Cap logic: count dispatched, not considered
+- Weak tests rewritten (portfolio autoingest, forecast missing)
+- Fire-and-forget exception tests added
+
+### Skills/Rules Audit & Refactoring
+- Converted `review-config.md` rule → `reviewing-code` skill (~900 tokens saved per interaction)
+- Deleted `phase-end-review.md` + `workflow-optimization.md` rules (~600 tokens saved)
+- Renamed `implement-ollama` → `implement-local`, `lmstudio-triage` → `local-llm-triage`
+- Fixed CLAUDE.md ↔ doc-delta.md contradiction (batch-at-phase-end is canonical)
+- Brainstorm routing cut from ~300 → ~120 tokens
+- Added mandatory fix-verification step + Test Engineer persona to review workflow
+
+### Session 96 Totals
+- 1 PR (#192), 14 commits, 20+ files changed
+- Tests: 1906 unit (46 new), 0 failures
+- 2 JIRA tickets resolved (KAN-403, KAN-404)
+- Skills/rules: ~1,500 tokens/interaction saved, 3 rules deleted/converted, 2 renamed
+- Resume: Phase E (UI Overhaul, KAN-400) or Phase F (Subscriptions + Monetization)

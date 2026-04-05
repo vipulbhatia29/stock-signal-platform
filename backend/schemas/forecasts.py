@@ -11,9 +11,9 @@ class ForecastHorizon(BaseModel):
     """Forecast at a single horizon."""
 
     horizon_days: int
-    predicted_price: float
-    predicted_lower: float
-    predicted_upper: float
+    predicted_price: float = Field(ge=0.01)
+    predicted_lower: float = Field(ge=0.01)
+    predicted_upper: float = Field(ge=0.01)
     target_date: date
     confidence_level: str = "medium"
     sharpe_direction: str = "flat"
@@ -45,6 +45,7 @@ class PortfolioForecastResponse(BaseModel):
     horizons: list[PortfolioForecastHorizon]
     ticker_count: int
     vix_regime: str = "normal"
+    missing_tickers: list[str] = Field(default_factory=list)
 
 
 class SectorForecastResponse(BaseModel):
