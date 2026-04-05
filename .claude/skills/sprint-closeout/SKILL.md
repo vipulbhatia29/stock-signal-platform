@@ -1,6 +1,6 @@
 ---
-name: sprint-closeout
-description: End-of-sprint bookkeeping — doc delta, JIRA transitions, state update. Run after completing a sprint's implementation tasks.
+name: closing-out-sprint
+description: Performs end-of-sprint bookkeeping — records doc deltas, transitions JIRA tickets, updates Serena state. Use when user says "sprint done", "close sprint", "end of sprint", "sprint closeout", or invokes /sprint-closeout.
 disable-model-invocation: true
 effort: medium
 argument-hint: "[sprint-number]"

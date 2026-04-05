@@ -1,6 +1,6 @@
 ---
-name: phase-closeout
-description: End-of-phase ceremony — apply doc deltas, review, update project-plan and PROJECT_INDEX. Two-stage with human approval gate.
+name: closing-out-phase
+description: Performs end-of-phase ceremony — applies accumulated doc deltas, runs phase-end review, updates project-plan and PROJECT_INDEX. Use when user says "phase closeout", "end of phase", "wrap up the phase", "finalize phase", or invokes /phase-closeout.
 disable-model-invocation: true
 context: fork
 effort: high
