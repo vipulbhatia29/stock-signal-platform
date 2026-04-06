@@ -13,10 +13,10 @@ allowed-tools:
   - Bash(git log *)
   - Bash(git diff *)
   - Bash(wc *)
-  - mcp__plugin_serena_serena__read_memory
-  - mcp__plugin_serena_serena__write_memory
-  - mcp__plugin_serena_serena__list_memories
-  - mcp__plugin_serena_serena__delete_memory
+  - mcp__serena__read_memory
+  - mcp__serena__write_memory
+  - mcp__serena__list_memories
+  - mcp__serena__delete_memory
   - mcp__plugin_atlassian_atlassian__searchJiraIssuesUsingJql
   - Agent
 ---
@@ -29,6 +29,21 @@ allowed-tools:
 
 ## Important
 This is a TWO-STAGE process. Complete Stage 1 and present all findings. Do NOT proceed to Stage 2 until the user explicitly says "approve".
+
+Copy this checklist and track progress:
+
+```
+Phase Closeout Progress:
+- [ ] 1.1 Collect doc deltas
+- [ ] 1.2 Generate doc diffs
+- [ ] 1.3 Generate project-plan.md diff
+- [ ] 1.4 Run phase-end review
+- [ ] 1.5 Present summary — WAIT for approval
+- [ ] 2.1 Apply doc changes
+- [ ] 2.2 Regenerate PROJECT_INDEX.md
+- [ ] 2.3 Update Serena memories
+- [ ] 2.4 Handoff
+```
 
 ---
 

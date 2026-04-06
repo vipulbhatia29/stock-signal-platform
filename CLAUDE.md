@@ -60,6 +60,7 @@ Load what you need for the task at hand:
 8. **Serena first** — use symbolic tools for all code reads/edits. Built-ins only when Serena can't.
 9. **JIRA workflow** — follow `conventions/jira-sdlc-workflow` exactly. Never skip refinement. Never create implementation subtasks before plan is approved.
 10. **No str(e) anywhere** — never pass `str(e)` to `ToolResult(error=...)`, `HTTPException(detail=...)`, or any user-facing output. Log the real error, return a safe generic message.
+11. **Sonnet for implementation** — All worktree/subagent implementation tasks use `model: "sonnet"`. Opus reviews only. Haiku for doc-only tasks. No exceptions.
 
 ## Testing Conventions
 
