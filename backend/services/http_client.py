@@ -17,14 +17,18 @@ _DEFAULT_LIMITS = httpx.Limits(max_connections=100, max_keepalive_connections=20
 def get_http_client() -> httpx.AsyncClient:
     """Return the shared async HTTP client.
 
+    Lazily creates the client if startup_http_client() hasn't been called yet
+    (e.g. in test fixtures that skip the full lifespan).
+
     Returns:
         The module-level httpx.AsyncClient singleton. Caller must NOT close it.
-
-    Raises:
-        RuntimeError: If called before startup_http_client().
     """
+    global _client  # noqa: PLW0603
     if _client is None:
-        raise RuntimeError("HTTP client not initialised — call startup_http_client() first")
+        _client = httpx.AsyncClient(
+            timeout=_DEFAULT_TIMEOUT,
+            limits=_DEFAULT_LIMITS,
+        )
     return _client
 
 
