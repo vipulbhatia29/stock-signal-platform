@@ -278,7 +278,7 @@ async def execute_plan(
         results.append(validated)
 
         # Store in session cache (successful cacheable tools only)
-        if cache_key and validated["status"] == "ok":
+        if cache is not None and cache_key and validated["status"] == "ok":
             await cache.set(cache_key, json.dumps(validated, default=str), CacheTier.SESSION)
 
         # Emit step progress

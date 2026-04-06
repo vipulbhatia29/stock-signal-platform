@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from pathlib import Path
+from typing import ClassVar
 
 from backend.tools.base import ToolFilter
 
@@ -11,19 +12,15 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 
 class BaseAgent(ABC):
-    """Abstract base for all agent types."""
+    """Abstract base for all agent types.
 
-    @property
-    @abstractmethod
-    def agent_type(self) -> str:
-        """Agent type identifier (e.g., 'stock', 'general')."""
-        ...
+    Subclasses must set both class variables. They're declared without
+    defaults so pyright flags missing overrides; at runtime, accessing an
+    unset attribute on a subclass raises AttributeError immediately.
+    """
 
-    @property
-    @abstractmethod
-    def tool_filter(self) -> ToolFilter:
-        """Which tool categories this agent can access."""
-        ...
+    agent_type: ClassVar[str]
+    tool_filter: ClassVar[ToolFilter]
 
     def system_prompt(self) -> str:
         """Load the agent's system prompt from markdown file."""
