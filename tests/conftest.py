@@ -90,9 +90,15 @@ def redis_container():
 async def _setup_database(db_url):
     """Create TimescaleDB extension and all tables once for the test session.
 
-    Teardown uses DROP ... CASCADE per table to handle TimescaleDB hypertables
-    correctly. SQLAlchemy's metadata.drop_all() doesn't account for hypertable
-    child partitions, causing 'table does not exist' errors on teardown.
+    No teardown DROP. Under pytest-xdist, each worker has its own pytest
+    session, but all workers share the same database. A teardown that DROPs
+    tables races with sibling workers still running tests: the first worker
+    to finish wipes the schema out from under the others, causing
+    'relation does not exist' errors on subsequent TRUNCATE / SELECT calls.
+
+    Container lifecycle handles cleanup instead:
+      - Local: testcontainers context manager destroys the container on exit.
+      - CI: GitHub Actions service containers are torn down with the runner.
     """
     engine = create_async_engine(db_url, echo=False)
     async with engine.begin() as conn:
@@ -100,14 +106,6 @@ async def _setup_database(db_url):
         await conn.run_sync(Base.metadata.create_all)
     await engine.dispose()
     yield
-    engine = create_async_engine(db_url, echo=False)
-    async with engine.begin() as conn:
-        for table in reversed(Base.metadata.sorted_tables):
-            # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query
-            # table.name from Base.metadata — not user input
-            stmt = f'DROP TABLE IF EXISTS "{table.name}" CASCADE'
-            await conn.execute(sa.text(stmt))
-    await engine.dispose()
 
 
 # ---------------------------------------------------------------------------
