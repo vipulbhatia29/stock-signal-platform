@@ -121,20 +121,18 @@ class Settings(BaseSettings):
     def validate_production_settings(self) -> None:
         """Validate security-critical settings.
 
-        Raises RuntimeError in production if JWT secret is the default
-        or COOKIE_SECURE is disabled. Logs warnings in development.
+        Raises ValueError in ALL environments if JWT secret is the insecure
+        default or empty — the app must never start with a known secret.
+        Raises RuntimeError in production/staging if COOKIE_SECURE is disabled.
         """
-        is_prod = self.ENVIRONMENT in ("production", "staging")
-
-        if self.JWT_SECRET_KEY == _INSECURE_JWT_DEFAULT:
-            msg = (
-                "JWT_SECRET_KEY is using the insecure default. "
-                "Set a strong secret (32+ chars) via environment variable."
+        if self.JWT_SECRET_KEY == _INSECURE_JWT_DEFAULT or not self.JWT_SECRET_KEY.strip():
+            raise ValueError(
+                "JWT_SECRET_KEY is using the insecure default or is empty. "
+                "Set a strong secret (32+ chars) via environment variable or backend/.env. "
+                "The application cannot start without a secure JWT secret."
             )
-            if is_prod:
-                raise RuntimeError(msg)
-            logger.warning(msg)
 
+        is_prod = self.ENVIRONMENT in ("production", "staging")
         if not self.COOKIE_SECURE and is_prod:
             raise RuntimeError("COOKIE_SECURE must be True in production (requires HTTPS).")
 

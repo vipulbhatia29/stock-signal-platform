@@ -5,6 +5,12 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 
+# --- Set test-safe JWT secret BEFORE any backend imports ---
+# backend.config validates JWT_SECRET_KEY at import time and raises ValueError
+# if the insecure default is detected. Tests must provide an explicit secret.
+if "JWT_SECRET_KEY" not in os.environ:
+    os.environ["JWT_SECRET_KEY"] = "test-secret-do-not-use-in-production-32chars!"
+
 import factory
 import pytest
 import pytest_asyncio
