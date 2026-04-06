@@ -6,6 +6,7 @@ interface for calling tools and getting ToolResults back.
 
 import asyncio
 import logging
+import os
 from contextlib import AsyncExitStack
 
 from backend.tools.base import ToolResult
@@ -51,6 +52,7 @@ class MCPToolClient:
         server_params = StdioServerParameters(
             command="uv",
             args=["run", "python", "-m", server_script],
+            env=dict(os.environ),
         )
         stdio_transport = await self._exit_stack.enter_async_context(stdio_client(server_params))
         read, write = stdio_transport
