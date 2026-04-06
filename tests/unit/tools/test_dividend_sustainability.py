@@ -94,6 +94,16 @@ class TestDividendSustainabilityTool:
         assert "Missing" in result.error
 
 
+def _make_session_cm(query_result: MagicMock) -> AsyncMock:
+    """Create a mock async context manager returning a session with one execute result."""
+    mock_session = AsyncMock()
+    mock_session.execute.return_value = query_result
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__.return_value = mock_session
+    mock_cm.__aexit__.return_value = None
+    return mock_cm
+
+
 class TestRiskNarrativeTool:
     """Tests for the RiskNarrativeTool."""
 
@@ -113,32 +123,22 @@ class TestRiskNarrativeTool:
         mock_signal.composite_score = 7.5
         mock_signal.rsi_14 = 55.0
 
-        mock_session = AsyncMock()
-
         stock_result = MagicMock()
         stock_result.scalar_one_or_none.return_value = mock_stock
-
         sig_result = MagicMock()
         sig_result.scalar_one_or_none.return_value = mock_signal
-
         fc_result = MagicMock()
         fc_result.scalar_one_or_none.return_value = None
 
-        # 4 execute calls: stock, signal, forecast, sector ETF
-        mock_session.execute.side_effect = [
-            stock_result,
-            sig_result,
-            fc_result,
-            fc_result,  # sector ETF forecast
-        ]
-
-        mock_cm = AsyncMock()
-        mock_cm.__aenter__.return_value = mock_session
-        mock_cm.__aexit__.return_value = None
-
+        # 4 sessions: stock (seq), then signal + forecast + sector ETF (parallel)
         with patch(
             "backend.database.async_session_factory",
-            return_value=mock_cm,
+            side_effect=[
+                _make_session_cm(stock_result),
+                _make_session_cm(sig_result),
+                _make_session_cm(fc_result),
+                _make_session_cm(fc_result),
+            ],
         ):
             tool = RiskNarrativeTool()
             result = await tool.execute({"ticker": "AAPL"})
@@ -163,31 +163,22 @@ class TestRiskNarrativeTool:
         mock_signal.composite_score = 2.1
         mock_signal.rsi_14 = 75.0
 
-        mock_session = AsyncMock()
-
         stock_result = MagicMock()
         stock_result.scalar_one_or_none.return_value = mock_stock
-
         sig_result = MagicMock()
         sig_result.scalar_one_or_none.return_value = mock_signal
-
         fc_result = MagicMock()
         fc_result.scalar_one_or_none.return_value = None
 
-        mock_session.execute.side_effect = [
-            stock_result,
-            sig_result,
-            fc_result,
-            fc_result,
-        ]
-
-        mock_cm = AsyncMock()
-        mock_cm.__aenter__.return_value = mock_session
-        mock_cm.__aexit__.return_value = None
-
+        # 4 sessions: stock (seq), then signal + forecast + sector ETF (parallel)
         with patch(
             "backend.database.async_session_factory",
-            return_value=mock_cm,
+            side_effect=[
+                _make_session_cm(stock_result),
+                _make_session_cm(sig_result),
+                _make_session_cm(fc_result),
+                _make_session_cm(fc_result),
+            ],
         ):
             tool = RiskNarrativeTool()
             result = await tool.execute({"ticker": "SNAP"})
@@ -231,8 +222,6 @@ class TestRiskNarrativeTool:
         mock_forecast.predicted_upper = 180.0
         mock_forecast.target_date = date(2026, 6, 20)
 
-        mock_session = AsyncMock()
-
         stock_r = MagicMock()
         stock_r.scalar_one_or_none.return_value = mock_stock
         sig_r = MagicMock()
@@ -242,15 +231,15 @@ class TestRiskNarrativeTool:
         etf_r = MagicMock()
         etf_r.scalar_one_or_none.return_value = None
 
-        mock_session.execute.side_effect = [stock_r, sig_r, fc_r, etf_r]
-
-        mock_cm = AsyncMock()
-        mock_cm.__aenter__.return_value = mock_session
-        mock_cm.__aexit__.return_value = None
-
+        # 4 sessions: stock (seq), then signal + forecast + sector ETF (parallel)
         with patch(
             "backend.database.async_session_factory",
-            return_value=mock_cm,
+            side_effect=[
+                _make_session_cm(stock_r),
+                _make_session_cm(sig_r),
+                _make_session_cm(fc_r),
+                _make_session_cm(etf_r),
+            ],
         ):
             tool = RiskNarrativeTool()
             result = await tool.execute({"ticker": "NVDA"})

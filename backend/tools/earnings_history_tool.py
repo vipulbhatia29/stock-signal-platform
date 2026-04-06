@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, CachePolicy, ToolResult
 
@@ -116,6 +117,9 @@ class EarningsHistoryTool(BaseTool):
                 },
             )
 
-        except Exception:
+        except SQLAlchemyError:
             logger.exception("Failed to get earnings history for %s", ticker)
-            return ToolResult(status="error", error=f"Failed to get earnings for {ticker}")
+            return ToolResult(
+                status="error",
+                error="Failed to get earnings history. Please try again.",
+            )

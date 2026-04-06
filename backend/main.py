@@ -45,7 +45,13 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Initialize AI subsystem on startup, clean up on shutdown."""
     # --- Startup ---
-    # 0. Database schema validation — catch stale alembic_version early
+    # 0. Shared HTTP client pool — must be initialised before any provider uses it
+    from backend.services.http_client import startup_http_client
+
+    await startup_http_client()
+    logger.info("Shared HTTP client pool initialised")
+
+    # 1. Database schema validation — catch stale alembic_version early
     from sqlalchemy import select, text
 
     from backend.agents.llm_client import LLMClient
@@ -275,11 +281,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # --- Shutdown ---
+    from backend.services.http_client import shutdown_http_client
     from backend.services.redis_pool import close_redis
 
     if mcp_manager:
         await mcp_manager.stop()
     await close_redis()  # closes shared pool (cache + blocklist)
+    await shutdown_http_client()
     if hasattr(app.state, "langfuse"):
         app.state.langfuse.shutdown()
     logger.info("Application shutting down")

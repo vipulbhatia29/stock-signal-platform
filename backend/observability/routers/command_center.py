@@ -15,6 +15,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
@@ -299,7 +300,7 @@ async def _get_llm_operations(request: Request, db: AsyncSession) -> LlmOperatio
             LLMCallLog.cost_usd.is_not(None),
         )
         cost_week = float((await db.execute(stmt_week)).scalar_one())
-    except Exception:
+    except SQLAlchemyError:
         logger.warning("Failed to compute LLM costs", exc_info=True)
 
     # --- Cascade rate ---

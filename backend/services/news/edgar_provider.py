@@ -9,6 +9,7 @@ from datetime import date, datetime, timezone
 import httpx
 
 from backend.config import settings
+from backend.services.http_client import get_http_client
 from backend.services.news.base import NewsProvider, RawArticle
 
 logger = logging.getLogger(__name__)
@@ -57,10 +58,10 @@ class EdgarProvider(NewsProvider):
         headers = {"User-Agent": self._user_agent}
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.get(url, params=params, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
+            client = get_http_client()
+            resp = await client.get(url, params=params, headers=headers, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
         except httpx.HTTPError:
             logger.error("EDGAR API error for %s", ticker, exc_info=True)
             return []

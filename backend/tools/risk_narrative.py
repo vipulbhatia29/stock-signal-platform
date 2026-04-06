@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, ClassVar
 
@@ -63,55 +64,67 @@ class RiskNarrativeTool(BaseTool):
             from backend.models.signal import SignalSnapshot
             from backend.models.stock import Stock
 
+            # Step 1: fetch stock first — sector ETF lookup depends on stock.sector
             async with async_session_factory() as session:
-                # Stock fundamentals
                 stock_result = await session.execute(select(Stock).where(Stock.ticker == ticker))
                 stock = stock_result.scalar_one_or_none()
 
-                if not stock:
-                    return ToolResult(
-                        status="error",
-                        error=(f"'{ticker}' not found. Use ingest_stock first."),
-                    )
-
-                # Latest signal
-                sig_result = await session.execute(
-                    select(SignalSnapshot)
-                    .where(SignalSnapshot.ticker == ticker)
-                    .order_by(SignalSnapshot.computed_at.desc())
-                    .limit(1)
+            if not stock:
+                return ToolResult(
+                    status="error",
+                    error=(f"'{ticker}' not found. Use ingest_stock first."),
                 )
-                signal = sig_result.scalar_one_or_none()
 
-                # Latest forecast (90d horizon)
-                fc_result = await session.execute(
-                    select(ForecastResult)
-                    .where(
-                        ForecastResult.ticker == ticker,
-                        ForecastResult.horizon_days == 90,
+            # Step 2: fetch signal, stock forecast, and sector ETF forecast in parallel
+            # All three are independent reads with no data dependencies between them
+            async def _fetch_signal() -> Any:
+                async with async_session_factory() as session:
+                    sig_result = await session.execute(
+                        select(SignalSnapshot)
+                        .where(SignalSnapshot.ticker == ticker)
+                        .order_by(SignalSnapshot.computed_at.desc())
+                        .limit(1)
                     )
-                    .order_by(ForecastResult.forecast_date.desc())
-                    .limit(1)
-                )
-                forecast = fc_result.scalar_one_or_none()
+                    return sig_result.scalar_one_or_none()
 
-                # Sector ETF forecast if available
-                sector_fc = None
-                if stock.sector:
-                    from backend.constants import SECTOR_ETF_MAP
-
-                    etf = SECTOR_ETF_MAP.get(stock.sector.lower())
-                    if etf:
-                        etf_result = await session.execute(
-                            select(ForecastResult)
-                            .where(
-                                ForecastResult.ticker == etf,
-                                ForecastResult.horizon_days == 90,
-                            )
-                            .order_by(ForecastResult.forecast_date.desc())
-                            .limit(1)
+            async def _fetch_forecast() -> Any:
+                async with async_session_factory() as session:
+                    fc_result = await session.execute(
+                        select(ForecastResult)
+                        .where(
+                            ForecastResult.ticker == ticker,
+                            ForecastResult.horizon_days == 90,
                         )
-                        sector_fc = etf_result.scalar_one_or_none()
+                        .order_by(ForecastResult.forecast_date.desc())
+                        .limit(1)
+                    )
+                    return fc_result.scalar_one_or_none()
+
+            async def _fetch_sector_fc() -> Any:
+                if not stock.sector:
+                    return None
+                from backend.routers.forecasts import SECTOR_ETF_MAP
+
+                etf = SECTOR_ETF_MAP.get(stock.sector.lower())
+                if not etf:
+                    return None
+                async with async_session_factory() as session:
+                    etf_result = await session.execute(
+                        select(ForecastResult)
+                        .where(
+                            ForecastResult.ticker == etf,
+                            ForecastResult.horizon_days == 90,
+                        )
+                        .order_by(ForecastResult.forecast_date.desc())
+                        .limit(1)
+                    )
+                    return etf_result.scalar_one_or_none()
+
+            signal, forecast, sector_fc = await asyncio.gather(
+                _fetch_signal(),
+                _fetch_forecast(),
+                _fetch_sector_fc(),
+            )
 
             # Build risk factors
             risk_factors = []

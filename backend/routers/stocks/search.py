@@ -19,6 +19,7 @@ from backend.models.stock import Stock
 from backend.models.user import User
 from backend.schemas.stock import IngestResponse, StockSearchResponse
 from backend.services.exceptions import IngestFailedError
+from backend.services.http_client import get_http_client
 from backend.validation import TICKER_RE, TickerPath
 
 logger = logging.getLogger(__name__)
@@ -41,22 +42,23 @@ async def _yahoo_search(query: str, limit: int = 8) -> list[StockSearchResponse]
     an "Add" action. Only US-listed equities and ETFs are included.
     """
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(
-                "https://query2.finance.yahoo.com/v1/finance/search",
-                params={
-                    "q": query,
-                    "quotesCount": limit,
-                    "newsCount": 0,
-                    "listsCount": 0,
-                },
-                headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; StockSignalPlatform/1.0)",
-                },
-            )
-            resp.raise_for_status()
-            quotes = resp.json().get("quotes", [])
-    except Exception:
+        client = get_http_client()
+        resp = await client.get(
+            "https://query2.finance.yahoo.com/v1/finance/search",
+            params={
+                "q": query,
+                "quotesCount": limit,
+                "newsCount": 0,
+                "listsCount": 0,
+            },
+            headers={
+                "User-Agent": "Mozilla/5.0 (compatible; StockSignalPlatform/1.0)",
+            },
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        quotes = resp.json().get("quotes", [])
+    except (httpx.HTTPError, httpx.TimeoutException):
         logger.warning("yahoo_search_failed", extra={"query": query})
         return []
 

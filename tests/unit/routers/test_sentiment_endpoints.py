@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.exc import OperationalError
 
 from backend.models.user import User, UserRole
 from backend.routers.sentiment import (
@@ -186,7 +187,7 @@ class TestGetTickerSentiment:
     @pytest.mark.asyncio
     async def test_db_error_raises_500(self, regular_user: User, mock_db: AsyncMock) -> None:
         """Returns 500 HTTPException when the DB raises an unexpected error."""
-        mock_db.execute = AsyncMock(side_effect=RuntimeError("DB down"))
+        mock_db.execute = AsyncMock(side_effect=OperationalError("DB down", None, None))
 
         with pytest.raises(HTTPException) as exc_info:
             await get_ticker_sentiment(
@@ -262,7 +263,7 @@ class TestGetBulkSentiment:
     @pytest.mark.asyncio
     async def test_db_error_raises_500(self, regular_user: User, mock_db: AsyncMock) -> None:
         """Returns 500 HTTPException when the DB raises an unexpected error."""
-        mock_db.execute = AsyncMock(side_effect=RuntimeError("DB down"))
+        mock_db.execute = AsyncMock(side_effect=OperationalError("DB down", None, None))
 
         with pytest.raises(HTTPException) as exc_info:
             await get_bulk_sentiment(
@@ -332,7 +333,7 @@ class TestGetMacroSentiment:
     @pytest.mark.asyncio
     async def test_db_error_raises_500(self, regular_user: User, mock_db: AsyncMock) -> None:
         """Returns 500 HTTPException when the DB raises an unexpected error."""
-        mock_db.execute = AsyncMock(side_effect=RuntimeError("DB down"))
+        mock_db.execute = AsyncMock(side_effect=OperationalError("DB down", None, None))
 
         with pytest.raises(HTTPException) as exc_info:
             await get_macro_sentiment(
@@ -460,7 +461,7 @@ class TestGetTickerArticles:
     @pytest.mark.asyncio
     async def test_db_error_raises_500(self, regular_user: User, mock_db: AsyncMock) -> None:
         """Returns 500 HTTPException when the DB raises an unexpected error."""
-        mock_db.execute = AsyncMock(side_effect=RuntimeError("DB down"))
+        mock_db.execute = AsyncMock(side_effect=OperationalError("DB down", None, None))
 
         with pytest.raises(HTTPException) as exc_info:
             await get_ticker_articles(

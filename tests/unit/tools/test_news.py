@@ -76,10 +76,8 @@ class TestFetchGoogleNewsRss:
 
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tools.news.httpx.AsyncClient", return_value=mock_client):
+        with patch("backend.tools.news.get_http_client", return_value=mock_client):
             articles = await fetch_google_news_rss("AAPL")
         assert len(articles) == 1
         assert articles[0]["title"] == "AAPL surges"
@@ -95,10 +93,8 @@ class TestFetchGoogleNewsRss:
 
         mock_client = AsyncMock()
         mock_client.get = AsyncMock(return_value=mock_resp)
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tools.news.httpx.AsyncClient", return_value=mock_client):
+        with patch("backend.tools.news.get_http_client", return_value=mock_client):
             articles = await fetch_google_news_rss("AAPL")
         assert articles == []
 

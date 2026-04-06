@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any, ClassVar
 
@@ -200,26 +201,33 @@ class GetSectorForecastTool(BaseTool):
             from backend.models.forecast import ForecastResult
             from backend.models.stock import Stock
 
-            async with async_session_factory() as session:
-                # Get ETF forecast
-                result = await session.execute(
-                    select(ForecastResult)
-                    .where(ForecastResult.ticker == etf_ticker)
-                    .order_by(
-                        ForecastResult.forecast_date.desc(),
-                        ForecastResult.horizon_days.asc(),
+            async def _fetch_etf_forecasts() -> list:
+                async with async_session_factory() as session:
+                    result = await session.execute(
+                        select(ForecastResult)
+                        .where(ForecastResult.ticker == etf_ticker)
+                        .order_by(
+                            ForecastResult.forecast_date.desc(),
+                            ForecastResult.horizon_days.asc(),
+                        )
+                        .limit(3)
                     )
-                    .limit(3)
-                )
-                forecasts = result.scalars().all()
+                    return list(result.scalars().all())
 
-                # Count stocks in this sector that the user might hold
-                sector_count_result = await session.execute(
-                    select(func.count())
-                    .select_from(Stock)
-                    .where(func.lower(Stock.sector) == sector.lower())
-                )
-                sector_stock_count = sector_count_result.scalar() or 0
+            async def _fetch_sector_stock_count() -> int:
+                async with async_session_factory() as session:
+                    sector_count_result = await session.execute(
+                        select(func.count())
+                        .select_from(Stock)
+                        .where(func.lower(Stock.sector) == sector.lower())
+                    )
+                    return sector_count_result.scalar() or 0
+
+            # Both queries are independent — run in parallel
+            forecasts, sector_stock_count = await asyncio.gather(
+                _fetch_etf_forecasts(),
+                _fetch_sector_stock_count(),
+            )
 
             if not forecasts:
                 return ToolResult(
@@ -465,49 +473,58 @@ class CompareStocksTool(BaseTool):
         tickers = [t.upper().strip() for t in raw_tickers]
 
         try:
-            from sqlalchemy import select
+            from sqlalchemy import func, select
 
             from backend.database import async_session_factory
             from backend.models.forecast import ForecastResult
             from backend.models.signal import SignalSnapshot
             from backend.models.stock import Stock
 
-            async with async_session_factory() as session:
-                # Stocks
-                stock_result = await session.execute(select(Stock).where(Stock.ticker.in_(tickers)))
-                stocks = {s.ticker: s for s in stock_result.scalars().all()}
-
-                # Latest signals
-                from sqlalchemy import func
-
-                latest_signals_sub = (
-                    select(
-                        SignalSnapshot.ticker,
-                        func.max(SignalSnapshot.computed_at).label("max_at"),
+            async def _fetch_stocks() -> dict:
+                async with async_session_factory() as session:
+                    stock_result = await session.execute(
+                        select(Stock).where(Stock.ticker.in_(tickers))
                     )
-                    .where(SignalSnapshot.ticker.in_(tickers))
-                    .group_by(SignalSnapshot.ticker)
-                    .subquery()
-                )
-                signal_result = await session.execute(
-                    select(SignalSnapshot).join(
-                        latest_signals_sub,
-                        (SignalSnapshot.ticker == latest_signals_sub.c.ticker)
-                        & (SignalSnapshot.computed_at == latest_signals_sub.c.max_at),
-                    )
-                )
-                signals = {s.ticker: s for s in signal_result.scalars().all()}
+                    return {s.ticker: s for s in stock_result.scalars().all()}
 
-                # Latest forecasts
-                fc_result = await session.execute(
-                    select(ForecastResult)
-                    .where(ForecastResult.ticker.in_(tickers))
-                    .order_by(
-                        ForecastResult.forecast_date.desc(),
-                        ForecastResult.horizon_days.asc(),
+            async def _fetch_signals() -> dict:
+                async with async_session_factory() as session:
+                    latest_signals_sub = (
+                        select(
+                            SignalSnapshot.ticker,
+                            func.max(SignalSnapshot.computed_at).label("max_at"),
+                        )
+                        .where(SignalSnapshot.ticker.in_(tickers))
+                        .group_by(SignalSnapshot.ticker)
+                        .subquery()
                     )
-                )
-                all_fc = fc_result.scalars().all()
+                    signal_result = await session.execute(
+                        select(SignalSnapshot).join(
+                            latest_signals_sub,
+                            (SignalSnapshot.ticker == latest_signals_sub.c.ticker)
+                            & (SignalSnapshot.computed_at == latest_signals_sub.c.max_at),
+                        )
+                    )
+                    return {s.ticker: s for s in signal_result.scalars().all()}
+
+            async def _fetch_forecasts() -> list:
+                async with async_session_factory() as session:
+                    fc_result = await session.execute(
+                        select(ForecastResult)
+                        .where(ForecastResult.ticker.in_(tickers))
+                        .order_by(
+                            ForecastResult.forecast_date.desc(),
+                            ForecastResult.horizon_days.asc(),
+                        )
+                    )
+                    return list(fc_result.scalars().all())
+
+            # All three queries are independent — run in parallel
+            stocks, signals, all_fc = await asyncio.gather(
+                _fetch_stocks(),
+                _fetch_signals(),
+                _fetch_forecasts(),
+            )
 
             # Group forecasts by ticker (latest date only)
             fc_by_ticker: dict[str, list[dict[str, Any]]] = {}

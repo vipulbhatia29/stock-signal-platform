@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from backend.services.http_client import get_http_client
 from backend.tools.adapters.base import MCPAdapter
 from backend.tools.base import ProxiedTool, ToolResult
 
@@ -123,10 +124,10 @@ class FinnhubAdapter(MCPAdapter):
         query = {"token": self._api_key}
         if params:
             query.update(params)
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(f"{_BASE_URL}{path}", params=query)
-            resp.raise_for_status()
-            return resp.json()
+        client = get_http_client()
+        resp = await client.get(f"{_BASE_URL}{path}", params=query, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
 
     async def _fetch_analyst_ratings(self, params: dict[str, Any]) -> dict:
         """Fetch analyst recommendation trends."""

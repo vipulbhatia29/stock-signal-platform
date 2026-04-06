@@ -117,7 +117,8 @@ async def _fetch_for_ticker(ticker: str) -> list[dict]:
         articles = await fetch_google_news_rss(ticker)
         return [{**a, "portfolio_ticker": ticker} for a in articles[:3]]
     except Exception:
-        logger.warning("News fetch failed for %s", ticker)
+        # Fire-and-forget: broad catch intentional — news fetch must not crash dashboard
+        logger.warning("News fetch failed for %s", ticker, exc_info=True)
         return []
 
 
@@ -170,6 +171,9 @@ async def get_dashboard_news(
 
             await cache.set(cache_key, response.model_dump_json(), CacheTier.VOLATILE)
         except Exception:
-            logger.warning("Failed to cache dashboard news for user %s", current_user.id)
+            # Fire-and-forget: broad catch intentional — cache write must not crash response
+            logger.warning(
+                "Failed to cache dashboard news for user %s", current_user.id, exc_info=True
+            )
 
     return response

@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, ToolResult
 
@@ -82,6 +83,6 @@ class ScreenStocksTool(BaseTool):
                         for r in rows
                     ],
                 )
-        except Exception:
+        except SQLAlchemyError:
             logger.exception("Failed to screen stocks")
             return ToolResult(status="error", error="Stock screening failed. Please try again.")

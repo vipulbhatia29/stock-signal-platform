@@ -12,6 +12,18 @@ import os
 
 import pytest
 
+import backend.services.http_client as _http_mod
+
+
+@pytest.fixture(autouse=True)
+async def _reset_http_client():
+    """Reset shared httpx client between API tests to avoid stale event-loop references."""
+    yield
+    if _http_mod._client is not None:
+        await _http_mod._client.aclose()
+        _http_mod._client = None
+
+
 # Only override db_url when running in CI — otherwise the root conftest's
 # testcontainers fixture provides an ephemeral database automatically.
 if os.environ.get("CI"):

@@ -134,22 +134,29 @@ class TestGetSectorForecastTool:
             _make_forecast_result(ticker="XLK", horizon_days=270),
         ]
 
-        mock_session = AsyncMock()
-
-        # First call: forecast query, second call: sector count
+        # ETF forecast session mock
         fc_result = MagicMock()
         fc_result.scalars.return_value.all.return_value = forecasts
+        mock_fc_session = AsyncMock()
+        mock_fc_session.execute.return_value = fc_result
+        mock_fc_cm = AsyncMock()
+        mock_fc_cm.__aenter__.return_value = mock_fc_session
+        mock_fc_cm.__aexit__.return_value = None
 
+        # Sector count session mock
         count_result = MagicMock()
         count_result.scalar.return_value = 42
+        mock_count_session = AsyncMock()
+        mock_count_session.execute.return_value = count_result
+        mock_count_cm = AsyncMock()
+        mock_count_cm.__aenter__.return_value = mock_count_session
+        mock_count_cm.__aexit__.return_value = None
 
-        mock_session.execute.side_effect = [fc_result, count_result]
-
-        mock_cm = AsyncMock()
-        mock_cm.__aenter__.return_value = mock_session
-        mock_cm.__aexit__.return_value = None
-
-        with patch("backend.database.async_session_factory", return_value=mock_cm):
+        # Return different session contexts on successive calls
+        with patch(
+            "backend.database.async_session_factory",
+            side_effect=[mock_fc_cm, mock_count_cm],
+        ):
             tool = GetSectorForecastTool()
             result = await tool.execute({"sector": "Technology"})
 
@@ -214,24 +221,37 @@ class TestCompareStocksTool:
         sig_msft.rsi_14 = 48.0
         sig_msft.recommendation = "WATCH"
 
-        mock_session = AsyncMock()
-
+        # Stocks session mock
         stock_result = MagicMock()
         stock_result.scalars.return_value.all.return_value = [stock_aapl, stock_msft]
+        mock_stock_session = AsyncMock()
+        mock_stock_session.execute.return_value = stock_result
+        mock_stock_cm = AsyncMock()
+        mock_stock_cm.__aenter__.return_value = mock_stock_session
+        mock_stock_cm.__aexit__.return_value = None
 
+        # Signals session mock
         signal_result = MagicMock()
         signal_result.scalars.return_value.all.return_value = [sig_aapl, sig_msft]
+        mock_signal_session = AsyncMock()
+        mock_signal_session.execute.return_value = signal_result
+        mock_signal_cm = AsyncMock()
+        mock_signal_cm.__aenter__.return_value = mock_signal_session
+        mock_signal_cm.__aexit__.return_value = None
 
+        # Forecasts session mock
         fc_result = MagicMock()
         fc_result.scalars.return_value.all.return_value = []
+        mock_fc_session = AsyncMock()
+        mock_fc_session.execute.return_value = fc_result
+        mock_fc_cm = AsyncMock()
+        mock_fc_cm.__aenter__.return_value = mock_fc_session
+        mock_fc_cm.__aexit__.return_value = None
 
-        mock_session.execute.side_effect = [stock_result, signal_result, fc_result]
-
-        mock_cm = AsyncMock()
-        mock_cm.__aenter__.return_value = mock_session
-        mock_cm.__aexit__.return_value = None
-
-        with patch("backend.database.async_session_factory", return_value=mock_cm):
+        with patch(
+            "backend.database.async_session_factory",
+            side_effect=[mock_stock_cm, mock_signal_cm, mock_fc_cm],
+        ):
             tool = CompareStocksTool()
             result = await tool.execute({"tickers": ["AAPL", "MSFT"]})
 

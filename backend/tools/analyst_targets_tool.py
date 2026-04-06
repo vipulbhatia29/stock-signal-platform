@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, CachePolicy, ToolResult
 
@@ -94,6 +95,9 @@ class AnalystTargetsTool(BaseTool):
 
             return ToolResult(status="ok", data=data)
 
-        except Exception:
+        except SQLAlchemyError:
             logger.exception("Failed to get analyst targets for %s", ticker)
-            return ToolResult(status="error", error=f"Failed to get analyst targets for {ticker}")
+            return ToolResult(
+                status="error",
+                error="Failed to get analyst targets. Please try again.",
+            )

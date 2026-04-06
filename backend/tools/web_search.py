@@ -43,26 +43,26 @@ class WebSearchTool(BaseTool):
     async def execute(self, params: dict[str, Any]) -> ToolResult:
         """Execute web search via SerpAPI."""
         try:
-            import httpx
-
             from backend.config import settings
+            from backend.services.http_client import get_http_client
 
             if not settings.SERPAPI_API_KEY:
                 return ToolResult(status="error", error="SERPAPI_API_KEY not configured")
 
             num_results = params.get("num_results", 5)
-            async with httpx.AsyncClient(timeout=8.0) as client:
-                resp = await client.get(
-                    "https://serpapi.com/search",
-                    params={
-                        "q": params["query"],
-                        "api_key": settings.SERPAPI_API_KEY,
-                        "engine": "google",
-                        "num": num_results,
-                    },
-                )
-                resp.raise_for_status()
-                data = resp.json()
+            client = get_http_client()
+            resp = await client.get(
+                "https://serpapi.com/search",
+                params={
+                    "q": params["query"],
+                    "api_key": settings.SERPAPI_API_KEY,
+                    "engine": "google",
+                    "num": num_results,
+                },
+                timeout=8.0,
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
             results = [
                 {

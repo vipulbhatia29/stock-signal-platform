@@ -16,6 +16,7 @@ from datetime import date
 import httpx
 
 from backend.config import settings
+from backend.services.http_client import get_http_client
 from backend.services.news.base import RawArticle
 
 logger = logging.getLogger(__name__)
@@ -138,10 +139,10 @@ class SentimentScorer:
         }
 
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
-                resp = await client.post(self._base_url, json=payload, headers=headers)
-                resp.raise_for_status()
-                data = resp.json()
+            client = get_http_client()
+            resp = await client.post(self._base_url, json=payload, headers=headers, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
         except httpx.HTTPError:
             logger.error("OpenAI API error during sentiment scoring", exc_info=True)
             return []

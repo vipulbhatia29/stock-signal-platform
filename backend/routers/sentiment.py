@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
@@ -109,7 +110,7 @@ async def get_bulk_sentiment(
     try:
         result = await session.execute(stmt)
         rows = result.scalars().all()
-    except Exception:
+    except SQLAlchemyError:
         logger.exception("Failed to fetch bulk sentiment for tickers=%s", ticker_list)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -161,7 +162,7 @@ async def get_macro_sentiment(
     try:
         result = await session.execute(stmt)
         rows = result.scalars().all()
-    except Exception:
+    except SQLAlchemyError:
         logger.exception("Failed to fetch macro sentiment days=%d", days)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -221,7 +222,7 @@ async def get_ticker_sentiment(
     try:
         result = await session.execute(stmt)
         rows = result.scalars().all()
-    except Exception:
+    except SQLAlchemyError:
         logger.exception("Failed to fetch sentiment for ticker=%s days=%d", ticker_upper, days)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -297,7 +298,7 @@ async def get_ticker_articles(
 
         data_result = await session.execute(data_stmt)
         articles = data_result.scalars().all()
-    except Exception:
+    except SQLAlchemyError:
         logger.exception("Failed to fetch articles for ticker=%s days=%d", ticker_upper, days)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

@@ -6,6 +6,7 @@ import logging
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, ToolResult
 
@@ -102,9 +103,9 @@ class GetRecommendationScorecardTool(BaseTool):
                 },
             )
 
-        except Exception:
+        except SQLAlchemyError:
             logger.exception("Failed to compute recommendation scorecard")
             return ToolResult(
                 status="error",
-                error="Failed to compute recommendation scorecard",
+                error="Failed to compute recommendation scorecard. Please try again.",
             )
