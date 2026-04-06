@@ -34,7 +34,7 @@ class _DummyTool(BaseTool):
     category = "testing"
     parameters: dict = {"type": "object", "properties": {}}
 
-    async def execute(self, params: dict) -> ToolResult:
+    async def _run(self, params: dict) -> ToolResult:
         """Return a dummy result."""
         return ToolResult(status="ok", data={"message": "hello"})
 
@@ -47,7 +47,7 @@ class _ContextCaptureTool(BaseTool):
     category = "testing"
     parameters: dict = {"type": "object", "properties": {}}
 
-    async def execute(self, params: dict) -> ToolResult:
+    async def _run(self, params: dict) -> ToolResult:
         """Return whatever current_user_id is set to."""
         uid = current_user_id.get()
         return ToolResult(status="ok", data={"user_id": str(uid) if uid else None})

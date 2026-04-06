@@ -126,137 +126,126 @@ class RecommendStocksTool(BaseTool):
     args_schema = RecommendStocksInput
     timeout_seconds = 15.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Execute recommendation engine."""
-        try:
-            from collections import defaultdict
+        from collections import defaultdict
 
-            from sqlalchemy import select
+        from sqlalchemy import func, select
 
-            from backend.database import async_session_factory
-            from backend.models.portfolio import Portfolio, Position
-            from backend.models.signal import SignalSnapshot
-            from backend.models.stock import Stock
-            from backend.request_context import current_user_id
-            from backend.schemas.recommend import RecommendationResult, StockCandidate
+        from backend.database import async_session_factory
+        from backend.models.portfolio import Portfolio, Position
+        from backend.models.signal import SignalSnapshot
+        from backend.models.stock import Stock
+        from backend.request_context import current_user_id
+        from backend.schemas.recommend import RecommendationResult, StockCandidate
 
-            user_id = current_user_id.get()
+        user_id = current_user_id.get()
 
-            async with async_session_factory() as db:
-                # Get BUY-rated stocks (composite_score >= 8)
-                from sqlalchemy import func
-
-                latest_signals_subq = (
-                    select(
-                        SignalSnapshot.ticker,
-                        func.max(SignalSnapshot.computed_at).label("max_date"),
-                    )
-                    .group_by(SignalSnapshot.ticker)
-                    .subquery()
+        async with async_session_factory() as db:
+            # Get BUY-rated stocks (composite_score >= 8)
+            latest_signals_subq = (
+                select(
+                    SignalSnapshot.ticker,
+                    func.max(SignalSnapshot.computed_at).label("max_date"),
                 )
-                buy_stmt = (
-                    select(SignalSnapshot, Stock)
-                    .join(
-                        latest_signals_subq,
-                        (SignalSnapshot.ticker == latest_signals_subq.c.ticker)
-                        & (SignalSnapshot.computed_at == latest_signals_subq.c.max_date),
-                    )
-                    .join(Stock, SignalSnapshot.ticker == Stock.ticker)
-                    .where(SignalSnapshot.composite_score >= 8.0)
-                    .order_by(SignalSnapshot.composite_score.desc())
-                    .limit(20)
+                .group_by(SignalSnapshot.ticker)
+                .subquery()
+            )
+            buy_stmt = (
+                select(SignalSnapshot, Stock)
+                .join(
+                    latest_signals_subq,
+                    (SignalSnapshot.ticker == latest_signals_subq.c.ticker)
+                    & (SignalSnapshot.computed_at == latest_signals_subq.c.max_date),
                 )
-                rows = (await db.execute(buy_stmt)).all()
+                .join(Stock, SignalSnapshot.ticker == Stock.ticker)
+                .where(SignalSnapshot.composite_score >= 8.0)
+                .order_by(SignalSnapshot.composite_score.desc())
+                .limit(20)
+            )
+            rows = (await db.execute(buy_stmt)).all()
 
-                # Get portfolio context if available
-                portfolio_tickers: set[str] = set()
-                sector_allocs: dict[str, float] = defaultdict(float)
-                if user_id:
-                    portfolio = (
-                        await db.execute(select(Portfolio).where(Portfolio.user_id == user_id))
-                    ).scalar_one_or_none()
-                    if portfolio:
-                        positions = (
-                            await db.execute(
-                                select(Position, Stock)
-                                .join(Stock, Position.ticker == Stock.ticker)
-                                .where(Position.portfolio_id == portfolio.id)
-                                .where(Position.shares > 0)
-                            )
-                        ).all()
-                        total_val = sum(
-                            float(p.shares) * float(p.avg_cost_basis) for p, _ in positions
+            # Get portfolio context if available
+            portfolio_tickers: set[str] = set()
+            sector_allocs: dict[str, float] = defaultdict(float)
+            if user_id:
+                portfolio = (
+                    await db.execute(select(Portfolio).where(Portfolio.user_id == user_id))
+                ).scalar_one_or_none()
+                if portfolio:
+                    positions = (
+                        await db.execute(
+                            select(Position, Stock)
+                            .join(Stock, Position.ticker == Stock.ticker)
+                            .where(Position.portfolio_id == portfolio.id)
+                            .where(Position.shares > 0)
                         )
-                        for pos, stock in positions:
-                            portfolio_tickers.add(pos.ticker)
-                            if total_val > 0:
-                                w = float(pos.shares) * float(pos.avg_cost_basis) / total_val * 100
-                                sector_allocs[stock.sector or "Unknown"] += w
+                    ).all()
+                    total_val = sum(float(p.shares) * float(p.avg_cost_basis) for p, _ in positions)
+                    for pos, stock in positions:
+                        portfolio_tickers.add(pos.ticker)
+                        if total_val > 0:
+                            w = float(pos.shares) * float(pos.avg_cost_basis) / total_val * 100
+                            sector_allocs[stock.sector or "Unknown"] += w
 
-                # Score and rank candidates
-                candidates = []
-                for signal, stock in rows:
-                    if stock.ticker in portfolio_tickers:
-                        continue  # Skip stocks already in portfolio
+            # Score and rank candidates
+            candidates = []
+            for signal, stock in rows:
+                if stock.ticker in portfolio_tickers:
+                    continue  # Skip stocks already in portfolio
 
-                    signal_score = float(signal.composite_score or 0)
-                    fundamental = _score_fundamentals(
-                        stock.forward_pe, stock.return_on_equity, None
-                    )
+                signal_score = float(signal.composite_score or 0)
+                fundamental = _score_fundamentals(stock.forward_pe, stock.return_on_equity, None)
 
-                    # Portfolio fit: bonus for underweight sectors
-                    stock_sector = stock.sector or "Unknown"
-                    current_alloc = sector_allocs.get(stock_sector, 0.0)
-                    fit_score = 8.0 if current_alloc < 15 else 5.0 if current_alloc < 30 else 3.0
+                # Portfolio fit: bonus for underweight sectors
+                stock_sector = stock.sector or "Unknown"
+                current_alloc = sector_allocs.get(stock_sector, 0.0)
+                fit_score = 8.0 if current_alloc < 15 else 5.0 if current_alloc < 30 else 3.0
 
-                    rec_score = _compute_recommendation_score(
+                rec_score = _compute_recommendation_score(
+                    signal_score=signal_score,
+                    fundamental_score=fundamental,
+                    momentum_score=signal_score * 0.8,  # proxy from signal
+                    portfolio_fit_score=fit_score,
+                )
+
+                # Build rationale
+                rationale = []
+                sources = []
+                if signal_score >= 8.0:
+                    rationale.append(f"Strong technical signals ({signal_score:.1f}/10)")
+                    sources.append("signals")
+                if fundamental >= 7.0:
+                    rationale.append(f"Solid fundamentals (score {fundamental:.1f})")
+                    sources.append("fundamentals")
+                if fit_score >= 7.0:
+                    rationale.append(f"Good portfolio fit — {stock_sector} underweight")
+                    sources.append("portfolio_fit")
+
+                candidates.append(
+                    StockCandidate(
+                        ticker=stock.ticker,
+                        name=stock.name or stock.ticker,
+                        sector=stock_sector,
+                        recommendation_score=rec_score,
+                        sources=sources,
+                        rationale=rationale,
                         signal_score=signal_score,
-                        fundamental_score=fundamental,
-                        momentum_score=signal_score * 0.8,  # proxy from signal
-                        portfolio_fit_score=fit_score,
+                        forward_pe=stock.forward_pe,
+                        dividend_yield=stock.dividend_yield,
                     )
-
-                    # Build rationale
-                    rationale = []
-                    sources = []
-                    if signal_score >= 8.0:
-                        rationale.append(f"Strong technical signals ({signal_score:.1f}/10)")
-                        sources.append("signals")
-                    if fundamental >= 7.0:
-                        rationale.append(f"Solid fundamentals (score {fundamental:.1f})")
-                        sources.append("fundamentals")
-                    if fit_score >= 7.0:
-                        rationale.append(f"Good portfolio fit — {stock_sector} underweight")
-                        sources.append("portfolio_fit")
-
-                    candidates.append(
-                        StockCandidate(
-                            ticker=stock.ticker,
-                            name=stock.name or stock.ticker,
-                            sector=stock_sector,
-                            recommendation_score=rec_score,
-                            sources=sources,
-                            rationale=rationale,
-                            signal_score=signal_score,
-                            forward_pe=stock.forward_pe,
-                            dividend_yield=stock.dividend_yield,
-                        )
-                    )
-
-                # Sort by recommendation score and take top 10
-                candidates.sort(key=lambda c: c.recommendation_score, reverse=True)
-                candidates = candidates[:10]
-
-                result = RecommendationResult(
-                    candidates=candidates,
-                    portfolio_context={
-                        "portfolio_tickers": list(portfolio_tickers),
-                        "sector_allocation": dict(sector_allocs),
-                    },
                 )
 
-                return ToolResult(status="ok", data=result.model_dump())
+            # Sort by recommendation score and take top 10
+            candidates.sort(key=lambda c: c.recommendation_score, reverse=True)
+            candidates = candidates[:10]
 
-        except Exception:
-            logger.exception("Failed to generate stock recommendations")
-            return ToolResult(status="error", error="Failed to generate recommendations")
+            result = RecommendationResult(
+                candidates=candidates,
+                portfolio_context={
+                    "portfolio_tickers": list(portfolio_tickers),
+                    "sector_allocation": dict(sector_allocs),
+                },
+            )
+
+            return ToolResult(status="ok", data=result.model_dump())

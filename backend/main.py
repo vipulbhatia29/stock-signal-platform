@@ -315,9 +315,11 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
 )
 
+from backend.middleware.error_handler import ErrorHandlerMiddleware  # noqa: E402
 from backend.observability.metrics.http_middleware import HttpMetricsMiddleware  # noqa: E402
 
 app.add_middleware(HttpMetricsMiddleware)
+app.add_middleware(ErrorHandlerMiddleware)
 
 
 # --- Routers ---

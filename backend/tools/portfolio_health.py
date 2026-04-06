@@ -338,38 +338,33 @@ class PortfolioHealthTool(BaseTool):
     args_schema = PortfolioHealthInput
     timeout_seconds = 15.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Execute portfolio health computation."""
-        try:
-            from sqlalchemy import select
+        from sqlalchemy import select
 
-            from backend.database import async_session_factory
-            from backend.models.portfolio import Portfolio
-            from backend.request_context import current_user_id
+        from backend.database import async_session_factory
+        from backend.models.portfolio import Portfolio
+        from backend.request_context import current_user_id
 
-            user_id = current_user_id.get()
-            if not user_id:
-                return ToolResult(status="error", error="No user context")
+        user_id = current_user_id.get()
+        if not user_id:
+            return ToolResult(status="error", error="No user context")
 
-            async with async_session_factory() as db:
-                portfolio = (
-                    await db.execute(select(Portfolio).where(Portfolio.user_id == user_id))
-                ).scalar_one_or_none()
-                if not portfolio:
-                    return ToolResult(
-                        status="ok",
-                        data={"message": "No portfolio found. Add positions first."},
-                    )
+        async with async_session_factory() as db:
+            portfolio = (
+                await db.execute(select(Portfolio).where(Portfolio.user_id == user_id))
+            ).scalar_one_or_none()
+            if not portfolio:
+                return ToolResult(
+                    status="ok",
+                    data={"message": "No portfolio found. Add positions first."},
+                )
 
-                result = await compute_portfolio_health(portfolio.id, db)
-                if result is None:
-                    return ToolResult(
-                        status="ok",
-                        data={"message": "Portfolio has no active positions."},
-                    )
+            result = await compute_portfolio_health(portfolio.id, db)
+            if result is None:
+                return ToolResult(
+                    status="ok",
+                    data={"message": "Portfolio has no active positions."},
+                )
 
-                return ToolResult(status="ok", data=result.model_dump())
-
-        except Exception:
-            logger.exception("Failed to compute portfolio health")
-            return ToolResult(status="error", error="Failed to compute portfolio health")
+            return ToolResult(status="ok", data=result.model_dump())

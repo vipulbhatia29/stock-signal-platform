@@ -137,9 +137,23 @@ class BaseTool(ABC):
     cache_policy: CachePolicy | None = None
     timeout_seconds: float = 10.0
 
-    @abstractmethod
     async def execute(self, params: dict[str, Any]) -> ToolResult:
-        """Execute the tool with the given parameters."""
+        """Execute the tool with automatic error handling.
+
+        Calls _run() and wraps any unhandled exception in a safe ToolResult.
+        """
+        try:
+            return await self._run(params)
+        except Exception:
+            logger.exception("%s_failed", self.name)
+            return ToolResult(
+                status="error",
+                error=f"Failed to execute {self.name}. Please try again.",
+            )
+
+    @abstractmethod
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
+        """Implement tool logic. Called by execute() with error handling."""
         ...
 
     def info(self) -> ToolInfo:
@@ -173,6 +187,6 @@ class ProxiedTool(BaseTool):
         self._adapter = adapter
         self.cache_policy = cache_policy
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Delegate execution to the MCP adapter."""
         return await self._adapter.execute(self.name, params)

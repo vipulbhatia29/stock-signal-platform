@@ -245,4 +245,4 @@ class TestAnalyzeStockAutoIngest:
             result = await tool.execute({"ticker": "AAPL"})
 
         assert result.status == "error"
-        assert result.error == "Stock analysis failed. Please try again."
+        assert result.error == "Failed to execute analyze_stock. Please try again."

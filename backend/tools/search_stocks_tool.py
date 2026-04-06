@@ -47,7 +47,7 @@ class SearchStocksTool(BaseTool):
     args_schema = SearchStocksInput
     timeout_seconds = 10.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Search DB + Yahoo Finance for matching stocks."""
         query = params.get("query", "").strip()
         if not query:
@@ -55,97 +55,92 @@ class SearchStocksTool(BaseTool):
 
         limit = params.get("limit", 5)
 
-        try:
-            from sqlalchemy import select
+        from sqlalchemy import select
 
-            from backend.database import async_session_factory
-            from backend.models.stock import Stock
-            from backend.services.http_client import get_http_client
+        from backend.database import async_session_factory
+        from backend.models.stock import Stock
+        from backend.services.http_client import get_http_client
 
-            # 1. Local DB search
-            async with async_session_factory() as session:
-                db_query = (
-                    select(Stock)
-                    .where((Stock.ticker.ilike(f"{query}%")) | (Stock.name.ilike(f"%{query}%")))
-                    .where(Stock.is_active.is_(True))
-                    .order_by(Stock.ticker)
-                    .limit(limit)
-                )
-                result = await session.execute(db_query)
-                db_stocks = list(result.scalars().all())
+        # 1. Local DB search
+        async with async_session_factory() as session:
+            db_query = (
+                select(Stock)
+                .where((Stock.ticker.ilike(f"{query}%")) | (Stock.name.ilike(f"%{query}%")))
+                .where(Stock.is_active.is_(True))
+                .order_by(Stock.ticker)
+                .limit(limit)
+            )
+            result = await session.execute(db_query)
+            db_stocks = list(result.scalars().all())
 
-            db_results = [
-                {
-                    "ticker": s.ticker,
-                    "name": s.name,
-                    "exchange": s.exchange,
-                    "sector": s.sector,
-                    "in_db": True,
-                }
-                for s in db_stocks
-            ]
-
-            # 2. If DB has enough, return early
-            if len(db_results) >= limit:
-                return ToolResult(status="ok", data=db_results)
-
-            # 3. Supplement with Yahoo Finance
-            _YF_ALLOWED_TYPES = {"EQUITY", "ETF"}
-            _YF_US_EXCHANGES = {
-                "NASDAQ",
-                "NYSE",
-                "NYSEArca",
-                "NasdaqGS",
-                "NasdaqGM",
-                "NasdaqCM",
+        db_results = [
+            {
+                "ticker": s.ticker,
+                "name": s.name,
+                "exchange": s.exchange,
+                "sector": s.sector,
+                "in_db": True,
             }
+            for s in db_stocks
+        ]
 
-            try:
-                http_client = get_http_client()
-                resp = await http_client.get(
-                    "https://query2.finance.yahoo.com/v1/finance/search",
-                    params={
-                        "q": query,
-                        "quotesCount": limit,
-                        "newsCount": 0,
-                        "listsCount": 0,
-                    },
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (compatible; StockSignalPlatform/1.0)",
-                    },
-                    timeout=5.0,
-                )
-                resp.raise_for_status()
-                quotes = resp.json().get("quotes", [])
-            except Exception:
-                logger.warning("yahoo_search_in_tool_failed", extra={"query": query})
-                return ToolResult(status="ok", data=db_results)
-
-            db_tickers = {r["ticker"] for r in db_results}
-            for q_item in quotes:
-                if len(db_results) >= limit:
-                    break
-                if q_item.get("quoteType") not in _YF_ALLOWED_TYPES:
-                    continue
-                ticker = q_item.get("symbol", "").replace(".", "-")
-                exchange = q_item.get("exchDisp", "")
-                if exchange not in _YF_US_EXCHANGES:
-                    continue
-                if ticker in db_tickers:
-                    continue
-                db_results.append(
-                    {
-                        "ticker": ticker,
-                        "name": q_item.get("longname") or q_item.get("shortname", ""),
-                        "exchange": exchange,
-                        "sector": q_item.get("sectorDisp"),
-                        "in_db": False,
-                    }
-                )
-                db_tickers.add(ticker)
-
+        # 2. If DB has enough, return early
+        if len(db_results) >= limit:
             return ToolResult(status="ok", data=db_results)
 
+        # 3. Supplement with Yahoo Finance
+        _YF_ALLOWED_TYPES = {"EQUITY", "ETF"}
+        _YF_US_EXCHANGES = {
+            "NASDAQ",
+            "NYSE",
+            "NYSEArca",
+            "NasdaqGS",
+            "NasdaqGM",
+            "NasdaqCM",
+        }
+
+        try:
+            http_client = get_http_client()
+            resp = await http_client.get(
+                "https://query2.finance.yahoo.com/v1/finance/search",
+                params={
+                    "q": query,
+                    "quotesCount": limit,
+                    "newsCount": 0,
+                    "listsCount": 0,
+                },
+                headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; StockSignalPlatform/1.0)",
+                },
+                timeout=5.0,
+            )
+            resp.raise_for_status()
+            quotes = resp.json().get("quotes", [])
         except Exception:
-            logger.exception("Failed to search stocks for query %s", query)
-            return ToolResult(status="error", error="Search failed. Please try again.")
+            logger.warning("yahoo_search_in_tool_failed", extra={"query": query})
+            return ToolResult(status="ok", data=db_results)
+
+        db_tickers = {r["ticker"] for r in db_results}
+        for q_item in quotes:
+            if len(db_results) >= limit:
+                break
+            if q_item.get("quoteType") not in _YF_ALLOWED_TYPES:
+                continue
+            ticker = q_item.get("symbol", "").replace(".", "-")
+            exchange = q_item.get("exchDisp", "")
+            if exchange not in _YF_US_EXCHANGES:
+                continue
+            if ticker in db_tickers:
+                continue
+            db_results.append(
+                {
+                    "ticker": ticker,
+                    "name": q_item.get("longname") or q_item.get("shortname", ""),
+                    "exchange": exchange,
+                    "sector": q_item.get("sectorDisp"),
+                    "in_db": False,
+                }
+            )
+            db_tickers.add(ticker)
+
+        return ToolResult(status="ok", data=db_results)

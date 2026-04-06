@@ -45,7 +45,7 @@ class DividendSustainabilityTool(BaseTool):
     args_schema: ClassVar[type[BaseModel] | None] = DividendSustainabilityInput
     timeout_seconds = 15.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Fetch dividend metrics and assess sustainability."""
         import asyncio
         from concurrent.futures import ThreadPoolExecutor
@@ -54,26 +54,18 @@ class DividendSustainabilityTool(BaseTool):
         if not ticker:
             return ToolResult(status="error", error="Missing required param: ticker")
 
-        try:
-            # yfinance is synchronous — run in executor
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                info = await loop.run_in_executor(pool, self._fetch_dividend_info, ticker)
+        # yfinance is synchronous — run in executor
+        loop = asyncio.get_event_loop()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            info = await loop.run_in_executor(pool, self._fetch_dividend_info, ticker)
 
-            if info is None:
-                return ToolResult(
-                    status="error",
-                    error=f"Could not fetch data for '{ticker}'.",
-                )
-
-            return ToolResult(status="ok", data=info)
-
-        except Exception:
-            logger.exception("Failed to assess dividend sustainability for %s", ticker)
+        if info is None:
             return ToolResult(
                 status="error",
-                error=f"Failed to assess dividend sustainability for {ticker}",
+                error=f"Could not fetch data for '{ticker}'.",
             )
+
+        return ToolResult(status="ok", data=info)
 
     @staticmethod
     def _fetch_dividend_info(ticker: str) -> dict[str, Any] | None:

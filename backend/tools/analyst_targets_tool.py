@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, CachePolicy, ToolResult
 
@@ -47,57 +46,49 @@ class AnalystTargetsTool(BaseTool):
     )
     timeout_seconds = 5.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Read analyst targets from DB for the given ticker."""
         ticker = str(params.get("ticker", "")).upper().strip()
         if not ticker:
             return ToolResult(status="error", error="Missing required param: ticker")
 
-        try:
-            from sqlalchemy import select
+        from sqlalchemy import select
 
-            from backend.database import async_session_factory
-            from backend.models.stock import Stock
+        from backend.database import async_session_factory
+        from backend.models.stock import Stock
 
-            async with async_session_factory() as session:
-                result = await session.execute(select(Stock).where(Stock.ticker == ticker))
-                stock = result.scalar_one_or_none()
+        async with async_session_factory() as session:
+            result = await session.execute(select(Stock).where(Stock.ticker == ticker))
+            stock = result.scalar_one_or_none()
 
-            if stock is None:
-                return ToolResult(
-                    status="error",
-                    error=f"Ticker '{ticker}' not found in database. Use ingest_stock first.",
-                )
-
-            # Check if analyst data is available
-            if stock.analyst_target_mean is None:
-                return ToolResult(
-                    status="ok",
-                    data={
-                        "ticker": stock.ticker,
-                        "has_targets": False,
-                        "message": "No analyst target data available for this ticker.",
-                    },
-                )
-
-            # Calculate upside from current market cap proxy (latest close)
-            # We use analyst_target_mean vs current price if available
-            data: dict[str, Any] = {
-                "ticker": stock.ticker,
-                "has_targets": True,
-                "target_mean": stock.analyst_target_mean,
-                "target_high": stock.analyst_target_high,
-                "target_low": stock.analyst_target_low,
-                "buy_count": stock.analyst_buy,
-                "hold_count": stock.analyst_hold,
-                "sell_count": stock.analyst_sell,
-            }
-
-            return ToolResult(status="ok", data=data)
-
-        except SQLAlchemyError:
-            logger.exception("Failed to get analyst targets for %s", ticker)
+        if stock is None:
             return ToolResult(
                 status="error",
-                error="Failed to get analyst targets. Please try again.",
+                error=f"Ticker '{ticker}' not found in database. Use ingest_stock first.",
             )
+
+        # Check if analyst data is available
+        if stock.analyst_target_mean is None:
+            return ToolResult(
+                status="ok",
+                data={
+                    "ticker": stock.ticker,
+                    "has_targets": False,
+                    "message": "No analyst target data available for this ticker.",
+                },
+            )
+
+        # Calculate upside from current market cap proxy (latest close)
+        # We use analyst_target_mean vs current price if available
+        data: dict[str, Any] = {
+            "ticker": stock.ticker,
+            "has_targets": True,
+            "target_mean": stock.analyst_target_mean,
+            "target_high": stock.analyst_target_high,
+            "target_low": stock.analyst_target_low,
+            "buy_count": stock.analyst_buy,
+            "hold_count": stock.analyst_hold,
+            "sell_count": stock.analyst_sell,
+        }
+
+        return ToolResult(status="ok", data=data)

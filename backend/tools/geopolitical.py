@@ -50,44 +50,37 @@ class GeopoliticalEventsTool(BaseTool):
     args_schema = GeopoliticalEventsInput
     timeout_seconds = 15.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Search GDELT for geopolitical events."""
-        try:
-            from datetime import datetime, timedelta
+        from datetime import datetime, timedelta
 
-            from gdeltdoc import Filters, GdeltDoc
+        from gdeltdoc import Filters, GdeltDoc
 
-            days = params.get("days", 7)
-            max_results = params.get("max_results", 10)
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
+        days = params.get("days", 7)
+        max_results = params.get("max_results", 10)
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days)
 
-            gd = GdeltDoc()
-            filters = Filters(
-                keyword=params["query"],
-                start_date=start_date.strftime("%Y-%m-%d"),
-                end_date=end_date.strftime("%Y-%m-%d"),
+        gd = GdeltDoc()
+        filters = Filters(
+            keyword=params["query"],
+            start_date=start_date.strftime("%Y-%m-%d"),
+            end_date=end_date.strftime("%Y-%m-%d"),
+        )
+        articles = gd.article_search(filters)
+
+        if articles is None or articles.empty:
+            return ToolResult(status="ok", data=[])
+
+        results = []
+        for _, row in articles.head(max_results).iterrows():
+            results.append(
+                {
+                    "title": row.get("title", ""),
+                    "url": row.get("url", ""),
+                    "domain": row.get("domain", ""),
+                    "language": row.get("language", ""),
+                    "seendate": str(row.get("seendate", "")),
+                }
             )
-            articles = gd.article_search(filters)
-
-            if articles is None or articles.empty:
-                return ToolResult(status="ok", data=[])
-
-            results = []
-            for _, row in articles.head(max_results).iterrows():
-                results.append(
-                    {
-                        "title": row.get("title", ""),
-                        "url": row.get("url", ""),
-                        "domain": row.get("domain", ""),
-                        "language": row.get("language", ""),
-                        "seendate": str(row.get("seendate", "")),
-                    }
-                )
-            return ToolResult(status="ok", data=results)
-        except Exception:
-            logger.exception("Geopolitical search failed for query %s", params.get("query"))
-            return ToolResult(
-                status="error",
-                error="Geopolitical events search failed. Please try again.",
-            )
+        return ToolResult(status="ok", data=results)
