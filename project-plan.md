@@ -149,6 +149,46 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 > Zero open bugs remaining. Intelligent review-config scoring system implemented.
 > **Tests:** 1860 backend + 439 frontend + 38 API = ~2337 total.
 
+### Full Data Reseed + Pipeline Integrity ✅ (Sessions 95-96, PR #192)
+
+> Session 95: Full DB reseed with 580 stocks, 1.24M price rows, 1548 forecasts. 4 pipeline bugs found (KAN-401-404) + 2 enhancements filed (KAN-405-406).
+> Session 96: KAN-403 (Prophet negative price floor) + KAN-404 (pipeline integrity: 6 fixes for non-universe tickers) resolved. Skills/rules audit: ~1,500 tokens/interaction saved.
+> **Tests:** 1906 backend unit (+46 new) after Session 96.
+
+### Phase Benchmark + Backend Code Health Batches ✅ (Sessions 93, 97, PRs #195-200)
+
+> Session 93: LLM benchmark research — built local LLM harness, qwen2.5-coder:14b fails tool use.
+> Session 97 (prior): Model benchmark framework built, Groq/LiteLLM smoke test (not Claude Code compatible).
+> **Backend code health batches:** KAN-407, 409, 410, 411, 414, 415, 416, 418 resolved across PRs #198, #199, #200.
+
+---
+
+### Epic KAN-408: Backend Code Health & Security Hardening (IN PROGRESS — Session 97)
+
+> Refined this session. Spec + plan written, 2 rounds of staff + test engineer reviews complete.
+> **Spec:** `docs/superpowers/specs/2026-04-06-backend-code-health-final.md`
+> **Plan:** `docs/superpowers/plans/2026-04-06-backend-code-health-final.md`
+
+| Ticket | Priority | Summary | Status |
+|--------|----------|---------|--------|
+| KAN-407 | High | Backend code health batch 1 | ✅ Done (PR #198) |
+| KAN-409 | High | Backend code health batch 2 | ✅ Done (PR #199) |
+| KAN-410 | High | Backend code health batch 2 | ✅ Done (PR #199) |
+| KAN-411 | High | Backend code health batch 2 | ✅ Done (PR #199) |
+| KAN-414 | High | Backend code health batch 3 | ✅ Done (PR #200) |
+| KAN-415 | High | Backend code health batch 3 | ✅ Done (PR #200) |
+| KAN-416 | High | Backend code health batch 1 | ✅ Done (PR #198) |
+| KAN-418 | High | Backend code health batch 2 | ✅ Done (PR #199) |
+| **KAN-412** | **High** | **Split oversized routers (auth.py 1263L, portfolio.py 776L)** | **Refinement ✅ — Ready to implement (tasks 1-5)** |
+| **KAN-413** | **High** | **Split portfolio service into focused modules** | **Refinement ✅ — Ready to implement (tasks 6-8)** |
+| **KAN-417** | **Medium** | **Add CSRF protection for cookie-based auth** | **Refinement ✅ — Ready to implement (tasks 9-13)** |
+
+**Plan highlights:**
+- 14 tasks total, TDD-style (failing tests before implementation)
+- Double-submit cookie CSRF enforced only on cookie-authenticated mutating requests
+- Security hardening: CSRF checks both access_token AND refresh_token cookies
+- Staff engineer + Test engineer review findings: 3 CRITICALs + 9 HIGHs + 12 MEDIUMs all addressed
+
 ---
 
 ### Phase E: UI Overhaul (Epic KAN-400) — To Do
