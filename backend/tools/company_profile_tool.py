@@ -87,6 +87,6 @@ class CompanyProfileTool(BaseTool):
                 },
             )
 
-        except Exception as e:
-            logger.error("get_company_profile_failed", extra={"ticker": ticker, "error": str(e)})
+        except Exception:
+            logger.exception("Failed to get company profile for %s", ticker)
             return ToolResult(status="error", error=f"Failed to get profile for {ticker}")

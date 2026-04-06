@@ -257,6 +257,6 @@ class RecommendStocksTool(BaseTool):
 
                 return ToolResult(status="ok", data=result.model_dump())
 
-        except Exception as e:
-            logger.error("recommend_stocks_failed", extra={"error": str(e)})
+        except Exception:
+            logger.exception("Failed to generate stock recommendations")
             return ToolResult(status="error", error="Failed to generate recommendations")

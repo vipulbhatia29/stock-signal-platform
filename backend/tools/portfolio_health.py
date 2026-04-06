@@ -370,6 +370,6 @@ class PortfolioHealthTool(BaseTool):
 
                 return ToolResult(status="ok", data=result.model_dump())
 
-        except Exception as e:
-            logger.error("portfolio_health_failed", extra={"error": str(e)})
+        except Exception:
+            logger.exception("Failed to compute portfolio health")
             return ToolResult(status="error", error="Failed to compute portfolio health")

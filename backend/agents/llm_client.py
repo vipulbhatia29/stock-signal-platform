@@ -288,13 +288,10 @@ class LLMClient:
                         provider=provider.name,
                         tier=tier or "",
                     )
-                logger.warning(
-                    "provider_failed",
-                    extra={
-                        "provider": provider.name,
-                        "error": str(e),
-                        "consecutive_failures": provider.health.consecutive_failures,
-                    },
+                logger.exception(
+                    "Provider %s failed (consecutive_failures=%d)",
+                    provider.name,
+                    provider.health.consecutive_failures,
                 )
                 continue
 

@@ -77,9 +77,9 @@ async def _model_retrain_all_async() -> dict:
                 await _runner.record_ticker_success(run_id, ticker)
                 trained += 1
 
-            except Exception as e:
+            except Exception:
                 await db.rollback()
-                await _runner.record_ticker_failure(run_id, ticker, str(e))
+                await _runner.record_ticker_failure(run_id, ticker, "retrain failed")
                 logger.exception("Failed to retrain %s", ticker)
 
     status = await _runner.complete_run(run_id)
@@ -119,9 +119,9 @@ async def _forecast_refresh_async() -> dict:
                 await db.commit()
                 await _runner.record_ticker_success(run_id, model_version.ticker)
                 refreshed += 1
-            except Exception as e:
+            except Exception:
                 await db.rollback()
-                await _runner.record_ticker_failure(run_id, model_version.ticker, str(e))
+                await _runner.record_ticker_failure(run_id, model_version.ticker, "refresh failed")
                 logger.exception("Failed to refresh forecast for %s", model_version.ticker)
 
         status = await _runner.complete_run(run_id)

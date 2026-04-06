@@ -99,6 +99,6 @@ class AnalyzeStockTool(BaseTool):
                         "sharpe_ratio": signals.sharpe_ratio,
                     },
                 )
-        except Exception as e:
-            logger.error("analyze_stock_failed", extra={"ticker": ticker, "error": str(e)})
+        except Exception:
+            logger.exception("Failed to analyze stock %s", ticker)
             return ToolResult(status="error", error="Stock analysis failed. Please try again.")

@@ -94,6 +94,6 @@ class AnalystTargetsTool(BaseTool):
 
             return ToolResult(status="ok", data=data)
 
-        except Exception as e:
-            logger.error("get_analyst_targets_failed", extra={"ticker": ticker, "error": str(e)})
+        except Exception:
+            logger.exception("Failed to get analyst targets for %s", ticker)
             return ToolResult(status="error", error=f"Failed to get analyst targets for {ticker}")

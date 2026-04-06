@@ -85,6 +85,6 @@ class FundamentalsTool(BaseTool):
                 },
             )
 
-        except Exception as e:
-            logger.error("get_fundamentals_failed", extra={"ticker": ticker, "error": str(e)})
+        except Exception:
+            logger.exception("Failed to get fundamentals for %s", ticker)
             return ToolResult(status="error", error=f"Failed to get fundamentals for {ticker}")

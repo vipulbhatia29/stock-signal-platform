@@ -231,11 +231,8 @@ class RiskNarrativeTool(BaseTool):
                 },
             )
 
-        except Exception as e:
-            logger.error(
-                "risk_narrative_failed",
-                extra={"ticker": ticker, "error": str(e)},
-            )
+        except Exception:
+            logger.exception("Failed to generate risk narrative for %s", ticker)
             return ToolResult(
                 status="error",
                 error=f"Failed to generate risk narrative for {ticker}",

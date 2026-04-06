@@ -73,6 +73,6 @@ class WebSearchTool(BaseTool):
                 for r in data.get("organic_results", [])[:num_results]
             ]
             return ToolResult(status="ok", data=results)
-        except Exception as e:
-            logger.error("web_search_failed", extra={"query": params.get("query"), "error": str(e)})
+        except Exception:
+            logger.exception("Web search failed for query %s", params.get("query"))
             return ToolResult(status="error", error="Web search failed. Please try again.")

@@ -305,6 +305,6 @@ class MarketBriefingTool(BaseTool):
 
             return ToolResult(status="ok", data=result)
 
-        except Exception as e:
-            logger.error("market_briefing_failed", extra={"error": str(e)})
+        except Exception:
+            logger.exception("Failed to generate market briefing")
             return ToolResult(status="error", error="Failed to generate market briefing")

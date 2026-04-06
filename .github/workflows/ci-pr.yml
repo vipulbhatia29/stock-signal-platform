@@ -118,6 +118,7 @@ jobs:
       - name: Run migrations
         env:
           DATABASE_URL: ${{ secrets.CI_DATABASE_URL }}
+          JWT_SECRET_KEY: ${{ secrets.CI_JWT_SECRET_KEY }}
         run: uv run alembic upgrade head
       - name: Run unit tests (xdist)
         env:
