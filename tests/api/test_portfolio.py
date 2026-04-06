@@ -84,7 +84,7 @@ class TestCreateTransaction:
         )
         assert resp.status_code == 422
         detail = resp.json()["detail"].lower()
-        assert "not recognized" in detail or "not found" in detail or "invalid" in detail
+        assert "not recognized" in detail
 
     async def test_oversell_returns_422(
         self, authenticated_client: AsyncClient, db_url: str
