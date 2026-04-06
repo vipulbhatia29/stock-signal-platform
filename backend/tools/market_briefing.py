@@ -185,126 +185,120 @@ class MarketBriefingTool(BaseTool):
     args_schema = MarketBriefingInput
     timeout_seconds = 30.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Execute market briefing data fetch."""
+        # Fetch indexes in parallel threads
+        index_tasks = [
+            asyncio.to_thread(_fetch_index_performance, ticker, name) for ticker, name in INDEXES
+        ]
+        index_results = await asyncio.gather(*index_tasks)
+        indexes = [r for r in index_results if r is not None]
+
+        # Fetch sector ETFs
+        sectors = await _fetch_sector_etf_performance()
+
+        # Portfolio news + earnings (best effort)
+        portfolio_news: list[dict] = []
+        upcoming_earnings: list[dict] = []
+
         try:
-            # Fetch indexes in parallel threads
-            index_tasks = [
-                asyncio.to_thread(_fetch_index_performance, ticker, name)
-                for ticker, name in INDEXES
-            ]
-            index_results = await asyncio.gather(*index_tasks)
-            indexes = [r for r in index_results if r is not None]
+            from backend.request_context import current_user_id
 
-            # Fetch sector ETFs
-            sectors = await _fetch_sector_etf_performance()
-
-            # Portfolio news + earnings (best effort)
-            portfolio_news: list[dict] = []
-            upcoming_earnings: list[dict] = []
-
-            try:
-                from backend.request_context import current_user_id
-
-                user_id = current_user_id.get()
-                if user_id:
-                    from backend.database import async_session_factory
-                    from backend.models.portfolio import Portfolio, Position
-
-                    async with async_session_factory() as db:
-                        portfolio = (
-                            await db.execute(select(Portfolio).where(Portfolio.user_id == user_id))
-                        ).scalar_one_or_none()
-                        if portfolio:
-                            positions = (
-                                (
-                                    await db.execute(
-                                        select(Position)
-                                        .where(Position.portfolio_id == portfolio.id)
-                                        .where(Position.shares > 0)
-                                        .order_by(Position.shares.desc())
-                                        .limit(5)
-                                    )
-                                )
-                                .scalars()
-                                .all()
-                            )
-                            top_tickers = [p.ticker for p in positions[:3]]
-
-                            # Fetch news for top holdings (parallel)
-                            from backend.tools.news import fetch_yfinance_news
-
-                            news_results = await asyncio.gather(
-                                *[asyncio.to_thread(fetch_yfinance_news, t) for t in top_tickers],
-                                return_exceptions=True,
-                            )
-                            for ticker, result in zip(top_tickers, news_results):
-                                if isinstance(result, Exception):
-                                    logger.warning(
-                                        "news_fetch_failed",
-                                        extra={"ticker": ticker, "error": str(result)},
-                                    )
-                                    continue
-                                for a in result[:2]:
-                                    a["portfolio_ticker"] = ticker
-                                    portfolio_news.append(a)
-
-                            # Fetch upcoming earnings (parallel)
-                            from backend.tools.intelligence import (
-                                fetch_next_earnings_date,
-                            )
-
-                            earnings_results = await asyncio.gather(
-                                *[
-                                    asyncio.to_thread(fetch_next_earnings_date, p.ticker)
-                                    for p in positions
-                                ],
-                                return_exceptions=True,
-                            )
-                            for p, ed in zip(positions, earnings_results):
-                                if isinstance(ed, Exception):
-                                    logger.warning(
-                                        "earnings_fetch_failed",
-                                        extra={"ticker": p.ticker, "error": str(ed)},
-                                    )
-                                    continue
-                                if ed:
-                                    upcoming_earnings.append({"ticker": p.ticker, "date": ed})
-            except Exception:
-                logger.warning("Failed to fetch portfolio context for briefing")
-
-            # Fetch general market news (best effort)
-            general_news: list[dict] = []
-            try:
-                from backend.tools.news import fetch_google_news_rss
-
-                raw_news = await fetch_google_news_rss("stock+market+today")
-                general_news = [{**article, "portfolio_ticker": None} for article in raw_news[:3]]
-            except Exception:
-                logger.warning("Failed to fetch general market news")
-
-            # Fetch top movers from signal snapshots
-            top_movers: dict[str, list[dict]] = {"gainers": [], "losers": []}
-            try:
+            user_id = current_user_id.get()
+            if user_id:
                 from backend.database import async_session_factory
+                from backend.models.portfolio import Portfolio, Position
 
                 async with async_session_factory() as db:
-                    top_movers = await _fetch_top_movers(db)
-            except Exception:
-                logger.warning("Failed to fetch top movers for briefing")
+                    portfolio = (
+                        await db.execute(select(Portfolio).where(Portfolio.user_id == user_id))
+                    ).scalar_one_or_none()
+                    if portfolio:
+                        positions = (
+                            (
+                                await db.execute(
+                                    select(Position)
+                                    .where(Position.portfolio_id == portfolio.id)
+                                    .where(Position.shares > 0)
+                                    .order_by(Position.shares.desc())
+                                    .limit(5)
+                                )
+                            )
+                            .scalars()
+                            .all()
+                        )
+                        top_tickers = [p.ticker for p in positions[:3]]
 
-            result = {
-                "indexes": indexes,
-                "sector_performance": sectors,
-                "portfolio_news": portfolio_news[:10],
-                "general_news": general_news,
-                "upcoming_earnings": upcoming_earnings,
-                "top_movers": top_movers,
-                "briefing_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            }
+                        # Fetch news for top holdings (parallel)
+                        from backend.tools.news import fetch_yfinance_news
 
-            return ToolResult(status="ok", data=result)
+                        news_results = await asyncio.gather(
+                            *[asyncio.to_thread(fetch_yfinance_news, t) for t in top_tickers],
+                            return_exceptions=True,
+                        )
+                        for ticker, result in zip(top_tickers, news_results):
+                            if isinstance(result, Exception):
+                                logger.warning(
+                                    "news_fetch_failed",
+                                    extra={"ticker": ticker, "error": str(result)},
+                                )
+                                continue
+                            for a in result[:2]:
+                                a["portfolio_ticker"] = ticker
+                                portfolio_news.append(a)
 
+                        # Fetch upcoming earnings (parallel)
+                        from backend.tools.intelligence import (
+                            fetch_next_earnings_date,
+                        )
+
+                        earnings_results = await asyncio.gather(
+                            *[
+                                asyncio.to_thread(fetch_next_earnings_date, p.ticker)
+                                for p in positions
+                            ],
+                            return_exceptions=True,
+                        )
+                        for p, ed in zip(positions, earnings_results):
+                            if isinstance(ed, Exception):
+                                logger.warning(
+                                    "earnings_fetch_failed",
+                                    extra={"ticker": p.ticker, "error": str(ed)},
+                                )
+                                continue
+                            if ed:
+                                upcoming_earnings.append({"ticker": p.ticker, "date": ed})
         except Exception:
-            logger.exception("Failed to generate market briefing")
-            return ToolResult(status="error", error="Failed to generate market briefing")
+            logger.warning("Failed to fetch portfolio context for briefing")
+
+        # Fetch general market news (best effort)
+        general_news: list[dict] = []
+        try:
+            from backend.tools.news import fetch_google_news_rss
+
+            raw_news = await fetch_google_news_rss("stock+market+today")
+            general_news = [{**article, "portfolio_ticker": None} for article in raw_news[:3]]
+        except Exception:
+            logger.warning("Failed to fetch general market news")
+
+        # Fetch top movers from signal snapshots
+        top_movers: dict[str, list[dict]] = {"gainers": [], "losers": []}
+        try:
+            from backend.database import async_session_factory
+
+            async with async_session_factory() as db:
+                top_movers = await _fetch_top_movers(db)
+        except Exception:
+            logger.warning("Failed to fetch top movers for briefing")
+
+        result = {
+            "indexes": indexes,
+            "sector_performance": sectors,
+            "portfolio_news": portfolio_news[:10],
+            "general_news": general_news,
+            "upcoming_earnings": upcoming_earnings,
+            "top_movers": top_movers,
+            "briefing_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        }
+
+        return ToolResult(status="ok", data=result)

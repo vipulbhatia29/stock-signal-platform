@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, CachePolicy, ToolResult
 
@@ -47,50 +46,42 @@ class CompanyProfileTool(BaseTool):
     )
     timeout_seconds = 5.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Read company profile from DB for the given ticker."""
         ticker = str(params.get("ticker", "")).upper().strip()
         if not ticker:
             return ToolResult(status="error", error="Missing required param: ticker")
 
-        try:
-            from sqlalchemy import select
+        from sqlalchemy import select
 
-            from backend.database import async_session_factory
-            from backend.models.stock import Stock
+        from backend.database import async_session_factory
+        from backend.models.stock import Stock
 
-            async with async_session_factory() as session:
-                result = await session.execute(select(Stock).where(Stock.ticker == ticker))
-                stock = result.scalar_one_or_none()
+        async with async_session_factory() as session:
+            result = await session.execute(select(Stock).where(Stock.ticker == ticker))
+            stock = result.scalar_one_or_none()
 
-            if stock is None:
-                return ToolResult(
-                    status="error",
-                    error=f"Ticker '{ticker}' not found in database. Use ingest_stock first.",
-                )
-
-            # Truncate business summary to 500 chars for concise agent context
-            summary = stock.business_summary
-            if summary and len(summary) > 500:
-                summary = summary[:497] + "..."
-
-            return ToolResult(
-                status="ok",
-                data={
-                    "ticker": stock.ticker,
-                    "name": stock.name,
-                    "summary": summary,
-                    "sector": stock.sector,
-                    "industry": stock.industry,
-                    "employees": stock.employees,
-                    "website": stock.website,
-                    "market_cap": stock.market_cap,
-                },
-            )
-
-        except SQLAlchemyError:
-            logger.exception("Failed to get company profile for %s", ticker)
+        if stock is None:
             return ToolResult(
                 status="error",
-                error="Failed to get company profile. Please try again.",
+                error=f"Ticker '{ticker}' not found in database. Use ingest_stock first.",
             )
+
+        # Truncate business summary to 500 chars for concise agent context
+        summary = stock.business_summary
+        if summary and len(summary) > 500:
+            summary = summary[:497] + "..."
+
+        return ToolResult(
+            status="ok",
+            data={
+                "ticker": stock.ticker,
+                "name": stock.name,
+                "summary": summary,
+                "sector": stock.sector,
+                "industry": stock.industry,
+                "employees": stock.employees,
+                "website": stock.website,
+                "market_cap": stock.market_cap,
+            },
+        )

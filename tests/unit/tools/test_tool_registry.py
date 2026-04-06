@@ -18,7 +18,7 @@ class FakeTool(BaseTool):
         self.cache_policy = None
         self.timeout_seconds = 5.0
 
-    async def execute(self, params):
+    async def _run(self, params):
         """Return a successful result."""
         return ToolResult(status="ok", data={"result": "success"})
 
@@ -47,7 +47,7 @@ class FakeTypedTool(BaseTool):
     args_schema = FakeInput
     timeout_seconds = 5.0
 
-    async def execute(self, params):
+    async def _run(self, params):
         """Return params as data."""
         return ToolResult(status="ok", data=params)
 

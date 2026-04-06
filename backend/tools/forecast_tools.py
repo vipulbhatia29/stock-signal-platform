@@ -76,80 +76,74 @@ class GetForecastTool(BaseTool):
     )
     timeout_seconds = 5.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Read forecast from DB and enrich with Sharpe direction."""
         ticker = str(params.get("ticker", "")).upper().strip()
         if not ticker:
             return ToolResult(status="error", error="Missing required param: ticker")
 
-        try:
-            from sqlalchemy import select
+        from sqlalchemy import select
 
-            from backend.database import async_session_factory
-            from backend.models.forecast import ForecastResult
-            from backend.tools.forecasting import compute_sharpe_direction
+        from backend.database import async_session_factory
+        from backend.models.forecast import ForecastResult
+        from backend.tools.forecasting import compute_sharpe_direction
 
-            async with async_session_factory() as session:
-                result = await session.execute(
-                    select(ForecastResult)
-                    .where(ForecastResult.ticker == ticker)
-                    .order_by(
-                        ForecastResult.forecast_date.desc(),
-                        ForecastResult.horizon_days.asc(),
-                    )
-                    .limit(3)
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(ForecastResult)
+                .where(ForecastResult.ticker == ticker)
+                .order_by(
+                    ForecastResult.forecast_date.desc(),
+                    ForecastResult.horizon_days.asc(),
                 )
-                forecasts = result.scalars().all()
+                .limit(3)
+            )
+            forecasts = result.scalars().all()
 
-                if not forecasts:
-                    return ToolResult(
-                        status="error",
-                        error=(
-                            f"No forecast data for '{ticker}'. "
-                            "Run nightly pipeline or ingest first."
-                        ),
-                    )
-
-                sharpe_direction = await compute_sharpe_direction(ticker, session)
-
-            horizons = []
-            for f in forecasts:
-                horizons.append(
-                    {
-                        "horizon_days": f.horizon_days,
-                        "target_date": f.target_date.isoformat(),
-                        "predicted_price": f.predicted_price,
-                        "predicted_lower": f.predicted_lower,
-                        "predicted_upper": f.predicted_upper,
-                        "confidence_range_pct": round(
-                            (f.predicted_upper - f.predicted_lower) / f.predicted_price * 100, 1
-                        ),
-                    }
+            if not forecasts:
+                return ToolResult(
+                    status="error",
+                    error=(
+                        f"No forecast data for '{ticker}'. Run nightly pipeline or ingest first."
+                    ),
                 )
 
-            # Confidence level based on range width of shortest horizon
-            first_range = horizons[0]["confidence_range_pct"] if horizons else 50.0
-            if first_range < 15:
-                confidence = "high"
-            elif first_range < 30:
-                confidence = "moderate"
-            else:
-                confidence = "low"
+            sharpe_direction = await compute_sharpe_direction(ticker, session)
 
-            return ToolResult(
-                status="ok",
-                data={
-                    "ticker": ticker,
-                    "forecast_date": forecasts[0].forecast_date.isoformat(),
-                    "horizons": horizons,
-                    "sharpe_direction": sharpe_direction,
-                    "confidence": confidence,
-                },
+        horizons = []
+        for f in forecasts:
+            horizons.append(
+                {
+                    "horizon_days": f.horizon_days,
+                    "target_date": f.target_date.isoformat(),
+                    "predicted_price": f.predicted_price,
+                    "predicted_lower": f.predicted_lower,
+                    "predicted_upper": f.predicted_upper,
+                    "confidence_range_pct": round(
+                        (f.predicted_upper - f.predicted_lower) / f.predicted_price * 100, 1
+                    ),
+                }
             )
 
-        except Exception:
-            logger.exception("Failed to get forecast for %s", ticker)
-            return ToolResult(status="error", error=f"Failed to get forecast for {ticker}")
+        # Confidence level based on range width of shortest horizon
+        first_range = horizons[0]["confidence_range_pct"] if horizons else 50.0
+        if first_range < 15:
+            confidence = "high"
+        elif first_range < 30:
+            confidence = "moderate"
+        else:
+            confidence = "low"
+
+        return ToolResult(
+            status="ok",
+            data={
+                "ticker": ticker,
+                "forecast_date": forecasts[0].forecast_date.isoformat(),
+                "horizons": horizons,
+                "sharpe_direction": sharpe_direction,
+                "confidence": confidence,
+            },
+        )
 
 
 class GetSectorForecastTool(BaseTool):
@@ -180,7 +174,7 @@ class GetSectorForecastTool(BaseTool):
     )
     timeout_seconds = 5.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Map sector to ETF and return forecast + exposure."""
         sector = str(params.get("sector", "")).strip()
         if not sector:
@@ -194,80 +188,75 @@ class GetSectorForecastTool(BaseTool):
                 error=f"Unknown sector '{sector}'. Available: {available}",
             )
 
-        try:
-            from sqlalchemy import func, select
+        from sqlalchemy import func, select
 
-            from backend.database import async_session_factory
-            from backend.models.forecast import ForecastResult
-            from backend.models.stock import Stock
+        from backend.database import async_session_factory
+        from backend.models.forecast import ForecastResult
+        from backend.models.stock import Stock
 
-            async def _fetch_etf_forecasts() -> list:
-                async with async_session_factory() as session:
-                    result = await session.execute(
-                        select(ForecastResult)
-                        .where(ForecastResult.ticker == etf_ticker)
-                        .order_by(
-                            ForecastResult.forecast_date.desc(),
-                            ForecastResult.horizon_days.asc(),
-                        )
-                        .limit(3)
+        async def _fetch_etf_forecasts() -> list:
+            async with async_session_factory() as session:
+                result = await session.execute(
+                    select(ForecastResult)
+                    .where(ForecastResult.ticker == etf_ticker)
+                    .order_by(
+                        ForecastResult.forecast_date.desc(),
+                        ForecastResult.horizon_days.asc(),
                     )
-                    return list(result.scalars().all())
-
-            async def _fetch_sector_stock_count() -> int:
-                async with async_session_factory() as session:
-                    sector_count_result = await session.execute(
-                        select(func.count())
-                        .select_from(Stock)
-                        .where(func.lower(Stock.sector) == sector.lower())
-                    )
-                    return sector_count_result.scalar() or 0
-
-            # Both queries are independent — run in parallel
-            forecasts, sector_stock_count = await asyncio.gather(
-                _fetch_etf_forecasts(),
-                _fetch_sector_stock_count(),
-            )
-
-            if not forecasts:
-                return ToolResult(
-                    status="ok",
-                    data={
-                        "sector": sector,
-                        "etf_ticker": etf_ticker,
-                        "forecast_available": False,
-                        "message": f"No forecast for {etf_ticker}. ETF may not be ingested yet.",
-                        "tracked_stocks_in_sector": sector_stock_count,
-                    },
+                    .limit(3)
                 )
+                return list(result.scalars().all())
 
-            horizons = []
-            for f in forecasts:
-                horizons.append(
-                    {
-                        "horizon_days": f.horizon_days,
-                        "target_date": f.target_date.isoformat(),
-                        "predicted_price": f.predicted_price,
-                        "predicted_lower": f.predicted_lower,
-                        "predicted_upper": f.predicted_upper,
-                    }
+        async def _fetch_sector_stock_count() -> int:
+            async with async_session_factory() as session:
+                sector_count_result = await session.execute(
+                    select(func.count())
+                    .select_from(Stock)
+                    .where(func.lower(Stock.sector) == sector.lower())
                 )
+                return sector_count_result.scalar() or 0
 
+        # Both queries are independent — run in parallel
+        forecasts, sector_stock_count = await asyncio.gather(
+            _fetch_etf_forecasts(),
+            _fetch_sector_stock_count(),
+        )
+
+        if not forecasts:
             return ToolResult(
                 status="ok",
                 data={
                     "sector": sector,
                     "etf_ticker": etf_ticker,
-                    "forecast_available": True,
-                    "forecast_date": forecasts[0].forecast_date.isoformat(),
-                    "horizons": horizons,
+                    "forecast_available": False,
+                    "message": f"No forecast for {etf_ticker}. ETF may not be ingested yet.",
                     "tracked_stocks_in_sector": sector_stock_count,
                 },
             )
 
-        except Exception:
-            logger.exception("Failed to get sector forecast for %s", sector)
-            return ToolResult(status="error", error=f"Failed to get sector forecast for {sector}")
+        horizons = []
+        for f in forecasts:
+            horizons.append(
+                {
+                    "horizon_days": f.horizon_days,
+                    "target_date": f.target_date.isoformat(),
+                    "predicted_price": f.predicted_price,
+                    "predicted_lower": f.predicted_lower,
+                    "predicted_upper": f.predicted_upper,
+                }
+            )
+
+        return ToolResult(
+            status="ok",
+            data={
+                "sector": sector,
+                "etf_ticker": etf_ticker,
+                "forecast_available": True,
+                "forecast_date": forecasts[0].forecast_date.isoformat(),
+                "horizons": horizons,
+                "tracked_stocks_in_sector": sector_stock_count,
+            },
+        )
 
 
 class GetPortfolioForecastTool(BaseTool):
@@ -294,7 +283,7 @@ class GetPortfolioForecastTool(BaseTool):
     args_schema: ClassVar[type[BaseModel] | None] = PortfolioForecastInput
     timeout_seconds = 10.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Compute weighted portfolio forecast from individual stock forecasts."""
         import uuid as uuid_mod
 
@@ -307,130 +296,125 @@ class GetPortfolioForecastTool(BaseTool):
         except ValueError:
             return ToolResult(status="error", error="Invalid user_id format")
 
-        try:
-            from sqlalchemy import select
+        from sqlalchemy import select
 
-            from backend.database import async_session_factory
-            from backend.models.forecast import ForecastResult
-            from backend.models.portfolio import Portfolio, Position
+        from backend.database import async_session_factory
+        from backend.models.forecast import ForecastResult
+        from backend.models.portfolio import Portfolio, Position
 
-            async with async_session_factory() as session:
-                # Get user's portfolio, then open positions
-                portfolio_result = await session.execute(
-                    select(Portfolio).where(Portfolio.user_id == user_id)
+        async with async_session_factory() as session:
+            # Get user's portfolio, then open positions
+            portfolio_result = await session.execute(
+                select(Portfolio).where(Portfolio.user_id == user_id)
+            )
+            portfolio = portfolio_result.scalar_one_or_none()
+            if not portfolio:
+                return ToolResult(
+                    status="ok",
+                    data={"message": "No portfolio found.", "holdings": 0},
                 )
-                portfolio = portfolio_result.scalar_one_or_none()
-                if not portfolio:
-                    return ToolResult(
-                        status="ok",
-                        data={"message": "No portfolio found.", "holdings": 0},
-                    )
 
-                pos_result = await session.execute(
-                    select(Position).where(
-                        Position.portfolio_id == portfolio.id,
-                        Position.shares > 0,
-                    )
+            pos_result = await session.execute(
+                select(Position).where(
+                    Position.portfolio_id == portfolio.id,
+                    Position.shares > 0,
                 )
-                positions = pos_result.scalars().all()
+            )
+            positions = pos_result.scalars().all()
 
-                if not positions:
-                    return ToolResult(
-                        status="ok",
-                        data={"message": "No open positions in portfolio.", "holdings": 0},
-                    )
-
-                # Compute total portfolio value
-                total_value = sum(p.shares * (p.avg_cost_basis or 0) for p in positions)
-                if total_value <= 0:
-                    return ToolResult(
-                        status="ok",
-                        data={"message": "Portfolio value is zero.", "holdings": len(positions)},
-                    )
-
-                # Get latest forecasts for all held tickers
-                held_tickers = [p.ticker for p in positions]
-                fc_result = await session.execute(
-                    select(ForecastResult)
-                    .where(ForecastResult.ticker.in_(held_tickers))
-                    .order_by(
-                        ForecastResult.forecast_date.desc(),
-                        ForecastResult.horizon_days.asc(),
-                    )
+            if not positions:
+                return ToolResult(
+                    status="ok",
+                    data={"message": "No open positions in portfolio.", "holdings": 0},
                 )
-                all_forecasts = fc_result.scalars().all()
 
-            # Group forecasts by ticker, keep only latest date per ticker
-            forecast_by_ticker: dict[str, list[dict[str, Any]]] = {}
-            seen_dates: dict[str, str] = {}
-            for f in all_forecasts:
-                fdate = f.forecast_date.isoformat()
-                if f.ticker not in seen_dates:
-                    seen_dates[f.ticker] = fdate
-                if seen_dates[f.ticker] == fdate:
-                    forecast_by_ticker.setdefault(f.ticker, []).append(
-                        {
-                            "horizon_days": f.horizon_days,
-                            "predicted_price": f.predicted_price,
-                            "predicted_lower": f.predicted_lower,
-                            "predicted_upper": f.predicted_upper,
-                        }
-                    )
+            # Compute total portfolio value
+            total_value = sum(p.shares * (p.avg_cost_basis or 0) for p in positions)
+            if total_value <= 0:
+                return ToolResult(
+                    status="ok",
+                    data={"message": "Portfolio value is zero.", "holdings": len(positions)},
+                )
 
-            # Weighted average per horizon
-            position_map = {p.ticker: p for p in positions}
-            horizon_agg: dict[int, dict[str, float]] = {}
-            contributions = []
+            # Get latest forecasts for all held tickers
+            held_tickers = [p.ticker for p in positions]
+            fc_result = await session.execute(
+                select(ForecastResult)
+                .where(ForecastResult.ticker.in_(held_tickers))
+                .order_by(
+                    ForecastResult.forecast_date.desc(),
+                    ForecastResult.horizon_days.asc(),
+                )
+            )
+            all_forecasts = fc_result.scalars().all()
 
-            for ticker, fc_list in forecast_by_ticker.items():
-                pos = position_map.get(ticker)
-                if not pos:
-                    continue
-                pos_value = pos.shares * (pos.avg_cost_basis or 0)
-                weight = pos_value / total_value
-
-                for fc in fc_list:
-                    h = fc["horizon_days"]
-                    # Predicted return from current cost basis
-                    cost = pos.avg_cost_basis or 1
-                    predicted_return = (fc["predicted_price"] - cost) / cost
-                    agg = horizon_agg.setdefault(h, {"weighted_return": 0.0, "coverage_pct": 0.0})
-                    agg["weighted_return"] += weight * predicted_return
-                    agg["coverage_pct"] += weight * 100
-
-                contributions.append(
+        # Group forecasts by ticker, keep only latest date per ticker
+        forecast_by_ticker: dict[str, list[dict[str, Any]]] = {}
+        seen_dates: dict[str, str] = {}
+        for f in all_forecasts:
+            fdate = f.forecast_date.isoformat()
+            if f.ticker not in seen_dates:
+                seen_dates[f.ticker] = fdate
+            if seen_dates[f.ticker] == fdate:
+                forecast_by_ticker.setdefault(f.ticker, []).append(
                     {
-                        "ticker": ticker,
-                        "weight_pct": round(weight * 100, 1),
-                        "horizons_available": len(fc_list),
+                        "horizon_days": f.horizon_days,
+                        "predicted_price": f.predicted_price,
+                        "predicted_lower": f.predicted_lower,
+                        "predicted_upper": f.predicted_upper,
                     }
                 )
 
-            horizon_results = []
-            for h in sorted(horizon_agg.keys()):
-                agg = horizon_agg[h]
-                horizon_results.append(
-                    {
-                        "horizon_days": h,
-                        "weighted_return_pct": round(agg["weighted_return"] * 100, 2),
-                        "coverage_pct": round(agg["coverage_pct"], 1),
-                    }
-                )
+        # Weighted average per horizon
+        position_map = {p.ticker: p for p in positions}
+        horizon_agg: dict[int, dict[str, float]] = {}
+        contributions = []
 
-            return ToolResult(
-                status="ok",
-                data={
-                    "total_positions": len(positions),
-                    "positions_with_forecast": len(forecast_by_ticker),
-                    "total_value": round(total_value, 2),
-                    "horizons": horizon_results,
-                    "contributions": contributions,
-                },
+        for ticker, fc_list in forecast_by_ticker.items():
+            pos = position_map.get(ticker)
+            if not pos:
+                continue
+            pos_value = pos.shares * (pos.avg_cost_basis or 0)
+            weight = pos_value / total_value
+
+            for fc in fc_list:
+                h = fc["horizon_days"]
+                # Predicted return from current cost basis
+                cost = pos.avg_cost_basis or 1
+                predicted_return = (fc["predicted_price"] - cost) / cost
+                agg = horizon_agg.setdefault(h, {"weighted_return": 0.0, "coverage_pct": 0.0})
+                agg["weighted_return"] += weight * predicted_return
+                agg["coverage_pct"] += weight * 100
+
+            contributions.append(
+                {
+                    "ticker": ticker,
+                    "weight_pct": round(weight * 100, 1),
+                    "horizons_available": len(fc_list),
+                }
             )
 
-        except Exception:
-            logger.exception("Failed to compute portfolio forecast")
-            return ToolResult(status="error", error="Failed to compute portfolio forecast")
+        horizon_results = []
+        for h in sorted(horizon_agg.keys()):
+            agg = horizon_agg[h]
+            horizon_results.append(
+                {
+                    "horizon_days": h,
+                    "weighted_return_pct": round(agg["weighted_return"] * 100, 2),
+                    "coverage_pct": round(agg["coverage_pct"], 1),
+                }
+            )
+
+        return ToolResult(
+            status="ok",
+            data={
+                "total_positions": len(positions),
+                "positions_with_forecast": len(forecast_by_ticker),
+                "total_value": round(total_value, 2),
+                "horizons": horizon_results,
+                "contributions": contributions,
+            },
+        )
 
 
 class CompareStocksTool(BaseTool):
@@ -462,7 +446,7 @@ class CompareStocksTool(BaseTool):
     args_schema: ClassVar[type[BaseModel] | None] = CompareStocksInput
     timeout_seconds = 10.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Read signals, fundamentals, and forecasts for multiple tickers."""
         raw_tickers = params.get("tickers", [])
         if not raw_tickers or len(raw_tickers) < 2:
@@ -472,120 +456,109 @@ class CompareStocksTool(BaseTool):
 
         tickers = [t.upper().strip() for t in raw_tickers]
 
-        try:
-            from sqlalchemy import func, select
+        from sqlalchemy import func, select
 
-            from backend.database import async_session_factory
-            from backend.models.forecast import ForecastResult
-            from backend.models.signal import SignalSnapshot
-            from backend.models.stock import Stock
+        from backend.database import async_session_factory
+        from backend.models.forecast import ForecastResult
+        from backend.models.signal import SignalSnapshot
+        from backend.models.stock import Stock
 
-            async def _fetch_stocks() -> dict:
-                async with async_session_factory() as session:
-                    stock_result = await session.execute(
-                        select(Stock).where(Stock.ticker.in_(tickers))
+        async def _fetch_stocks() -> dict:
+            async with async_session_factory() as session:
+                stock_result = await session.execute(select(Stock).where(Stock.ticker.in_(tickers)))
+                return {s.ticker: s for s in stock_result.scalars().all()}
+
+        async def _fetch_signals() -> dict:
+            async with async_session_factory() as session:
+                latest_signals_sub = (
+                    select(
+                        SignalSnapshot.ticker,
+                        func.max(SignalSnapshot.computed_at).label("max_at"),
                     )
-                    return {s.ticker: s for s in stock_result.scalars().all()}
-
-            async def _fetch_signals() -> dict:
-                async with async_session_factory() as session:
-                    latest_signals_sub = (
-                        select(
-                            SignalSnapshot.ticker,
-                            func.max(SignalSnapshot.computed_at).label("max_at"),
-                        )
-                        .where(SignalSnapshot.ticker.in_(tickers))
-                        .group_by(SignalSnapshot.ticker)
-                        .subquery()
+                    .where(SignalSnapshot.ticker.in_(tickers))
+                    .group_by(SignalSnapshot.ticker)
+                    .subquery()
+                )
+                signal_result = await session.execute(
+                    select(SignalSnapshot).join(
+                        latest_signals_sub,
+                        (SignalSnapshot.ticker == latest_signals_sub.c.ticker)
+                        & (SignalSnapshot.computed_at == latest_signals_sub.c.max_at),
                     )
-                    signal_result = await session.execute(
-                        select(SignalSnapshot).join(
-                            latest_signals_sub,
-                            (SignalSnapshot.ticker == latest_signals_sub.c.ticker)
-                            & (SignalSnapshot.computed_at == latest_signals_sub.c.max_at),
-                        )
+                )
+                return {s.ticker: s for s in signal_result.scalars().all()}
+
+        async def _fetch_forecasts() -> list:
+            async with async_session_factory() as session:
+                fc_result = await session.execute(
+                    select(ForecastResult)
+                    .where(ForecastResult.ticker.in_(tickers))
+                    .order_by(
+                        ForecastResult.forecast_date.desc(),
+                        ForecastResult.horizon_days.asc(),
                     )
-                    return {s.ticker: s for s in signal_result.scalars().all()}
+                )
+                return list(fc_result.scalars().all())
 
-            async def _fetch_forecasts() -> list:
-                async with async_session_factory() as session:
-                    fc_result = await session.execute(
-                        select(ForecastResult)
-                        .where(ForecastResult.ticker.in_(tickers))
-                        .order_by(
-                            ForecastResult.forecast_date.desc(),
-                            ForecastResult.horizon_days.asc(),
-                        )
-                    )
-                    return list(fc_result.scalars().all())
+        # All three queries are independent — run in parallel
+        stocks, signals, all_fc = await asyncio.gather(
+            _fetch_stocks(),
+            _fetch_signals(),
+            _fetch_forecasts(),
+        )
 
-            # All three queries are independent — run in parallel
-            stocks, signals, all_fc = await asyncio.gather(
-                _fetch_stocks(),
-                _fetch_signals(),
-                _fetch_forecasts(),
-            )
-
-            # Group forecasts by ticker (latest date only)
-            fc_by_ticker: dict[str, list[dict[str, Any]]] = {}
-            seen_dates: dict[str, str] = {}
-            for f in all_fc:
-                fdate = f.forecast_date.isoformat()
-                if f.ticker not in seen_dates:
-                    seen_dates[f.ticker] = fdate
-                if seen_dates[f.ticker] == fdate:
-                    fc_by_ticker.setdefault(f.ticker, []).append(
-                        {
-                            "horizon_days": f.horizon_days,
-                            "predicted_price": f.predicted_price,
-                        }
-                    )
-
-            comparisons = []
-            missing = []
-            for t in tickers:
-                stock = stocks.get(t)
-                if not stock:
-                    missing.append(t)
-                    continue
-
-                sig = signals.get(t)
-                fc = fc_by_ticker.get(t, [])
-
-                comparisons.append(
+        # Group forecasts by ticker (latest date only)
+        fc_by_ticker: dict[str, list[dict[str, Any]]] = {}
+        seen_dates: dict[str, str] = {}
+        for f in all_fc:
+            fdate = f.forecast_date.isoformat()
+            if f.ticker not in seen_dates:
+                seen_dates[f.ticker] = fdate
+            if seen_dates[f.ticker] == fdate:
+                fc_by_ticker.setdefault(f.ticker, []).append(
                     {
-                        "ticker": t,
-                        "name": stock.name,
-                        "sector": stock.sector,
-                        "market_cap": stock.market_cap,
-                        "signals": {
-                            "composite_score": sig.composite_score if sig else None,
-                            "rsi": sig.rsi_14 if sig else None,
-                            "recommendation": sig.recommendation if sig else None,
-                        },
-                        "fundamentals": {
-                            "revenue_growth": stock.revenue_growth,
-                            "gross_margins": stock.gross_margins,
-                            "operating_margins": stock.operating_margins,
-                            "profit_margins": stock.profit_margins,
-                            "return_on_equity": stock.return_on_equity,
-                        },
-                        "forecast": fc if fc else None,
+                        "horizon_days": f.horizon_days,
+                        "predicted_price": f.predicted_price,
                     }
                 )
 
-            return ToolResult(
-                status="ok",
-                data={
-                    "comparisons": comparisons,
-                    "missing_tickers": missing,
-                },
+        comparisons = []
+        missing = []
+        for t in tickers:
+            stock = stocks.get(t)
+            if not stock:
+                missing.append(t)
+                continue
+
+            sig = signals.get(t)
+            fc = fc_by_ticker.get(t, [])
+
+            comparisons.append(
+                {
+                    "ticker": t,
+                    "name": stock.name,
+                    "sector": stock.sector,
+                    "market_cap": stock.market_cap,
+                    "signals": {
+                        "composite_score": sig.composite_score if sig else None,
+                        "rsi": sig.rsi_14 if sig else None,
+                        "recommendation": sig.recommendation if sig else None,
+                    },
+                    "fundamentals": {
+                        "revenue_growth": stock.revenue_growth,
+                        "gross_margins": stock.gross_margins,
+                        "operating_margins": stock.operating_margins,
+                        "profit_margins": stock.profit_margins,
+                        "return_on_equity": stock.return_on_equity,
+                    },
+                    "forecast": fc if fc else None,
+                }
             )
 
-        except Exception:
-            logger.exception("Failed to compare stocks %s", tickers)
-            joined = ", ".join(tickers)
-            return ToolResult(
-                status="error",
-                error=f"Failed to compare stocks: {joined}",
-            )
+        return ToolResult(
+            status="ok",
+            data={
+                "comparisons": comparisons,
+                "missing_tickers": missing,
+            },
+        )

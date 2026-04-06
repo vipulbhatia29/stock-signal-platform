@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, CachePolicy, ToolResult
 
@@ -48,44 +47,39 @@ class FundamentalsTool(BaseTool):
     )
     timeout_seconds = 5.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Read fundamentals from DB for the given ticker."""
         ticker = str(params.get("ticker", "")).upper().strip()
         if not ticker:
             return ToolResult(status="error", error="Missing required param: ticker")
 
-        try:
-            from sqlalchemy import select
+        from sqlalchemy import select
 
-            from backend.database import async_session_factory
-            from backend.models.stock import Stock
+        from backend.database import async_session_factory
+        from backend.models.stock import Stock
 
-            async with async_session_factory() as session:
-                result = await session.execute(select(Stock).where(Stock.ticker == ticker))
-                stock = result.scalar_one_or_none()
+        async with async_session_factory() as session:
+            result = await session.execute(select(Stock).where(Stock.ticker == ticker))
+            stock = result.scalar_one_or_none()
 
-            if stock is None:
-                return ToolResult(
-                    status="error",
-                    error=f"Ticker '{ticker}' not found in database. Use ingest_stock first.",
-                )
-
+        if stock is None:
             return ToolResult(
-                status="ok",
-                data={
-                    "ticker": stock.ticker,
-                    "name": stock.name,
-                    "sector": stock.sector,
-                    "industry": stock.industry,
-                    "market_cap": stock.market_cap,
-                    "revenue_growth": stock.revenue_growth,
-                    "gross_margins": stock.gross_margins,
-                    "operating_margins": stock.operating_margins,
-                    "profit_margins": stock.profit_margins,
-                    "return_on_equity": stock.return_on_equity,
-                },
+                status="error",
+                error=f"Ticker '{ticker}' not found in database. Use ingest_stock first.",
             )
 
-        except SQLAlchemyError:
-            logger.exception("Failed to get fundamentals for %s", ticker)
-            return ToolResult(status="error", error="Failed to get fundamentals. Please try again.")
+        return ToolResult(
+            status="ok",
+            data={
+                "ticker": stock.ticker,
+                "name": stock.name,
+                "sector": stock.sector,
+                "industry": stock.industry,
+                "market_cap": stock.market_cap,
+                "revenue_growth": stock.revenue_growth,
+                "gross_margins": stock.gross_margins,
+                "operating_margins": stock.operating_margins,
+                "profit_margins": stock.profit_margins,
+                "return_on_equity": stock.return_on_equity,
+            },
+        )

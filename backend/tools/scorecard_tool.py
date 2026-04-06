@@ -6,7 +6,6 @@ import logging
 from typing import Any, ClassVar
 
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, ToolResult
 
@@ -46,7 +45,7 @@ class GetRecommendationScorecardTool(BaseTool):
     args_schema: ClassVar[type[BaseModel] | None] = ScorecardInput
     timeout_seconds = 10.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Compute and return the recommendation scorecard."""
         import uuid as uuid_mod
 
@@ -59,53 +58,45 @@ class GetRecommendationScorecardTool(BaseTool):
         except ValueError:
             return ToolResult(status="error", error="Invalid user_id format")
 
-        try:
-            from backend.database import async_session_factory
-            from backend.tools.scorecard import compute_scorecard
+        from backend.database import async_session_factory
+        from backend.tools.scorecard import compute_scorecard
 
-            async with async_session_factory() as session:
-                scorecard = await compute_scorecard(user_id, session)
+        async with async_session_factory() as session:
+            scorecard = await compute_scorecard(user_id, session)
 
-            if scorecard.total_outcomes == 0:
-                return ToolResult(
-                    status="ok",
-                    data={
-                        "message": "No evaluated recommendations yet.",
-                        "total_outcomes": 0,
-                    },
-                )
-
-            horizons = []
-            for h in scorecard.horizons:
-                horizons.append(
-                    {
-                        "horizon_days": h.horizon_days,
-                        "total": h.total,
-                        "correct": h.correct,
-                        "hit_rate": round(h.hit_rate * 100, 1),
-                        "avg_alpha": round(h.avg_alpha * 100, 2),
-                    }
-                )
-
+        if scorecard.total_outcomes == 0:
             return ToolResult(
                 status="ok",
                 data={
-                    "total_outcomes": scorecard.total_outcomes,
-                    "overall_hit_rate_pct": round(scorecard.overall_hit_rate * 100, 1),
-                    "avg_alpha_pct": round(scorecard.avg_alpha * 100, 2),
-                    "buy_hit_rate_pct": round(scorecard.buy_hit_rate * 100, 1),
-                    "sell_hit_rate_pct": round(scorecard.sell_hit_rate * 100, 1),
-                    "worst_miss": {
-                        "ticker": scorecard.worst_miss_ticker,
-                        "return_pct": round(scorecard.worst_miss_pct * 100, 2),
-                    },
-                    "horizons": horizons,
+                    "message": "No evaluated recommendations yet.",
+                    "total_outcomes": 0,
                 },
             )
 
-        except SQLAlchemyError:
-            logger.exception("Failed to compute recommendation scorecard")
-            return ToolResult(
-                status="error",
-                error="Failed to compute recommendation scorecard. Please try again.",
+        horizons = []
+        for h in scorecard.horizons:
+            horizons.append(
+                {
+                    "horizon_days": h.horizon_days,
+                    "total": h.total,
+                    "correct": h.correct,
+                    "hit_rate": round(h.hit_rate * 100, 1),
+                    "avg_alpha": round(h.avg_alpha * 100, 2),
+                }
             )
+
+        return ToolResult(
+            status="ok",
+            data={
+                "total_outcomes": scorecard.total_outcomes,
+                "overall_hit_rate_pct": round(scorecard.overall_hit_rate * 100, 1),
+                "avg_alpha_pct": round(scorecard.avg_alpha * 100, 2),
+                "buy_hit_rate_pct": round(scorecard.buy_hit_rate * 100, 1),
+                "sell_hit_rate_pct": round(scorecard.sell_hit_rate * 100, 1),
+                "worst_miss": {
+                    "ticker": scorecard.worst_miss_ticker,
+                    "return_pct": round(scorecard.worst_miss_pct * 100, 2),
+                },
+                "horizons": horizons,
+            },
+        )

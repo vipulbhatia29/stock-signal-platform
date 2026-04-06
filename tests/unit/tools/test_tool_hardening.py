@@ -21,7 +21,7 @@ class SuccessTool(BaseTool):
     parameters = {"type": "object", "properties": {"ticker": {"type": "string"}}}
     timeout_seconds = 5.0
 
-    async def execute(self, params):
+    async def _run(self, params):
         """Return a successful ToolResult."""
         return ToolResult(status="ok", data={"ticker": params.get("ticker", "TST")})
 
@@ -35,7 +35,7 @@ class ErrorTool(BaseTool):
     parameters = {"type": "object", "properties": {}}
     timeout_seconds = 5.0
 
-    async def execute(self, params):
+    async def _run(self, params):
         """Return an error ToolResult without raising."""
         return ToolResult(status="error", error="Something went wrong")
 
@@ -49,14 +49,14 @@ class SlowTool(BaseTool):
     parameters = {"type": "object", "properties": {}}
     timeout_seconds = 0.1  # Very short timeout
 
-    async def execute(self, params):
+    async def _run(self, params):
         """Sleep longer than timeout."""
         await asyncio.sleep(5)
         return ToolResult(status="ok", data={})
 
 
 class ExceptionTool(BaseTool):
-    """Tool that raises an exception."""
+    """Tool that raises an exception, caught by BaseTool.execute()."""
 
     name = "exception_tool"
     description = "Raises exception"
@@ -64,7 +64,7 @@ class ExceptionTool(BaseTool):
     parameters = {"type": "object", "properties": {}}
     timeout_seconds = 5.0
 
-    async def execute(self, params):
+    async def _run(self, params):
         """Raise an unexpected exception."""
         raise RuntimeError("Unexpected crash")
 

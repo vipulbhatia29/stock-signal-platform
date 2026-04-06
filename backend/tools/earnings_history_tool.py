@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, CachePolicy, ToolResult
 
@@ -52,7 +51,7 @@ class EarningsHistoryTool(BaseTool):
     )
     timeout_seconds = 5.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Read earnings history from DB for the given ticker."""
         ticker = str(params.get("ticker", "")).upper().strip()
         if not ticker:
@@ -60,66 +59,58 @@ class EarningsHistoryTool(BaseTool):
 
         quarters = int(params.get("quarters", 8))
 
-        try:
-            from sqlalchemy import select
+        from sqlalchemy import select
 
-            from backend.database import async_session_factory
-            from backend.models.earnings import EarningsSnapshot
+        from backend.database import async_session_factory
+        from backend.models.earnings import EarningsSnapshot
 
-            async with async_session_factory() as session:
-                result = await session.execute(
-                    select(EarningsSnapshot)
-                    .where(EarningsSnapshot.ticker == ticker)
-                    .order_by(EarningsSnapshot.quarter.desc())
-                    .limit(quarters)
-                )
-                snapshots = list(result.scalars().all())
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(EarningsSnapshot)
+                .where(EarningsSnapshot.ticker == ticker)
+                .order_by(EarningsSnapshot.quarter.desc())
+                .limit(quarters)
+            )
+            snapshots = list(result.scalars().all())
 
-            if not snapshots:
-                return ToolResult(
-                    status="ok",
-                    data={
-                        "ticker": ticker,
-                        "has_earnings": False,
-                        "message": "No earnings data available. Use ingest_stock to fetch it.",
-                    },
-                )
-
-            # Build quarterly data and beat/miss summary
-            earnings_list = []
-            beat_count = 0
-            total_with_both = 0
-
-            for snap in snapshots:
-                entry: dict[str, Any] = {
-                    "quarter": snap.quarter,
-                    "eps_estimate": snap.eps_estimate,
-                    "eps_actual": snap.eps_actual,
-                    "surprise_pct": snap.surprise_pct,
-                }
-                if snap.eps_estimate is not None and snap.eps_actual is not None:
-                    total_with_both += 1
-                    if snap.eps_actual > snap.eps_estimate:
-                        beat_count += 1
-                earnings_list.append(entry)
-
+        if not snapshots:
             return ToolResult(
                 status="ok",
                 data={
                     "ticker": ticker,
-                    "has_earnings": True,
-                    "quarters": earnings_list,
-                    "beat_count": beat_count,
-                    "total_quarters": total_with_both,
-                    "summary": f"Beat {beat_count} of last {total_with_both} quarters"
-                    if total_with_both > 0
-                    else "No comparable quarters",
+                    "has_earnings": False,
+                    "message": "No earnings data available. Use ingest_stock to fetch it.",
                 },
             )
 
-        except SQLAlchemyError:
-            logger.exception("Failed to get earnings history for %s", ticker)
-            return ToolResult(
-                status="error",
-                error="Failed to get earnings history. Please try again.",
-            )
+        # Build quarterly data and beat/miss summary
+        earnings_list = []
+        beat_count = 0
+        total_with_both = 0
+
+        for snap in snapshots:
+            entry: dict[str, Any] = {
+                "quarter": snap.quarter,
+                "eps_estimate": snap.eps_estimate,
+                "eps_actual": snap.eps_actual,
+                "surprise_pct": snap.surprise_pct,
+            }
+            if snap.eps_estimate is not None and snap.eps_actual is not None:
+                total_with_both += 1
+                if snap.eps_actual > snap.eps_estimate:
+                    beat_count += 1
+            earnings_list.append(entry)
+
+        return ToolResult(
+            status="ok",
+            data={
+                "ticker": ticker,
+                "has_earnings": True,
+                "quarters": earnings_list,
+                "beat_count": beat_count,
+                "total_quarters": total_with_both,
+                "summary": f"Beat {beat_count} of last {total_with_both} quarters"
+                if total_with_both > 0
+                else "No comparable quarters",
+            },
+        )

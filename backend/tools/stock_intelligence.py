@@ -43,43 +43,36 @@ class StockIntelligenceTool(BaseTool):
     args_schema = StockIntelligenceInput
     timeout_seconds = 15.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Execute intelligence data fetch for a ticker."""
         ticker = str(params.get("ticker", "")).upper().strip()
         if not ticker:
             return ToolResult(status="error", error="Ticker is required")
 
-        try:
-            from backend.tools.intelligence import (
-                fetch_eps_revisions,
-                fetch_insider_transactions,
-                fetch_next_earnings_date,
-                fetch_short_interest,
-                fetch_upgrades_downgrades,
-            )
+        from backend.tools.intelligence import (
+            fetch_eps_revisions,
+            fetch_insider_transactions,
+            fetch_next_earnings_date,
+            fetch_short_interest,
+            fetch_upgrades_downgrades,
+        )
 
-            upgrades, insider, earnings, eps, short = await asyncio.gather(
-                asyncio.to_thread(fetch_upgrades_downgrades, ticker),
-                asyncio.to_thread(fetch_insider_transactions, ticker),
-                asyncio.to_thread(fetch_next_earnings_date, ticker),
-                asyncio.to_thread(fetch_eps_revisions, ticker),
-                asyncio.to_thread(fetch_short_interest, ticker),
-            )
+        upgrades, insider, earnings, eps, short = await asyncio.gather(
+            asyncio.to_thread(fetch_upgrades_downgrades, ticker),
+            asyncio.to_thread(fetch_insider_transactions, ticker),
+            asyncio.to_thread(fetch_next_earnings_date, ticker),
+            asyncio.to_thread(fetch_eps_revisions, ticker),
+            asyncio.to_thread(fetch_short_interest, ticker),
+        )
 
-            return ToolResult(
-                status="ok",
-                data={
-                    "ticker": ticker,
-                    "upgrades_downgrades": upgrades,
-                    "insider_transactions": insider,
-                    "next_earnings_date": earnings,
-                    "eps_revisions": eps,
-                    "short_interest": short,
-                },
-            )
-        except Exception:
-            logger.exception("Failed to fetch intelligence for %s", ticker)
-            return ToolResult(
-                status="error",
-                error=f"Failed to fetch intelligence for {ticker}",
-            )
+        return ToolResult(
+            status="ok",
+            data={
+                "ticker": ticker,
+                "upgrades_downgrades": upgrades,
+                "insider_transactions": insider,
+                "next_earnings_date": earnings,
+                "eps_revisions": eps,
+                "short_interest": short,
+            },
+        )

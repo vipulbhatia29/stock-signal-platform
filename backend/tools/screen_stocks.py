@@ -6,7 +6,6 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, ToolResult
 
@@ -49,40 +48,34 @@ class ScreenStocksTool(BaseTool):
     args_schema = ScreenStocksInput
     timeout_seconds = 10.0
 
-    async def execute(self, params: dict[str, Any]) -> ToolResult:
+    async def _run(self, params: dict[str, Any]) -> ToolResult:
         """Run stock screener query."""
-        try:
-            from sqlalchemy import desc, select
+        from sqlalchemy import desc, select
 
-            from backend.database import async_session_factory
-            from backend.models.signal import SignalSnapshot
+        from backend.database import async_session_factory
+        from backend.models.signal import SignalSnapshot
 
-            limit = params.get("limit", 20)
-            async with async_session_factory() as session:
-                query = (
-                    select(SignalSnapshot)
-                    .order_by(desc(SignalSnapshot.composite_score))
-                    .limit(limit)
-                )
-                if params.get("min_score"):
-                    query = query.where(SignalSnapshot.composite_score >= params["min_score"])
-                if params.get("rsi_state"):
-                    query = query.where(SignalSnapshot.rsi_signal == params["rsi_state"])
+        limit = params.get("limit", 20)
+        async with async_session_factory() as session:
+            query = (
+                select(SignalSnapshot).order_by(desc(SignalSnapshot.composite_score)).limit(limit)
+            )
+            if params.get("min_score"):
+                query = query.where(SignalSnapshot.composite_score >= params["min_score"])
+            if params.get("rsi_state"):
+                query = query.where(SignalSnapshot.rsi_signal == params["rsi_state"])
 
-                result = await session.execute(query)
-                rows = result.scalars().all()
-                return ToolResult(
-                    status="ok",
-                    data=[
-                        {
-                            "ticker": r.ticker,
-                            "composite_score": r.composite_score,
-                            "rsi_signal": r.rsi_signal,
-                            "macd_signal": r.macd_signal_label,
-                        }
-                        for r in rows
-                    ],
-                )
-        except SQLAlchemyError:
-            logger.exception("Failed to screen stocks")
-            return ToolResult(status="error", error="Stock screening failed. Please try again.")
+            result = await session.execute(query)
+            rows = result.scalars().all()
+            return ToolResult(
+                status="ok",
+                data=[
+                    {
+                        "ticker": r.ticker,
+                        "composite_score": r.composite_score,
+                        "rsi_signal": r.rsi_signal,
+                        "macd_signal": r.macd_signal_label,
+                    }
+                    for r in rows
+                ],
+            )
