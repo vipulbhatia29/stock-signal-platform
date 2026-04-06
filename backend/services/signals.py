@@ -19,6 +19,7 @@ import importlib.metadata  # noqa: F401 — pandas-ta-openbb maps.py needs this 
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import cast
 
 import numpy as np
 import pandas as pd
@@ -198,7 +199,9 @@ def compute_signals(
     """
     # ── Determine which price column to use ──────────────────────────
     close_col = "Adj Close" if "Adj Close" in df.columns else "Close"
-    closes = df[close_col].dropna()
+    # Narrow to Series: df[col] is typed as DataFrame | Series by pandas stubs
+    # even though for a single column it's always Series at runtime.
+    closes = cast(pd.Series, df[close_col]).dropna()
 
     # ── Guard: we need enough data to compute signals ────────────────
     if len(closes) < RSI_PERIOD + 1:
@@ -498,10 +501,13 @@ def compute_quantstats_stock(
 
     returns = closes.pct_change().dropna()
     spy_returns = spy_closes.pct_change().dropna()
-    # Normalize to tz-naive for intersection compatibility
-    if returns.index.tz is not None:
+    # Normalize to tz-naive for intersection compatibility.
+    # Series.index is typed as Index by pandas stubs; at runtime it's a
+    # DatetimeIndex here because `closes` is price-keyed. Use isinstance
+    # to narrow the type and satisfy pyright.
+    if isinstance(returns.index, pd.DatetimeIndex) and returns.index.tz is not None:
         returns.index = returns.index.tz_localize(None)
-    if spy_returns.index.tz is not None:
+    if isinstance(spy_returns.index, pd.DatetimeIndex) and spy_returns.index.tz is not None:
         spy_returns.index = spy_returns.index.tz_localize(None)
     common = returns.index.intersection(spy_returns.index)
 
@@ -509,8 +515,10 @@ def compute_quantstats_stock(
         null_result["data_days"] = len(common)
         return null_result
 
-    returns = returns[common]
-    spy_returns = spy_returns[common]
+    # Subscripting with an Index broadens the stubbed return type; the
+    # runtime value is always a Series here.
+    returns = cast(pd.Series, returns[common])
+    spy_returns = cast(pd.Series, spy_returns[common])
 
     try:
         import math
@@ -522,9 +530,11 @@ def compute_quantstats_stock(
         greeks = qs.stats.greeks(returns, spy_returns)
         greeks_dict = greeks.to_dict() if hasattr(greeks, "to_dict") else {}
 
+        # QuantStats accepts Series at runtime; its stubs are strict about
+        # parameter types so cast to float to satisfy pyright.
         return {
-            "sortino": _safe(qs.stats.sortino(returns, rf=risk_free_rate)),
-            "max_drawdown": _safe(abs(qs.stats.max_drawdown(returns))),
+            "sortino": _safe(float(qs.stats.sortino(returns, rf=risk_free_rate))),
+            "max_drawdown": _safe(float(abs(qs.stats.max_drawdown(returns)))),
             "alpha": _safe(greeks_dict.get("alpha", 0.0)),
             "beta": _safe(greeks_dict.get("beta", 0.0)),
             "data_days": len(common),
@@ -896,6 +906,6 @@ async def get_bulk_signals(
     query = query.limit(limit).offset(offset)
 
     result = await db.execute(query)
-    rows = result.all()
+    rows = list(result.all())
 
     return total, rows
