@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timezone
 
 import httpx
@@ -116,7 +117,7 @@ def _parse_fed_rss_xml(xml_text: str, since: date, source_name: str) -> list[Raw
     articles: list[RawArticle] = []
     try:
         root = safe_fromstring(xml_text)
-    except Exception:
+    except ET.ParseError:
         logger.error("Failed to parse Fed RSS XML", exc_info=True)
         return []
 

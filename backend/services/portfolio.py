@@ -669,7 +669,7 @@ async def compute_quantstats_portfolio(
         try:
             calmar_val = float(qs.stats.calmar(returns))
             metrics["calmar"] = round(calmar_val, 4) if math.isfinite(calmar_val) else None
-        except Exception:
+        except (ValueError, ZeroDivisionError, ArithmeticError):
             pass
 
         # Max drawdown duration
@@ -677,7 +677,7 @@ async def compute_quantstats_portfolio(
             dd_details = qs.stats.drawdown_details(returns)
             if dd_details is not None and not dd_details.empty and "days" in dd_details.columns:
                 metrics["max_drawdown_duration"] = int(dd_details["days"].max())
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             pass
 
         # Alpha/beta from SPY benchmark

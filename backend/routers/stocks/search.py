@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,7 +58,7 @@ async def _yahoo_search(query: str, limit: int = 8) -> list[StockSearchResponse]
         )
         resp.raise_for_status()
         quotes = resp.json().get("quotes", [])
-    except Exception:
+    except (httpx.HTTPError, httpx.TimeoutException):
         logger.warning("yahoo_search_failed", extra={"query": query})
         return []
 

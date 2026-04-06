@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, CachePolicy, ToolResult
 
@@ -85,6 +86,6 @@ class FundamentalsTool(BaseTool):
                 },
             )
 
-        except Exception:
+        except SQLAlchemyError:
             logger.exception("Failed to get fundamentals for %s", ticker)
-            return ToolResult(status="error", error=f"Failed to get fundamentals for {ticker}")
+            return ToolResult(status="error", error="Failed to get fundamentals. Please try again.")

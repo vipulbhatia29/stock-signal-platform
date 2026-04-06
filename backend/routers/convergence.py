@@ -8,6 +8,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_async_session
@@ -205,7 +206,7 @@ async def get_convergence_history(
         rows, total = await service.get_convergence_history(
             ticker_upper, session, days=days, limit=limit, offset=offset
         )
-    except Exception:
+    except SQLAlchemyError:
         logger.exception("Failed to fetch convergence history for %s", ticker_upper)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

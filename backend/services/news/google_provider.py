@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import xml.etree.ElementTree as ET
 from datetime import date, timezone
 
 import httpx
@@ -56,7 +57,7 @@ def _parse_google_rss(
     articles: list[RawArticle] = []
     try:
         root = safe_fromstring(xml_text)
-    except Exception:
+    except ET.ParseError:
         logger.error("Failed to parse Google News RSS XML", exc_info=True)
         return []
 

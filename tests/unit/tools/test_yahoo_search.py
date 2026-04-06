@@ -2,6 +2,7 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from backend.routers.stocks.search import _yahoo_search
@@ -113,9 +114,9 @@ async def test_yahoo_search_excludes_non_equity():
 
 @pytest.mark.asyncio
 async def test_yahoo_search_handles_failure_gracefully():
-    """Yahoo search returns empty list on network failure."""
+    """Yahoo search returns empty list on httpx network failure."""
     mock_client = AsyncMock()
-    mock_client.get.side_effect = Exception("Network error")
+    mock_client.get.side_effect = httpx.ConnectError("Network error")
 
     with patch("backend.routers.stocks.search.get_http_client", return_value=mock_client):
         results = await _yahoo_search("palantir")

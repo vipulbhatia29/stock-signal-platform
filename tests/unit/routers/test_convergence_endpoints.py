@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.exc import OperationalError
 
 from backend.models.user import User, UserRole
 from backend.routers.convergence import (
@@ -314,7 +315,9 @@ class TestGetConvergenceHistory:
         """DB error in service raises 500."""
         with patch("backend.routers.convergence.SignalConvergenceService") as MockService:
             svc = MockService.return_value
-            svc.get_convergence_history = AsyncMock(side_effect=RuntimeError("DB error"))
+            svc.get_convergence_history = AsyncMock(
+                side_effect=OperationalError("DB error", None, None)
+            )
 
             with pytest.raises(HTTPException) as exc_info:
                 await get_convergence_history("AAPL", 90, 50, 0, regular_user, mock_db)

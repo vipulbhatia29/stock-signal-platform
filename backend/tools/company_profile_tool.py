@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.tools.base import BaseTool, CachePolicy, ToolResult
 
@@ -87,6 +88,9 @@ class CompanyProfileTool(BaseTool):
                 },
             )
 
-        except Exception:
+        except SQLAlchemyError:
             logger.exception("Failed to get company profile for %s", ticker)
-            return ToolResult(status="error", error=f"Failed to get profile for {ticker}")
+            return ToolResult(
+                status="error",
+                error="Failed to get company profile. Please try again.",
+            )
