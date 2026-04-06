@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from backend.services.http_client import get_http_client
 from backend.tools.adapters.base import MCPAdapter
 from backend.tools.base import ProxiedTool, ToolResult
 
@@ -76,39 +77,41 @@ class FredAdapter(MCPAdapter):
         limit = params.get("limit", 10)
         results: dict[str, list[dict]] = {}
 
-        async with httpx.AsyncClient(timeout=30) as client:
-            for sid in series_ids:
-                resp = await client.get(
-                    _BASE_URL,
-                    params={
-                        "series_id": sid,
-                        "api_key": self._api_key,
-                        "file_type": "json",
-                        "sort_order": "desc",
-                        "limit": limit,
-                    },
-                )
-                resp.raise_for_status()
-                data = resp.json()
-                observations = data.get("observations", [])
-                results[sid] = [
-                    {"date": o.get("date", ""), "value": o.get("value", "")} for o in observations
-                ]
+        client = get_http_client()
+        for sid in series_ids:
+            resp = await client.get(
+                _BASE_URL,
+                params={
+                    "series_id": sid,
+                    "api_key": self._api_key,
+                    "file_type": "json",
+                    "sort_order": "desc",
+                    "limit": limit,
+                },
+                timeout=30,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            observations = data.get("observations", [])
+            results[sid] = [
+                {"date": o.get("date", ""), "value": o.get("value", "")} for o in observations
+            ]
 
         return {"series": results}
 
     async def health_check(self) -> bool:
         """Verify FRED API is reachable."""
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    "https://api.stlouisfed.org/fred/series",
-                    params={
-                        "series_id": "DFF",
-                        "api_key": self._api_key,
-                        "file_type": "json",
-                    },
-                )
-                return resp.status_code < 500
+            client = get_http_client()
+            resp = await client.get(
+                "https://api.stlouisfed.org/fred/series",
+                params={
+                    "series_id": "DFF",
+                    "api_key": self._api_key,
+                    "file_type": "json",
+                },
+                timeout=10,
+            )
+            return resp.status_code < 500
         except httpx.HTTPError:
             return False

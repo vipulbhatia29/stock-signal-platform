@@ -82,11 +82,9 @@ def _mock_response(
 
 
 def _mock_client(resp: MagicMock) -> AsyncMock:
-    """Wrap a mock response in an async context-manager client."""
+    """Wrap a mock response in a client returned by get_http_client()."""
     client = AsyncMock()
     client.get = AsyncMock(return_value=resp)
-    client.__aenter__ = AsyncMock(return_value=client)
-    client.__aexit__ = AsyncMock(return_value=False)
     return client
 
 
@@ -199,7 +197,7 @@ class TestFinnhubProvider:
 
         with (
             patch(
-                "backend.services.news.finnhub_provider.httpx.AsyncClient",
+                "backend.services.news.finnhub_provider.get_http_client",
                 return_value=client,
             ),
             patch("backend.services.news.finnhub_provider.asyncio.sleep"),
@@ -218,7 +216,7 @@ class TestFinnhubProvider:
 
         with (
             patch(
-                "backend.services.news.finnhub_provider.httpx.AsyncClient",
+                "backend.services.news.finnhub_provider.get_http_client",
                 return_value=client,
             ),
             patch("backend.services.news.finnhub_provider.asyncio.sleep"),
@@ -237,7 +235,7 @@ class TestFinnhubProvider:
 
         with (
             patch(
-                "backend.services.news.finnhub_provider.httpx.AsyncClient",
+                "backend.services.news.finnhub_provider.get_http_client",
                 return_value=client,
             ),
             patch("backend.services.news.finnhub_provider.asyncio.sleep"),
@@ -256,7 +254,7 @@ class TestFinnhubProvider:
 
         with (
             patch(
-                "backend.services.news.finnhub_provider.httpx.AsyncClient",
+                "backend.services.news.finnhub_provider.get_http_client",
                 return_value=client,
             ),
             patch("backend.services.news.finnhub_provider.asyncio.sleep"),
@@ -283,7 +281,7 @@ class TestFinnhubProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.finnhub_provider.httpx.AsyncClient",
+            "backend.services.news.finnhub_provider.get_http_client",
             return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
@@ -301,7 +299,7 @@ class TestFinnhubProvider:
 
         with (
             patch(
-                "backend.services.news.finnhub_provider.httpx.AsyncClient",
+                "backend.services.news.finnhub_provider.get_http_client",
                 return_value=client,
             ),
             patch("backend.services.news.finnhub_provider.asyncio.sleep"),
@@ -320,7 +318,7 @@ class TestFinnhubProvider:
 
         with (
             patch(
-                "backend.services.news.finnhub_provider.httpx.AsyncClient",
+                "backend.services.news.finnhub_provider.get_http_client",
                 return_value=client,
             ),
             patch("backend.services.news.finnhub_provider.asyncio.sleep"),
@@ -340,7 +338,7 @@ class TestFinnhubProvider:
 
         with (
             patch(
-                "backend.services.news.finnhub_provider.httpx.AsyncClient",
+                "backend.services.news.finnhub_provider.get_http_client",
                 return_value=client,
             ),
             patch("backend.services.news.finnhub_provider.asyncio.sleep"),
@@ -377,7 +375,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.httpx.AsyncClient",
+            "backend.services.news.edgar_provider.get_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -393,7 +391,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.httpx.AsyncClient",
+            "backend.services.news.edgar_provider.get_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -410,7 +408,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.httpx.AsyncClient",
+            "backend.services.news.edgar_provider.get_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -433,7 +431,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.httpx.AsyncClient",
+            "backend.services.news.edgar_provider.get_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -449,7 +447,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.httpx.AsyncClient",
+            "backend.services.news.edgar_provider.get_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -465,7 +463,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.httpx.AsyncClient",
+            "backend.services.news.edgar_provider.get_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -491,7 +489,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.httpx.AsyncClient",
+            "backend.services.news.fed_provider.get_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -507,7 +505,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.httpx.AsyncClient",
+            "backend.services.news.fed_provider.get_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -527,7 +525,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.httpx.AsyncClient",
+            "backend.services.news.fed_provider.get_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -544,7 +542,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.httpx.AsyncClient",
+            "backend.services.news.fed_provider.get_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -561,7 +559,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.httpx.AsyncClient",
+            "backend.services.news.fed_provider.get_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -577,7 +575,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.httpx.AsyncClient",
+            "backend.services.news.fed_provider.get_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -600,7 +598,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.httpx.AsyncClient",
+            "backend.services.news.fed_provider.get_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -626,7 +624,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.httpx.AsyncClient",
+            "backend.services.news.google_provider.get_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()
@@ -642,7 +640,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.httpx.AsyncClient",
+            "backend.services.news.google_provider.get_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()
@@ -658,7 +656,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.httpx.AsyncClient",
+            "backend.services.news.google_provider.get_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()
@@ -673,7 +671,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.httpx.AsyncClient",
+            "backend.services.news.google_provider.get_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()
@@ -689,7 +687,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.httpx.AsyncClient",
+            "backend.services.news.google_provider.get_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()

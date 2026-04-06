@@ -7,6 +7,7 @@ from typing import Any
 
 import httpx
 
+from backend.services.http_client import get_http_client
 from backend.tools.adapters.base import MCPAdapter
 from backend.tools.base import ProxiedTool, ToolResult
 
@@ -83,18 +84,19 @@ class AlphaVantageAdapter(MCPAdapter):
         """Fetch news sentiment from Alpha Vantage."""
         ticker = params["ticker"]
         limit = params.get("limit", 10)
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(
-                _BASE_URL,
-                params={
-                    "function": "NEWS_SENTIMENT",
-                    "tickers": ticker,
-                    "limit": limit,
-                    "apikey": self._api_key,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_http_client()
+        resp = await client.get(
+            _BASE_URL,
+            params={
+                "function": "NEWS_SENTIMENT",
+                "tickers": ticker,
+                "limit": limit,
+                "apikey": self._api_key,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
         feed = data.get("feed", [])[:limit]
         return {
             "ticker": ticker,
@@ -113,17 +115,18 @@ class AlphaVantageAdapter(MCPAdapter):
     async def _fetch_quote(self, params: dict[str, Any]) -> dict:
         """Fetch real-time quote from Alpha Vantage."""
         ticker = params["ticker"]
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(
-                _BASE_URL,
-                params={
-                    "function": "GLOBAL_QUOTE",
-                    "symbol": ticker,
-                    "apikey": self._api_key,
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        client = get_http_client()
+        resp = await client.get(
+            _BASE_URL,
+            params={
+                "function": "GLOBAL_QUOTE",
+                "symbol": ticker,
+                "apikey": self._api_key,
+            },
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
         quote = data.get("Global Quote", {})
         return {
             "ticker": ticker,
@@ -136,11 +139,12 @@ class AlphaVantageAdapter(MCPAdapter):
     async def health_check(self) -> bool:
         """Verify Alpha Vantage API is reachable."""
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.get(
-                    _BASE_URL,
-                    params={"function": "TIME_SERIES_INTRADAY", "apikey": self._api_key},
-                )
-                return resp.status_code < 500
+            client = get_http_client()
+            resp = await client.get(
+                _BASE_URL,
+                params={"function": "TIME_SERIES_INTRADAY", "apikey": self._api_key},
+                timeout=10,
+            )
+            return resp.status_code < 500
         except httpx.HTTPError:
             return False

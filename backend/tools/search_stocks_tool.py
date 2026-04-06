@@ -56,11 +56,11 @@ class SearchStocksTool(BaseTool):
         limit = params.get("limit", 5)
 
         try:
-            import httpx
             from sqlalchemy import select
 
             from backend.database import async_session_factory
             from backend.models.stock import Stock
+            from backend.services.http_client import get_http_client
 
             # 1. Local DB search
             async with async_session_factory() as session:
@@ -101,21 +101,22 @@ class SearchStocksTool(BaseTool):
             }
 
             try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
-                    resp = await client.get(
-                        "https://query2.finance.yahoo.com/v1/finance/search",
-                        params={
-                            "q": query,
-                            "quotesCount": limit,
-                            "newsCount": 0,
-                            "listsCount": 0,
-                        },
-                        headers={
-                            "User-Agent": "Mozilla/5.0 (compatible; StockSignalPlatform/1.0)",
-                        },
-                    )
-                    resp.raise_for_status()
-                    quotes = resp.json().get("quotes", [])
+                http_client = get_http_client()
+                resp = await http_client.get(
+                    "https://query2.finance.yahoo.com/v1/finance/search",
+                    params={
+                        "q": query,
+                        "quotesCount": limit,
+                        "newsCount": 0,
+                        "listsCount": 0,
+                    },
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (compatible; StockSignalPlatform/1.0)",
+                    },
+                    timeout=5.0,
+                )
+                resp.raise_for_status()
+                quotes = resp.json().get("quotes", [])
             except Exception:
                 logger.warning("yahoo_search_in_tool_failed", extra={"query": query})
                 return ToolResult(status="ok", data=db_results)

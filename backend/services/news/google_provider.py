@@ -8,6 +8,7 @@ from datetime import date, timezone
 import httpx
 from defusedxml.ElementTree import fromstring as safe_fromstring
 
+from backend.services.http_client import get_http_client
 from backend.services.news.base import NewsProvider, RawArticle
 
 logger = logging.getLogger(__name__)
@@ -37,10 +38,10 @@ class GoogleNewsProvider(NewsProvider):
         params = {"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"}
 
         try:
-            async with httpx.AsyncClient(timeout=30) as client:
-                resp = await client.get(GOOGLE_NEWS_RSS, params=params)
-                resp.raise_for_status()
-                xml_text = resp.text
+            client = get_http_client()
+            resp = await client.get(GOOGLE_NEWS_RSS, params=params, timeout=30)
+            resp.raise_for_status()
+            xml_text = resp.text
         except httpx.HTTPError:
             logger.error("Google News RSS error for query '%s'", query, exc_info=True)
             return []

@@ -361,13 +361,13 @@ class TestSentimentScorer:
 
         scorer = SentimentScorer(api_key="sk-test", model="gpt-4o-mini")
 
-        with patch("backend.services.news.sentiment_scorer.httpx.AsyncClient") as mock_client_cls:
-            mock_client = AsyncMock()
-            mock_client.post = mock_post
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client_cls.return_value = mock_client
+        mock_client = AsyncMock()
+        mock_client.post = mock_post
 
+        with patch(
+            "backend.services.news.sentiment_scorer.get_http_client",
+            return_value=mock_client,
+        ):
             results = await scorer._score_single_batch([article])
 
         assert captured_payload["model"] == "gpt-4o-mini"

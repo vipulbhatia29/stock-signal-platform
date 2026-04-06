@@ -9,8 +9,9 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-import httpx
 import yfinance as yf
+
+from backend.services.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +67,10 @@ async def fetch_google_news_rss(ticker: str) -> list[dict]:
 
     url = f"https://news.google.com/rss/search?q={ticker}+stock&hl=en-US&gl=US&ceid=US:en"
     try:
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.get(url)
-            if resp.status_code != 200:
-                return []
+        client = get_http_client()
+        resp = await client.get(url, timeout=5.0)
+        if resp.status_code != 200:
+            return []
 
         root = ET.fromstring(resp.text)
         articles = []

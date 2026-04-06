@@ -11,11 +11,11 @@ import secrets
 from dataclasses import dataclass
 from urllib.parse import urlencode
 
-import httpx
 import jwt
 from jwt import PyJWKClient
 
 from backend.config import settings
+from backend.services.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -115,19 +115,20 @@ async def exchange_code(code: str, state: str) -> tuple[GoogleUserInfo, str]:
     next_url = state_data.get("next_url", "/dashboard")
 
     # Exchange code for tokens
-    async with httpx.AsyncClient() as client:
-        token_response = await client.post(
-            GOOGLE_TOKEN_URL,
-            data={
-                "code": code,
-                "client_id": settings.GOOGLE_CLIENT_ID,
-                "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                "redirect_uri": settings.GOOGLE_OAUTH_REDIRECT_URI,
-                "grant_type": "authorization_code",
-            },
-        )
-        token_response.raise_for_status()
-        tokens = token_response.json()
+    client = get_http_client()
+    token_response = await client.post(
+        GOOGLE_TOKEN_URL,
+        data={
+            "code": code,
+            "client_id": settings.GOOGLE_CLIENT_ID,
+            "client_secret": settings.GOOGLE_CLIENT_SECRET,
+            "redirect_uri": settings.GOOGLE_OAUTH_REDIRECT_URI,
+            "grant_type": "authorization_code",
+        },
+        timeout=30,
+    )
+    token_response.raise_for_status()
+    tokens = token_response.json()
 
     id_token_str = tokens.get("id_token")
     if not id_token_str:

@@ -7,16 +7,14 @@ import pytest
 from backend.routers.stocks.search import _yahoo_search
 
 
-def _mock_httpx_client(json_data: dict) -> MagicMock:
-    """Create a mock httpx.AsyncClient that returns the given JSON."""
+def _mock_httpx_client(json_data: dict) -> AsyncMock:
+    """Create a mock httpx client (returned by get_http_client) that returns the given JSON."""
     mock_response = MagicMock()
     mock_response.raise_for_status = MagicMock()
     mock_response.json.return_value = json_data
 
     mock_client = AsyncMock()
     mock_client.get.return_value = mock_response
-    mock_client.__aenter__.return_value = mock_client
-    mock_client.__aexit__.return_value = False
 
     return mock_client
 
@@ -44,7 +42,7 @@ async def test_yahoo_search_returns_us_equities():
         }
     )
 
-    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.get_http_client", return_value=client):
         results = await _yahoo_search("palantir")
 
     assert len(results) == 1
@@ -70,7 +68,7 @@ async def test_yahoo_search_includes_etfs():
         }
     )
 
-    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.get_http_client", return_value=client):
         results = await _yahoo_search("spy")
 
     assert len(results) == 1
@@ -106,7 +104,7 @@ async def test_yahoo_search_excludes_non_equity():
         }
     )
 
-    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.get_http_client", return_value=client):
         results = await _yahoo_search("aapl")
 
     assert len(results) == 1
@@ -118,10 +116,8 @@ async def test_yahoo_search_handles_failure_gracefully():
     """Yahoo search returns empty list on network failure."""
     mock_client = AsyncMock()
     mock_client.get.side_effect = Exception("Network error")
-    mock_client.__aenter__.return_value = mock_client
-    mock_client.__aexit__.return_value = False
 
-    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=mock_client):
+    with patch("backend.routers.stocks.search.get_http_client", return_value=mock_client):
         results = await _yahoo_search("palantir")
 
     assert results == []
@@ -143,7 +139,7 @@ async def test_yahoo_search_converts_dot_to_dash():
         }
     )
 
-    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.get_http_client", return_value=client):
         results = await _yahoo_search("berkshire")
 
     assert results[0].ticker == "BRK-B"
@@ -165,7 +161,7 @@ async def test_yahoo_search_uses_shortname_fallback():
         }
     )
 
-    with patch("backend.routers.stocks.search.httpx.AsyncClient", return_value=client):
+    with patch("backend.routers.stocks.search.get_http_client", return_value=client):
         results = await _yahoo_search("nvidia")
 
     assert results[0].name == "NVIDIA Corporation"
