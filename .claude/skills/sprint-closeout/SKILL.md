@@ -8,9 +8,9 @@ allowed-tools:
   - Bash(git log *)
   - Bash(git diff *)
   - Bash(git branch *)
-  - mcp__plugin_serena_serena__read_memory
-  - mcp__plugin_serena_serena__write_memory
-  - mcp__plugin_serena_serena__list_memories
+  - mcp__serena__read_memory
+  - mcp__serena__write_memory
+  - mcp__serena__list_memories
   - mcp__plugin_atlassian_atlassian__searchJiraIssuesUsingJql
   - mcp__plugin_atlassian_atlassian__transitionJiraIssue
   - mcp__plugin_atlassian_atlassian__getJiraIssue
@@ -25,6 +25,17 @@ allowed-tools:
 ## Your Task
 
 Execute these steps IN ORDER. Present a summary after each step and wait for approval before executing transitions.
+
+Copy this checklist and track progress:
+
+```
+Sprint Closeout Progress:
+- [ ] Step 1: Doc delta review
+- [ ] Step 2: JIRA ticket scan — WAIT for approval
+- [ ] Step 3: Execute transitions
+- [ ] Step 4: Verify transitions succeeded
+- [ ] Step 5: Update project state
+```
 
 ### Step 1: Doc Delta Review
 1. Read Serena memory `session/doc-delta`
@@ -59,7 +70,13 @@ Execute these steps IN ORDER. Present a summary after each step and wait for app
 1. For each approved ticket, call `transitionJiraIssue` with transition ID `31` (Done)
 2. Report: "Transitioned: [list]. Failed: [list]."
 
-### Step 4: Update Project State
+### Step 4: Verify Transitions
+1. For each transitioned ticket, query JIRA again using `getJiraIssue`
+2. Confirm status is now "Done"
+3. If any failed: report which ones and retry once
+4. Present: "Verified: [list of confirmed Done]. Issues: [list of failures]."
+
+### Step 5: Update Project State
 1. Read current Serena memory `project/state`
 2. Update with:
    - Current branch

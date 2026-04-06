@@ -1,8 +1,8 @@
 ---
-name: Benchmarking models
-description: Runs a coding task across Sonnet 4.6, MiniMax M2.5, and Qwen3-32B in
-  parallel worktrees, collects cost/quality/speed metrics, and produces an Opus blind review
-triggers: ["benchmark", "model comparison", "compare models", "run benchmark"]
+name: benchmarking-models
+description: Benchmark coding tasks across LLM models (Sonnet, MiniMax, Qwen3) in parallel worktrees with cost/quality/speed metrics and Opus blind review. Use when user says "benchmark", "compare models", "model comparison", or "run benchmark".
+disable-model-invocation: true
+argument-hint: "[task-yaml-path]"
 ---
 
 # Benchmark Skill
