@@ -143,6 +143,45 @@ Full database reseed (preserving portfolio/user/watchlist) to validate backend w
 
 ---
 
+## Session 97 — KAN-408 Backend Code Health Spec + Plan (2026-04-06)
+
+**Branch:** `develop` (spec/plan work only, no code changes) | **No PR yet**
+
+### Scope
+Refined the 3 remaining KAN-408 subtasks (KAN-412, KAN-413, KAN-417) into a complete spec and 14-task implementation plan.
+
+### Deliverables
+- **Spec:** `docs/superpowers/specs/2026-04-06-backend-code-health-final.md`
+- **Plan:** `docs/superpowers/plans/2026-04-06-backend-code-health-final.md`
+- JIRA comments added to KAN-412, KAN-413, KAN-417 with spec/plan links
+
+### Design Decisions
+- **KAN-412 (auth router split):** 7 sub-modules (`core`, `email_verification`, `password`, `oauth`, `oidc`, `admin`, `_helpers`). Package with `__init__.py` re-export — `main.py` import unchanged. Portfolio router gets section headers only, no endpoint reordering.
+- **KAN-413 (portfolio service split):** 3 sub-modules (`core`, `fifo`, `analytics`). Dependency flow `core → fifo ← analytics`. `__init__.py` re-exports 14 public + 5 private helpers (consumed by `backend/tools/portfolio.py`, `backend/routers/portfolio.py`, 5 test files).
+- **KAN-417 (CSRF):** Double-submit cookie pattern, enforced only on cookie-auth mutating requests. Bearer auth bypasses CSRF. CSRF token rotates on refresh.
+
+### Review Findings (2 rounds — Staff + Test Engineer)
+- **3 CRITICALs fixed:**
+  1. Middleware ordering: CORS must be outermost of CSRF (Starlette reverse-order registration)
+  2. `_helpers.py` re-export pattern for blocklist functions was wrong — dropped, sub-modules import directly from `token_blocklist`
+  3. Dead `/health` exempt path removed (endpoint is at `/api/v1/health`)
+- **9 HIGHs fixed:** multi-module mock path audit, `tests/unit/infra/test_user_context.py` added to dep map, dependency arrow direction, refresh-cookie-only CSRF bypass (security), lowercase Bearer check, max_age TTL assertion, ...
+- **Upstream/downstream audit found 3 gaps:** `backend/tools/portfolio.py` re-exports `_group_sectors` and `_get_transactions_for_ticker` — both added to `__init__.py` re-exports. `tests/unit/portfolio/test_portfolio.py` added to dependency map.
+
+### Mock Path Strategy (Important)
+Each sub-module imports its dependencies via `from ... import`, which binds names into the sub-module's namespace. `mock.patch` must target the sub-module call site, not `__init__.py` or `_helpers.py`.
+- `backend.routers.auth.core.is_blocklisted`
+- `backend.routers.auth.core.add_to_blocklist`
+- `backend.routers.auth.password.set_user_revocation`
+- `backend.services.portfolio.core.get_or_create_portfolio`
+- `backend.services.portfolio.fifo.get_positions_with_pnl`
+- etc.
+
+### Next Session
+Execute the 14-task plan via subagent-driven-development or inline executing-plans. First task: extract `_helpers.py` from `backend/routers/auth.py`.
+
+---
+
 ## Session 96 — Pipeline Integrity + Skills Audit (2026-04-05)
 
 **Branch:** `fix/KAN-403-404-pipeline-integrity` → develop | **PR #192**
