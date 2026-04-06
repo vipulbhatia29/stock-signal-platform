@@ -223,8 +223,8 @@ async def _nightly_price_refresh_async() -> dict:
                 await _runner.record_ticker_success(run_id, ticker)
             else:
                 await _runner.record_ticker_failure(run_id, ticker, result["status"])
-        except Exception as e:
-            await _runner.record_ticker_failure(run_id, ticker, str(e))
+        except Exception:
+            await _runner.record_ticker_failure(run_id, ticker, "refresh failed")
             logger.exception("Failed to refresh %s in nightly pipeline", ticker)
 
     status = await _runner.complete_run(run_id)

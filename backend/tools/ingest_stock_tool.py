@@ -84,11 +84,8 @@ class IngestStockTool(BaseTool):
                 # 2. Fetch price data (full 10Y for new, delta for existing)
                 try:
                     delta_df = await fetch_prices_delta(ticker, session)
-                except ValueError as e:
-                    logger.error(
-                        "fetch_prices_delta_failed",
-                        extra={"ticker": ticker, "error": str(e)},
-                    )
+                except ValueError:
+                    logger.exception("Failed to fetch price delta for %s", ticker)
                     return ToolResult(
                         status="error",
                         error=f"Failed to fetch price data for {ticker}. Please try again.",
@@ -145,9 +142,6 @@ class IngestStockTool(BaseTool):
                     },
                 )
 
-        except Exception as e:
-            logger.error(
-                "ingest_stock_failed",
-                extra={"ticker": ticker, "error": str(e)},
-            )
+        except Exception:
+            logger.exception("Failed to ingest stock %s", ticker)
             return ToolResult(status="error", error=f"Failed to ingest {ticker}")

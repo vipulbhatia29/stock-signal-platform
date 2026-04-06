@@ -85,11 +85,8 @@ class GeopoliticalEventsTool(BaseTool):
                     }
                 )
             return ToolResult(status="ok", data=results)
-        except Exception as e:
-            logger.error(
-                "geopolitical_failed",
-                extra={"query": params.get("query"), "error": str(e)},
-            )
+        except Exception:
+            logger.exception("Geopolitical search failed for query %s", params.get("query"))
             return ToolResult(
                 status="error",
                 error="Geopolitical events search failed. Please try again.",

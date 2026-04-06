@@ -146,8 +146,8 @@ class GetForecastTool(BaseTool):
                 },
             )
 
-        except Exception as e:
-            logger.error("get_forecast_failed", extra={"ticker": ticker, "error": str(e)})
+        except Exception:
+            logger.exception("Failed to get forecast for %s", ticker)
             return ToolResult(status="error", error=f"Failed to get forecast for {ticker}")
 
 
@@ -257,8 +257,8 @@ class GetSectorForecastTool(BaseTool):
                 },
             )
 
-        except Exception as e:
-            logger.error("get_sector_forecast_failed", extra={"sector": sector, "error": str(e)})
+        except Exception:
+            logger.exception("Failed to get sector forecast for %s", sector)
             return ToolResult(status="error", error=f"Failed to get sector forecast for {sector}")
 
 
@@ -420,8 +420,8 @@ class GetPortfolioForecastTool(BaseTool):
                 },
             )
 
-        except Exception as e:
-            logger.error("get_portfolio_forecast_failed", extra={"error": str(e)})
+        except Exception:
+            logger.exception("Failed to compute portfolio forecast")
             return ToolResult(status="error", error="Failed to compute portfolio forecast")
 
 
@@ -565,8 +565,8 @@ class CompareStocksTool(BaseTool):
                 },
             )
 
-        except Exception as e:
-            logger.error("compare_stocks_failed", extra={"tickers": tickers, "error": str(e)})
+        except Exception:
+            logger.exception("Failed to compare stocks %s", tickers)
             joined = ", ".join(tickers)
             return ToolResult(
                 status="error",

@@ -50,8 +50,8 @@ class PortfolioExposureTool(BaseTool):
                 portfolio = await get_or_create_portfolio(user_id, session)
                 summary = await get_portfolio_summary(portfolio.id, session)
                 return ToolResult(status="ok", data=summary.model_dump())
-        except Exception as e:
-            logger.error("portfolio_exposure_failed", extra={"error": str(e)})
+        except Exception:
+            logger.exception("Failed to retrieve portfolio exposure")
             return ToolResult(
                 status="error",
                 error="Failed to retrieve portfolio exposure. Please try again.",

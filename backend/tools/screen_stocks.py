@@ -82,6 +82,6 @@ class ScreenStocksTool(BaseTool):
                         for r in rows
                     ],
                 )
-        except Exception as e:
-            logger.error("screen_stocks_failed", extra={"error": str(e)})
+        except Exception:
+            logger.exception("Failed to screen stocks")
             return ToolResult(status="error", error="Stock screening failed. Please try again.")

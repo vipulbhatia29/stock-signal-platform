@@ -68,11 +68,8 @@ class DividendSustainabilityTool(BaseTool):
 
             return ToolResult(status="ok", data=info)
 
-        except Exception as e:
-            logger.error(
-                "dividend_sustainability_failed",
-                extra={"ticker": ticker, "error": str(e)},
-            )
+        except Exception:
+            logger.exception("Failed to assess dividend sustainability for %s", ticker)
             return ToolResult(
                 status="error",
                 error=f"Failed to assess dividend sustainability for {ticker}",

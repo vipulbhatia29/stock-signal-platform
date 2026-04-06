@@ -77,11 +77,8 @@ class StockIntelligenceTool(BaseTool):
                     "short_interest": short,
                 },
             )
-        except Exception as e:
-            logger.error(
-                "stock_intelligence_failed",
-                extra={"ticker": ticker, "error": str(e)},
-            )
+        except Exception:
+            logger.exception("Failed to fetch intelligence for %s", ticker)
             return ToolResult(
                 status="error",
                 error=f"Failed to fetch intelligence for {ticker}",

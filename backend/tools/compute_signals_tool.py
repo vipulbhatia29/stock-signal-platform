@@ -71,6 +71,6 @@ class ComputeSignalsTool(BaseTool):
                         "sharpe_ratio": signals.sharpe_ratio,
                     },
                 )
-        except Exception as e:
-            logger.error("compute_signals_failed", extra={"ticker": ticker, "error": str(e)})
+        except Exception:
+            logger.exception("Failed to compute signals for %s", ticker)
             return ToolResult(status="error", error="Signal computation failed. Please try again.")

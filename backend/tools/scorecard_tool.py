@@ -102,11 +102,8 @@ class GetRecommendationScorecardTool(BaseTool):
                 },
             )
 
-        except Exception as e:
-            logger.error(
-                "get_recommendation_scorecard_failed",
-                extra={"error": str(e)},
-            )
+        except Exception:
+            logger.exception("Failed to compute recommendation scorecard")
             return ToolResult(
                 status="error",
                 error="Failed to compute recommendation scorecard",
