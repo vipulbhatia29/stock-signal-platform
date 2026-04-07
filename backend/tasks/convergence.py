@@ -1,4 +1,17 @@
-"""Celery task for computing daily signal convergence snapshots."""
+"""Celery task for computing daily signal convergence snapshots.
+
+Backfill helpers
+----------------
+_backfill_actual_returns   — fills actual_return_90d / actual_return_180d for past rows
+_bulk_latest_price         — DISTINCT ON price fetch up to a ceiling date (7-day window)
+_bulk_price_on_date        — thin wrapper for fetching price at a specific historical date
+
+Circular-import note
+--------------------
+backend.services.signal_convergence imports classification helpers (_classify_*)
+from this module, so SignalConvergenceService is imported lazily inside the
+async implementation to avoid a circular import at module load time.
+"""
 
 from __future__ import annotations
 
