@@ -403,7 +403,9 @@ async def _compute_convergence_snapshot_async(
         if backfilled:
             await db.commit()
 
-        # Mark each ticker's convergence stage as updated
+        # Mark each ticker's convergence stage as updated (Spec A ticker_state).
+        # Called after the main upsert commit so a crash here never rolls back DB writes.
+        # mark_stage_updated is fire-and-forget (errors are logged, not raised).
         for tkr in convergences:
             await mark_stage_updated(tkr, "convergence")
 
