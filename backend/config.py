@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     NEWS_SCORING_FALLBACK: str = "groq"
     NEWS_INGEST_LOOKBACK_HOURS: int = 6
     NEWS_MIN_ARTICLES_FOR_SCORE: int = 1
+    NEWS_SCORING_MAX_CONCURRENCY: int = 5  # max concurrent OpenAI batch requests
 
     # --- Backtesting ---
     BACKTEST_MIN_TRAIN_DAYS: int = 365
