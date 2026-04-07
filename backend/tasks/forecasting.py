@@ -68,7 +68,7 @@ async def _model_retrain_all_async() -> dict:
         for ticker in tickers:
             try:
                 model_version = await train_prophet_model(ticker, db)
-                forecasts = predict_forecast(model_version)
+                forecasts = await predict_forecast(model_version, db)
 
                 for fc in forecasts:
                     db.add(fc)
@@ -113,7 +113,7 @@ async def _forecast_refresh_async() -> dict:
 
         for model_version in active_models:
             try:
-                forecasts = predict_forecast(model_version)
+                forecasts = await predict_forecast(model_version, db)
                 for fc in forecasts:
                     db.add(fc)
                 await db.commit()
@@ -208,7 +208,7 @@ def retrain_single_ticker_task(ticker: str) -> dict:
 
         async with async_session_factory() as db:
             model_version = await train_prophet_model(ticker, db)
-            forecasts = predict_forecast(model_version)
+            forecasts = await predict_forecast(model_version, db)
             for fc in forecasts:
                 db.add(fc)
             await db.commit()

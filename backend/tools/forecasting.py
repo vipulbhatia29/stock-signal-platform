@@ -1,8 +1,9 @@
 """Prophet forecasting engine — training, prediction, Sharpe direction, correlation."""
 
+import asyncio
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -146,14 +147,17 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
     return model_version
 
 
-def predict_forecast(
+async def predict_forecast(
     model_version: ModelVersion,
+    db: AsyncSession,
     horizons: list[int] | None = None,
 ) -> list[ForecastResult]:
     """Generate forecasts from a trained Prophet model.
 
     Args:
         model_version: The ModelVersion with artifact_path.
+        db: Async database session, used to fetch real sentiment regressors
+            for the predict-time future DataFrame (KAN-422 Spec B B3).
         horizons: List of horizon days (default: [90, 180, 270]).
 
     Returns:
@@ -194,22 +198,130 @@ def predict_forecast(
     sentiment_regressor_names = ["stock_sentiment", "sector_sentiment", "macro_sentiment"]
     has_sentiment_regressors = any(r in model.extra_regressors for r in sentiment_regressor_names)
 
+    # KAN-422 Spec B B3 fix — build the regressor series that Prophet will see
+    # at predict time. The previous implementation hard-coded 0.0 for every row
+    # of the future DataFrame, silently zeroing the trained regressor beta
+    # contribution. This revision uses a hybrid source:
+    #
+    #   1. HISTORICAL ROWS (ds <= training_end): read straight from
+    #      ``model.history``, which is Prophet's snapshot of the exact values
+    #      it was fit on. No DB query for these dates — eliminates any
+    #      training-serving skew from downstream news reprocessing, and the
+    #      values are guaranteed to match the training fit 1:1.
+    #
+    #   2. POST-TRAINING ROWS (training_end < ds <= today): fetch FRESH values
+    #      from NewsSentimentDaily for this narrow window only. These dates
+    #      were never in the training frame, so there is no skew risk, and
+    #      we capture the most recent real signal for the gap between model
+    #      training and today — the exact rows the earlier implementation
+    #      silently clobbered with a stale projection.
+    #
+    #   3. FORECAST ROWS (ds > today): filled with a 7-day trailing mean
+    #      anchored to the **most recent available** sentiment date (not
+    #      training_end). For a model trained 30 days ago, this means
+    #      "sentiment as of today, held constant" rather than "sentiment as
+    #      of a month ago, held constant" — a meaningful quality improvement
+    #      for the nightly refresh path.
+    combined_sentiment_df: pd.DataFrame | None = None
+    sentiment_projection: dict[str, float] = {}
+    training_end: date | None = None
+    if has_sentiment_regressors:
+        if not hasattr(model, "history") or len(model.history) == 0:
+            raise RuntimeError(
+                f"predict_forecast: model {model_version.ticker} "
+                f"v{model_version.version} has sentiment regressors but no "
+                "training history — artifact is corrupt or empty"
+            )
+
+        training_end = model.history["ds"].max().date()
+
+        # Step 1 — historical rows straight from the serialized model.
+        cols = ["ds", *sentiment_regressor_names]
+        history_sent_df: pd.DataFrame = model.history[cols].copy()  # type: ignore[assignment]
+
+        # Step 2 — post-training-window fresh fetch.
+        if training_end < today:
+            post_start = pd.Timestamp(training_end) + pd.Timedelta(days=1)
+            post_end = pd.Timestamp(today)
+            post_df = await _fetch_sentiment_regressors(
+                model_version.ticker, post_start, post_end, db
+            )
+            if post_df is not None and not post_df.empty:
+                combined_sentiment_df = pd.concat([history_sent_df, post_df], ignore_index=True)
+            else:
+                combined_sentiment_df = history_sent_df
+                logger.warning(
+                    "predict_forecast: no post-training sentiment data found "
+                    "for %s in window (%s, %s]; forecasts will project from "
+                    "training-window sentiment only, which may be stale",
+                    model_version.ticker,
+                    training_end,
+                    today,
+                )
+        else:
+            combined_sentiment_df = history_sent_df
+
+        # Step 3 — 7-day trailing mean anchored to the most recent available
+        # date (training_end for same-day predictions, today for stale models
+        # that ingested fresh post-training sentiment). Falls back to the
+        # full-window mean if there's less than 7 days of data at all.
+        most_recent_date = combined_sentiment_df["ds"].max()
+        cutoff = most_recent_date - pd.Timedelta(days=7)
+        recent = combined_sentiment_df[combined_sentiment_df["ds"] >= cutoff]
+        if recent.empty:
+            recent = combined_sentiment_df
+
+        for col in sentiment_regressor_names:
+            sentiment_projection[col] = float(recent[col].mean()) if not recent.empty else 0.0
+
+        # Loud degradation warning — the whole reason this PR exists is to
+        # eliminate silent 0.0 projection. If the computed projection is still
+        # all-zero despite having regressors, operators need to know so they
+        # can investigate ingestion upstream. This is NOT a quiet fallback.
+        if all(abs(v) < 1e-9 for v in sentiment_projection.values()):
+            logger.error(
+                "predict_forecast: %s v%d was trained with sentiment "
+                "regressors but the projection collapsed to all-zero (training "
+                "and post-training sentiment are both zero). Predictions will "
+                "silently ignore the trained sentiment beta. Check "
+                "news_sentiment_daily ingestion for %s.",
+                model_version.ticker,
+                model_version.version,
+                model_version.ticker,
+            )
+
     for horizon in horizons:
         # Create future dataframe for the specific target date
         target_date = today + timedelta(days=horizon)
         future = model.make_future_dataframe(periods=horizon, freq="D")
 
-        # Add sentiment regressor columns to future DataFrame if model uses them.
-        # KNOWN LIMITATION: Historical dates also get 0.0 instead of the actual
-        # sentiment used during training. This underestimates the regressor effect
-        # in Prophet's predictions. Future work: fetch historical sentiment from DB
-        # (requires making predict_forecast async) or cache in model artifact.
+        # Merge real sentiment values for historical + post-training rows.
+        # The combined frame covers every date <= today; anything past today
+        # is NaN after the left-join and gets the projection. We NEVER
+        # overwrite non-NaN cells, so real merged values are preserved.
         if has_sentiment_regressors:
-            future["stock_sentiment"] = 0.0
-            future["sector_sentiment"] = 0.0
-            future["macro_sentiment"] = 0.0
+            if combined_sentiment_df is None or training_end is None:
+                raise RuntimeError(
+                    "predict_forecast invariant violated: "
+                    "has_sentiment_regressors=True but sentiment state is None"
+                )
+            future = future.merge(combined_sentiment_df, on="ds", how="left")
+            for col, projected in sentiment_projection.items():
+                nan_mask = future[col].isna()
+                future.loc[nan_mask, col] = projected
+                # Cast to float64 once rows are filled; asserts there are no
+                # lingering NaNs so a future bug can't silently zero the col.
+                future[col] = future[col].astype("float64")
+                if future[col].isna().any():
+                    raise RuntimeError(
+                        f"predict_forecast: {col} still has NaN after merge + "
+                        f"projection for {model_version.ticker} — refusing to "
+                        "silently zero (regression of the KAN-422 B3 bug)"
+                    )
 
-        forecast = model.predict(future)
+        # Prophet's predict() is CPU-bound (NumPy + Stan), so we run it on a
+        # worker thread to avoid starving the event loop in async Celery tasks.
+        forecast = await asyncio.to_thread(model.predict, future)
 
         # Get the prediction for the target date
         target_row = forecast[forecast["ds"].dt.date == target_date]

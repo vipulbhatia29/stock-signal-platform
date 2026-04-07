@@ -180,10 +180,12 @@ class TestTrainProphetModel:
 class TestPredictForecast:
     """Tests for predict_forecast."""
 
+    @pytest.mark.asyncio
     @patch("backend.tools.forecasting.model_from_json")
-    def test_returns_3_forecast_results(self, mock_from_json) -> None:
+    async def test_returns_3_forecast_results(self, mock_from_json) -> None:
         """predict_forecast should return one ForecastResult per horizon."""
         mock_model = MagicMock()
+        mock_model.extra_regressors = {}
         mock_model.make_future_dataframe.return_value = pd.DataFrame({"ds": []})
         mock_model.predict.return_value = _make_prophet_forecast_df(DEFAULT_HORIZONS)
         mock_from_json.return_value = mock_model
@@ -192,17 +194,19 @@ class TestPredictForecast:
 
         with patch("builtins.open", MagicMock()):
             with patch.object(Path, "exists", return_value=True):
-                results = predict_forecast(mv)
+                results = await predict_forecast(mv, AsyncMock())
 
         assert len(results) == 3
         assert all(isinstance(r, ForecastResult) for r in results)
         horizons = [r.horizon_days for r in results]
         assert horizons == [90, 180, 270]
 
+    @pytest.mark.asyncio
     @patch("backend.tools.forecasting.model_from_json")
-    def test_forecast_has_correct_fields(self, mock_from_json) -> None:
+    async def test_forecast_has_correct_fields(self, mock_from_json) -> None:
         """Each ForecastResult should have predicted price, lower, upper, target date."""
         mock_model = MagicMock()
+        mock_model.extra_regressors = {}
         mock_model.make_future_dataframe.return_value = pd.DataFrame({"ds": []})
         mock_model.predict.return_value = _make_prophet_forecast_df([90])
         mock_from_json.return_value = mock_model
@@ -211,7 +215,7 @@ class TestPredictForecast:
 
         with patch("builtins.open", MagicMock()):
             with patch.object(Path, "exists", return_value=True):
-                results = predict_forecast(mv, horizons=[90])
+                results = await predict_forecast(mv, AsyncMock(), horizons=[90])
 
         fc = results[0]
         assert fc.ticker == "AAPL"
@@ -221,12 +225,13 @@ class TestPredictForecast:
         assert fc.actual_price is None
         assert fc.model_version_id == mv.id
 
-    def test_missing_artifact_raises(self) -> None:
+    @pytest.mark.asyncio
+    async def test_missing_artifact_raises(self) -> None:
         """predict_forecast should raise FileNotFoundError if artifact is missing."""
         mv = _make_model_version(artifact_path="/nonexistent/path.json")
 
         with pytest.raises(FileNotFoundError, match="Model artifact not found"):
-            predict_forecast(mv)
+            await predict_forecast(mv, AsyncMock())
 
 
 # ---------------------------------------------------------------------------

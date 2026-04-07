@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
 import pytest
@@ -96,7 +96,8 @@ class TestPredictForecastPriceFloor:
     """Tests for the price floor applied to Prophet predictions."""
 
     @pytest.mark.regression
-    def test_negative_yhat_is_floored_to_scale_minimum(self) -> None:
+    @pytest.mark.asyncio
+    async def test_negative_yhat_is_floored_to_scale_minimum(self) -> None:
         """Negative yhat values are floored to max(0.01, last_price * 0.01).
 
         For a last training price of $100, the floor is $1.00.
@@ -119,7 +120,7 @@ class TestPredictForecastPriceFloor:
             patch("backend.tools.forecasting.model_from_json", return_value=model),
             patch("backend.tools.forecasting.Path.exists", return_value=True),
         ):
-            results = predict_forecast(mv, horizons=[90, 180, 270])
+            results = await predict_forecast(mv, AsyncMock(), horizons=[90, 180, 270])
 
         horizon_90 = next(r for r in results if r.horizon_days == 90)
 
@@ -131,7 +132,8 @@ class TestPredictForecastPriceFloor:
         assert horizon_90.predicted_upper == round(5.0, 2)
 
     @pytest.mark.regression
-    def test_positive_predictions_above_floor_are_unchanged(self) -> None:
+    @pytest.mark.asyncio
+    async def test_positive_predictions_above_floor_are_unchanged(self) -> None:
         """Positive yhat values above the floor pass through unmodified."""
         last_price = 200.0
 
@@ -149,7 +151,7 @@ class TestPredictForecastPriceFloor:
             patch("backend.tools.forecasting.model_from_json", return_value=model),
             patch("backend.tools.forecasting.Path.exists", return_value=True),
         ):
-            results = predict_forecast(mv, horizons=[90, 180, 270])
+            results = await predict_forecast(mv, AsyncMock(), horizons=[90, 180, 270])
 
         for result in results:
             assert result.predicted_price > 0
@@ -162,7 +164,8 @@ class TestPredictForecastPriceFloor:
         assert horizon_90.predicted_upper == round(225.0, 2)
 
     @pytest.mark.regression
-    def test_zero_yhat_is_floored(self) -> None:
+    @pytest.mark.asyncio
+    async def test_zero_yhat_is_floored(self) -> None:
         """Zero yhat value is floored since equities cannot trade at $0."""
         last_price = 50.0
         floor = max(0.01, last_price * 0.01)  # 0.50
@@ -181,7 +184,7 @@ class TestPredictForecastPriceFloor:
             patch("backend.tools.forecasting.model_from_json", return_value=model),
             patch("backend.tools.forecasting.Path.exists", return_value=True),
         ):
-            results = predict_forecast(mv, horizons=[90])
+            results = await predict_forecast(mv, AsyncMock(), horizons=[90])
 
         horizon_90 = results[0]
         # 0.0 < floor → floored
@@ -192,7 +195,8 @@ class TestPredictForecastPriceFloor:
         assert horizon_90.predicted_upper == round(floor, 2)
 
     @pytest.mark.regression
-    def test_floor_uses_last_training_price_scale(self) -> None:
+    @pytest.mark.asyncio
+    async def test_floor_uses_last_training_price_scale(self) -> None:
         """Floor is 1% of last training price, not a fixed value.
 
         For a penny stock (last_price=0.05), the floor falls back to 0.01.
@@ -212,7 +216,7 @@ class TestPredictForecastPriceFloor:
             patch("backend.tools.forecasting.model_from_json", return_value=penny_model),
             patch("backend.tools.forecasting.Path.exists", return_value=True),
         ):
-            results = predict_forecast(mv, horizons=[90])
+            results = await predict_forecast(mv, AsyncMock(), horizons=[90])
 
         assert results[0].predicted_price == 0.01
 
@@ -229,12 +233,15 @@ class TestPredictForecastPriceFloor:
             patch("backend.tools.forecasting.model_from_json", return_value=large_cap_model),
             patch("backend.tools.forecasting.Path.exists", return_value=True),
         ):
-            results = predict_forecast(mv, horizons=[90])
+            results = await predict_forecast(mv, AsyncMock(), horizons=[90])
 
         assert results[0].predicted_price == round(5.0, 2)
 
     @pytest.mark.regression
-    def test_warning_logged_when_flooring_occurs(self, caplog: pytest.LogCaptureFixture) -> None:
+    @pytest.mark.asyncio
+    async def test_warning_logged_when_flooring_occurs(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
         """logger.warning() is emitted with ticker, horizon, raw values, and floor when clamping.
 
         Verifies that when any of yhat/yhat_lower/yhat_upper falls below the price
@@ -260,7 +267,7 @@ class TestPredictForecastPriceFloor:
             patch("backend.tools.forecasting.Path.exists", return_value=True),
             caplog.at_level(logging.WARNING, logger="backend.tools.forecasting"),
         ):
-            predict_forecast(mv, horizons=[90, 180, 270])
+            await predict_forecast(mv, AsyncMock(), horizons=[90, 180, 270])
 
         warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warning_records) == 1, (
@@ -275,7 +282,8 @@ class TestPredictForecastPriceFloor:
         assert "1.0" in msg  # floor value (1.00) present
 
     @pytest.mark.regression
-    def test_no_warning_logged_when_no_flooring_occurs(
+    @pytest.mark.asyncio
+    async def test_no_warning_logged_when_no_flooring_occurs(
         self,
         caplog: pytest.LogCaptureFixture,
     ) -> None:
@@ -303,7 +311,7 @@ class TestPredictForecastPriceFloor:
             patch("backend.tools.forecasting.Path.exists", return_value=True),
             caplog.at_level(logging.WARNING, logger="backend.tools.forecasting"),
         ):
-            predict_forecast(mv, horizons=[90, 180, 270])
+            await predict_forecast(mv, AsyncMock(), horizons=[90, 180, 270])
 
         warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
         assert len(warning_records) == 0, (
@@ -311,7 +319,8 @@ class TestPredictForecastPriceFloor:
         )
 
     @pytest.mark.regression
-    def test_model_without_history_uses_absolute_minimum_floor(self) -> None:
+    @pytest.mark.asyncio
+    async def test_model_without_history_uses_absolute_minimum_floor(self) -> None:
         """Model with no history attribute falls back to absolute minimum floor (0.01)."""
         model = _make_mock_model(
             last_training_price=100.0,
@@ -329,7 +338,7 @@ class TestPredictForecastPriceFloor:
             patch("backend.tools.forecasting.model_from_json", return_value=model),
             patch("backend.tools.forecasting.Path.exists", return_value=True),
         ):
-            results = predict_forecast(mv, horizons=[90])
+            results = await predict_forecast(mv, AsyncMock(), horizons=[90])
 
         # last_known_price=0.0 → floor=max(0.01, 0.0*0.01)=0.01
         assert results[0].predicted_price == 0.01
