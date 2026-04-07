@@ -218,11 +218,16 @@ async def test_forecast_period_uses_seven_day_trailing_mean(db_session) -> None:
     that ramps up linearly so the trailing-mean is well above 0 and the
     fallback (0.0) would be obviously wrong.
 
-    The test sanity-checks the projection value by patching
-    ``_fetch_sentiment_regressors`` once with real data and once with empty
-    data; the difference between predictions must trace back through the
-    horizon prediction (longer horizons see more days of projected sentiment
-    so the gap should grow with horizon).
+    The test sanity-checks the projection by running predict twice — once
+    with real sentiment, once with ``_fetch_sentiment_regressors`` forced to
+    ``None`` (the degenerate-fallback case). All three horizons must show a
+    meaningful delta, proving the non-zero 7d trailing mean is being applied
+    to the forecast-date rows of the future DataFrame. We do NOT assert the
+    deltas scale with horizon: Prophet extracts a single target-date row per
+    horizon, and the projection is a constant trailing-mean across all future
+    dates — so the per-row regressor contribution is ~equal across horizons.
+    The original "grows with horizon" intuition was wrong and produced flaky
+    float-tie-breaker failures between macOS and Linux Prophet builds.
     """
     from backend.tools.forecasting import predict_forecast, train_prophet_model
 
@@ -269,16 +274,18 @@ async def test_forecast_period_uses_seven_day_trailing_mean(db_session) -> None:
     ):
         forecasts_zeroed = await predict_forecast(model_version, db_session)
 
-    # The longest horizon spans more projected days than the shortest, so
-    # the gap from honoring the trailing-mean projection should grow with
-    # horizon. We assert the longest-horizon delta is at least as large as
-    # the shortest-horizon delta — a strict check that the projection is
-    # being applied to forecast dates, not just historical merge.
     deltas = {
         f_real.horizon_days: abs(f_real.predicted_price - f_zero.predicted_price)
         for f_real, f_zero in zip(forecasts_real, forecasts_zeroed, strict=True)
     }
-    assert deltas[270] >= deltas[90], (
-        f"Long-horizon delta should be >= short-horizon delta when the "
-        f"trailing-mean projection is applied to future dates. deltas={deltas}"
+    # With a ramped sentiment series reaching ~0.8 near training end, the
+    # 7d trailing mean is well above 0 and the trained beta is ~8, so the
+    # per-horizon delta should comfortably exceed 0.5$. If ANY horizon shows
+    # a near-zero delta, the projection was silently not applied to forecast
+    # dates — which is exactly the B3 regression this test guards.
+    min_delta = min(deltas.values())
+    assert min_delta > 0.5, (
+        f"Every horizon must show a non-trivial delta when the 7d trailing "
+        f"mean projection is applied to forecast dates (min delta was "
+        f"{min_delta:.4f}). deltas={deltas}"
     )
