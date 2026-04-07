@@ -2,6 +2,10 @@
 
 Uses db_session (testcontainers) — must live under tests/api/, not tests/unit/.
 Prophet is always patched here; these tests verify task orchestration only.
+
+Note on test isolation: db_session does NOT truncate between tests (only the
+'client' fixture does). Each test uses unique ticker symbols to avoid cross-test
+contamination.
 """
 
 from __future__ import annotations
@@ -33,10 +37,15 @@ FAKE_METRICS = BacktestMetrics(
 )
 
 
-def _seed_stock_and_model(session, ticker: str) -> "uuid.UUID":
+async def _seed_stock_and_model(session, ticker: str) -> uuid.UUID:
     """Seed a Stock row and an active ModelVersion for *ticker*.
 
-    Returns the ModelVersion id for use in assertions.
+    Args:
+        session: Async database session.
+        ticker: Stock ticker symbol.
+
+    Returns:
+        The ModelVersion UUID for use in assertions.
     """
     from backend.models.forecast import ModelVersion
     from backend.models.stock import Stock
@@ -55,6 +64,7 @@ def _seed_stock_and_model(session, ticker: str) -> "uuid.UUID":
             updated_at=now,
         )
     )
+    await session.flush()
 
     mv_id = uuid.uuid4()
     session.add(
@@ -71,13 +81,27 @@ def _seed_stock_and_model(session, ticker: str) -> "uuid.UUID":
             status="active",
         )
     )
+    await session.flush()
     return mv_id
 
 
+def _make_mock_factory(db_session):
+    """Create a mock async_session_factory context manager backed by db_session.
+
+    Args:
+        db_session: The test async session to inject.
+
+    Returns:
+        Mock that behaves like async_session_factory().
+    """
+    mock_cm = MagicMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=db_session)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    return mock_cm
+
+
 # ---------------------------------------------------------------------------
-# B2.2 tests — these are written against the *real* _run_backtest_async
-# implementation (B2.3). Running them before B2.3 is implemented will FAIL.
-# After B2.3 is merged they must all pass GREEN.
+# B2.2/B2.3 tests
 # ---------------------------------------------------------------------------
 
 
@@ -85,10 +109,10 @@ def _seed_stock_and_model(session, ticker: str) -> "uuid.UUID":
 async def test_single_ticker_inserts_one_row(db_session):
     """Calling _run_backtest_async with a single ticker inserts exactly one BacktestRun row.
 
-    Verifies: row count, horizon_days, and result["completed"] == 1.
+    Verifies: row is for the correct ticker, horizon_days matches, completed == 1.
     """
-    ticker = "AAP"
-    await db_session.run_sync(lambda s: _seed_stock_and_model(s, ticker))
+    ticker = "XQ1"
+    await _seed_stock_and_model(db_session, ticker)
     await db_session.commit()
 
     with (
@@ -103,17 +127,16 @@ async def test_single_ticker_inserts_one_row(db_session):
         ),
         patch(
             "backend.tasks.forecasting.async_session_factory",
-        ) as mock_factory,
+            return_value=_make_mock_factory(db_session),
+        ),
     ):
-        # Route the task's session to our test db_session
-        mock_cm = MagicMock()
-        mock_cm.__aenter__ = AsyncMock(return_value=db_session)
-        mock_cm.__aexit__ = AsyncMock(return_value=False)
-        mock_factory.return_value = mock_cm
-
         result = await _run_backtest_async(ticker, 90)
 
-    rows = (await db_session.execute(select(BacktestRun))).scalars().all()
+    rows = (
+        (await db_session.execute(select(BacktestRun).where(BacktestRun.ticker == ticker)))
+        .scalars()
+        .all()
+    )
     assert len(rows) == 1
     assert rows[0].horizon_days == 90
     assert result["completed"] == 1
@@ -127,9 +150,9 @@ async def test_universe_mode_three_tickers(db_session):
     Patches get_all_referenced_tickers to return 3 tickers.
     Asserts 3 BacktestRun rows inserted and result["completed"] == 3.
     """
-    tickers = ["T1A", "T2B", "T3C"]
+    tickers = ["XU1", "XU2", "XU3"]
     for tkr in tickers:
-        await db_session.run_sync(lambda s, t=tkr: _seed_stock_and_model(s, t))
+        await _seed_stock_and_model(db_session, tkr)
     await db_session.commit()
 
     with (
@@ -149,16 +172,16 @@ async def test_universe_mode_three_tickers(db_session):
         ),
         patch(
             "backend.tasks.forecasting.async_session_factory",
-        ) as mock_factory,
+            return_value=_make_mock_factory(db_session),
+        ),
     ):
-        mock_cm = MagicMock()
-        mock_cm.__aenter__ = AsyncMock(return_value=db_session)
-        mock_cm.__aexit__ = AsyncMock(return_value=False)
-        mock_factory.return_value = mock_cm
-
         result = await _run_backtest_async(None, 90)
 
-    rows = (await db_session.execute(select(BacktestRun))).scalars().all()
+    rows = (
+        (await db_session.execute(select(BacktestRun).where(BacktestRun.ticker.in_(tickers))))
+        .scalars()
+        .all()
+    )
     assert len(rows) == 3
     assert result["completed"] == 3
     assert result["failed"] == 0
@@ -168,27 +191,23 @@ async def test_universe_mode_three_tickers(db_session):
 async def test_per_ticker_failure_isolated(db_session):
     """A failure for one ticker does not block others.
 
-    MSFT raises; AAPL and GOOG succeed.
-    Asserts: 2 rows inserted, result["failed"] == 1, result["completed"] == 2.
+    XF2 raises; XF1 and XF3 succeed.
+    Asserts: 2 rows inserted for succeeding tickers, failed == 1, completed == 2.
     """
-    tickers = ["AAA", "BBB", "CCC"]
+    tickers = ["XF1", "XF2", "XF3"]
     for tkr in tickers:
-        await db_session.run_sync(lambda s, t=tkr: _seed_stock_and_model(s, t))
+        await _seed_stock_and_model(db_session, tkr)
     await db_session.commit()
 
-    def _side_effect(tkr, db, **kwargs):
-        if tkr == "BBB":
-            raise RuntimeError("Simulated Prophet failure")
-
-        async def _ok():
-            return FAKE_METRICS
-
-        return _ok()
+    async def _walk_forward_side_effect(tkr, db, **kwargs):
+        if tkr == "XF2":
+            raise RuntimeError("Simulated Prophet failure for XF2")
+        return FAKE_METRICS
 
     with (
         patch(
             "backend.tasks.forecasting.BacktestEngine.run_walk_forward",
-            side_effect=_side_effect,
+            side_effect=_walk_forward_side_effect,
         ),
         patch(
             "backend.tasks.forecasting.mark_stage_updated",
@@ -201,44 +220,54 @@ async def test_per_ticker_failure_isolated(db_session):
         ),
         patch(
             "backend.tasks.forecasting.async_session_factory",
-        ) as mock_factory,
+            return_value=_make_mock_factory(db_session),
+        ),
     ):
-        mock_cm = MagicMock()
-        mock_cm.__aenter__ = AsyncMock(return_value=db_session)
-        mock_cm.__aexit__ = AsyncMock(return_value=False)
-        mock_factory.return_value = mock_cm
-
         result = await _run_backtest_async(None, 90)
 
     assert result["failed"] == 1
     assert result["completed"] == 2
+    # Succeeding tickers got rows; failing ticker did not
+    success_rows = (
+        (
+            await db_session.execute(
+                select(BacktestRun).where(BacktestRun.ticker.in_(["XF1", "XF3"]))
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(success_rows) == 2
+    failure_rows = (
+        (await db_session.execute(select(BacktestRun).where(BacktestRun.ticker == "XF2")))
+        .scalars()
+        .all()
+    )
+    assert len(failure_rows) == 0
 
 
 @pytest.mark.asyncio
 async def test_mark_stage_updated_called_on_success_only(db_session):
     """mark_stage_updated is called only for tickers that succeed, not for failing ones.
 
-    With AAPL succeeding and MSFT failing, expects one call to mark_stage_updated.
+    XM1 succeeds and XM2 fails. Expects exactly one mark_stage_updated call
+    with XM1 as the ticker argument.
     """
-    tickers = ["SUC", "FAL"]
+    tickers = ["XM1", "XM2"]
     for tkr in tickers:
-        await db_session.run_sync(lambda s, t=tkr: _seed_stock_and_model(s, t))
+        await _seed_stock_and_model(db_session, tkr)
     await db_session.commit()
 
-    def _side_effect(tkr, db, **kwargs):
-        if tkr == "FAL":
-            raise RuntimeError("Planned failure")
-
-        async def _ok():
-            return FAKE_METRICS
-
-        return _ok()
+    async def _walk_forward_side_effect(tkr, db, **kwargs):
+        if tkr == "XM2":
+            raise RuntimeError("Planned failure for XM2")
+        return FAKE_METRICS
 
     mock_mark = AsyncMock()
     with (
         patch(
             "backend.tasks.forecasting.BacktestEngine.run_walk_forward",
-            side_effect=_side_effect,
+            side_effect=_walk_forward_side_effect,
         ),
         patch(
             "backend.tasks.forecasting.mark_stage_updated",
@@ -251,16 +280,12 @@ async def test_mark_stage_updated_called_on_success_only(db_session):
         ),
         patch(
             "backend.tasks.forecasting.async_session_factory",
-        ) as mock_factory,
+            return_value=_make_mock_factory(db_session),
+        ),
     ):
-        mock_cm = MagicMock()
-        mock_cm.__aenter__ = AsyncMock(return_value=db_session)
-        mock_cm.__aexit__ = AsyncMock(return_value=False)
-        mock_factory.return_value = mock_cm
-
         await _run_backtest_async(None, 90)
 
     # Only the successful ticker should have triggered stage update
     assert mock_mark.call_count == 1
     called_ticker = mock_mark.call_args[0][0]
-    assert called_ticker == "SUC"
+    assert called_ticker == "XM1"
