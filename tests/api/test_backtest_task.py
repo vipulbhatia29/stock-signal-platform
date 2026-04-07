@@ -289,3 +289,73 @@ async def test_mark_stage_updated_called_on_success_only(db_session):
     assert mock_mark.call_count == 1
     called_ticker = mock_mark.call_args[0][0]
     assert called_ticker == "XM1"
+
+
+# ---------------------------------------------------------------------------
+# B2 regression: no active ModelVersion must not count as success
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_no_active_model_version_skips_row_and_marks_failed(db_session):
+    """When no active ModelVersion exists for a ticker, the task must not
+    persist a BacktestRun row, must not call mark_stage_updated, and must
+    count the ticker as failed (not completed).
+
+    Regression for the placement bug where mark_stage_updated and completed+=1
+    were called unconditionally outside the success branch.
+    """
+    from backend.models.backtest import BacktestRun
+    from backend.models.stock import Stock
+
+    ticker = "NOMV"
+    now = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+
+    # Seed Stock row only — intentionally NO ModelVersion for this ticker
+    stock_id = __import__("uuid").uuid4()
+    db_session.add(
+        Stock(
+            id=stock_id,
+            ticker=ticker,
+            name="NOMV Corp",
+            exchange="TEST",
+            sector="Technology",
+            is_active=True,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+
+    mock_mark = AsyncMock()
+    with (
+        patch(
+            "backend.tasks.forecasting.BacktestEngine.run_walk_forward",
+            new_callable=AsyncMock,
+            return_value=FAKE_METRICS,
+        ),
+        patch(
+            "backend.tasks.forecasting.mark_stage_updated",
+            mock_mark,
+        ),
+        patch(
+            "backend.tasks.forecasting.async_session_factory",
+            return_value=_make_mock_factory(db_session),
+        ),
+    ):
+        result = await _run_backtest_async(ticker, 90)
+
+    # No BacktestRun row should have been written
+    rows = (
+        (await db_session.execute(select(BacktestRun).where(BacktestRun.ticker == ticker)))
+        .scalars()
+        .all()
+    )
+    assert len(rows) == 0, "BacktestRun row must NOT be written when ModelVersion is missing"
+
+    # Counts must reflect failure, not success
+    assert result["completed"] == 0, "completed must be 0 when no ModelVersion found"
+    assert result["failed"] == 1, "failed must be 1 when no ModelVersion found"
+
+    # Stage tracker must not be called — we didn't actually persist anything
+    mock_mark.assert_not_called()
