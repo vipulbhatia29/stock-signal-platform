@@ -18,6 +18,7 @@ from backend.services.backtesting import BacktestEngine, BacktestMetrics
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_price_rows(
     ticker: str,
     start: datetime,
@@ -238,3 +239,69 @@ async def test_walk_forward_mocked_windows_returns_correct_aggregates(db_session
     assert metrics.ci_bias in ("above", "below", "balanced")
     assert 0.0 <= metrics.ci_containment <= 1.0
     assert 0.0 <= metrics.direction_accuracy <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# Slow smoke test — exercises real Prophet end-to-end (_fit_and_predict_sync)
+# ---------------------------------------------------------------------------
+
+prophet = pytest.importorskip("prophet", reason="prophet not installed — skipping slow smoke")
+
+
+@pytest.mark.slow
+@pytest.mark.asyncio
+async def test_fit_and_predict_sync_linear_series_smoke(db_session):
+    """Smoke test for the real Prophet path through BacktestEngine.
+
+    Seeds 400 days of linear price data (no mocking of _fit_and_predict_sync)
+    and verifies that run_walk_forward produces at least one window with
+    sensible metrics. Linear data is easy for Prophet, so MAPE < 10% is a
+    reasonable bar.
+
+    Marked @pytest.mark.slow — expected runtime ~5–15 s depending on machine.
+    Uses pytest.importorskip at module level to skip cleanly if Prophet is not
+    installed (e.g. CI minimal images).
+    """
+    import math
+
+    from backend.models.stock import Stock
+
+    ticker = "LIN"
+    start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+    stock = Stock(
+        id=__import__("uuid").uuid4(),
+        ticker=ticker,
+        name="LIN Linear Corp",
+        exchange="TEST",
+        sector="Industrials",
+        is_active=True,
+        created_at=start,
+        updated_at=start,
+    )
+    db_session.add(stock)
+    await db_session.flush()
+
+    # 400 days, close = 100 + 0.5*i — a strong linear trend Prophet handles well
+    rows = _make_price_rows(ticker, start, n_days=400, base=100.0, slope=0.5)
+    for r in rows:
+        db_session.add(r)
+    await db_session.commit()
+
+    engine = BacktestEngine()
+    metrics = await engine.run_walk_forward(
+        ticker,
+        db_session,
+        horizon_days=30,
+        min_train_days=365,
+        step_days=30,
+    )
+
+    assert metrics.num_windows >= 1, "Expected at least one completed walk-forward window"
+    assert math.isfinite(metrics.mape), f"MAPE must be finite, got {metrics.mape}"
+    assert metrics.mape < 0.10, f"Expected MAPE < 10% on linear data, got {metrics.mape:.4f}"
+    assert math.isfinite(metrics.mae), f"MAE must be finite, got {metrics.mae}"
+    assert math.isfinite(metrics.rmse), f"RMSE must be finite, got {metrics.rmse}"
+    assert math.isfinite(metrics.direction_accuracy), (
+        f"direction_accuracy must be finite, got {metrics.direction_accuracy}"
+    )
