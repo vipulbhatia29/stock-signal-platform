@@ -170,7 +170,9 @@ class PipelineRunner:
 
             # Compute total duration
             if run.started_at:
-                run.total_duration_seconds = (run.completed_at - run.started_at).total_seconds()
+                # TODO(KAN-pyright-cleanup): run.completed_at was set on the line above
+                # but pyright cannot narrow Mapped[datetime|None] across the assignment.
+                run.total_duration_seconds = (run.completed_at - run.started_at).total_seconds()  # pyright: ignore[reportOptionalOperand]
 
             if run.tickers_failed == 0:
                 run.status = "success"

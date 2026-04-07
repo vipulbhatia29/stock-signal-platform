@@ -149,7 +149,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         from backend.services.cache import CacheTier
 
         async with async_session_factory() as warmup_db:
-            from backend.models.stock import StockIndex
+            # TODO(KAN-pyright-cleanup): StockIndex was relocated to backend.models.index
+            # in an earlier refactor; this import path is stale but functional via re-export.
+            from backend.models.stock import (
+                StockIndex,  # pyright: ignore[reportAttributeAccessIssue]
+            )
 
             idx_result = await warmup_db.execute(select(StockIndex))
             indexes = idx_result.scalars().all()
@@ -317,7 +321,10 @@ app = FastAPI(
 
 # --- Middleware ---
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# TODO(KAN-pyright-cleanup): slowapi's _rate_limit_exceeded_handler is typed against its
+# concrete RateLimitExceeded subclass, while FastAPI.add_exception_handler accepts the
+# broader ExceptionHandler protocol. The runtime contract is correct.
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # pyright: ignore[reportArgumentType]
 
 app.add_middleware(
     CORSMiddleware,

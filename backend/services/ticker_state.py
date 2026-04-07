@@ -6,7 +6,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from typing import Literal
+from typing import Literal, cast
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -214,7 +214,9 @@ def _worst(values: Iterable[StageStatus]) -> StageStatus:
         The worst status across all values.
     """
     priority = {"red": 0, "yellow": 1, "unknown": 2, "green": 3}
-    return min(values, key=lambda s: priority[s], default="unknown")
+    # cast: min() over a Literal iterable is widened to str by pyright; the
+    # default literal "unknown" is itself a StageStatus, so the call is sound.
+    return cast("StageStatus", min(values, key=lambda s: priority[s], default="unknown"))
 
 
 def _to_row(r: ReadinessState) -> ReadinessRow:

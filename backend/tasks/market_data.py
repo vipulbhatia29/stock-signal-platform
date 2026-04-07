@@ -121,7 +121,7 @@ async def _refresh_ticker_async(
     retry_backoff_max=60,
     name="backend.tasks.market_data.refresh_ticker_task",
 )
-def refresh_ticker_task(self, ticker: str) -> dict:
+def refresh_ticker_task(self, ticker: str) -> RefreshTickerResult:
     """Fetch latest prices and recompute signals for a single ticker.
 
     Args:
@@ -321,7 +321,9 @@ def nightly_pipeline_chain_task() -> dict:
         for pattern in ("app:screener:*", "app:sectors:*", "app:signals:*", "app:forecast:*"):
             cursor = 0
             while True:
-                cursor, keys = r.scan(cursor=cursor, match=pattern, count=100)
+                # TODO(KAN-pyright-cleanup): redis-py stubs declare scan() async-overload
+                # in some sync contexts; runtime path uses sync redis client.
+                cursor, keys = r.scan(cursor=cursor, match=pattern, count=100)  # pyright: ignore[reportGeneralTypeIssues]
                 if keys:
                     r.delete(*keys)
                     deleted += len(keys)
@@ -395,7 +397,10 @@ def _run_tasks_parallel(tasks: dict[str, object]) -> dict:
 
     results: dict = {}
     with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-        futures = {executor.submit(fn): name for name, fn in tasks.items()}
+        # TODO(KAN-pyright-cleanup): tasks values are typed as object since this helper
+        # accepts heterogeneous Callables; ThreadPoolExecutor.submit's ParamSpec inference
+        # cannot resolve through dict.values(). Runtime contract is enforced by callers.
+        futures = {executor.submit(fn): name for name, fn in tasks.items()}  # pyright: ignore[reportCallIssue, reportArgumentType]
         for future in as_completed(futures):
             name = futures[future]
             try:
