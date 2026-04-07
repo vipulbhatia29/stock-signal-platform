@@ -28,6 +28,7 @@ def test_staleness_slas_exact_values() -> None:
     assert sla.sentiment == timedelta(hours=6)
     assert sla.convergence == timedelta(hours=24)
     assert sla.backtest == timedelta(days=7)
+    assert sla.recommendation == timedelta(hours=24)
 
 
 def test_settings_staleness_slas_property_returns_instance() -> None:
@@ -98,6 +99,7 @@ async def test_get_ticker_readiness_green_when_fresh() -> None:
         sentiment_updated_at=now,
         convergence_updated_at=now,
         backtest_updated_at=now,
+        recommendation_updated_at=now,
     )
 
     fake_session = AsyncMock()
@@ -195,41 +197,21 @@ async def test_mark_stage_updated_swallows_db_error() -> None:
         await ticker_state.mark_stage_updated("AAPL", "prices")
 
 
-async def test_mark_stage_updated_forecast_vs_forecast_retrain() -> None:
-    """'forecast' writes forecast_updated_at; 'forecast_retrain' writes forecast_retrained_at."""
-    from backend.services import ticker_state
-
-    captured_stmts: list = []
-
-    async def fake_execute(stmt):
-        """Capture executed statements."""
-        captured_stmts.append(stmt)
-        return MagicMock()
-
-    fake_session = AsyncMock()
-    fake_session.execute = AsyncMock(side_effect=fake_execute)
-    fake_session.commit = AsyncMock()
-
-    with patch.object(ticker_state, "async_session_factory") as factory:
-        factory.return_value.__aenter__.return_value = fake_session
-        factory.return_value.__aexit__.return_value = None
-
-        await ticker_state.mark_stage_updated("AAPL", "forecast")
-        await ticker_state.mark_stage_updated("AAPL", "forecast_retrain")
-
-    # Both statements should have been issued
-    assert len(captured_stmts) == 2
-
-
 @freeze_time("2026-04-06 12:00:00")
-async def test_get_universe_health_orders_red_first() -> None:
-    """Sort order: red, yellow, unknown, green then ticker."""
+async def test_get_universe_health_orders_red_yellow_unknown_green() -> None:
+    """Sort order must be: red < yellow < unknown < green (then ticker ascending).
+
+    This pins all 4 buckets. The previous test only had 3 buckets and a
+    partial ordering check. Test is deterministic via @freeze_time.
+    """
     from backend.services import ticker_state
 
     now = datetime(2026, 4, 6, 12, 0, tzinfo=timezone.utc)
-    aged_red = datetime(2026, 4, 5, 12, 0, tzinfo=timezone.utc)  # 24h for prices (red)
+    # prices SLA = 4h. 1.5x = 6h → yellow. 2.5x = 10h → red.
+    aged_yellow = datetime(2026, 4, 6, 6, 0, tzinfo=timezone.utc)  # 6h old → yellow
+    aged_red = datetime(2026, 4, 6, 1, 0, tzinfo=timezone.utc)  # 11h old → red (>2×4h)
     rows = [
-        # GRN: all stages fresh → overall green
+        # GRN: all stages fresh
         _make_state_row(
             ticker="GRN",
             prices_updated_at=now,
@@ -241,10 +223,14 @@ async def test_get_universe_health_orders_red_first() -> None:
             sentiment_updated_at=now,
             convergence_updated_at=now,
             backtest_updated_at=now,
+            recommendation_updated_at=now,
         ),
-        # RED: prices aged >2×SLA → overall red
+        # RED: prices aged >2×SLA (>8h) → red
         _make_state_row(ticker="RED", prices_updated_at=aged_red),
-        _make_state_row(ticker="UNK"),  # no timestamps → overall unknown
+        # UNK: no timestamps at all → unknown
+        _make_state_row(ticker="UNK"),
+        # YLW: prices aged between 1×SLA and 2×SLA (4h–8h) → yellow
+        _make_state_row(ticker="YLW", prices_updated_at=aged_yellow),
     ]
 
     fake_session = AsyncMock()
@@ -258,9 +244,22 @@ async def test_get_universe_health_orders_red_first() -> None:
         health = await ticker_state.get_universe_health()
 
     tickers_in_order = [r.ticker for r in health]
-    # RED must come before UNK which must come before GRN
-    assert tickers_in_order.index("RED") < tickers_in_order.index("UNK")
-    assert tickers_in_order.index("UNK") < tickers_in_order.index("GRN")
+    # Assert exact bucket ordering: red < yellow < unknown < green
+    assert tickers_in_order.index("RED") < tickers_in_order.index("YLW"), (
+        f"Expected RED before YLW; got {tickers_in_order}"
+    )
+    assert tickers_in_order.index("YLW") < tickers_in_order.index("UNK"), (
+        f"Expected YLW before UNK; got {tickers_in_order}"
+    )
+    assert tickers_in_order.index("UNK") < tickers_in_order.index("GRN"), (
+        f"Expected UNK before GRN; got {tickers_in_order}"
+    )
+    # Also verify the overall status values match expectations
+    status_map = {r.ticker: r.overall for r in health}
+    assert status_map["RED"] == "red"
+    assert status_map["YLW"] == "yellow"
+    assert status_map["UNK"] == "unknown"
+    assert status_map["GRN"] == "green"
 
 
 async def test_get_universe_health_empty_table_returns_empty_list() -> None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import typing
 import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -83,7 +84,13 @@ async def test_tracked_task_forwards_tickers_total() -> None:
 
 
 async def test_tracked_task_marks_failed_on_exception() -> None:
-    """Inner raises → PipelineRun marked failed; exception re-raised."""
+    """Inner raises → PipelineRun marked failed; exception re-raised.
+
+    Asserts that exactly one UPDATE statement was issued and one commit,
+    verifying the failure path hits the DB. The authoritative leak-guard test
+    (Hard Rule #10) lives in tests/api/test_tracked_task_error_redaction.py
+    with a real DB — that test is the source of truth for str(e) redaction.
+    """
     from backend.tasks import pipeline
 
     run_id = uuid.uuid4()
@@ -109,54 +116,9 @@ async def test_tracked_task_marks_failed_on_exception() -> None:
 
     # complete_run must NOT be called on exception path
     complete_mock.assert_not_awaited()
-    # Session was used to mark the row failed
+    # Session was used to mark the row failed — one execute + one commit
     fake_session.execute.assert_awaited_once()
     fake_session.commit.assert_awaited_once()
-
-    # Hard Rule #10: error_summary must never carry the raw exception string.
-    # Inspect what was passed in the update statement's values.
-    stmt = fake_session.execute.await_args[0][0]
-    compiled = str(stmt)
-    assert "hunter2" not in compiled
-    assert "secret db password" not in compiled
-
-
-async def test_tracked_task_no_str_e_leakage() -> None:
-    """Regression for Hard Rule #10: exception message must not appear in DB write."""
-    from backend.tasks import pipeline
-
-    run_id = uuid.uuid4()
-    execute_args_list: list = []
-    fake_session = AsyncMock()
-
-    async def capture_execute(stmt):
-        """Capture and return mock result."""
-        execute_args_list.append(str(stmt))
-        return MagicMock()
-
-    fake_session.execute = AsyncMock(side_effect=capture_execute)
-    fake_session.commit = AsyncMock()
-
-    with (
-        patch.object(pipeline.PipelineRunner, "start_run", new=AsyncMock(return_value=run_id)),
-        patch.object(pipeline.PipelineRunner, "complete_run", new=AsyncMock()),
-        patch.object(pipeline, "async_session_factory") as factory_mock,
-    ):
-        factory_mock.return_value.__aenter__.return_value = fake_session
-        factory_mock.return_value.__aexit__.return_value = None
-
-        @pipeline.tracked_task("p")
-        async def inner(*, run_id: uuid.UUID) -> None:
-            """Inner task with a secret in its error message."""
-            raise RuntimeError("hunter2 is my real password")
-
-        with pytest.raises(RuntimeError):
-            await inner()
-
-    # Check nothing leaked through the SQL statement
-    all_sql = " ".join(execute_args_list)
-    assert "hunter2" not in all_sql
-    assert "real password" not in all_sql
 
 
 async def test_tracked_task_default_trigger_is_scheduled() -> None:
@@ -201,3 +163,16 @@ async def test_tracked_task_custom_trigger_passthrough() -> None:
         await inner()
 
     assert start_mock.await_args.kwargs["trigger"] == "manual"
+
+
+def test_ticker_failure_reason_is_literal_type() -> None:
+    """TickerFailureReason must be a typing.Literal — enforces Hard Rule #10 at type-check time.
+
+    Verifies that get_origin(TickerFailureReason) returns typing.Literal so
+    pyright/mypy can reject callers that pass dynamic strings (e.g. str(e)).
+    """
+    from backend.tasks.pipeline import TickerFailureReason
+
+    assert typing.get_origin(TickerFailureReason) is typing.Literal, (
+        "TickerFailureReason must be a typing.Literal so pyright can enforce Hard Rule #10"
+    )
