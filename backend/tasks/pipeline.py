@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
-from typing import Any, ParamSpec, TypeVar
+from typing import Any, Literal, ParamSpec, TypeVar
 
 import pandas as pd
 from sqlalchemy import select, update
@@ -21,6 +21,21 @@ logger = logging.getLogger(__name__)
 
 # Stale run threshold: if a run has been "running" for > 1 hour, mark it failed
 STALE_RUN_THRESHOLD = timedelta(hours=1)
+
+# ---------------------------------------------------------------------------
+# Hard Rule #10: never pass str(e) or repr(e) as an error code.
+# TickerFailureReason is an exhaustive Literal of safe, static strings.
+# Add new values here via PR — do NOT add dynamic runtime strings.
+# ---------------------------------------------------------------------------
+TickerFailureReason = Literal[
+    "fetch_failed",
+    "score_failed",
+    "timeout",
+    "rate_limit",
+    "unknown_error",
+    "retrain failed",
+    "refresh failed",
+]
 
 
 class PipelineRunner:
@@ -78,13 +93,20 @@ class PipelineRunner:
             await session.commit()
         logger.debug("Pipeline %s: %s succeeded", run_id, ticker)
 
-    async def record_ticker_failure(self, run_id: uuid.UUID, ticker: str, error: str) -> None:
+    async def record_ticker_failure(
+        self, run_id: uuid.UUID, ticker: str, error: TickerFailureReason
+    ) -> None:
         """Increment tickers_failed and add error to error_summary.
+
+        Hard Rule #10: ``error`` must be a static :data:`TickerFailureReason`
+        string — never ``str(e)`` or ``repr(e)``. Pyright enforces this at
+        type-check time; add new values to the ``TickerFailureReason`` union
+        via PR, never inline at the call site.
 
         Args:
             run_id: The PipelineRun UUID.
             ticker: Ticker symbol that failed.
-            error: Error description.
+            error: Static error code from :data:`TickerFailureReason`.
         """
         async with async_session_factory() as session:
             result = await session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
@@ -391,8 +413,10 @@ def tracked_task(
                 try:
                     await _score_one(t)
                     await _runner.record_ticker_success(run_id, t)
-                except Exception as e:
-                    await _runner.record_ticker_failure(run_id, t, repr(e))
+                except Exception:
+                    # Hard Rule #10: never pass str(e) / repr(e) — use a
+                    # static TickerFailureReason string instead.
+                    await _runner.record_ticker_failure(run_id, t, "score_failed")
             return {"tickers": len(tickers)}
 
     Args:
