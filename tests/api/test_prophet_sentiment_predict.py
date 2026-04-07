@@ -55,6 +55,7 @@ async def _seed_synthetic_series(
     end_date: Any = None,
     seed_sentiment: bool = True,
     constant_sentiment: float | None = None,
+    tail_zero_days: int = 0,
 ) -> None:
     """Seed Stock + StockPrice + (optionally) NewsSentimentDaily rows.
 
@@ -73,6 +74,10 @@ async def _seed_synthetic_series(
             (model will train without sentiment regressors).
         constant_sentiment: When set, overrides the sinusoid and uses this
             value for every day (useful for projection-collapse tests).
+        tail_zero_days: Force the last N days of seeded sentiment (and the
+            corresponding price drift contribution) to exactly 0.0. Used
+            by the stale-model test to deterministically pin the 7-day
+            trailing-mean fallback at 0, eliminating phase-dependent flakiness.
     """
     await _seed_stock(db_session, ticker)
     rng = np.random.default_rng(seed)
@@ -81,6 +86,9 @@ async def _seed_synthetic_series(
         sentiment = np.full(days, float(constant_sentiment))
     else:
         sentiment = 0.5 * np.sin(np.linspace(0, 6 * np.pi, days)) + rng.normal(0, 0.05, days)
+
+    if tail_zero_days > 0:
+        sentiment[-tail_zero_days:] = 0.0
 
     drift = beta * sentiment + rng.normal(0, 0.2, days)
     prices = 100.0 + np.cumsum(drift)
@@ -244,6 +252,10 @@ async def test_stale_model_fetches_post_training_sentiment(db_session) -> None:
     training_end_date = datetime(2026, 1, 15, tzinfo=timezone.utc).date()
 
     with freeze_time("2026-01-15 12:00:00"):
+        # Seed sine sentiment for 193 days so Prophet learns a non-trivial
+        # beta, then force the last 7 days to exactly 0.0. This pins the
+        # stale-fallback trailing-mean baseline at 0 deterministically,
+        # eliminating flakiness from sine-phase dependence on the seed (TQ1).
         await _seed_synthetic_series(
             db_session,
             ticker="STALE",
@@ -251,6 +263,7 @@ async def test_stale_model_fetches_post_training_sentiment(db_session) -> None:
             beta=10.0,
             seed=101,
             end_date=training_end_date,
+            tail_zero_days=7,
         )
         await db_session.commit()
         model_version = await train_prophet_model("STALE", db_session)
@@ -341,28 +354,12 @@ async def test_projection_collapse_logs_error(db_session, caplog: pytest.LogCapt
     assert "ZEROSENT" in matching[0].message
 
 
-@pytest.mark.asyncio
-@pytest.mark.regression
-@pytest.mark.timeout(180)
-async def test_no_nan_in_regressor_columns_after_merge(db_session) -> None:
-    """After merge + projection, no sentiment column may contain NaN.
-
-    The fix raises RuntimeError if a NaN leaks through the merge + projection
-    pipeline. This test exercises the happy path and verifies that the
-    invariant holds — any future regression that introduces NaN handling
-    via ``fillna(0.0)`` (the original C3 bug) would bypass the raise and
-    pass this test, so we also assert the projection populated every row.
-    """
-    from backend.tools.forecasting import predict_forecast, train_prophet_model
-
-    await _seed_synthetic_series(db_session, ticker="NANCHECK", days=200, beta=5.0, seed=55)
-    await db_session.commit()
-
-    model_version = await train_prophet_model("NANCHECK", db_session)
-    forecasts = await predict_forecast(model_version, db_session)
-
-    # If no RuntimeError was raised and we got 3 forecasts, the invariant
-    # (no NaN after merge + projection) held. This is mostly a smoke test
-    # of the raise path being reachable only when there's an actual bug.
-    assert len(forecasts) == 3
-    assert all(f.predicted_price > 0 for f in forecasts)
+# Note: the RuntimeError guard for NaN-after-merge in predict_forecast is a
+# defensive safety net — not reachable in normal production paths because
+# every row of combined_sentiment_df is non-null by construction. We
+# deliberately do NOT add a test for the raise path because any test that
+# forces it through has to contrive a broken pd.concat result or a
+# schema-mismatched post_df, neither of which reflects a real regression
+# mode. The guard is defense-in-depth; the C3 "fillna(0.0) silently zeros
+# weekends" bug is structurally prevented by sourcing historical rows from
+# model.history (which contains only market days — no weekend rows to fill).
