@@ -163,6 +163,56 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 
 ---
 
+### Epic KAN-419: Pipeline Architecture Overhaul (REFINED — Session 98)
+
+> Comprehensive refactor of ingestion + observability + UX after a full audit found stub tasks closed without code, broken Prophet sentiment integration, missed entry points, and observability gaps.
+> **8 specs + 8 plans + 3 expert reviews. ~80 review findings (28 CRITICAL applied inline). 7 superseded JIRA tickets.**
+>
+> **Specs:** `docs/superpowers/specs/2026-04-06-pipeline-overhaul-spec-{A..G,Z}-*.md` (~5,576 lines)
+> **Plans:** `docs/superpowers/plans/2026-04-06-pipeline-overhaul-plan-{A..G,Z}-*.md` (~9,853 lines)
+> **Reviews:** `docs/superpowers/plans/2026-04-06-pipeline-overhaul-review-{staff-engineer,test-engineer,efgz,resolutions}.md`
+
+| Ticket | Spec | Priority | Summary | Status |
+|--------|------|----------|---------|--------|
+| KAN-419 | Epic | High | Pipeline Architecture Overhaul | Refined ✅ |
+| KAN-421 | A | High | Ingestion Foundation — state table, SLAs, PipelineRunner contract, observability helpers | Refined ✅ |
+| KAN-422 | B | High | Pipeline Completeness — convergence, backtest, Prophet sentiment fix, news concurrency | Refined ✅ |
+| KAN-423 | C | High | Entry Point Unification — watchlist, portfolio, chat, stale auto-refresh, bulk CSV | Refined ✅ |
+| KAN-420 | D | High | Admin + Observability — universal PipelineRunner, per-task trigger, ingestion health, Langfuse spans | Refined ✅ |
+| KAN-424 | E | Medium | Forecast Quality & Scale — cap raise, weekly retrain, intraday fast/slow split | Refined ✅ |
+| KAN-425 | F | Medium | DQ + Retention + Rate Limiting — DQ scanner, token bucket, retention tasks, TimescaleDB compression | Refined ✅ |
+| KAN-426 | G | Medium | Frontend Polish — ingest progress, polling, stale badges, ticker search | Refined ✅ |
+| KAN-427 | Z | Medium | Quick Wins — registry typo, news LIMIT 50, task rename, frontend invalidation, WelcomeBanner | Refined ✅ |
+
+**Superseded tickets** (commented in JIRA, will close when corresponding KAN- ticket lands):
+- KAN-405 (sentiment concurrent) → folded into KAN-422
+- KAN-395 (convergence stub — was wrongly closed) → folded into KAN-422
+- KAN-398 (AccuracyBadge wiring) → enabled by KAN-422 + KAN-426
+- KAN-406 (SPY 2y history) → folded into KAN-424
+- KAN-212 (tool orchestration tests) → folded into KAN-423
+- KAN-213 (testcontainers refactor) → overhaul test strategy
+- KAN-214 (error path tests) → folded across KAN-422/423/420
+- KAN-162 (Langfuse self-hosted) → partially folded into KAN-420
+
+**Execution order (isolation batches):**
+
+```
+Batch Z (KAN-427) ─────────┐ Independent — anytime
+Batch A (KAN-421) ─────────┤ Foundation — anytime
+                            │
+Batch A → Batch B (KAN-422) ┤ B uses A's primitives
+Batch A → Batch D (KAN-420) ┤ D uses A's primitives
+Batch B → Batch C (KAN-423) ┤ C uses B's extended ingest_ticker
+Batch A + F → Batch E ──────┤ E uses F3 yfinance rate limiter
+Batch C → Batch G (KAN-426) ┘ G uses C's API contract
+```
+
+**Migration sequence:** Current head `b2351fa2d293` → 025 (Spec A) → 026 (Spec F) → 027 (Spec F).
+
+**Critical fixes already applied to specs/plans** (review pre-merge, see resolutions doc): 25 cross-cutting fixes including `task_tracer` import path consolidation, `mark_stage_updated` signature lock, `Stage` Literal extension, Prophet sentiment async refactor, Postgres pool math correction, TimescaleDB compression downgrade fix, frontend Jest (not Vitest), Redis SETNX dedup, etc.
+
+---
+
 ### Epic KAN-408: Backend Code Health & Security Hardening (IN PROGRESS — Session 97)
 
 > Refined this session. Spec + plan written, 2 rounds of staff + test engineer reviews complete.

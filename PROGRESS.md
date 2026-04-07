@@ -143,6 +143,79 @@ Full database reseed (preserving portfolio/user/watchlist) to validate backend w
 
 ---
 
+## Session 98 — Pipeline Architecture Overhaul: Specs + Plans + Reviews + JIRA (2026-04-06)
+
+**Branch:** `develop` (specs/plans only, no code) | **No PR yet — multiple PRs to follow per spec**
+
+### Trigger
+Deep audit of the backend pipeline revealed systemic issues:
+- **KAN-395 was closed Done with ZERO code written** — `compute_convergence_snapshot_task` is still a stub returning `{"computed": 0}`. `signal_convergence_daily` table is empty in production.
+- **Prophet sentiment regressor half-broken** — training adds 3 sentiment regressors, but predict-time fills future DataFrame with `0.0` for ALL dates including historical (code comment literally says "KNOWN LIMITATION").
+- **News scoring is sequential** despite KAN-405 — 27 sequential LLM calls × 2s = ~54s/run.
+- **`run_backtest_task` and `calibrate_seasonality_task`** are also stubs with same "Sprint 4 integration" pattern.
+- **Watchlist add can't ingest new tickers** — returns 404. Portfolio transaction creates Stock row only. Chat tool computes signals but doesn't store. News ingest hard-codes `LIMIT 50`.
+- **Only 3 of 12+ Celery tasks use PipelineRunner.** Langfuse only wired to agent path. ~100 LLM calls/day untraced.
+
+### Deliverables — 8 specs + 8 plans + 4 reviews = ~15,429 lines
+
+| Spec | Plan | KAN ticket | Title |
+|---|---|---|---|
+| A | A | KAN-421 | Ingestion Foundation (state table, SLAs, PipelineRunner contract, task_tracer) |
+| B | B | KAN-422 | Pipeline Completeness (convergence, backtest, Prophet sentiment fix, news concurrency) |
+| C | C | KAN-423 | Entry Point Unification (watchlist, portfolio, chat, stale, bulk CSV) |
+| D | D | KAN-420 | Admin + Observability (universal PipelineRunner, per-task trigger, ingestion health, Langfuse spans) |
+| E | E | KAN-424 | Forecast Quality & Scale (cap raise, weekly retrain, intraday fast/slow split) |
+| F | F | KAN-425 | DQ + Retention + Rate Limiting (DQ scanner, token bucket, retention, TimescaleDB compression) |
+| G | G | KAN-426 | Frontend Polish (ingest progress, polling, stale badges, TickerSearch in dialog) |
+| Z | Z | KAN-427 | Quick Wins (registry typo, news LIMIT 50, task rename, frontend invalidation, WelcomeBanner) |
+
+Files: `docs/superpowers/{specs,plans}/2026-04-06-pipeline-overhaul-{spec,plan}-{A..G,Z}-*.md`
+
+### Reviews
+3 expert reviews (Staff Engineer + Test Engineer + EFGZ combined) found ~80 findings:
+- 28 CRITICAL (cross-spec drift, broken tests, security holes, schema mismatches)
+- ~42 HIGH, ~34 MEDIUM, ~19 LOW
+
+**All 28 CRITICALs applied inline** to specs/plans before JIRA registration. Resolution log at `docs/superpowers/plans/2026-04-06-pipeline-overhaul-review-resolutions.md`.
+
+Notable cross-cutting fixes:
+- `task_tracer` location locked to `backend/services/observability/task_tracer.py` (was 3 different paths across specs)
+- `mark_stage_updated(ticker, stage)` signature locked (no `db` arg)
+- `Stage` Literal extended with `"recommendation"`
+- Prophet test rewritten as deterministic synthetic-correlation test (was no-op mock)
+- All DB-hitting tests in plans moved from `tests/unit/` to `tests/api/`
+- `LangfuseService` real method names used (`create_trace`, `create_span`, NOT `start_span`)
+- Spec E `Semaphore(10)` → `Semaphore(5)` (DB pool is 5+10=15 effective, not 20)
+- Spec F TimescaleDB downgrade now decompresses chunks before clearing flag
+- Spec G frontend tests use Jest not Vitest
+- Spec C adds Redis SETNX `ingest:in_flight:{ticker}` dedup for parallel users
+- Migration revision IDs use hash format (matches `b2351fa2d293_024_*.py` convention)
+
+### JIRA Registration
+- **Epic KAN-419** — Pipeline Architecture Overhaul
+- **8 subtasks:** KAN-420 through KAN-427
+- **7 superseded tickets** (commented with link): KAN-395, KAN-398, KAN-405, KAN-406, KAN-212, KAN-213, KAN-214, KAN-162
+
+### Migration sequence
+Current head `b2351fa2d293` → 025 `ticker_ingestion_state` (Spec A) → 026 `dq_check_history` (Spec F) → 027 `timescale_compression` (Spec F)
+
+### Execution order (isolation batches for max parallelism)
+```
+Batch Z (KAN-427) ─────────┐ Independent — anytime
+Batch A (KAN-421) ─────────┤ Foundation — anytime
+                            │
+Batch A → Batch B (KAN-422) ┤ B uses A's primitives
+Batch A → Batch D (KAN-420) ┤ D uses A's primitives
+Batch B → Batch C (KAN-423) ┤ C uses B's extended ingest_ticker
+Batch A + F → Batch E ──────┤ E uses F3 yfinance rate limiter
+Batch C → Batch G (KAN-426) ┘ G uses C's API contract
+```
+
+### Next session
+Execute the plans starting with **Batch Z (quick wins)** or **Batch A (foundation)** — both independent. Then Batch B and D in parallel. Then C. Then E and G. F can run any time after A.
+
+---
+
 ## Session 97 — KAN-408 Backend Code Health Spec + Plan (2026-04-06)
 
 **Branch:** `develop` (spec/plan work only, no code changes) | **No PR yet**
