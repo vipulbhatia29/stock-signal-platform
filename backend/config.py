@@ -1,12 +1,36 @@
 """Application settings loaded from environment variables via Pydantic Settings."""
 
 import logging
+from datetime import timedelta
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
 _INSECURE_JWT_DEFAULT = "change-me-in-production"
+
+
+class StalenessSLAs:
+    """Green-threshold freshness SLAs per pipeline stage.
+
+    Yellow = 2x green. Red = >2x green. See services/ticker_state.py for
+    the bucketing logic.
+
+    These are module-level constants (immutable) rather than a Pydantic
+    settings class because they are a product decision, not an env knob.
+    If a deployment wants tighter SLAs, bump the constants in a PR — don't
+    flip them per-environment.
+    """
+
+    prices: timedelta = timedelta(hours=4)
+    signals: timedelta = timedelta(hours=4)
+    fundamentals: timedelta = timedelta(hours=24)
+    forecast: timedelta = timedelta(hours=24)
+    forecast_retrain: timedelta = timedelta(days=14)
+    news: timedelta = timedelta(hours=6)
+    sentiment: timedelta = timedelta(hours=6)
+    convergence: timedelta = timedelta(hours=24)
+    backtest: timedelta = timedelta(days=7)
 
 
 class Settings(BaseSettings):
@@ -112,6 +136,11 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_BASEURL: str = "http://localhost:3001"
+
+    @property
+    def staleness_slas(self) -> StalenessSLAs:
+        """Return the staleness SLA constants (see StalenessSLAs docstring)."""
+        return StalenessSLAs()
 
     @property
     def cors_origins_list(self) -> list[str]:
