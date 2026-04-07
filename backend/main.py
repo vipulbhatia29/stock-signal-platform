@@ -135,12 +135,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app.state.langfuse = langfuse_service
 
+    # Publish app-level singletons to task_tracer for non-agent Celery tasks
+    from backend.services.observability.task_tracer import (
+        set_langfuse_service,
+        set_observability_collector,
+    )
+
+    set_langfuse_service(langfuse_service)
+    set_observability_collector(collector)
+
     # Cache warmup — pre-load indexes
     try:
         from backend.services.cache import CacheTier
 
         async with async_session_factory() as warmup_db:
-            from backend.models.stock import StockIndex
+            # TODO(KAN-pyright-cleanup): StockIndex was relocated to backend.models.index
+            # in an earlier refactor; this import path is stale but functional via re-export.
+            from backend.models.stock import (
+                StockIndex,  # pyright: ignore[reportAttributeAccessIssue]
+            )
 
             idx_result = await warmup_db.execute(select(StockIndex))
             indexes = idx_result.scalars().all()
@@ -290,6 +303,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await shutdown_http_client()
     if hasattr(app.state, "langfuse"):
         app.state.langfuse.shutdown()
+    # Clear task_tracer singletons so hot-reload does not carry stale references.
+    set_langfuse_service(None)
+    set_observability_collector(None)
     logger.info("Application shutting down")
 
 
@@ -305,7 +321,10 @@ app = FastAPI(
 
 # --- Middleware ---
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+# TODO(KAN-pyright-cleanup): slowapi's _rate_limit_exceeded_handler is typed against its
+# concrete RateLimitExceeded subclass, while FastAPI.add_exception_handler accepts the
+# broader ExceptionHandler protocol. The runtime contract is correct.
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # pyright: ignore[reportArgumentType]
 
 app.add_middleware(
     CORSMiddleware,

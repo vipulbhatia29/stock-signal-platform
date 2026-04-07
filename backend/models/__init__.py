@@ -29,6 +29,7 @@ from backend.models.price import StockPrice
 from backend.models.recommendation import RecommendationSnapshot
 from backend.models.signal import SignalSnapshot
 from backend.models.stock import Stock, Watchlist
+from backend.models.ticker_ingestion_state import TickerIngestionState
 from backend.models.user import User, UserPreference, UserRole
 
 __all__ = [
@@ -65,6 +66,7 @@ __all__ = [
     "StockIndex",
     "StockIndexMembership",
     "StockPrice",
+    "TickerIngestionState",
     "ToolExecutionLog",
     "Transaction",
     "User",

@@ -6,8 +6,10 @@ All methods are async and should be called via asyncio.run() from Celery tasks.
 import asyncio
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timedelta, timezone
-from typing import Any
+from functools import wraps
+from typing import Any, Literal, ParamSpec, TypeVar
 
 import pandas as pd
 from sqlalchemy import select, update
@@ -19,6 +21,22 @@ logger = logging.getLogger(__name__)
 
 # Stale run threshold: if a run has been "running" for > 1 hour, mark it failed
 STALE_RUN_THRESHOLD = timedelta(hours=1)
+
+# ---------------------------------------------------------------------------
+# Hard Rule #10: never pass str(e) or repr(e) as an error code.
+# TickerFailureReason is an exhaustive Literal of safe, static strings.
+# Add new values here via PR — do NOT add dynamic runtime strings.
+# ---------------------------------------------------------------------------
+TickerFailureReason = Literal[
+    "fetch_failed",
+    "score_failed",
+    "timeout",
+    "rate_limit",
+    "unknown_error",
+    "retrain failed",
+    "refresh failed",
+    "no_data",
+]
 
 
 class PipelineRunner:
@@ -76,13 +94,20 @@ class PipelineRunner:
             await session.commit()
         logger.debug("Pipeline %s: %s succeeded", run_id, ticker)
 
-    async def record_ticker_failure(self, run_id: uuid.UUID, ticker: str, error: str) -> None:
+    async def record_ticker_failure(
+        self, run_id: uuid.UUID, ticker: str, error: TickerFailureReason
+    ) -> None:
         """Increment tickers_failed and add error to error_summary.
+
+        Hard Rule #10: ``error`` must be a static :data:`TickerFailureReason`
+        string — never ``str(e)`` or ``repr(e)``. Pyright enforces this at
+        type-check time; add new values to the ``TickerFailureReason`` union
+        via PR, never inline at the call site.
 
         Args:
             run_id: The PipelineRun UUID.
             ticker: Ticker symbol that failed.
-            error: Error description.
+            error: Static error code from :data:`TickerFailureReason`.
         """
         async with async_session_factory() as session:
             result = await session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
@@ -145,7 +170,9 @@ class PipelineRunner:
 
             # Compute total duration
             if run.started_at:
-                run.total_duration_seconds = (run.completed_at - run.started_at).total_seconds()
+                # TODO(KAN-pyright-cleanup): run.completed_at was set on the line above
+                # but pyright cannot narrow Mapped[datetime|None] across the assignment.
+                run.total_duration_seconds = (run.completed_at - run.started_at).total_seconds()  # pyright: ignore[reportOptionalOperand]
 
             if run.tickers_failed == 0:
                 run.status = "success"
@@ -349,3 +376,102 @@ async def with_retry(
                     e,
                 )
     raise last_exception  # type: ignore[misc]
+
+
+# ---------------------------------------------------------------------------
+# @tracked_task decorator — wraps an async function in the PipelineRunner lifecycle
+# ---------------------------------------------------------------------------
+
+P = ParamSpec("P")
+R = TypeVar("R")
+
+
+def tracked_task(
+    pipeline_name: str,
+    *,
+    trigger: str = "scheduled",
+) -> Callable[[Callable[..., Awaitable[R]]], Callable[..., Awaitable[R]]]:
+    """Decorate an async task function with the PipelineRunner lifecycle.
+
+    The decorated function is called with ``run_id: uuid.UUID`` as an
+    extra keyword argument. On success, the pipeline run is marked
+    completed; on exception the run is marked failed (with a generic
+    error_summary — never the raw exception text, per Hard Rule #10) and
+    the exception re-raises so Celery retry policy still triggers.
+
+    Callers may pass ``tickers_total`` as a kwarg — it is consumed by the
+    decorator (not forwarded to the wrapped function) and recorded on the
+    pipeline_runs row.
+
+    Usage (adopted in Spec D, not this spec)::
+
+        @shared_task(name="tasks.news_sentiment")
+        def nightly_news_sentiment_task() -> dict:
+            return asyncio.run(_run())
+
+        @tracked_task("news_sentiment")
+        async def _run(*, run_id: uuid.UUID) -> dict:
+            tickers = await _load_universe()
+            for t in tickers:
+                try:
+                    await _score_one(t)
+                    await _runner.record_ticker_success(run_id, t)
+                except Exception:
+                    # Hard Rule #10: never pass str(e) / repr(e) — use a
+                    # static TickerFailureReason string instead.
+                    await _runner.record_ticker_failure(run_id, t, "score_failed")
+            return {"tickers": len(tickers)}
+
+    Args:
+        pipeline_name: Name recorded in pipeline_runs.pipeline_name.
+        trigger: "scheduled" | "backfill" | "manual".
+
+    Returns:
+        A decorator that wraps an async function with the runner lifecycle.
+    """
+
+    def decorator(fn: Callable[..., Awaitable[R]]) -> Callable[..., Awaitable[R]]:
+        """Inner decorator that binds the PipelineRunner to the function."""
+        runner = PipelineRunner()
+
+        @wraps(fn)
+        async def wrapper(*args: object, **kwargs: object) -> R:
+            """Wrapper that runs the full PipelineRunner lifecycle."""
+            tickers_total_raw = kwargs.pop("tickers_total", 0)
+            tickers_total = int(tickers_total_raw)  # type: ignore[arg-type]
+            run_id = await runner.start_run(
+                pipeline_name=pipeline_name,
+                trigger=trigger,
+                tickers_total=tickers_total,
+            )
+            try:
+                result = await fn(*args, run_id=run_id, **kwargs)
+            except Exception:
+                logger.exception(
+                    "Tracked task %s crashed — marking run %s failed",
+                    pipeline_name,
+                    run_id,
+                )
+                try:
+                    async with async_session_factory() as session:
+                        stmt = (
+                            update(PipelineRun)
+                            .where(PipelineRun.id == run_id)
+                            .values(
+                                status="failed",
+                                completed_at=datetime.now(timezone.utc),
+                                error_summary={"_exception": "see logs"},
+                            )
+                        )
+                        await session.execute(stmt)
+                        await session.commit()
+                except Exception:
+                    logger.warning("Failed to mark run %s as failed", run_id, exc_info=True)
+                raise
+            else:
+                await runner.complete_run(run_id)
+                return result  # type: ignore[return-value]
+
+        return wrapper
+
+    return decorator
