@@ -135,6 +135,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     )
     app.state.langfuse = langfuse_service
 
+    # Publish app-level singletons to task_tracer for non-agent Celery tasks
+    from backend.services.observability.task_tracer import (
+        set_langfuse_service,
+        set_observability_collector,
+    )
+
+    set_langfuse_service(langfuse_service)
+    set_observability_collector(collector)
+
     # Cache warmup — pre-load indexes
     try:
         from backend.services.cache import CacheTier
