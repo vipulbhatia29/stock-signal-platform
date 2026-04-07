@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import factory
-from datetime import date, datetime, timezone
 
 from backend.models.convergence import SignalConvergenceDaily
 

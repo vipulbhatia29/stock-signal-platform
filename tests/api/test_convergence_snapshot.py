@@ -2,15 +2,21 @@
 
 Uses db_session (real DB via testcontainers) — must live under tests/api/,
 not tests/unit/, per the Plan A test-placement guardrail.
+
+Note: db_session does NOT truncate between tests (unlike the 'client' fixture).
+We therefore use unique-per-test tickers generated via factory sequences to
+avoid PK collisions when tests share the same container session.
 """
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+import uuid
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from backend.models.convergence import SignalConvergenceDaily
 from backend.models.price import StockPrice
@@ -19,26 +25,34 @@ from backend.models.stock import Stock
 from backend.tasks.convergence import _compute_convergence_snapshot_async
 from tests.factories.convergence import SignalConvergenceDailyFactory
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
+def _unique_ticker(prefix: str = "CV") -> str:
+    """Generate a short unique ticker so tests do not collide on shared containers."""
+    return f"{prefix}{uuid.uuid4().hex[:4].upper()}"
+
+
 async def _seed_stock(db_session, ticker: str) -> Stock:
-    """Insert a minimal Stock row so FK constraints pass."""
-    stock = Stock(
+    """Insert a minimal Stock row so FK constraints pass (idempotent via ON CONFLICT)."""
+    now = datetime.now(timezone.utc)
+    stmt = pg_insert(Stock).values(
         ticker=ticker,
         name=f"{ticker} Corp",
         exchange="NASDAQ",
         sector="Technology",
         is_active=True,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
+        created_at=now,
+        updated_at=now,
+        id=uuid.uuid4(),
     )
-    db_session.add(stock)
+    stmt = stmt.on_conflict_do_nothing(index_elements=["ticker"])
+    await db_session.execute(stmt)
     await db_session.flush()
-    return stock
+    result = await db_session.execute(select(Stock).where(Stock.ticker == ticker))
+    return result.scalar_one()
 
 
 async def _seed_signal(db_session, ticker: str) -> SignalSnapshot:
@@ -95,7 +109,7 @@ async def _seed_price(
 
 
 # ---------------------------------------------------------------------------
-# B1.1 tests — these must be RED before B1.2 implementation
+# B1 tests
 # ---------------------------------------------------------------------------
 
 
@@ -106,7 +120,7 @@ async def test_empty_universe_returns_no_tickers(db_session) -> None:
         "backend.tasks.convergence.get_all_referenced_tickers",
         AsyncMock(return_value=[]),
     ):
-        result = await _compute_convergence_snapshot_async()
+        result = await _compute_convergence_snapshot_async(_db=db_session)
 
     assert result["status"] == "no_tickers"
     assert result["computed"] == 0
@@ -116,27 +130,17 @@ async def test_empty_universe_returns_no_tickers(db_session) -> None:
 async def test_universe_mode_inserts_one_row_per_ticker(db_session) -> None:
     """Universe mode inserts exactly one signal_convergence_daily row per ticker today."""
     today = datetime.now(timezone.utc).date()
-    tickers = ["AAPL", "MSFT", "GOOG"]
+    t1, t2, t3 = _unique_ticker(), _unique_ticker(), _unique_ticker()
+    tickers = [t1, t2, t3]
 
-    # Seed stocks + signals so convergence service finds signal data
     for tkr in tickers:
         await _seed_stock(db_session, tkr)
         await _seed_signal(db_session, tkr)
     await db_session.commit()
 
-    with (
-        patch(
-            "backend.tasks.convergence.get_all_referenced_tickers",
-            AsyncMock(return_value=tickers),
-        ),
-        patch(
-            "backend.tasks.convergence.mark_stage_updated",
-            new_callable=AsyncMock,
-        ),
-        patch(
-            "backend.tasks.convergence.async_session_factory",
-            return_value=db_session,
-        ),
+    with patch(
+        "backend.tasks.convergence.get_all_referenced_tickers",
+        AsyncMock(return_value=tickers),
     ):
         result = await _compute_convergence_snapshot_async(_db=db_session)
 
@@ -159,50 +163,48 @@ async def test_universe_mode_inserts_one_row_per_ticker(db_session) -> None:
 async def test_single_ticker_mode(db_session) -> None:
     """Single-ticker mode inserts only the specified ticker's row."""
     today = datetime.now(timezone.utc).date()
-    await _seed_stock(db_session, "AAPL")
-    await _seed_stock(db_session, "MSFT")
-    await _seed_signal(db_session, "AAPL")
-    await _seed_signal(db_session, "MSFT")
+    t1 = _unique_ticker("ST")
+    t2 = _unique_ticker("ST")
+    await _seed_stock(db_session, t1)
+    await _seed_stock(db_session, t2)
+    await _seed_signal(db_session, t1)
+    await _seed_signal(db_session, t2)
     await db_session.commit()
 
-    with patch(
-        "backend.tasks.convergence.mark_stage_updated",
-        new_callable=AsyncMock,
-    ):
-        result = await _compute_convergence_snapshot_async(ticker="AAPL", _db=db_session)
+    result = await _compute_convergence_snapshot_async(ticker=t1, _db=db_session)
 
     assert result["status"] == "ok"
     assert result["computed"] == 1
 
     rows_result = await db_session.execute(
-        select(SignalConvergenceDaily).where(SignalConvergenceDaily.date == today)
+        select(SignalConvergenceDaily).where(
+            SignalConvergenceDaily.date == today,
+            SignalConvergenceDaily.ticker.in_([t1, t2]),
+        )
     )
     rows = rows_result.scalars().all()
     assert len(rows) == 1
-    assert rows[0].ticker == "AAPL"
+    assert rows[0].ticker == t1
 
 
 @pytest.mark.asyncio
 async def test_rerun_same_day_updates_via_on_conflict(db_session) -> None:
     """Running the task twice on the same day updates the row via ON CONFLICT DO UPDATE."""
     today = datetime.now(timezone.utc).date()
-    await _seed_stock(db_session, "AAPL")
-    await _seed_signal(db_session, "AAPL")
+    tkr = _unique_ticker("RC")
+    await _seed_stock(db_session, tkr)
+    await _seed_signal(db_session, tkr)
     await db_session.commit()
 
-    with patch(
-        "backend.tasks.convergence.mark_stage_updated",
-        new_callable=AsyncMock,
-    ):
-        await _compute_convergence_snapshot_async(ticker="AAPL", _db=db_session)
-        result = await _compute_convergence_snapshot_async(ticker="AAPL", _db=db_session)
+    await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
+    result = await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
 
     assert result["status"] == "ok"
 
     rows_result = await db_session.execute(
         select(SignalConvergenceDaily).where(
             SignalConvergenceDaily.date == today,
-            SignalConvergenceDaily.ticker == "AAPL",
+            SignalConvergenceDaily.ticker == tkr,
         )
     )
     rows = rows_result.scalars().all()
@@ -215,38 +217,33 @@ async def test_backfill_actual_return_90d(db_session) -> None:
     """Backfill populates actual_return_90d for rows whose target date has elapsed."""
     today = datetime.now(timezone.utc).date()
     target_date = today - timedelta(days=90)
-
-    await _seed_stock(db_session, "AAPL")
+    tkr = _unique_ticker("BF")
+    await _seed_stock(db_session, tkr)
 
     # Seed a convergence row 90 days ago with NULL actual_return_90d
     row = SignalConvergenceDailyFactory.build(
-        ticker="AAPL",
+        ticker=tkr,
         date=target_date,
         actual_return_90d=None,
+        actual_return_180d=None,
     )
     db_session.add(row)
 
     # Seed prices: one at target_date (100.0), one at today (110.0)
     await _seed_price(
         db_session,
-        "AAPL",
+        tkr,
         100.0,
         at=datetime(target_date.year, target_date.month, target_date.day, 12, tzinfo=timezone.utc),
     )
-    await _seed_price(db_session, "AAPL", 110.0)
+    await _seed_price(db_session, tkr, 110.0)
     await db_session.commit()
 
-    with (
-        patch(
-            "backend.tasks.convergence.get_all_referenced_tickers",
-            AsyncMock(return_value=["AAPL"]),
-        ),
-        patch(
-            "backend.tasks.convergence.mark_stage_updated",
-            new_callable=AsyncMock,
-        ),
+    with patch(
+        "backend.tasks.convergence.get_all_referenced_tickers",
+        AsyncMock(return_value=[tkr]),
     ):
-        result = await _compute_convergence_snapshot_async(ticker="AAPL", _db=db_session)
+        result = await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
 
     assert result["backfilled"] >= 1
 
@@ -260,29 +257,24 @@ async def test_backfill_noop_when_already_populated(db_session) -> None:
     """Backfill skips rows whose actual_return_90d is already set."""
     today = datetime.now(timezone.utc).date()
     target_date = today - timedelta(days=90)
-
-    await _seed_stock(db_session, "AAPL")
+    tkr = _unique_ticker("NP")
+    await _seed_stock(db_session, tkr)
 
     # Seed row with actual_return_90d already filled
     row = SignalConvergenceDailyFactory.build(
-        ticker="AAPL",
+        ticker=tkr,
         date=target_date,
-        actual_return_90d=0.05,  # already set
+        actual_return_90d=0.05,  # already set — must not be overwritten
+        actual_return_180d=None,
     )
     db_session.add(row)
     await db_session.commit()
 
-    with (
-        patch(
-            "backend.tasks.convergence.get_all_referenced_tickers",
-            AsyncMock(return_value=["AAPL"]),
-        ),
-        patch(
-            "backend.tasks.convergence.mark_stage_updated",
-            new_callable=AsyncMock,
-        ),
+    with patch(
+        "backend.tasks.convergence.get_all_referenced_tickers",
+        AsyncMock(return_value=[tkr]),
     ):
-        await _compute_convergence_snapshot_async(ticker="AAPL", _db=db_session)
+        await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
 
     await db_session.refresh(row)
     # Must remain unchanged
@@ -294,31 +286,27 @@ async def test_backfill_skips_when_historical_price_missing(db_session) -> None:
     """Backfill skips the row (no exception) when no StockPrice exists for the target date."""
     today = datetime.now(timezone.utc).date()
     target_date = today - timedelta(days=90)
-
-    await _seed_stock(db_session, "AAPL")
+    tkr = _unique_ticker("PM")
+    await _seed_stock(db_session, tkr)
 
     # Seed row with NULL actual_return_90d but NO prices
     row = SignalConvergenceDailyFactory.build(
-        ticker="AAPL",
+        ticker=tkr,
         date=target_date,
         actual_return_90d=None,
+        actual_return_180d=None,
     )
     db_session.add(row)
     await db_session.commit()
 
-    with (
-        patch(
-            "backend.tasks.convergence.get_all_referenced_tickers",
-            AsyncMock(return_value=["AAPL"]),
-        ),
-        patch(
-            "backend.tasks.convergence.mark_stage_updated",
-            new_callable=AsyncMock,
-        ),
+    with patch(
+        "backend.tasks.convergence.get_all_referenced_tickers",
+        AsyncMock(return_value=[tkr]),
     ):
         # Must not raise
-        result = await _compute_convergence_snapshot_async(ticker="AAPL", _db=db_session)
+        result = await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
 
+    # No crash — status can be ok or no_tickers depending on signal availability
     assert result["status"] in ("ok", "no_tickers")
 
     await db_session.refresh(row)
@@ -329,7 +317,9 @@ async def test_backfill_skips_when_historical_price_missing(db_session) -> None:
 @pytest.mark.asyncio
 async def test_mark_stage_updated_called_per_ticker(db_session) -> None:
     """mark_stage_updated must be called once per successfully-processed ticker."""
-    tickers = ["AAPL", "MSFT"]
+    t1 = _unique_ticker("MS")
+    t2 = _unique_ticker("MS")
+    tickers = [t1, t2]
 
     for tkr in tickers:
         await _seed_stock(db_session, tkr)
@@ -357,7 +347,7 @@ async def test_mark_stage_updated_called_per_ticker(db_session) -> None:
 
 @pytest.mark.asyncio
 async def test_task_signature_accepts_ticker_kwarg() -> None:
-    """compute_convergence_snapshot_task must accept ticker as a keyword argument.
+    """_compute_convergence_snapshot_async must accept ticker as a keyword argument.
 
     Does not use db_session — pure introspection test.
     """
