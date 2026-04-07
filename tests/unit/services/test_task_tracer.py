@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import time
+import asyncio
 import uuid
 from unittest.mock import AsyncMock, MagicMock
 
@@ -103,7 +103,12 @@ async def test_trace_task_exception_sets_error_status() -> None:
 
 
 async def test_trace_task_measures_duration_ms() -> None:
-    """Duration is measured in ms and non-negative."""
+    """Duration is measured in ms and proves the timer is actually wired up.
+
+    Uses asyncio.sleep (non-blocking) to yield at least ~10ms; asserts >= 5ms
+    so the test is resilient to scheduler jitter while still proving measurement.
+    Using time.sleep here would block the event loop (Staff M8).
+    """
     from backend.services.observability.task_tracer import trace_task
 
     trace_obj = MagicMock()
@@ -111,9 +116,11 @@ async def test_trace_task_measures_duration_ms() -> None:
     collector = _make_collector()
 
     async with trace_task("x", langfuse=langfuse, collector=collector) as handle:
-        time.sleep(0.01)
+        await asyncio.sleep(0.01)
 
-    assert handle._duration_ms >= 0
+    assert handle._duration_ms >= 5, (
+        f"Expected duration >= 5ms (proves timer is wired up); got {handle._duration_ms}ms"
+    )
 
 
 async def test_trace_task_finalize_swallows_langfuse_errors() -> None:
