@@ -77,3 +77,26 @@ def db_session():
         "sibling xdist workers under tests/unit/. Move this test to "
         "tests/api/ where tests run sequentially."
     )
+
+
+# ---------------------------------------------------------------------------
+# Singleton cleanup — resets task_tracer module singletons after every test
+# so stale references don't bleed across tests that patch them.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _reset_observability_singletons():
+    """Reset task_tracer singletons after each test.
+
+    Prevents stale LangfuseService / ObservabilityCollector references from
+    leaking between tests that patch these singletons. The guard added in
+    Fix 9 (trace_task raises RuntimeError when not initialised) makes this
+    cleanup critical — without it, a test that sets the singleton and then
+    crashes before teardown would leave it set for the next test.
+    """
+    yield
+    from backend.services.observability import task_tracer
+
+    task_tracer.set_langfuse_service(None)
+    task_tracer.set_observability_collector(None)

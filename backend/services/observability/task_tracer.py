@@ -3,6 +3,20 @@
 Wraps Langfuse trace creation + ObservabilityCollector recording so
 nightly jobs (sentiment scoring, Prophet training, news ingestion,
 convergence, backtest) get the same visibility agents get today.
+
+Singleton wiring
+----------------
+The ``langfuse_service`` and ``observability_collector`` module-level
+singletons must be populated before ``trace_task`` is called.
+
+* **FastAPI**: The ``lifespan`` context manager in ``backend/main.py``
+  calls :func:`set_langfuse_service` and :func:`set_observability_collector`
+  on startup and clears them on shutdown. No manual setup needed.
+
+* **Celery workers**: The ``worker_process_init`` signal handler in the
+  Celery app (Spec D) must call both setters. This wiring is deferred to
+  Spec D. Until then, :func:`trace_task` raises :exc:`RuntimeError` with
+  a clear message rather than silently producing no-op traces.
 """
 
 from __future__ import annotations
@@ -18,6 +32,18 @@ from backend.observability.collector import ObservabilityCollector
 from backend.observability.langfuse import LangfuseService
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Stable sentinel UUIDs for non-agent task traces.
+#
+# Using the trace_id as both session_id and user_id (the previous approach)
+# would pollute Langfuse's user/session analytics — every task run looks like
+# a unique user and session, making those dashboards meaningless for real users.
+# These all-zeros sentinels flag non-agent traces as "system" rather than
+# attributing them to any real user or interactive session.
+# ---------------------------------------------------------------------------
+SYSTEM_SESSION_ID = uuid.UUID("00000000-0000-0000-0000-000000000000")
+SYSTEM_USER_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
 class TaskTraceHandle:
@@ -156,13 +182,20 @@ async def trace_task(
     Yields:
         TaskTraceHandle — call add_metadata / record_llm inside the block.
     """
+    if langfuse is None or collector is None:
+        raise RuntimeError(
+            "task_tracer not initialised — call set_langfuse_service() and "
+            "set_observability_collector() in FastAPI lifespan or Celery "
+            "worker_process_init before using trace_task."
+        )
     trace_id = uuid.uuid4()
-    # Non-agent: session_id/user_id have no meaning. Reuse trace_id as a
-    # stable identifier so LangfuseService doesn't receive None values.
+    # Non-agent traces use stable sentinel UUIDs for session_id and user_id
+    # so Langfuse's user/session analytics are not polluted with task run IDs.
+    # See module-level SYSTEM_SESSION_ID / SYSTEM_USER_ID for rationale.
     trace = langfuse.create_trace(
         trace_id=trace_id,
-        session_id=trace_id,
-        user_id=trace_id,
+        session_id=SYSTEM_SESSION_ID,
+        user_id=SYSTEM_USER_ID,
         metadata={"task": name, **(metadata or {})},
     )
     handle = TaskTraceHandle(

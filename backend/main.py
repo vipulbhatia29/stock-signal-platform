@@ -299,6 +299,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await shutdown_http_client()
     if hasattr(app.state, "langfuse"):
         app.state.langfuse.shutdown()
+    # Clear task_tracer singletons so hot-reload does not carry stale references.
+    set_langfuse_service(None)
+    set_observability_collector(None)
     logger.info("Application shutting down")
 
 
