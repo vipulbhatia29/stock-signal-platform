@@ -1,56 +1,135 @@
-## Project State (Session 97)
+## Project State (Session 98)
 
-**Current phase:** Completing Epic KAN-408 (Backend Code Health & Security Hardening)
-**Resume point:** Execute `docs/superpowers/plans/2026-04-06-backend-code-health-final.md` (14 tasks) for KAN-412, KAN-413, KAN-417. Then Phase E (UI Overhaul KAN-400) → Phase F (Subscriptions).
-**Branch:** `develop` — Session 97 was spec/plan work only, no code changes yet
-**Latest merged:** PRs #198-200 (KAN-407, 409, 410, 411, 414, 415, 416, 418 — backend code health batches 1-3)
+**Current phase:** Pipeline Architecture Overhaul (KAN-419 epic refined this session)
+**Resume point:** Execute Batch Z (quick wins) + Batch A (foundation) in parallel — both are independent and unblock everything else
+**Branch:** `develop` — Session 98 was specs/plans/reviews/JIRA only, no code changes
 
-### Session 97 Summary — KAN-408 Spec + Plan
-- Brainstormed KAN-412 (auth router split), KAN-413 (portfolio service split), KAN-417 (CSRF protection)
-- Design decisions: 7 auth sub-modules (core, email_verification, password, oauth, oidc, admin, _helpers), 3 portfolio sub-modules (core, fifo, analytics), double-submit cookie CSRF
-- Spec written: `docs/superpowers/specs/2026-04-06-backend-code-health-final.md`
-- Plan written: `docs/superpowers/plans/2026-04-06-backend-code-health-final.md` (14 tasks)
-- 2 rounds of staff + test engineer reviews — 3 CRITICALs fixed (middleware ordering, _helpers re-export pattern, dead /health path), plus 9 HIGHs + 12 MEDIUMs
-- Upstream/downstream dependency audit found 3 gaps (backend/tools/portfolio.py re-exports _group_sectors and _get_transactions_for_ticker — both added to __init__.py re-exports)
-- **Security hardening:** CSRF middleware now checks BOTH access_token AND refresh_token cookies (attacker with only refresh cookie must not bypass CSRF)
-- JIRA comments added to KAN-412, 413, 417 with spec/plan links
+### Session 98 Summary — Pipeline Architecture Overhaul
 
-### Key Facts
-- Alembic head: `b2351fa2d293` (migration 024)
-- Tests: 1906 backend unit + 439 frontend + 38 API + 48 E2E + 27 nightly = ~2458 total
-- Coverage: ~69% (floor 60%)
-- Internal tools: 25 + 4 MCP adapters
-- Docker: Postgres 5433, Redis 6380, Langfuse 3001+5434
-- Skills/rules audit Session 96: ~1,500 tokens/interaction saved
-- ADRs: 11 total
+Comprehensive deep audit found multiple critical gaps in the backend pipeline:
 
-### Open JIRA (Epic KAN-408 remaining)
-- **KAN-412 (HIGH):** Split oversized routers (auth.py 1263L, portfolio.py 776L) — Refinement complete, Ready for implementation (tasks 1-5)
-- **KAN-413 (HIGH):** Split portfolio service into focused modules — Refinement complete, Ready for implementation (tasks 6-8)
-- **KAN-417 (MEDIUM):** Add CSRF protection for cookie-based auth — Refinement complete, Ready for implementation (tasks 9-13)
+**Stub tasks closed without code (KAN-395 was the canary):**
+- `compute_convergence_snapshot_task` at `backend/tasks/convergence.py:143-153` — returns `{"computed": 0}`. `signal_convergence_daily` table is empty in prod. Convergence history chart, divergence hit rate, sector convergence panel all dead.
+- `run_backtest_task` at `backend/tasks/forecasting.py:225-238` — returns fake success. `backtest_runs` empty. Drift detection's calibrated threshold uses fallback because `backtest_mapes` dict is empty.
+- `calibrate_seasonality_task` at `backend/tasks/forecasting.py:241-253` — same pattern.
 
-### Other Open JIRA
-- KAN-400: Phase E UI Overhaul (Epic) — To Do
-- KAN-398: Wire AccuracyBadge into forecast-card.tsx — To Do
-- KAN-405: Sentiment scoring concurrent batch dispatch — To Do
-- KAN-406: SPY ETF 2y history misalignment — Low priority
-- KAN-211: Test Suite Hardening Epic (5 stories KAN-212-216)
-- KAN-217: Playwright E2E Refresh (blocked on KAN-400)
-- KAN-363: Visual Regression (blocked on KAN-400)
-- KAN-157: Live LLM eval tests in CI
-- KAN-162: Langfuse self-hosted integration
+**Prophet sentiment regressor half-broken:**
+- Training side correctly adds `add_regressor("stock_sentiment")` etc.
+- Predict side fills future DataFrame with `0.0` for ALL dates including historical → systematic bias documented in code as "KNOWN LIMITATION"
+- Fix in Spec B3: make `predict_forecast` async, fetch real historical sentiment for past dates, use 7-day trailing mean for forecast dates
 
-### Recently Completed (Sessions 92-97)
-- Session 92: Workflow optimization system (PR #188)
-- Session 93: LLM benchmark research
-- Session 94: Bug sweep + tech debt clearout (PR #189)
-- Session 95: Full data reseed + DQ analysis (KAN-401-406 filed)
-- Session 96: Pipeline integrity + skills audit (PR #192, KAN-403/404)
-- Session 97 (in progress): KAN-408 spec + plan (this session)
-- KAN-407, 409, 410, 411, 414, 415, 416, 418 already merged (PRs #198-200, backend code health batches)
+**Entry point inconsistency:**
+- Watchlist add returns 404 if stock not in DB (no auto-ingest)
+- Portfolio transaction creates Stock row only (no price fetch, no forecast dispatch)
+- Chat `analyze_stock` computes signals inline but never persists them
+- Only `POST /stocks/{ticker}/ingest` calls the canonical `ingest_ticker` pipeline
+- News ingest hard-codes `LIMIT 50` with no ordering — most tickers never get news
 
-### Next Steps
-1. **Execute KAN-408 plan** — 14 tasks, ship via subagent-driven-development or inline execution
-2. **Phase E (UI Overhaul KAN-400)** — after KAN-408 ships
-3. **Phase F (Subscriptions + Monetization)** — post Phase E
-4. **Phase G (Cloud Deployment)** — final phase
+**Observability gaps:**
+- `LangfuseService` only wired to agent path; sentiment scorer + Prophet training have ~100 LLM calls/day untraced
+- `ObservabilityCollector` only used by agent paths
+- Only 3 of 12+ Celery tasks use `PipelineRunner` (price_refresh, forecast_refresh, model_retrain_all)
+- No per-ticker ingestion health view for admin
+
+### Deliverables
+
+**8 specs + 8 plans + 4 review docs = ~15,429 lines of design content**
+
+| Spec | Plan | KAN ticket | Title |
+|---|---|---|---|
+| A | A | KAN-421 | Ingestion Foundation (state table, SLAs, PipelineRunner contract, task_tracer) |
+| B | B | KAN-422 | Pipeline Completeness (convergence, backtest, Prophet sentiment fix, news concurrency) |
+| C | C | KAN-423 | Entry Point Unification (watchlist, portfolio, chat, stale, bulk CSV) |
+| D | D | KAN-420 | Admin + Observability (universal PipelineRunner, per-task trigger, ingestion health, Langfuse spans) |
+| E | E | KAN-424 | Forecast Quality & Scale (cap raise, weekly retrain, intraday fast/slow) |
+| F | F | KAN-425 | DQ + Retention + Rate Limiting (DQ scanner, token bucket, retention, TimescaleDB compression) |
+| G | G | KAN-426 | Frontend Polish (ingest progress, polling, stale badges, TickerSearch) |
+| Z | Z | KAN-427 | Quick Wins (registry typo, news LIMIT 50, task rename, cache invalidation, WelcomeBanner) |
+
+**Files:**
+- Specs: `docs/superpowers/specs/2026-04-06-pipeline-overhaul-spec-{A..G,Z}-*.md`
+- Plans: `docs/superpowers/plans/2026-04-06-pipeline-overhaul-plan-{A..G,Z}-*.md`
+- Reviews: `docs/superpowers/plans/2026-04-06-pipeline-overhaul-review-{staff-engineer,test-engineer,efgz,resolutions}.md`
+
+### Review Findings
+
+3 expert reviews (Staff Engineer + Test Engineer + EFGZ combined) found ~80 findings:
+- **28 CRITICAL** (cross-spec drift, broken tests, security holes, schema mismatches)
+- ~42 HIGH
+- ~34 MEDIUM
+- ~19 LOW
+
+**All 28 CRITICALs were applied inline to specs/plans before JIRA registration.** Resolution log: `docs/superpowers/plans/2026-04-06-pipeline-overhaul-review-resolutions.md`.
+
+Notable cross-cutting fixes:
+- `task_tracer` location locked to `backend/services/observability/task_tracer.py` (was 3 different paths)
+- `mark_stage_updated(ticker, stage)` signature locked (no `db` argument; opens own session)
+- `Stage` Literal extended with `"recommendation"`
+- `tracked_task(pipeline_name, *, trigger="scheduled")` signature locked
+- Prophet test rewritten as deterministic synthetic-correlation test (was no-op mock)
+- All DB-hitting tests in plans moved from `tests/unit/` to `tests/api/`
+- `LangfuseService` real method names used (`create_trace`, `create_span` — NOT `start_span`)
+- Spec E `Semaphore(10)` → `Semaphore(5)` (DB pool is 5+10=15 effective, not 20)
+- Spec F TimescaleDB downgrade now decompresses chunks before clearing flag
+- Spec G frontend tests use Jest not Vitest
+- Spec C adds Redis SETNX `ingest:in_flight:{ticker}` dedup for parallel users
+- Migration revision IDs use hash format (matches `b2351fa2d293_024_*.py` convention)
+
+### Superseded JIRA tickets (7)
+
+| Ticket | Folded into | Why |
+|---|---|---|
+| KAN-395 | KAN-422 (Spec B1) | Was wrongly closed; convergence task is still a stub |
+| KAN-405 | KAN-422 (Spec B4) | Sentiment concurrent batch dispatch — exact match |
+| KAN-398 | KAN-422 + KAN-426 | AccuracyBadge needs backtest data which Spec B2 enables |
+| KAN-406 | KAN-424 (Spec E3) | SPY 2y history misalignment touched by intraday refresh |
+| KAN-212 | KAN-423 (Spec C3) | Tool orchestration tests covered by `analyze_stock` test additions |
+| KAN-213 | KAN-419 epic | Testcontainer-based integration tests = the overhaul test strategy |
+| KAN-214 | KAN-419 epic | Error path + edge case tests covered across all 8 plans |
+| KAN-162 | KAN-420 (Spec D5) — partial | Langfuse spans for non-agent paths |
+
+All 7 commented in JIRA with link to the new ticket.
+
+### Migration sequence
+Current head `b2351fa2d293` → 025 `ticker_ingestion_state` (Spec A) → 026 `dq_check_history` (Spec F) → 027 `timescale_compression` (Spec F)
+
+### Execution Order (isolation batches)
+
+```
+Batch Z (KAN-427) ─────────┐ Independent — anytime
+Batch A (KAN-421) ─────────┤ Foundation — anytime
+                            │
+Batch A → Batch B (KAN-422) ┤ B uses A's primitives
+Batch A → Batch D (KAN-420) ┤ D uses A's primitives
+Batch B → Batch C (KAN-423) ┤ C uses B's extended ingest_ticker
+Batch A + F → Batch E ──────┤ E uses F3 yfinance rate limiter
+Batch C → Batch G (KAN-426) ┘ G uses C's API contract
+```
+
+### Key Facts (carry forward)
+
+- **Alembic head:** `b2351fa2d293` (migration 024)
+- **Tests:** 1907 backend unit + 13 moved to tests/api/ (security_headers + api_snapshots) + 38 API + 48 E2E
+- **Coverage:** ~69% (floor 60%)
+- **Pyright errors:** 170 (down from 200 after Session 98 PR #203)
+- **Recent merged PRs (Session 97-98):** #198-204
+- **Internal tools:** 25 + 4 MCP adapters
+- **Docker:** Postgres 5433, Redis 6380, Langfuse 3001+5434
+
+### Critical Process Insights from this session
+
+1. **JIRA auto-close on PR merge** can wrongly close tickets if the PR body mentions ticket keys. Use `feedback_jira_no_ticket_refs_in_docs_prs.md` rule.
+2. **`continue-on-error: true` workflows** show as failed jobs in GitHub UI but do not block merges. The `ci-merge` workflow is advisory; only `ci-pr` is the gate.
+3. **xdist + shared DB teardown** is a classic race. PR #202 fixed by removing the session DROP teardown; PR #204 added a guardrail preventing `client`/`authenticated_client` fixtures in `tests/unit/`.
+4. **Stub tasks closed as Done** is a process failure pattern (KAN-395). Need stricter "Done = code merged + test passing + verified" rule.
+5. **Cross-spec import drift** was the #1 source of CRITICAL review findings — 8 specs with overlapping primitives need a single canonical declaration.
+
+### Open Bugs (post-Session 98)
+
+None new. Existing:
+- KAN-401, KAN-402 (news pipeline tz/varchar — hotfixed in Session 95, proper migrations pending. May get folded into KAN-425.)
+- KAN-417 (CSRF) — part of KAN-408, still pending implementation
+
+### Resume
+
+Run `/execute-plan docs/superpowers/plans/2026-04-06-pipeline-overhaul-plan-Z-quick-wins.md` to start with the smallest batch. Or `/execute-plan docs/superpowers/plans/2026-04-06-pipeline-overhaul-plan-A-foundation.md` for the foundation batch. Both are independent.
