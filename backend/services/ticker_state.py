@@ -66,10 +66,12 @@ class ReadinessRow:
     signals: StageStatus
     fundamentals: StageStatus
     forecast: StageStatus
+    forecast_retrain: StageStatus
     news: StageStatus
     sentiment: StageStatus
     convergence: StageStatus
     backtest: StageStatus
+    recommendation: StageStatus
     overall: StageStatus
 
 
@@ -174,6 +176,7 @@ def _compute_readiness(ticker: str, row: TickerIngestionState | None) -> Readine
         "sentiment": row.sentiment_updated_at if row else None,
         "convergence": row.convergence_updated_at if row else None,
         "backtest": row.backtest_updated_at if row else None,
+        "recommendation": row.recommendation_updated_at if row else None,
     }
 
     stages: dict[Stage, StageStatus] = {
@@ -192,6 +195,9 @@ def _compute_readiness(ticker: str, row: TickerIngestionState | None) -> Readine
         "sentiment": status_for(timestamps["sentiment"], sla.sentiment, sla.sentiment * 2),
         "convergence": status_for(timestamps["convergence"], sla.convergence, sla.convergence * 2),
         "backtest": status_for(timestamps["backtest"], sla.backtest, sla.backtest * 2),
+        "recommendation": status_for(
+            timestamps["recommendation"], sla.recommendation, sla.recommendation * 2
+        ),
     }
 
     overall = _worst(stages.values())
@@ -227,9 +233,11 @@ def _to_row(r: ReadinessState) -> ReadinessRow:
         signals=s["signals"],
         fundamentals=s["fundamentals"],
         forecast=s["forecast"],
+        forecast_retrain=s["forecast_retrain"],
         news=s["news"],
         sentiment=s["sentiment"],
         convergence=s["convergence"],
         backtest=s["backtest"],
+        recommendation=s["recommendation"],
         overall=r.overall,
     )

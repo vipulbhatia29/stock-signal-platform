@@ -31,6 +31,7 @@ class StalenessSLAs:
     sentiment: timedelta = timedelta(hours=6)
     convergence: timedelta = timedelta(hours=24)
     backtest: timedelta = timedelta(days=7)
+    recommendation: timedelta = timedelta(hours=24)
 
 
 class Settings(BaseSettings):
