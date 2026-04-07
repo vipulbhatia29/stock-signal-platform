@@ -106,7 +106,7 @@ async def main(
             start = time.time()
             try:
                 model_version = await train_prophet_model(ticker, db)
-                forecasts = predict_forecast(model_version)
+                forecasts = await predict_forecast(model_version, db)
 
                 for fc in forecasts:
                     db.add(fc)

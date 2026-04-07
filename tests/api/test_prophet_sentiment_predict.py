@@ -134,7 +134,7 @@ async def test_sentiment_regressor_is_honored_at_predict_time(db_session) -> Non
     """
     from backend.tools.forecasting import predict_forecast, train_prophet_model
 
-    _seed_synthetic_series(db_session, ticker="FOO", days=200, beta=10.0, seed=42)
+    await _seed_synthetic_series(db_session, ticker="FOO", days=200, beta=10.0, seed=42)
     await db_session.commit()
 
     model_version = await train_prophet_model("FOO", db_session)

@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -197,20 +197,59 @@ async def predict_forecast(
     sentiment_regressor_names = ["stock_sentiment", "sector_sentiment", "macro_sentiment"]
     has_sentiment_regressors = any(r in model.extra_regressors for r in sentiment_regressor_names)
 
+    # Pre-fetch the historical sentiment series spanning training start to the
+    # furthest forecast horizon. This is the KAN-422 Spec B B3 fix: previously
+    # we hard-coded the regressor columns to 0.0 in the future DataFrame, which
+    # silently zeroed the trained beta at predict time. Now we merge the real
+    # historical values for in-window dates and project a 7-day trailing mean
+    # for forecast dates.
+    sentiment_history_df: pd.DataFrame | None = None
+    sentiment_projection: dict[str, float] = {}
+    training_end: date | None = None
+    if has_sentiment_regressors:
+        max_horizon = max(horizons)
+        target_date = today + timedelta(days=max_horizon)
+        training_end = model.history["ds"].max().date()
+        sentiment_history_df = await _fetch_sentiment_regressors(
+            model_version.ticker,
+            model.history["ds"].min(),
+            pd.Timestamp(target_date),
+            db,
+        )
+        if sentiment_history_df is None or sentiment_history_df.empty:
+            sentiment_history_df = pd.DataFrame(
+                columns=["ds", "stock_sentiment", "sector_sentiment", "macro_sentiment"]
+            )
+
+        # 7-day trailing-mean projection used for forecast dates beyond
+        # training_end. Falls back to 0.0 only when there's no recent data at
+        # all (e.g. brand-new ticker) — preserving the old fallback behavior
+        # in the degenerate case while letting real sentiment flow through
+        # in the common case.
+        cutoff = pd.Timestamp(training_end) - pd.Timedelta(days=7)
+        recent = sentiment_history_df[sentiment_history_df["ds"] >= cutoff]
+        for col in sentiment_regressor_names:
+            sentiment_projection[col] = float(recent[col].mean()) if not recent.empty else 0.0
+
     for horizon in horizons:
         # Create future dataframe for the specific target date
         target_date = today + timedelta(days=horizon)
         future = model.make_future_dataframe(periods=horizon, freq="D")
 
-        # Add sentiment regressor columns to future DataFrame if model uses them.
-        # KNOWN LIMITATION: Historical dates also get 0.0 instead of the actual
-        # sentiment used during training. This underestimates the regressor effect
-        # in Prophet's predictions. Future work: fetch historical sentiment from DB
-        # (requires making predict_forecast async) or cache in model artifact.
+        # Merge real sentiment values for any date Prophet's future frame
+        # covers. Historical rows get the actual training-time values; forecast
+        # rows (after training_end) get the 7-day trailing-mean projection.
         if has_sentiment_regressors:
-            future["stock_sentiment"] = 0.0
-            future["sector_sentiment"] = 0.0
-            future["macro_sentiment"] = 0.0
+            assert sentiment_history_df is not None  # narrowed by has_sentiment_regressors
+            assert training_end is not None
+            future = future.merge(sentiment_history_df, on="ds", how="left")
+            future_dates = future["ds"].dt.date
+            forecast_mask = future_dates > training_end
+            for col, projected in sentiment_projection.items():
+                future.loc[forecast_mask, col] = projected
+                # Cast to float64 before fillna to avoid the pandas object-dtype
+                # downcasting FutureWarning when the merge produces NaNs.
+                future[col] = future[col].astype("float64").fillna(0.0)
 
         forecast = model.predict(future)
 
