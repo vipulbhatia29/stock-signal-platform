@@ -74,6 +74,7 @@ def upgrade() -> None:
             (ticker, prices_updated_at, created_at, updated_at)
         SELECT ticker, last_fetched_at, now(), now()
         FROM stocks
+        ON CONFLICT (ticker) DO NOTHING
         """
     )
 
