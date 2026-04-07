@@ -264,33 +264,34 @@ async def _run_backtest_async(ticker: str | None, horizon_days: int) -> dict:
                 if model_version is None:
                     logger.warning(
                         "run_backtest_task: no active ModelVersion for %s — "
-                        "skipping BacktestRun row (metrics computed but not persisted)",
+                        "cannot persist BacktestRun row; marking as failed",
                         tkr,
                     )
-                else:
-                    today = date.today()
-                    db.add(
-                        BacktestRun(
-                            ticker=tkr,
-                            model_version_id=model_version.id,
-                            config_label="walk_forward",
-                            # Use the model's training range as proxy for the
-                            # walk-forward window bounds (no per-window state stored)
-                            train_start=model_version.training_data_start,
-                            train_end=model_version.training_data_end,
-                            test_start=today,
-                            test_end=today,
-                            horizon_days=horizon_days,
-                            num_windows=metrics.num_windows,
-                            mape=metrics.mape,
-                            mae=metrics.mae,
-                            rmse=metrics.rmse,
-                            direction_accuracy=metrics.direction_accuracy,
-                            ci_containment=metrics.ci_containment,
-                        )
-                    )
-                    await db.commit()
+                    failed.append(tkr)
+                    continue
 
+                today = date.today()
+                db.add(
+                    BacktestRun(
+                        ticker=tkr,
+                        model_version_id=model_version.id,
+                        config_label="walk_forward",
+                        # Use the model's training range as proxy for the
+                        # walk-forward window bounds (no per-window state stored)
+                        train_start=model_version.training_data_start,
+                        train_end=model_version.training_data_end,
+                        test_start=today,
+                        test_end=today,
+                        horizon_days=horizon_days,
+                        num_windows=metrics.num_windows,
+                        mape=metrics.mape,
+                        mae=metrics.mae,
+                        rmse=metrics.rmse,
+                        direction_accuracy=metrics.direction_accuracy,
+                        ci_containment=metrics.ci_containment,
+                    )
+                )
+                await db.commit()
                 await mark_stage_updated(tkr, "backtest")
                 completed += 1
 
