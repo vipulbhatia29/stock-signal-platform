@@ -138,6 +138,7 @@ class TestNightlyPipelineChain:
     @patch("backend.tasks.portfolio.snapshot_health_task")
     @patch("backend.tasks.alerts.generate_alerts_task")
     @patch("backend.tasks.evaluation.check_drift_task")
+    @patch("backend.tasks.convergence.compute_convergence_snapshot_task")
     @patch("backend.tasks.evaluation.evaluate_recommendations_task")
     @patch("backend.tasks.evaluation.evaluate_forecasts_task")
     @patch("backend.tasks.portfolio.snapshot_all_portfolios_task")
@@ -152,11 +153,12 @@ class TestNightlyPipelineChain:
         mock_snapshot,
         mock_eval_fc,
         mock_eval_rec,
+        mock_convergence,
         mock_drift,
         mock_alerts,
         mock_health_snapshot,
     ) -> None:
-        """Chain should call all 9 pipeline steps in order."""
+        """Chain should call all 10 pipeline steps in order (including convergence phase 3)."""
         from backend.tasks.market_data import nightly_pipeline_chain_task
 
         mock_price.return_value = {"status": "success"}
@@ -164,6 +166,7 @@ class TestNightlyPipelineChain:
         mock_recs.return_value = {"status": "success", "recommendations": 5}
         mock_eval_fc.return_value = {"status": "no_pending", "evaluated": 0}
         mock_eval_rec.return_value = {"status": "success", "evaluated": 0}
+        mock_convergence.return_value = {"status": "ok", "computed": 50}
         mock_drift.return_value = {"degraded": [], "retrain_triggered": []}
         mock_alerts.return_value = {"alerts_created": 2}
         mock_snapshot.return_value = {"snapshots_created": 3}
@@ -176,6 +179,7 @@ class TestNightlyPipelineChain:
         assert result["recommendations"]["recommendations"] == 5
         assert result["forecast_evaluation"]["status"] == "no_pending"
         assert result["recommendation_evaluation"]["evaluated"] == 0
+        assert result["convergence"]["computed"] == 50
         assert result["drift"]["degraded"] == []
         assert result["alerts"]["alerts_created"] == 2
         assert result["portfolio_snapshots"]["snapshots_created"] == 3
@@ -185,6 +189,7 @@ class TestNightlyPipelineChain:
         mock_recs.assert_called_once()
         mock_eval_fc.assert_called_once()
         mock_eval_rec.assert_called_once()
+        mock_convergence.assert_called_once()
         mock_drift.assert_called_once()
         mock_alerts.assert_called_once()
         mock_snapshot.assert_called_once()
@@ -193,6 +198,7 @@ class TestNightlyPipelineChain:
     @patch("backend.tasks.portfolio.snapshot_health_task")
     @patch("backend.tasks.alerts.generate_alerts_task")
     @patch("backend.tasks.evaluation.check_drift_task")
+    @patch("backend.tasks.convergence.compute_convergence_snapshot_task")
     @patch("backend.tasks.evaluation.evaluate_recommendations_task")
     @patch("backend.tasks.evaluation.evaluate_forecasts_task")
     @patch("backend.tasks.portfolio.snapshot_all_portfolios_task")
@@ -207,15 +213,15 @@ class TestNightlyPipelineChain:
         mock_snapshot,
         mock_eval_fc,
         mock_eval_rec,
+        mock_convergence,
         mock_drift,
         mock_alerts,
         mock_health_snapshot,
     ) -> None:
-        """Drift detection (phase 3) must run after forecast evaluation (phase 2).
+        """Drift detection (phase 4) must run after convergence + forecast eval.
 
-        Verifies that check_drift_task is only called after
-        forecast evaluation has completed, since drift detection reads
-        the MAPE values that forecast evaluation updates.
+        Verifies convergence (phase 3) precedes drift (phase 4), and drift
+        detection reads the MAPE values that forecast evaluation (phase 2) updates.
         """
         from backend.tasks.market_data import nightly_pipeline_chain_task
 
@@ -233,6 +239,7 @@ class TestNightlyPipelineChain:
         mock_recs.side_effect = _track("recommendations", {"status": "ok"})
         mock_eval_fc.side_effect = _track("forecast_eval", {"status": "ok"})
         mock_eval_rec.side_effect = _track("rec_eval", {"status": "ok"})
+        mock_convergence.side_effect = _track("convergence", {"status": "ok", "computed": 0})
         mock_drift.side_effect = _track("drift", {"degraded": []})
         mock_alerts.side_effect = _track("alerts", {"alerts_created": 0})
         mock_snapshot.side_effect = _track("portfolio_snapshots", {"snapshotted": 0})
@@ -243,18 +250,27 @@ class TestNightlyPipelineChain:
         # Price refresh must be first (phase 1)
         assert call_order[0] == "price_refresh"
 
-        # Drift must come after forecast eval (phase 3 after phase 2)
-        drift_idx = call_order.index("drift")
+        # Convergence must come after phase 2 (after forecast_eval)
+        convergence_idx = call_order.index("convergence")
         fc_idx = call_order.index("forecast_eval")
-        assert drift_idx > fc_idx, f"drift ({drift_idx}) should run after forecast_eval ({fc_idx})"
+        assert convergence_idx > fc_idx, (
+            f"convergence ({convergence_idx}) should run after forecast_eval ({fc_idx})"
+        )
 
-        # Alerts must come after drift (phase 4 after phase 3)
+        # Drift must come after convergence (phase 4 after phase 3)
+        drift_idx = call_order.index("drift")
+        assert drift_idx > convergence_idx, (
+            f"drift ({drift_idx}) should run after convergence ({convergence_idx})"
+        )
+
+        # Alerts must come after drift (phase 5 after phase 4)
         alerts_idx = call_order.index("alerts")
         assert alerts_idx > drift_idx, f"alerts ({alerts_idx}) should run after drift ({drift_idx})"
 
     @patch("backend.tasks.portfolio.snapshot_health_task")
     @patch("backend.tasks.alerts.generate_alerts_task")
     @patch("backend.tasks.evaluation.check_drift_task")
+    @patch("backend.tasks.convergence.compute_convergence_snapshot_task")
     @patch("backend.tasks.evaluation.evaluate_recommendations_task")
     @patch("backend.tasks.evaluation.evaluate_forecasts_task")
     @patch("backend.tasks.portfolio.snapshot_all_portfolios_task")
@@ -269,6 +285,7 @@ class TestNightlyPipelineChain:
         mock_snapshot,
         mock_eval_fc,
         mock_eval_rec,
+        mock_convergence,
         mock_drift,
         mock_alerts,
         mock_health_snapshot,
@@ -284,6 +301,7 @@ class TestNightlyPipelineChain:
         mock_recs.return_value = {"status": "success", "recommendations": 5}
         mock_eval_fc.return_value = {"status": "ok"}
         mock_eval_rec.return_value = {"status": "ok"}
+        mock_convergence.return_value = {"status": "ok", "computed": 50}
         mock_drift.return_value = {"degraded": []}
         mock_alerts.return_value = {"alerts_created": 0}
         mock_snapshot.return_value = {"snapshotted": 3}
@@ -295,12 +313,14 @@ class TestNightlyPipelineChain:
         assert result["forecast_refresh"]["status"] == "failed"
         # Other steps should still succeed
         assert result["recommendations"]["recommendations"] == 5
+        assert result["convergence"]["computed"] == 50
         assert result["drift"]["degraded"] == []
         assert result["health_snapshots"]["computed"] == 3
 
     @patch("backend.tasks.portfolio.snapshot_health_task")
     @patch("backend.tasks.alerts.generate_alerts_task")
     @patch("backend.tasks.evaluation.check_drift_task")
+    @patch("backend.tasks.convergence.compute_convergence_snapshot_task")
     @patch("backend.tasks.evaluation.evaluate_recommendations_task")
     @patch("backend.tasks.evaluation.evaluate_forecasts_task")
     @patch("backend.tasks.portfolio.snapshot_all_portfolios_task")
@@ -315,6 +335,7 @@ class TestNightlyPipelineChain:
         mock_snapshot,
         mock_eval_fc,
         mock_eval_rec,
+        mock_convergence,
         mock_drift,
         mock_alerts,
         mock_health_snapshot,
@@ -327,6 +348,7 @@ class TestNightlyPipelineChain:
         mock_recs.return_value = {"status": "ok"}
         mock_eval_fc.return_value = {"status": "ok"}
         mock_eval_rec.return_value = {"status": "ok"}
+        mock_convergence.return_value = {"status": "ok", "computed": 50}
         drift_result = {"degraded": ["TSLA"], "retrain_triggered": ["TSLA"]}
         mock_drift.return_value = drift_result
         mock_alerts.return_value = {"alerts_created": 1}
