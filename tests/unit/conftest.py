@@ -61,3 +61,19 @@ def authenticated_client():
         "races with sibling xdist workers under tests/unit/. Move this "
         "test to tests/api/ where tests run sequentially."
     )
+
+
+@pytest.fixture
+def db_session():
+    """Guardrail — DB-hitting db_session is banned under tests/unit/.
+
+    tests/unit/ runs with pytest-xdist -n auto. Multiple workers share
+    one Postgres instance; per-test TRUNCATE teardown races with sibling
+    workers still running tests. Tests that need a real DB belong in
+    tests/api/ (sequential).
+    """
+    pytest.fail(
+        "The `db_session` fixture hits the real database and races with "
+        "sibling xdist workers under tests/unit/. Move this test to "
+        "tests/api/ where tests run sequentially."
+    )
