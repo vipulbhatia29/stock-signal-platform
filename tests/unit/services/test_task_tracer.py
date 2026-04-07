@@ -41,10 +41,20 @@ async def test_trace_task_creates_langfuse_trace_with_task_metadata() -> None:
     ) as handle:
         assert handle.name == "nightly_sentiment"
 
+    from backend.services.observability.task_tracer import (
+        SYSTEM_SESSION_ID,
+        SYSTEM_USER_ID,
+    )
+
     langfuse.create_trace.assert_called_once()
     call_kwargs = langfuse.create_trace.call_args.kwargs
     assert call_kwargs["metadata"]["task"] == "nightly_sentiment"
     assert call_kwargs["metadata"]["ticker_count"] == 500
+    # Pin sentinel UUIDs (H6) — guards against silent regression to the
+    # trace_id-as-session_id-as-user_id collision that polluted Langfuse user
+    # analytics (every task would otherwise look like a unique user/session).
+    assert call_kwargs["session_id"] == SYSTEM_SESSION_ID
+    assert call_kwargs["user_id"] == SYSTEM_USER_ID
 
 
 async def test_trace_task_handles_disabled_langfuse() -> None:
@@ -153,3 +163,22 @@ async def test_trace_task_add_metadata_merges_into_final_update() -> None:
     assert metadata["articles"] == 10
     assert metadata["task"] == "x"
     assert metadata["status"] == "completed"
+
+
+async def test_trace_task_raises_when_singletons_unset() -> None:
+    """trace_task must raise loudly when langfuse or collector is None.
+
+    Guards the H3 fix: in Celery worker context (no FastAPI lifespan), the
+    module-level singletons start as None. A caller that grabs them without
+    initialization should hit a clear RuntimeError, not a silent NoneType
+    AttributeError on Langfuse SDK calls.
+    """
+    from backend.services.observability.task_tracer import trace_task
+
+    with pytest.raises(RuntimeError, match="not initialised"):
+        async with trace_task("x", langfuse=None, collector=_make_collector()):  # type: ignore[arg-type]
+            pass
+
+    with pytest.raises(RuntimeError, match="not initialised"):
+        async with trace_task("x", langfuse=_make_langfuse(MagicMock()), collector=None):  # type: ignore[arg-type]
+            pass

@@ -35,6 +35,7 @@ TickerFailureReason = Literal[
     "unknown_error",
     "retrain failed",
     "refresh failed",
+    "no_data",
 ]
 
 

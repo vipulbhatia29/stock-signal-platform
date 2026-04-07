@@ -218,13 +218,14 @@ def _worst(values: Iterable[StageStatus]) -> StageStatus:
 
 
 def _to_row(r: ReadinessState) -> ReadinessRow:
-    """Flatten a ReadinessState into a dashboard row (drops forecast_retrain).
+    """Flatten a ReadinessState into a dashboard row (all 10 stages included).
 
     Args:
         r: The ReadinessState to flatten.
 
     Returns:
-        ReadinessRow suitable for the admin health dashboard.
+        ReadinessRow suitable for the admin health dashboard, with one
+        StageStatus column per pipeline stage plus the worst-stage overall.
     """
     s = r.stages
     return ReadinessRow(

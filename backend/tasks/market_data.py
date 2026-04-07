@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -27,7 +27,20 @@ logger = logging.getLogger(__name__)
 _runner = PipelineRunner()
 
 
-async def _refresh_ticker_async(ticker: str, spy_closes: "pd.Series | None" = None) -> dict:
+class RefreshTickerResult(TypedDict):
+    """Typed return shape for _refresh_ticker_async — narrows status to a Literal.
+
+    Pyright/mypy can then propagate the Literal into record_ticker_failure's
+    TickerFailureReason constraint at the call site (Hard Rule #10 enforcement).
+    """
+
+    ticker: str
+    status: Literal["ok", "no_data"]
+
+
+async def _refresh_ticker_async(
+    ticker: str, spy_closes: "pd.Series | None" = None
+) -> RefreshTickerResult:
     """Async implementation: fetch prices, compute signals, store snapshot.
 
     Args:
@@ -219,10 +232,12 @@ async def _nightly_price_refresh_async() -> dict:
     for ticker in tickers:
         try:
             result = await _refresh_ticker_async(ticker, spy_closes=spy_closes)
-            if result["status"] == "ok":
+            status = result["status"]
+            if status == "ok":
                 await _runner.record_ticker_success(run_id, ticker)
             else:
-                await _runner.record_ticker_failure(run_id, ticker, result["status"])
+                # status narrowed to Literal["no_data"] — flows safely into TickerFailureReason
+                await _runner.record_ticker_failure(run_id, ticker, status)
         except Exception:
             await _runner.record_ticker_failure(run_id, ticker, "refresh failed")
             logger.exception("Failed to refresh %s in nightly pipeline", ticker)
