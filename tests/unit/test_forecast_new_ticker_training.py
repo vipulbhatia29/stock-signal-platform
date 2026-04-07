@@ -90,7 +90,7 @@ class TestForecastNewTickerDispatch:
                 new_callable=AsyncMock,
                 return_value="ok",
             ),
-            patch("backend.tools.forecasting.predict_forecast", return_value=[]),
+            patch("backend.tools.forecasting.predict_forecast", new=AsyncMock(return_value=[])),
             patch(
                 "backend.services.ticker_universe.get_all_referenced_tickers",
                 new_callable=AsyncMock,
@@ -138,7 +138,7 @@ class TestForecastNewTickerDispatch:
                 new_callable=AsyncMock,
                 return_value="ok",
             ),
-            patch("backend.tools.forecasting.predict_forecast", return_value=[]),
+            patch("backend.tools.forecasting.predict_forecast", new=AsyncMock(return_value=[])),
             patch(
                 "backend.services.ticker_universe.get_all_referenced_tickers",
                 new_callable=AsyncMock,
@@ -189,7 +189,7 @@ class TestForecastNewTickerDispatch:
                 new_callable=AsyncMock,
                 return_value="ok",
             ),
-            patch("backend.tools.forecasting.predict_forecast", return_value=[]),
+            patch("backend.tools.forecasting.predict_forecast", new=AsyncMock(return_value=[])),
             patch(
                 "backend.services.ticker_universe.get_all_referenced_tickers",
                 new_callable=AsyncMock,
@@ -238,7 +238,7 @@ class TestForecastNewTickerDispatch:
                 new_callable=AsyncMock,
                 return_value="ok",
             ),
-            patch("backend.tools.forecasting.predict_forecast", return_value=[]),
+            patch("backend.tools.forecasting.predict_forecast", new=AsyncMock(return_value=[])),
             patch(
                 "backend.services.ticker_universe.get_all_referenced_tickers",
                 new_callable=AsyncMock,

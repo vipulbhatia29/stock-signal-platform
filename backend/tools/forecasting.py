@@ -146,14 +146,17 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
     return model_version
 
 
-def predict_forecast(
+async def predict_forecast(
     model_version: ModelVersion,
+    db: AsyncSession,
     horizons: list[int] | None = None,
 ) -> list[ForecastResult]:
     """Generate forecasts from a trained Prophet model.
 
     Args:
         model_version: The ModelVersion with artifact_path.
+        db: Async database session, used to fetch real sentiment regressors
+            for the predict-time future DataFrame (KAN-422 Spec B B3).
         horizons: List of horizon days (default: [90, 180, 270]).
 
     Returns:
