@@ -18,7 +18,11 @@ NEWS_LOOKBACK_DAYS = 7
     bind=True,
     name="backend.tasks.news_sentiment.news_ingest_task",
 )
-def news_ingest_task(self, lookback_days: int = NEWS_LOOKBACK_DAYS) -> dict:
+def news_ingest_task(
+    self,
+    lookback_days: int = NEWS_LOOKBACK_DAYS,
+    tickers: list[str] | None = None,
+) -> dict:
     """Ingest stock and macro news from all providers.
 
     Fetches news for all active tickers (from the stock universe) and
@@ -26,34 +30,54 @@ def news_ingest_task(self, lookback_days: int = NEWS_LOOKBACK_DAYS) -> dict:
 
     Args:
         lookback_days: How many days back to fetch.
+        tickers: Optional explicit list of tickers to restrict ingestion to.
+            When provided, the active-universe DB query is skipped and only
+            the supplied tickers are processed (uppercased). When None,
+            the full active universe (up to 50) is used.
 
     Returns:
         Dict with stock and macro ingestion stats.
     """
     self.update_state(state="PROGRESS", meta={"step": "ingesting_news"})
-    return asyncio.run(_ingest_news(lookback_days))
+    return asyncio.run(_ingest_news(lookback_days, tickers=tickers))
 
 
-async def _ingest_news(lookback_days: int) -> dict:
-    """Async implementation of news ingestion."""
-    from sqlalchemy import select
+async def _ingest_news(
+    lookback_days: int,
+    tickers: list[str] | None = None,
+) -> dict:
+    """Async implementation of news ingestion.
 
-    from backend.database import async_session_factory
-    from backend.models.stock import Stock
+    Args:
+        lookback_days: How many days back to fetch.
+        tickers: Optional explicit list of tickers. When None, the active
+            stock universe (up to 50) is queried from the database.
+
+    Returns:
+        Dict with status, stock stats, macro stats, and tickers_processed count.
+    """
     from backend.services.news.ingestion import NewsIngestionService
 
     since = datetime.now(timezone.utc).date() - timedelta(days=lookback_days)
     service = NewsIngestionService()
 
-    # Get active tickers from the universe
-    async with async_session_factory() as session:
-        result = await session.execute(
-            select(Stock.ticker).where(Stock.is_active.is_(True)).limit(50)
-        )
-        tickers = [row[0] for row in result.all()]
+    # Resolve ticker list: explicit override or active-universe DB query
+    if tickers is not None:
+        ticker_list = [t.upper() for t in tickers]
+    else:
+        from sqlalchemy import select
+
+        from backend.database import async_session_factory
+        from backend.models.stock import Stock
+
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(Stock.ticker).where(Stock.is_active.is_(True)).limit(50)
+            )
+            ticker_list = [row[0] for row in result.all()]
 
     # Ingest stock news
-    stock_result = await service.ingest_stock_news(tickers, since)
+    stock_result = await service.ingest_stock_news(ticker_list, since)
     logger.info("Stock news ingested: %s", stock_result)
 
     # Ingest macro news
@@ -64,7 +88,7 @@ async def _ingest_news(lookback_days: int) -> dict:
         "status": "complete",
         "stock": stock_result,
         "macro": macro_result,
-        "tickers_processed": len(tickers),
+        "tickers_processed": len(ticker_list),
     }
 
 
