@@ -90,9 +90,9 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.news_sentiment.news_sentiment_scoring_task",
         "schedule": crontab(hour="7,11,15,19", minute=0),  # 1h after ingest
     },
-    # ── Weekly walk-forward backtest (Saturday 03:00 ET) ──
+    # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {
         "task": "backend.tasks.forecasting.run_backtest_task",
-        "schedule": crontab(hour=3, minute=0, day_of_week=6),  # Saturday 03:00
+        "schedule": crontab(hour=3, minute=30, day_of_week=6),  # Saturday 03:30 ET (avoids 03:00 daily-purge collision)
     },
 }
