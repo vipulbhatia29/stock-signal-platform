@@ -93,6 +93,7 @@ celery_app.conf.beat_schedule = {
     # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {
         "task": "backend.tasks.forecasting.run_backtest_task",
-        "schedule": crontab(hour=3, minute=30, day_of_week=6),  # Saturday 03:30 ET (avoids 03:00 daily-purge collision)
+        # Saturday 03:30 ET — avoids 03:00 collision with purge-login-attempts-daily
+        "schedule": crontab(hour=3, minute=30, day_of_week=6),
     },
 }
