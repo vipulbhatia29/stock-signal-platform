@@ -441,3 +441,71 @@ class TestScoreSentiment:
         mock_session = mock_factory.__aenter__.return_value
         # Session execute should have been called for both UPDATE and INSERT
         assert mock_session.execute.call_count >= 1
+
+
+# ---------------------------------------------------------------------------
+# B5.1: tickers parameter on _ingest_news
+# ---------------------------------------------------------------------------
+
+
+class TestIngestNewsTickersParam:
+    """Tests for the explicit tickers parameter added in B5."""
+
+    @pytest.mark.asyncio
+    async def test_ingest_news_explicit_tickers_bypasses_db_query(self) -> None:
+        """When tickers is provided, the DB query for active tickers is skipped."""
+        mock_service = _make_mock_ingestion_service()
+
+        with patch(
+            "backend.services.news.ingestion.NewsIngestionService",
+            return_value=mock_service,
+        ):
+            from backend.tasks.news_sentiment import _ingest_news
+
+            result = await _ingest_news(30, tickers=["FOO", "BAR"])
+
+        # ingest_stock_news is still called — but with our explicit list
+        mock_service.ingest_stock_news.assert_called_once()
+        call_args = mock_service.ingest_stock_news.call_args
+        tickers_arg = call_args[0][0]
+        assert sorted(tickers_arg) == ["BAR", "FOO"]
+        # tickers_processed reflects the explicit list
+        assert result["tickers_processed"] == 2
+
+    @pytest.mark.asyncio
+    async def test_ingest_news_explicit_tickers_uppercased(self) -> None:
+        """Explicit tickers are uppercased before being passed to the ingestion service."""
+        mock_service = _make_mock_ingestion_service()
+
+        with patch(
+            "backend.services.news.ingestion.NewsIngestionService",
+            return_value=mock_service,
+        ):
+            from backend.tasks.news_sentiment import _ingest_news
+
+            await _ingest_news(30, tickers=["foo", "bar"])
+
+        call_args = mock_service.ingest_stock_news.call_args
+        tickers_arg = call_args[0][0]
+        assert sorted(tickers_arg) == ["BAR", "FOO"]
+
+    @pytest.mark.asyncio
+    async def test_ingest_news_none_tickers_queries_db(self) -> None:
+        """When tickers=None (default), active tickers are queried from DB."""
+        mock_factory = _make_mock_session_factory([("AAPL",), ("MSFT",)])
+        mock_service = _make_mock_ingestion_service()
+
+        with (
+            patch("backend.database.async_session_factory", return_value=mock_factory),
+            patch(
+                "backend.services.news.ingestion.NewsIngestionService",
+                return_value=mock_service,
+            ),
+        ):
+            from backend.tasks.news_sentiment import _ingest_news
+
+            result = await _ingest_news(7, tickers=None)
+
+        # DB session was entered (to query active tickers)
+        mock_factory.__aenter__.assert_called_once()
+        assert result["tickers_processed"] == 2

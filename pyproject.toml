@@ -78,6 +78,7 @@ markers = [
     "regression: regression tests for previously-fixed bugs",
     "migration: Alembic migration consistency tests",
     "cache: Redis cache behavior tests (TTL, invalidation, stampede)",
+    "slow: tests that take >5 seconds (real Prophet, large data, CPU-bound)",
 ]
 timeout = 30
 

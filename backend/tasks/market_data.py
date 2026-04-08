@@ -280,13 +280,15 @@ def nightly_pipeline_chain_task() -> dict:
             ├── Recommendation eval      (needs fresh prices for past recs)
             └── Portfolio snapshots      (needs fresh prices)
             |
-        Phase 3: Drift detection         (needs forecast eval MAPE updates)
+        Phase 3: Convergence snapshot     (needs signals + forecasts from phase 2)
             |
-        Phase 4 (parallel):
+        Phase 4: Drift detection         (needs forecast eval MAPE updates)
+            |
+        Phase 5 (parallel):
             ├── Alert generation         (needs drift context + new recs)
             └── Health snapshots         (needs portfolio snapshots)
 
-    Steps 4-6 will no-op until enough time has passed for forecasts
+    Steps 5-6 will no-op until enough time has passed for forecasts
     and recommendations to mature (30-90 days).
 
     Returns:
@@ -295,6 +297,7 @@ def nightly_pipeline_chain_task() -> dict:
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     from backend.tasks.alerts import generate_alerts_task
+    from backend.tasks.convergence import compute_convergence_snapshot_task
     from backend.tasks.evaluation import (
         check_drift_task,
         evaluate_forecasts_task,
@@ -350,23 +353,27 @@ def nightly_pipeline_chain_task() -> dict:
     logger.info("Nightly chain phase 2: running %d steps in parallel", len(phase2_tasks))
     results.update(_run_tasks_parallel(phase2_tasks))
 
-    # Phase 3: Drift detection (depends on forecast evaluation updating model MAPEs)
-    logger.info("Nightly chain phase 3: drift detection")
+    # Phase 3: Convergence snapshot (depends on signals + forecasts from phase 2)
+    logger.info("Nightly chain phase 3: convergence snapshot")
+    results["convergence"] = compute_convergence_snapshot_task()
+
+    # Phase 4: Drift detection (depends on forecast evaluation updating model MAPEs)
+    logger.info("Nightly chain phase 4: drift detection")
     results["drift"] = check_drift_task()
 
-    # Phase 4: Alerts + health snapshots run in parallel.
+    # Phase 5: Alerts + health snapshots run in parallel.
     # Alerts needs drift context + new recs (both complete).
     # Health snapshots needs portfolio snapshots (complete from phase 2).
-    phase4_tasks: dict[str, tuple] = {
+    phase5_tasks: dict[str, tuple] = {
         "alerts": (generate_alerts_task, {"pipeline_context": results.get("drift")}),
         "health_snapshots": (snapshot_health_task, {}),
         "rebalancing": (materialize_rebalancing_task, {}),
     }
-    logger.info("Nightly chain phase 4: running %d steps in parallel", len(phase4_tasks))
+    logger.info("Nightly chain phase 5: running %d steps in parallel", len(phase5_tasks))
 
-    with ThreadPoolExecutor(max_workers=len(phase4_tasks)) as executor:
+    with ThreadPoolExecutor(max_workers=len(phase5_tasks)) as executor:
         futures = {}
-        for name, (fn, kwargs) in phase4_tasks.items():
+        for name, (fn, kwargs) in phase5_tasks.items():
             futures[executor.submit(fn, **kwargs)] = name
 
         for future in as_completed(futures):
@@ -374,7 +381,7 @@ def nightly_pipeline_chain_task() -> dict:
             try:
                 results[name] = future.result()
             except Exception:
-                logger.exception("Phase 4 step '%s' failed", name)
+                logger.exception("Phase 5 step '%s' failed", name)
                 results[name] = {"status": "failed"}
 
     logger.info("Nightly pipeline chain complete: %s", results)

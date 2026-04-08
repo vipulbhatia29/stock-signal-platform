@@ -113,6 +113,7 @@ class Settings(BaseSettings):
     NEWS_SCORING_FALLBACK: str = "groq"
     NEWS_INGEST_LOOKBACK_HOURS: int = 6
     NEWS_MIN_ARTICLES_FOR_SCORE: int = 1
+    NEWS_SCORING_MAX_CONCURRENCY: int = 5  # max concurrent OpenAI batch requests
 
     # --- Backtesting ---
     BACKTEST_MIN_TRAIN_DAYS: int = 365
@@ -125,6 +126,12 @@ class Settings(BaseSettings):
 
     # --- Monte Carlo ---
     MONTE_CARLO_SIMULATIONS: int = 10000
+
+    # --- Feature Flags (rollback kill-switches for Spec B pipeline stages) ---
+    CONVERGENCE_SNAPSHOT_ENABLED: bool = True
+    BACKTEST_ENABLED: bool = True
+    PROPHET_REAL_SENTIMENT_ENABLED: bool = True
+    # NEWS_SCORING_MAX_CONCURRENCY controls concurrency (added in B4.2, see above)
 
     # --- Pipeline ---
     PIPELINE_FAILURE_MODE: str = "continue"

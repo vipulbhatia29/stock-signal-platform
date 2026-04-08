@@ -7,6 +7,7 @@ using exponential decay weighting.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import math
@@ -97,27 +98,42 @@ class SentimentScorer:
         self._base_url = "https://api.openai.com/v1/chat/completions"
 
     async def score_batch(self, articles: list[RawArticle]) -> list[ArticleScore]:
-        """Score a batch of articles via the OpenAI API.
+        """Score a batch of articles via the OpenAI API concurrently.
 
-        Articles are batched into groups of BATCH_SIZE for LLM efficiency.
-        Each batch produces structured JSON with per-article scores.
+        Articles are split into groups of BATCH_SIZE and dispatched in parallel
+        using asyncio.gather, bounded by settings.NEWS_SCORING_MAX_CONCURRENCY
+        to avoid overwhelming the upstream API.
+
+        If a single batch fails, it is logged and skipped; the remaining
+        batches continue and their scores are returned.
 
         Args:
             articles: List of RawArticle objects to score.
 
         Returns:
-            List of ArticleScore objects (one per article).
+            List of ArticleScore objects for all successfully scored articles.
         """
         if not self._api_key:
             logger.warning("OPENAI_API_KEY not set — skipping sentiment scoring")
             return []
+        if not articles:
+            return []
+
+        sem = asyncio.Semaphore(settings.NEWS_SCORING_MAX_CONCURRENCY)
+
+        async def _bounded(batch: list[RawArticle]) -> list[ArticleScore]:
+            async with sem:
+                return await self._score_single_batch(batch)
+
+        batches = [articles[i : i + BATCH_SIZE] for i in range(0, len(articles), BATCH_SIZE)]
+        results = await asyncio.gather(*(_bounded(b) for b in batches), return_exceptions=True)
 
         all_scores: list[ArticleScore] = []
-        for i in range(0, len(articles), BATCH_SIZE):
-            batch = articles[i : i + BATCH_SIZE]
-            scores = await self._score_single_batch(batch)
-            all_scores.extend(scores)
-
+        for idx, result in enumerate(results):
+            if isinstance(result, BaseException):
+                logger.error("Batch %d failed during concurrent scoring", idx, exc_info=result)
+                continue
+            all_scores.extend(result)
         return all_scores
 
     async def _score_single_batch(self, articles: list[RawArticle]) -> list[ArticleScore]:

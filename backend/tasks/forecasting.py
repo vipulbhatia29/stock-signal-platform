@@ -9,7 +9,13 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import settings
 from backend.database import async_session_factory
+from backend.models.backtest import BacktestRun
+from backend.models.forecast import ModelVersion
+from backend.services.backtesting import BacktestEngine
+from backend.services.ticker_state import mark_stage_updated
+from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
 from backend.tasks.pipeline import PipelineRunner
 from backend.tools.forecasting import MIN_DATA_POINTS
@@ -222,6 +228,92 @@ def retrain_single_ticker_task(ticker: str) -> dict:
     return asyncio.run(_retrain())
 
 
+async def _run_backtest_async(ticker: str | None, horizon_days: int) -> dict:
+    """Async implementation of walk-forward backtest for one or all tickers.
+
+    Args:
+        ticker: Specific ticker symbol, or None to run for all referenced tickers.
+        horizon_days: Forecast horizon to validate.
+
+    Returns:
+        Dict with status, completed count, failed count, horizon, and ticker.
+    """
+    if not settings.BACKTEST_ENABLED:
+        logger.info("BACKTEST_ENABLED=False — skipping")
+        return {"status": "disabled"}
+
+    from datetime import date
+
+    engine = BacktestEngine()
+    completed = 0
+    failed: list[str] = []
+
+    async with async_session_factory() as db:
+        tickers = [ticker] if ticker else await get_all_referenced_tickers(db)
+
+        for tkr in tickers:
+            try:
+                metrics = await engine.run_walk_forward(tkr, db, horizon_days=horizon_days)
+
+                # Look up the active model version for this ticker — required FK
+                mv_result = await db.execute(
+                    select(ModelVersion)
+                    .where(
+                        ModelVersion.ticker == tkr,
+                        ModelVersion.model_type == "prophet",
+                        ModelVersion.is_active.is_(True),
+                    )
+                    .limit(1)
+                )
+                model_version = mv_result.scalar_one_or_none()
+                if model_version is None:
+                    logger.warning(
+                        "run_backtest_task: no active ModelVersion for %s — "
+                        "cannot persist BacktestRun row; marking as failed",
+                        tkr,
+                    )
+                    failed.append(tkr)
+                    continue
+
+                today = date.today()
+                db.add(
+                    BacktestRun(
+                        ticker=tkr,
+                        model_version_id=model_version.id,
+                        config_label="walk_forward",
+                        # Use the model's training range as proxy for the
+                        # walk-forward window bounds (no per-window state stored)
+                        train_start=model_version.training_data_start,
+                        train_end=model_version.training_data_end,
+                        test_start=today,
+                        test_end=today,
+                        horizon_days=horizon_days,
+                        num_windows=metrics.num_windows,
+                        mape=metrics.mape,
+                        mae=metrics.mae,
+                        rmse=metrics.rmse,
+                        direction_accuracy=metrics.direction_accuracy,
+                        ci_containment=metrics.ci_containment,
+                    )
+                )
+                await db.commit()
+                await mark_stage_updated(tkr, "backtest")
+                completed += 1
+
+            except Exception:
+                await db.rollback()
+                logger.exception("Backtest failed for %s", tkr)
+                failed.append(tkr)
+
+    return {
+        "status": "ok",
+        "completed": completed,
+        "failed": len(failed),
+        "horizon_days": horizon_days,
+        "ticker": ticker,
+    }
+
+
 @celery_app.task(name="backend.tasks.forecasting.run_backtest_task")
 def run_backtest_task(ticker: str | None = None, horizon_days: int = 90) -> dict:
     """Run walk-forward backtest for a ticker or all active tickers.
@@ -234,8 +326,7 @@ def run_backtest_task(ticker: str | None = None, horizon_days: int = 90) -> dict
         Dict with backtest results summary.
     """
     logger.info("Backtest task started: ticker=%s, horizon=%d", ticker or "all", horizon_days)
-    # Full implementation wired in Sprint 4 integration
-    return {"status": "ok", "ticker": ticker, "horizon_days": horizon_days}
+    return asyncio.run(_run_backtest_async(ticker, horizon_days))
 
 
 @celery_app.task(name="backend.tasks.forecasting.calibrate_seasonality_task")

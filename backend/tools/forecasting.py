@@ -12,6 +12,7 @@ from prophet.serialize import model_from_json, model_to_json
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import settings
 from backend.models.forecast import ForecastResult, ModelVersion
 from backend.models.news_sentiment import NewsSentimentDaily
 from backend.models.price import StockPrice
@@ -225,7 +226,7 @@ async def predict_forecast(
     combined_sentiment_df: pd.DataFrame | None = None
     sentiment_projection: dict[str, float] = {}
     training_end: date | None = None
-    if has_sentiment_regressors:
+    if settings.PROPHET_REAL_SENTIMENT_ENABLED and has_sentiment_regressors:
         if not hasattr(model, "history") or len(model.history) == 0:
             raise RuntimeError(
                 f"predict_forecast: model {model_version.ticker} "
@@ -299,7 +300,7 @@ async def predict_forecast(
         # The combined frame covers every date <= today; anything past today
         # is NaN after the left-join and gets the projection. We NEVER
         # overwrite non-NaN cells, so real merged values are preserved.
-        if has_sentiment_regressors:
+        if settings.PROPHET_REAL_SENTIMENT_ENABLED and has_sentiment_regressors:
             if combined_sentiment_df is None or training_end is None:
                 raise RuntimeError(
                     "predict_forecast invariant violated: "
@@ -318,6 +319,18 @@ async def predict_forecast(
                         f"projection for {model_version.ticker} — refusing to "
                         "silently zero (regression of the KAN-422 B3 bug)"
                     )
+        elif has_sentiment_regressors:
+            # PROPHET_REAL_SENTIMENT_ENABLED=False — emergency rollback path.
+            # Fill all sentiment regressor columns with 0.0, reproducing the
+            # pre-B3 behavior. Logged at WARNING so operators know the flag
+            # is active and forecasts are degraded.
+            logger.warning(
+                "predict_forecast: PROPHET_REAL_SENTIMENT_ENABLED=False — "
+                "zeroing sentiment regressors for %s (rollback mode)",
+                model_version.ticker,
+            )
+            for col in sentiment_regressor_names:
+                future[col] = 0.0
 
         # Prophet's predict() is CPU-bound (NumPy + Stan), so we run it on a
         # worker thread to avoid starving the event loop in async Celery tasks.

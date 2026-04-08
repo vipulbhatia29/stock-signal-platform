@@ -294,3 +294,188 @@ Execute the 14-task plan via subagent-driven-development or inline executing-pla
 - 2 JIRA tickets resolved (KAN-403, KAN-404)
 - Skills/rules: ~1,500 tokens/interaction saved, 3 rules deleted/converted, 2 renamed
 - Resume: Phase E (UI Overhaul, KAN-400) or Phase F (Subscriptions + Monetization)
+
+---
+
+## Session 101 — KAN-422 Spec B Pipeline Completeness B1+B2+B4+B5 (2026-04-07)
+
+**Branch:** `feat/KAN-422-spec-b-completeness` → develop | **PR pending — bundled PR 2 for Spec B**
+
+### Shipped (KAN-422 Spec B sub-areas B1, B2, B4, B5; B3 already shipped in Session 100)
+
+- **B1 — Convergence snapshot task** (KAN-431): real `compute_convergence_snapshot_task` replaces stub. Universe + single-ticker mode. `pg_insert.on_conflict_do_update` upsert against `(date, ticker)` PK. `_backfill_actual_returns` for 90d/180d using bulk DISTINCT-ON price queries. `mark_stage_updated` for ALL requested tickers (not just successful upserts — fix from persona review). Wired into nightly chain as new Phase 3; drift becomes Phase 4, alerts becomes Phase 5. Try/except wrap on bulk op so one bad ticker can't kill nightly Phase 3 (fix from persona review).
+- **B2 — Backtest engine + task** (KAN-432): public `BacktestEngine.run_walk_forward(ticker, db, horizon=90, min_train=365, step=30)` wraps sync Prophet via `asyncio.to_thread`, reuses existing metric helpers. New `_fit_and_predict_sync` and `_fetch_sentiment_for_window` (latter is a known refactor target — duplicates `_fetch_sentiment_regressors` from B3, filed as follow-up). Real `_run_backtest_async` loops tickers with per-ticker failure isolation, looks up active `ModelVersion` (skip + fail when missing), inserts `BacktestRun` rows. Weekly Saturday **03:30 ET** beat schedule (moved from 03:00 to avoid daily-purge collision). `mark_stage_updated` and `completed += 1` only fire on actual row persistence (post-fix). Slow Prophet smoke test added.
+- **B4 — Concurrent news scoring** (KAN-434): `SentimentScorer.score_batch` rewritten to `asyncio.gather` + `Semaphore(NEWS_SCORING_MAX_CONCURRENCY=5)` with per-batch failure isolation via `return_exceptions=True` + `BaseException` narrowing.
+- **B5 — ingest_ticker extension** (KAN-435): `news_ingest_task` accepts `tickers: list[str] | None = None` param. `ingest_ticker` Steps 6b/8/9/10 add `mark_stage_updated` for prices/signals/recommendation, plus fire-and-forget dispatch of `news_ingest_task.delay(lookback_days=90, tickers=[ticker])` and `compute_convergence_snapshot_task.delay(ticker=ticker)` for new tickers. Dispatch failures log warnings; never abort ingest.
+- **Final.1** — 3 feature flags: `CONVERGENCE_SNAPSHOT_ENABLED`, `BACKTEST_ENABLED`, `PROPHET_REAL_SENTIMENT_ENABLED` (all default `True`) with early-return guards before any DB write. PROPHET flag wraps the B3 predict-time sentiment branch with a zero-fallback for emergency rollback. `NEWS_SCORING_MAX_CONCURRENCY` env var documented. `backend/.env.example` updated.
+- **Final.2** — Lint pass, full test run.
+
+### Process highlights — 5-persona pre-push review caught 1 BLOCKING + 5 HIGH
+
+5-persona pre-push review (Staff Backend Architect, Reliability Engineer, Performance Engineer, Test Engineer, DevOps Engineer) flagged:
+- **BLOCKING:** New pyright error in `backtesting.py:275` (`pd.DataFrame(rows, columns=sentiment_cols)` — wrap with `pd.Index(...)`).
+- **HIGH:** Beat schedule collision Saturday 03:00 ET with daily login-attempts purge → moved to 03:30.
+- **HIGH:** Convergence stage marking only iterated successful upserts → brand-new tickers from `ingest_ticker` Step 9 stuck unmarked. Switched to iterating the requested ticker list.
+- **HIGH:** Convergence task had no try/except around bulk op → one bad ticker would kill the entire nightly Phase 3. Wrapped with partial-failure isolation; rollback only when function owns the session (test-injection safe).
+- **HIGH:** Performance — 500 sequential `mark_stage_updated` round-trips per nightly run + walk-forward sentiment N+1 (~55k queries) → filed as follow-up.
+- **HIGH:** Reliability — `_run_backtest_async` shares one DB session across all tickers → filed as follow-up (mirrors existing `_model_retrain_all_async` precedent).
+- **MEDIUM:** Wall-clock test flake (`< 0.5` for 0.3s) → widened to `< 1.0`.
+- **MEDIUM:** Missing `@pytest.mark.regression` on B2 fix-up tests → added.
+
+All 7 must-fix items committed; fix verification re-review CLEARED FOR PUSH.
+
+### Tests
+- Unit: 1932 → **1945** (+13 from B4 + Final.1)
+- API: 397 → **428+** (+31+ from B1, B2, B5; convergence regression tests; drift consumer tests; ingest_ticker extension)
+- Slow Prophet smoke (`pytest.mark.slow` + `pytest.importorskip`) for `_fit_and_predict_sync` linear-series end-to-end
+- Pyright: 0 new errors above the 186 baseline on changed files
+
+### Commits — 29 total on branch
+1-6: B1.1–B1.5 + lint cleanup (`946d166`..`64b8747`)
+7-11: B2.1–B2.5 (`ac5bd73`..`159d30c`)
+12-14: B2 fix-ups (`9ad9d27`, `cdc25f8`, `0b6c3ba`)
+15-16: B4.1–B4.2 (`34ee5d5`, `22dc7fa`)
+17-19: B5.1, B5.3, B5.4 (`3312d00`, `059276a`, `cc5935a`)
+20-21: Final.1, Final.2 (`81df007`, `fcb8019`)
+22-29: Persona review fixes (`e4ebd93` pyright, `f10963f` beat 03:30, `e0d08c6` mark_stage tickers, `4d7922c` partial-failure, `24f7f95` flake, `07e9089` regression markers, `c3d65f0` env example, `b8d5e68` E501)
+
+### Follow-up tickets to file
+- **KAN-perf-mark-stages-bulk** — Bulk `mark_stages_updated(tickers, stage)` helper to replace 500 sequential round-trips
+- **KAN-perf-walk-forward-sentiment** — Pre-load full sentiment history once per ticker instead of per window
+- **KAN-perf-backtest-session-per-ticker** — Open fresh session per ticker iteration in `_run_backtest_async`
+- **KAN-backtest-degraded-status** — Return `status="degraded"` when `failed > 0` so monitoring can pick it up
+- **KAN-backtest-unique-constraint** — Add `(ticker, model_version_id, test_end, horizon_days)` UniqueConstraint + switch to upsert
+- **KAN-backtest-time-limit** — Add Celery `time_limit` to `run_backtest_task`
+- **KAN-backtest-sentiment-helper-dedup** — Consolidate `_fetch_sentiment_for_window` into `_fetch_sentiment_regressors`
+- **KAN-pyright-tools-forecasting** — Same `pd.Index(...)` wrap needed at `backend/tools/forecasting.py:508` (KAN-428 sub-item)
+- **KAN-test-forecast-tz-flake** — Pre-existing `test_forecast_has_correct_fields` fails due to ET vs UTC `date.today()` gap (also fails on develop)
+
+---
+
+## Session 100 — KAN-433 Spec B3 Prophet Sentiment Predict-Time Fix (2026-04-07)
+
+**Branch:** `feat/KAN-422-b3-prophet-sentiment-fix` → develop | **PR #207 merged (squash `12fcbe4`)**
+
+### Shipped (KAN-433, sub-area B3 of KAN-422 Spec B)
+
+Fixed the **CRITICAL forecast quality bug** where `predict_forecast` hard-coded Prophet sentiment regressor columns (`stock_sentiment`, `sector_sentiment`, `macro_sentiment`) to `0.0` in the future DataFrame — including historical training rows Prophet re-projects internally. Trained regressor betas silently contributed zero to predictions. Code comment literally said "KNOWN LIMITATION".
+
+**Fix: hybrid source architecture**
+- **Historical rows** (`ds <= training_end`): read straight from `model.history[cols].copy()` — Prophet's own snapshot of the values it was fit on. Skew-proof by construction (no DB query for these dates, no risk of training-serving skew from news reprocessing).
+- **Post-training rows** (`training_end < ds <= today`): fresh narrow DB query via `_fetch_sentiment_regressors`. These dates were never in training → no skew risk.
+- **Forecast rows** (`ds > today`): 7-day trailing mean anchored to `combined_sentiment_df.max()` (i.e. today for stale models, not training_end) — fresh projection for nightly refresh.
+- NaN after merge + projection raises `RuntimeError` (no silent `fillna(0.0)`).
+- All-zero projection logs `ERROR` with ticker/version/remediation hint.
+- Missing post-training fetch logs `WARNING`.
+- `assert` replaced with explicit `RuntimeError` (survives `PYTHONOPTIMIZE=1`).
+- `model.predict` wrapped in `asyncio.to_thread` (Prophet is CPU-bound, was starving the event loop).
+
+**Files changed:** `backend/tools/forecasting.py` (+136 lines), `backend/tasks/forecasting.py` (3 callers awaited), `scripts/seed_forecasts.py` (4th caller), 4 test files.
+
+### Process highlights — review caught 3 CRITICALs
+
+**Initial submission had 3 CRITICAL bugs that would have shipped silent-failure regressions of the exact bug being fixed:**
+1. **C1:** `forecast_mask = future_dates > training_end` unconditionally clobbered real post-training sentiment with the projection. For any model older than a day (the normal nightly refresh), the fix delivered ~0% of its intended benefit.
+2. **C2:** Empty-DataFrame fallback when `_fetch_sentiment_regressors` returned None/empty silently collapsed to 0.0 — literally the pre-fix bug via a new code path.
+3. **C3:** `fillna(0.0)` after merge silently zeroed weekends/holidays/gaps in the training window, injecting `beta × 0` for those days.
+
+4-persona review (Backend Architect, Test Engineer, Silent Failure Hunter, Domain Expert) caught all three. I had skipped the `reviewing-code` skill before opening the PR initially — the user explicitly called this out and demanded it run. This is the second time in the project where a pre-merge persona review caught bugs that all tests passed and CI was green for.
+
+**Process fix:** `reviewing-code` must run BEFORE opening a PR, not before merge. Recorded in memory as a hard lesson. Same discipline will apply to PR 2 (B1+B2+B4+B5 bundle).
+
+### Test suite rewritten (6 tests, real Postgres via testcontainers)
+
+- `test_predict_forecast_is_async` — coroutine signature guard
+- `test_predict_uses_model_history_sentiment_not_zero` — direct regression for C1: monkey-patches `model_from_json` to zero sentiment in loaded `model.history`, asserts forecasts differ by >$0.5
+- `test_predict_forecast_without_sentiment_still_works` — smoke test for non-regressor path
+- `test_stale_model_fetches_post_training_sentiment` — uses `freezegun` to train on 2026-01-15, advance to 2026-01-25, seed +0.9 post-training sentiment, asserts it influences the forecast by >$0.3. Uses new `tail_zero_days` param to deterministically pin the stale-fallback baseline at 0 (eliminates sine-phase flakiness).
+- `test_projection_collapse_logs_error` — meta-guardrail: trains with all-zero sentiment, asserts ERROR log with "projection collapsed" fires. Fails if the silent failure comes back.
+
+### CI debugging
+
+- **Round 1:** backend-test failed on `deltas[270] >= deltas[90]` assertion in the old 4th test (off by ~1e-13 between macOS and Linux Prophet builds). Fixed by changing to `min(deltas) > 0.5` — conceptually correct (deltas are equal across horizons, not increasing).
+- **Round 2:** Review-driven restructure of the fix itself → all 4 reviews re-ran (focused re-review) → 2 test-quality issues (TQ1 flakiness, TQ2 misleading smoke test) → fixed → CI green on push 3.
+- **Type-check** failed with 12 pyright errors (7 pre-existing stub gaps + 5 new) — confirmed as advisory per `ci-pr.yml` line 289 (`continue-on-error: true`) and NOT in the `ci-gate` failure list (lines 344-362 only check backend-lint/backend-test/frontend-lint/frontend-test/e2e-lint). Non-blocking.
+
+### Post-merge — **4th KAN-429 incident**
+
+Audit query `project = KAN AND status = Done AND resolved >= -1h` found **6 tickets closed within 1 second** at 2026-04-07 18:19:09-10 local:
+- **KAN-433** — legitimate (B3 shipped) ✅
+- **KAN-431, KAN-432, KAN-434, KAN-435** — mass-close misfire (4 sibling subtasks, unshipped)
+- **KAN-422** — parent-close cascade misfire (only 1 of 5 children actually done)
+
+**Root cause:** my PR body included a `## JIRA` section with links to all 5 subtasks + parent for context. KAN-429's automation scans PR bodies for `KAN-xxx` mentions and treats them as ship signals. Then "all subtasks Done → parent Done" cascaded to close KAN-422.
+
+Reopened all 5 misfires with evidence-trail comments. **Learning recorded:** never include `## JIRA` sections in PR bodies listing related/sibling/parent tickets — only reference the single ticket the PR actually ships. Updated `feedback_jira_audit_after_merge.md` with PR body template for the workaround.
+
+### Followups filed in review (deferred, not blocking)
+
+- **H-Callers:** differentiate `RegressorFetchError` from solver errors in `backend/tasks/forecasting.py` exception handlers; the new DB query widened the error surface for callers that currently log "refresh failed" generically
+- **Domain H2:** evaluate training-window mean / AR(1) / exponential decay vs the current 7-day trailing mean at 270-day horizons (constant projection assumes sentiment stays fixed for 9 months)
+- **Domain M2:** evaluate multiplicative regressor mode vs additive for cross-ticker stability
+- **Pre-existing bug:** `make_future_dataframe(periods=horizon)` extends from `training_end`, not `today` — for stale models, target_date falls off the end of `future` and the code falls back to `.tail(1)` (wrong target)
+
+### Session 100 Totals
+
+- 1 PR (#207), 6 commits squashed to 1
+- Tests: 1932 unit (baseline match — 0 regressions), +6 new B3 tests in `tests/api/`
+- 1 JIRA ticket shipped (KAN-433)
+- 5 JIRA subtasks created (KAN-431, KAN-432, KAN-433, KAN-434, KAN-435)
+- 5 JIRA tickets reopened after mass-close misfire (KAN-431/432/434/435 + KAN-422 parent)
+- **4th KAN-429 incident documented** (memory updated, PR body template added)
+- Review process lesson learned: `reviewing-code` runs BEFORE PR open, always. Caught 3 CRITICALs that CI + tests did not.
+
+### Resume point
+
+KAN-422 Spec B still in progress — 4 of 5 sub-areas remaining. Next session options:
+- **PR 2 (B1+B2+B4+B5 bundle):** KAN-431 (convergence real impl), KAN-432 (backtest real impl), KAN-434 (news concurrent), KAN-435 (ingest_ticker extension). B1 must land before B5 (dependency). **Run `reviewing-code` BEFORE opening the PR.**
+- **Alternative:** pivot to KAN-427 (Spec Z quick wins) for an independent momentum builder, or file the 4 follow-up tickets from the B3 review first.
+
+---
+
+## Session 99 — KAN-421 Spec A Ingestion Foundation (2026-04-07)
+
+**Branch:** `feat/KAN-421-ingestion-foundation` → develop | **PR #206 merged (squash `01ca0af`)**
+
+### Shipped (KAN-421)
+- Migration 025 — `ticker_ingestion_state` table (10 stages + `last_error JSONB`, FK CASCADE, 3 indexes, idempotent backfill)
+- `backend/services/ticker_state.py` — `mark_stage_updated`, `get_ticker_readiness`, `get_universe_health`
+- `StalenessSLAs` constants in `backend/config.py`
+- `@tracked_task` decorator in `backend/tasks/pipeline.py` — Hard Rule #10 compliant
+- `backend/services/observability/task_tracer.py` + module-level singletons + main.py lifespan wiring
+- `TickerFailureReason` Literal constraint on `record_ticker_failure` (defense in depth)
+- `RefreshTickerResult` TypedDict narrowing `_refresh_ticker_async` return type
+
+### Process highlights
+- Sonnet (TDD) implementation, 4-persona Opus review (Staff Eng + Test Eng + Security + DB/Migration), 2 review rounds
+- Round 1: 1 CRITICAL + 14 HIGH findings — all fixed
+- Round 2: 4 small items — all fixed
+- CI: failed on push 1 with 8 pyright errors → triaged 2 mine vs 6 pre-existing → fixed mine at root + targeted ignores for pre-existing → 13/13 green on push 2
+- Caught Sonnet's `asyncpg pool conflict` test bug during full-suite verification (commit `54a2d0f` → `641efcc`)
+
+### Mass-close investigation
+- Session start: 18 tickets reopened from previous session's mass-close incident (KAN-395 + 17 from PR #205 merge at 01:11)
+- Session end: KAN-419 (Epic) auto-closed AGAIN by PR #206 merge — same automation rule, different failure mode (parent Epic close)
+- Filed **KAN-429** (HIGH bug) tracking both incidents — needs JIRA expert config fix
+
+### Tests
+- Unit: 1907 → 1932 (+25 net: 27 new, 2 deleted weak unit-level leak tests)
+- API: 383 → 397 (+14 new real-DB tests including migration backfill)
+- Spec test-case coverage: 27/32 (5 deferred — full alembic round-trip, e2e pipeline)
+- Lint clean, format clean, pyright clean on all 10 changed files
+
+### Followups filed
+- **KAN-428** (Medium, ~2-3h) — Pyright cleanup of 6 pre-existing errors tagged with `TODO(KAN-pyright-cleanup)`
+- **KAN-429** (HIGH) — JIRA automation incorrectly closes parent Epic + unrelated tickets on PR merge
+- **KAN-430** (Low, ~1h) — Worktree tooling defaults to main instead of develop
+
+### Memory updates
+- Added auto-memory `feedback_jira_audit_after_merge.md` — post-merge JQL audit recipe
+- MEMORY.md Session Start section now points at the audit recipe (auto-loaded)
+- MEMORY.md Project State updated (PR #206, alembic head 025, test counts, follow-ups)
+
+### Session 99 Totals
+- 1 PR (#206), 16 commits squashed to 1, 15 files changed, 1546 inserts / 1 delete
+- Tests: 1932 unit (+25), 397 API (+14), 0 failures, 0 lint, 0 pyright
+- 1 JIRA ticket shipped (KAN-421), 3 new JIRA tickets filed (KAN-428, 429, 430), 19 reopened (18 first sweep + KAN-419 second sweep)
+- Resume: KAN-427 (Spec Z Quick Wins, independent) or KAN-422 (Spec B Pipeline Completeness, depends on KAN-421 just shipped). **Caveat: every Pipeline Overhaul merge will currently re-trigger KAN-429 until it's fixed.**

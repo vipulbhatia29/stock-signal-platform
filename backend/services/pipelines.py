@@ -33,6 +33,9 @@ from backend.services.stock_data import (
     persist_enriched_fundamentals,
     update_last_fetched_at,
 )
+from backend.services.ticker_state import mark_stage_updated
+from backend.tasks.convergence import compute_convergence_snapshot_task
+from backend.tasks.news_sentiment import news_ingest_task
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +124,11 @@ async def ingest_ticker(
     # ── Step 6: Update last_fetched_at ────────────────────────────────
     await update_last_fetched_at(ticker, db)
 
+    # ── Step 6b: Mark prices (and signals) stages as updated ─────────
+    await mark_stage_updated(ticker, "prices")
+    if composite_score is not None:
+        await mark_stage_updated(ticker, "signals")
+
     # ── Step 7b: Dispatch forecast training for new tickers (fire-and-forget) ──
     if is_new:
         try:
@@ -130,6 +138,22 @@ async def ingest_ticker(
             logger.info("Dispatched forecast training for %s", ticker)
         except Exception:
             logger.warning("Failed to dispatch forecast for %s", ticker, exc_info=True)
+
+    # ── Step 8: Dispatch news backfill for new tickers (fire-and-forget) ─────
+    if is_new:
+        try:
+            news_ingest_task.delay(lookback_days=90, tickers=[ticker])
+            logger.info("Dispatched news backfill for %s", ticker)
+        except Exception:
+            logger.warning("Failed to dispatch news backfill for %s", ticker, exc_info=True)
+
+    # ── Step 9: Dispatch convergence seed for new tickers (fire-and-forget) ──
+    if is_new:
+        try:
+            compute_convergence_snapshot_task.delay(ticker=ticker)
+            logger.info("Dispatched convergence seed for %s", ticker)
+        except Exception:
+            logger.warning("Failed to dispatch convergence seed for %s", ticker, exc_info=True)
 
     # ── Step 7: Generate portfolio-aware recommendation ───────────────
     recommendation = None
@@ -220,4 +244,8 @@ async def _generate_recommendation_with_context(
         max_position_pct=max_position_pct,
     )
     await store_recommendation(rec, user_id, db)
+
+    # ── Step 10: Mark recommendation stage as updated ─────────────────
+    await mark_stage_updated(ticker, "recommendation")
+
     return rec
