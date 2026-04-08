@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import settings
 from backend.database import async_session_factory
 from backend.models.convergence import SignalConvergenceDaily
 from backend.models.price import StockPrice
@@ -326,6 +327,10 @@ async def _compute_convergence_snapshot_async(
     Returns:
         Status dict with keys: status, computed, backfilled.
     """
+    if not settings.CONVERGENCE_SNAPSHOT_ENABLED:
+        logger.info("CONVERGENCE_SNAPSHOT_ENABLED=False — skipping")
+        return {"status": "disabled"}
+
     # Lazy import to break circular dependency:
     # signal_convergence imports classification helpers from this module,
     # so we cannot import SignalConvergenceService at the top of this file.

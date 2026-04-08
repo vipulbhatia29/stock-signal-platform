@@ -127,6 +127,12 @@ class Settings(BaseSettings):
     # --- Monte Carlo ---
     MONTE_CARLO_SIMULATIONS: int = 10000
 
+    # --- Feature Flags (rollback kill-switches for Spec B pipeline stages) ---
+    CONVERGENCE_SNAPSHOT_ENABLED: bool = True
+    BACKTEST_ENABLED: bool = True
+    PROPHET_REAL_SENTIMENT_ENABLED: bool = True
+    # NEWS_SCORING_MAX_CONCURRENCY controls concurrency (added in B4.2, see above)
+
     # --- Pipeline ---
     PIPELINE_FAILURE_MODE: str = "continue"
 

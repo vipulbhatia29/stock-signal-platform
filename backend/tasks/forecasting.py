@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import settings
 from backend.database import async_session_factory
 from backend.models.backtest import BacktestRun
 from backend.models.forecast import ModelVersion
@@ -237,6 +238,10 @@ async def _run_backtest_async(ticker: str | None, horizon_days: int) -> dict:
     Returns:
         Dict with status, completed count, failed count, horizon, and ticker.
     """
+    if not settings.BACKTEST_ENABLED:
+        logger.info("BACKTEST_ENABLED=False — skipping")
+        return {"status": "disabled"}
+
     from datetime import date
 
     engine = BacktestEngine()
