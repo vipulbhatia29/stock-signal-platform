@@ -62,9 +62,8 @@ async def fetch_sentiment_regressors(
     if not rows:
         return None
 
-    df = pd.DataFrame(
-        rows,
-        columns=["ds", "stock_sentiment", "sector_sentiment", "macro_sentiment"],
-    )
+    sentiment_cols = ["ds", "stock_sentiment", "sector_sentiment", "macro_sentiment"]
+    # pd.Index() wrapper avoids the pandas-stub `list[str]` → `Axes` pyright gap.
+    df = pd.DataFrame(rows, columns=pd.Index(sentiment_cols))
     df["ds"] = pd.to_datetime(df["ds"]).dt.tz_localize(None)
     return df
