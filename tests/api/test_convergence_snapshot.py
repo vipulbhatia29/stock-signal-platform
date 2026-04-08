@@ -361,3 +361,33 @@ async def test_task_signature_accepts_ticker_kwarg() -> None:
     )
     param = sig.parameters["ticker"]
     assert param.default is None, "ticker param default must be None (optional)"
+
+
+# ---------------------------------------------------------------------------
+# Fix 3 regression: stage must be marked even when convergence dict is empty
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_single_ticker_with_no_signals_still_marks_stage(db_session, monkeypatch):
+    """Brand-new ticker dispatched from ingest_ticker Step 9: get_bulk_convergence
+    returns empty, but the convergence stage must still be marked so the
+    ticker_ingestion_state dashboard is not permanently stuck.
+    """
+    marked: list[tuple[str, str]] = []
+
+    async def fake_mark(ticker: str, stage: str) -> None:
+        marked.append((ticker, stage))
+
+    monkeypatch.setattr("backend.tasks.convergence.mark_stage_updated", fake_mark)
+    with patch(
+        "backend.services.signal_convergence.SignalConvergenceService.get_bulk_convergence",
+        AsyncMock(return_value={}),
+    ):
+        result = await _compute_convergence_snapshot_async(ticker="NEWCO", _db=db_session)
+
+    assert ("NEWCO", "convergence") in marked, (
+        "Stage must be marked even when convergence dict is empty"
+    )
+    assert result["computed"] == 0
