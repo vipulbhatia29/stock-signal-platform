@@ -145,6 +145,25 @@ class Settings(BaseSettings):
     LANGFUSE_PUBLIC_KEY: str = ""
     LANGFUSE_BASEURL: str = "http://localhost:3001"
 
+    # --- Spec D — Langfuse task tracking (non-agent paths) ---
+    # Global kill switch for @tracked_task → Langfuse trace creation.
+    # Set False in environments where Langfuse isn't configured to keep
+    # worker logs clean. When False, `@tracked_task` still writes the
+    # PipelineRunner row (DB) but skips Langfuse wiring.
+    LANGFUSE_TRACK_TASKS: bool = True
+    # Sampling rate for including prompt/response text in sentiment
+    # generation spans. Defaults to 25% to bound Langfuse storage cost.
+    LANGFUSE_SENTIMENT_IO_SAMPLING_RATE: float = 0.25
+
+    # --- Spec D — Ingestion staleness SLA flags ---
+    # Intentionally NOT added here. The original Plan D Task 1 proposed
+    # `INGESTION_SLA_*_HOURS: int` fields, but Spec A (PR #206) already
+    # shipped the immutable `StalenessSLAs` class above with tighter
+    # product-defensible defaults. Duplicating them as env vars with
+    # looser values would regress behavior. The principled refactor
+    # (env-tunable frozen dataclass + regression tests) is tracked under
+    # KAN-445 and will land between KAN-420 PR1 and PR2.
+
     @property
     def staleness_slas(self) -> StalenessSLAs:
         """Return the staleness SLA constants (see StalenessSLAs docstring)."""
