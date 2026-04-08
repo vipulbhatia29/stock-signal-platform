@@ -89,20 +89,21 @@ frontend/src/types/api.ts                                             # MODIFY �
 
 - [ ] **Step 1: Add config flags**
 
-Edit `backend/config.py`:
+> **UPDATED 2026-04-08 during KAN-420 PR1 implementation.** The original
+> plan listed `INGESTION_SLA_*_HOURS: int` flags here. Those are
+> **dropped** — Spec A (PR #206) already shipped `StalenessSLAs` as the
+> source of truth with tighter product defaults, and the Plan D values
+> above would have regressed them. The principled env-tunable refactor
+> is tracked under **KAN-445** (convert `StalenessSLAs` to env-tunable
+> frozen dataclass, supersedes A-LOW-2 + A-TEST-MED-2). KAN-445 lands
+> between KAN-420 PR1 and PR2.
+
+Edit `backend/config.py` — add only the two Langfuse task-tracking flags:
 
 ```python
 # Spec D — Langfuse task tracking
 LANGFUSE_TRACK_TASKS: bool = True
 LANGFUSE_SENTIMENT_IO_SAMPLING_RATE: float = 0.25
-
-# Ingestion staleness thresholds (hours)
-INGESTION_SLA_PRICES_HOURS: int = 24
-INGESTION_SLA_SIGNALS_HOURS: int = 24
-INGESTION_SLA_FORECAST_HOURS: int = 48
-INGESTION_SLA_NEWS_HOURS: int = 12
-INGESTION_SLA_SENTIMENT_HOURS: int = 24
-INGESTION_SLA_CONVERGENCE_HOURS: int = 24
 ```
 
 - [ ] **Step 2: Publish singletons in `main.py` lifespan**
