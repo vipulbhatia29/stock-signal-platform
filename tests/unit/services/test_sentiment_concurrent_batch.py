@@ -103,9 +103,7 @@ async def test_score_batch_semaphore_cap() -> None:
         await scorer.score_batch(articles)
 
     default_cap = settings.NEWS_SCORING_MAX_CONCURRENCY
-    assert max_in_flight <= default_cap, (
-        f"max_in_flight={max_in_flight} exceeded cap={default_cap}"
-    )
+    assert max_in_flight <= default_cap, f"max_in_flight={max_in_flight} exceeded cap={default_cap}"
 
 
 @pytest.mark.asyncio
@@ -169,6 +167,4 @@ async def test_configurable_concurrency(monkeypatch: pytest.MonkeyPatch) -> None
     with patch.object(scorer, "_score_single_batch", side_effect=tracked_batch):
         await scorer.score_batch(articles)
 
-    assert max_in_flight <= 2, (
-        f"max_in_flight={max_in_flight} exceeded configured cap=2"
-    )
+    assert max_in_flight <= 2, f"max_in_flight={max_in_flight} exceeded configured cap=2"
