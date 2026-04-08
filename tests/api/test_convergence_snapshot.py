@@ -299,15 +299,22 @@ async def test_backfill_skips_when_historical_price_missing(db_session) -> None:
     db_session.add(row)
     await db_session.commit()
 
-    with patch(
-        "backend.tasks.convergence.get_all_referenced_tickers",
-        AsyncMock(return_value=[tkr]),
+    with (
+        patch(
+            "backend.tasks.convergence.get_all_referenced_tickers",
+            AsyncMock(return_value=[tkr]),
+        ),
+        patch(
+            "backend.tasks.convergence.mark_stage_updated",
+            new_callable=AsyncMock,
+        ),
     ):
         # Must not raise
         result = await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
 
-    # No crash — status can be ok or no_tickers depending on signal availability
-    assert result["status"] in ("ok", "no_tickers")
+    # No crash — status can be ok, partial_failure, or no_tickers
+    # depending on signal availability for this ticker
+    assert result["status"] in ("ok", "partial_failure", "no_tickers")
 
     await db_session.refresh(row)
     # Still NULL — no prices available
@@ -391,3 +398,39 @@ async def test_single_ticker_with_no_signals_still_marks_stage(db_session, monke
         "Stage must be marked even when convergence dict is empty"
     )
     assert result["computed"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Fix 4 regression: bulk upsert failure must not kill backfill or stage marking
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_get_bulk_convergence_failure_does_not_kill_backfill_or_stage(
+    db_session, monkeypatch
+):
+    """One bad call to get_bulk_convergence must not kill the entire nightly
+    Phase 3. Backfill should still run; stage should still be marked.
+    """
+    marked: list[tuple[str, str]] = []
+
+    async def fake_mark(ticker: str, stage: str) -> None:
+        marked.append((ticker, stage))
+
+    monkeypatch.setattr("backend.tasks.convergence.mark_stage_updated", fake_mark)
+    monkeypatch.setattr(
+        "backend.tasks.convergence.get_all_referenced_tickers",
+        AsyncMock(return_value=["AAPL", "MSFT"]),
+    )
+    with patch(
+        "backend.services.signal_convergence.SignalConvergenceService.get_bulk_convergence",
+        AsyncMock(side_effect=RuntimeError("simulated")),
+    ):
+        result = await _compute_convergence_snapshot_async(_db=db_session)
+
+    assert result["status"] == "partial_failure"
+    assert result["computed"] == 0
+    # Both tickers should still have stage marked even after the failure
+    assert ("AAPL", "convergence") in marked
+    assert ("MSFT", "convergence") in marked

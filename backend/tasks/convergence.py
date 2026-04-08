@@ -331,13 +331,7 @@ async def _compute_convergence_snapshot_async(
         logger.info("CONVERGENCE_SNAPSHOT_ENABLED=False — skipping")
         return {"status": "disabled"}
 
-    # Lazy import to break circular dependency:
-    # signal_convergence imports classification helpers from this module,
-    # so we cannot import SignalConvergenceService at the top of this file.
-    from backend.services.signal_convergence import SignalConvergenceService  # noqa: PLC0415
-
     today = datetime.now(timezone.utc).date()
-    svc = SignalConvergenceService()
 
     async with _get_session(_db) as db:
         # Resolve ticker list
@@ -349,64 +343,86 @@ async def _compute_convergence_snapshot_async(
         if not tickers:
             return {"status": "no_tickers", "computed": 0, "backfilled": 0}
 
-        # Bulk-fetch convergence data for all tickers
-        convergences = await svc.get_bulk_convergence(tickers, db)
+        # _owns_session is True in production (we created the session via factory).
+        # When _db is injected (tests), we never rollback — the caller owns the session.
+        _owns_session = _db is None
 
         computed = 0
-        if convergences:
-            # Build upsert rows for tickers that have signal data
-            upsert_rows: list[dict] = []
-            for tkr, conv in convergences.items():
-                # Extract per-signal directions from the signals list
-                directions_map: dict[str, str] = {s.signal: s.direction for s in conv.signals}
-                values_map: dict[str, float | None] = {s.signal: s.value for s in conv.signals}
-
-                upsert_rows.append(
-                    {
-                        "date": today,
-                        "ticker": tkr,
-                        "rsi_direction": directions_map.get("rsi", "neutral"),
-                        "macd_direction": directions_map.get("macd", "neutral"),
-                        "sma_direction": directions_map.get("sma", "neutral"),
-                        "piotroski_direction": directions_map.get("piotroski", "neutral"),
-                        "forecast_direction": directions_map.get("forecast", "neutral"),
-                        "news_sentiment": values_map.get("news"),
-                        "signals_aligned": conv.signals_aligned,
-                        "convergence_label": conv.convergence_label,
-                        "composite_score": conv.composite_score,
-                        "actual_return_90d": None,
-                        "actual_return_180d": None,
-                    }
-                )
-
-            # Upsert all rows in one statement
-            ins = pg_insert(SignalConvergenceDaily).values(upsert_rows)
-            ins = ins.on_conflict_do_update(
-                index_elements=["ticker", "date"],
-                set_={
-                    "rsi_direction": ins.excluded.rsi_direction,
-                    "macd_direction": ins.excluded.macd_direction,
-                    "sma_direction": ins.excluded.sma_direction,
-                    "piotroski_direction": ins.excluded.piotroski_direction,
-                    "forecast_direction": ins.excluded.forecast_direction,
-                    "news_sentiment": ins.excluded.news_sentiment,
-                    "signals_aligned": ins.excluded.signals_aligned,
-                    "convergence_label": ins.excluded.convergence_label,
-                    "composite_score": ins.excluded.composite_score,
-                },
+        try:
+            # Lazy import to break circular dependency:
+            # signal_convergence imports classification helpers from this module,
+            # so we cannot import SignalConvergenceService at the top of this file.
+            from backend.services.signal_convergence import (
+                SignalConvergenceService,  # noqa: PLC0415
             )
-            await db.execute(ins)
-            await db.commit()
-            computed = len(convergences)
+
+            svc = SignalConvergenceService()
+            convergences = await svc.get_bulk_convergence(tickers, db)
+
+            if convergences:
+                # Build upsert rows for tickers that have signal data
+                upsert_rows: list[dict] = []
+                for tkr, conv in convergences.items():
+                    # Extract per-signal directions from the signals list
+                    directions_map: dict[str, str] = {s.signal: s.direction for s in conv.signals}
+                    values_map: dict[str, float | None] = {s.signal: s.value for s in conv.signals}
+
+                    upsert_rows.append(
+                        {
+                            "date": today,
+                            "ticker": tkr,
+                            "rsi_direction": directions_map.get("rsi", "neutral"),
+                            "macd_direction": directions_map.get("macd", "neutral"),
+                            "sma_direction": directions_map.get("sma", "neutral"),
+                            "piotroski_direction": directions_map.get("piotroski", "neutral"),
+                            "forecast_direction": directions_map.get("forecast", "neutral"),
+                            "news_sentiment": values_map.get("news"),
+                            "signals_aligned": conv.signals_aligned,
+                            "convergence_label": conv.convergence_label,
+                            "composite_score": conv.composite_score,
+                            "actual_return_90d": None,
+                            "actual_return_180d": None,
+                        }
+                    )
+
+                # Upsert all rows in one statement
+                ins = pg_insert(SignalConvergenceDaily).values(upsert_rows)
+                ins = ins.on_conflict_do_update(
+                    index_elements=["ticker", "date"],
+                    set_={
+                        "rsi_direction": ins.excluded.rsi_direction,
+                        "macd_direction": ins.excluded.macd_direction,
+                        "sma_direction": ins.excluded.sma_direction,
+                        "piotroski_direction": ins.excluded.piotroski_direction,
+                        "forecast_direction": ins.excluded.forecast_direction,
+                        "news_sentiment": ins.excluded.news_sentiment,
+                        "signals_aligned": ins.excluded.signals_aligned,
+                        "convergence_label": ins.excluded.convergence_label,
+                        "composite_score": ins.excluded.composite_score,
+                    },
+                )
+                await db.execute(ins)
+                await db.commit()
+                computed = len(convergences)
+        except Exception:
+            if _owns_session:
+                await db.rollback()
+            logger.exception("Convergence bulk upsert failed for %d tickers", len(tickers))
+            # Continue to backfill + stage marking — don't kill the chain.
 
         # Backfill actual returns for rows from 90 and 180 days ago.
         # Runs regardless of whether today's convergences exist — historical
         # rows may need backfilling even if a ticker has no current signals.
         backfilled = 0
-        backfilled += await _backfill_actual_returns(db, tickers, today, days=90)
-        backfilled += await _backfill_actual_returns(db, tickers, today, days=180)
-        if backfilled:
-            await db.commit()
+        try:
+            backfilled += await _backfill_actual_returns(db, tickers, today, days=90)
+            backfilled += await _backfill_actual_returns(db, tickers, today, days=180)
+            if backfilled:
+                await db.commit()
+        except Exception:
+            if _owns_session:
+                await db.rollback()
+            logger.exception("Convergence backfill failed")
 
         # Mark each ticker's convergence stage as updated (Spec A ticker_state).
         # Iterates over *tickers* (the input), not *convergences* (the result),
@@ -416,12 +432,14 @@ async def _compute_convergence_snapshot_async(
         for tkr in tickers:
             await mark_stage_updated(tkr, "convergence")
 
+        status = "ok" if computed > 0 else "partial_failure" if tickers else "no_tickers"
         logger.info(
-            "Convergence snapshot complete: computed=%d backfilled=%d",
+            "Convergence snapshot complete: status=%s computed=%d backfilled=%d",
+            status,
             computed,
             backfilled,
         )
-        return {"status": "ok", "computed": computed, "backfilled": backfilled}
+        return {"status": status, "computed": computed, "backfilled": backfilled}
 
 
 # ---------------------------------------------------------------------------
