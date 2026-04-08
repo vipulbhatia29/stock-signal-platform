@@ -10,6 +10,7 @@ from typing import Literal, cast
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.database import async_session_factory
@@ -75,16 +76,29 @@ class ReadinessRow:
     overall: StageStatus
 
 
-async def mark_stage_updated(ticker: str, stage: Stage) -> None:
+async def mark_stage_updated(
+    ticker: str,
+    stage: Stage,
+    db: AsyncSession | None = None,
+) -> None:
     """Idempotent upsert of the stage timestamp for a ticker.
 
     Safe to call concurrently — uses ON CONFLICT DO UPDATE. Fire-and-forget:
     errors are logged at warning but never propagated, so an observability
     write failure cannot kill an ingestion task.
 
+    When ``db`` is provided, the upsert runs on the caller's transaction —
+    the caller owns commit semantics and no errors are swallowed (a failed
+    upsert here would have already broken the caller's transaction). When
+    ``db`` is None, a fresh session is opened from the factory, committed,
+    and any error is logged at warning level.
+
     Args:
         ticker: Stock ticker symbol.
         stage: Which pipeline stage just completed.
+        db: Optional caller-owned session. When provided, no commit is issued
+            and exceptions are NOT swallowed. When None, opens a fresh session
+            and swallows errors (fire-and-forget).
     """
     now = datetime.now(timezone.utc)
     col = _STAGE_COLUMNS[stage]
@@ -99,12 +113,74 @@ async def mark_stage_updated(ticker: str, stage: Stage) -> None:
         index_elements=["ticker"],
         set_={col: now, "updated_at": now},
     )
+    if db is not None:
+        await db.execute(stmt)
+        return
     try:
         async with async_session_factory() as session:
             await session.execute(stmt)
             await session.commit()
     except Exception:
         logger.warning("Failed to mark stage %s for ticker %s", stage, ticker, exc_info=True)
+
+
+async def mark_stages_updated(
+    tickers: list[str],
+    stage: Stage,
+    db: AsyncSession | None = None,
+) -> None:
+    """Bulk upsert of a stage timestamp for many tickers in a single statement.
+
+    Eliminates the N round-trips of looping ``mark_stage_updated`` over a
+    universe of tickers (relevant for the nightly convergence + backtest
+    chains). Same dual-mode session handling as :func:`mark_stage_updated`.
+
+    Input is uppercased and de-duplicated before the upsert: Postgres
+    ``INSERT ... ON CONFLICT DO UPDATE`` raises ``cardinality_violation``
+    if a single statement contains two rows with the same conflict key,
+    so callers that derive their list from joins or retries cannot be
+    trusted to deliver unique tickers.
+
+    Args:
+        tickers: List of stock ticker symbols. Empty list is a no-op.
+            Duplicates and case variants are collapsed.
+        stage: Which pipeline stage just completed for all of them.
+        db: Optional caller-owned session. When provided, no commit is issued
+            and exceptions are NOT swallowed. When None, opens a fresh session
+            and swallows errors (fire-and-forget).
+    """
+    if not tickers:
+        return
+    # Dedup + normalize case so a single statement cannot hit the same PK
+    # twice (Postgres `cardinality_violation`). dict.fromkeys preserves the
+    # first-seen order, which makes the resulting SQL stable for tests.
+    unique_tickers = list(dict.fromkeys(t.upper().strip() for t in tickers if t))
+    if not unique_tickers:
+        return
+    now = datetime.now(timezone.utc)
+    col = _STAGE_COLUMNS[stage]
+    rows: list[dict[str, object]] = [
+        {"ticker": t, col: now, "created_at": now, "updated_at": now} for t in unique_tickers
+    ]
+    stmt = insert(TickerIngestionState).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["ticker"],
+        set_={col: now, "updated_at": now},
+    )
+    if db is not None:
+        await db.execute(stmt)
+        return
+    try:
+        async with async_session_factory() as session:
+            await session.execute(stmt)
+            await session.commit()
+    except Exception:
+        logger.warning(
+            "Failed to bulk mark stage %s for %d tickers",
+            stage,
+            len(unique_tickers),
+            exc_info=True,
+        )
 
 
 async def get_ticker_readiness(ticker: str) -> ReadinessState:

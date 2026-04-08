@@ -14,7 +14,7 @@ from backend.database import async_session_factory
 from backend.models.backtest import BacktestRun
 from backend.models.forecast import ModelVersion
 from backend.services.backtesting import BacktestEngine
-from backend.services.ticker_state import mark_stage_updated
+from backend.services.ticker_state import mark_stages_updated
 from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
 from backend.tasks.pipeline import PipelineRunner
@@ -242,68 +242,95 @@ async def _run_backtest_async(ticker: str | None, horizon_days: int) -> dict:
         logger.info("BACKTEST_ENABLED=False — skipping")
         return {"status": "disabled"}
 
-    from datetime import date
-
     engine = BacktestEngine()
     completed = 0
     failed: list[str] = []
+    successful_tickers: list[str] = []
 
+    # Resolve the ticker universe in its own short-lived session so we never
+    # hold a connection open while iterating below.
     async with async_session_factory() as db:
         tickers = [ticker] if ticker else await get_all_referenced_tickers(db)
 
-        for tkr in tickers:
-            try:
-                metrics = await engine.run_walk_forward(tkr, db, horizon_days=horizon_days)
+    for tkr in tickers:
+        # Per-ticker session: the primary motivation is session-state
+        # isolation — a SQLAlchemy InvalidRequestError / PendingRollbackError
+        # from a poisoned transaction in one ticker must not bleed into
+        # the next iteration's reads. (Per-ticker checkouts add modest
+        # connection-pool churn vs the old single-session pattern, but
+        # that trade-off is intentional.) The outer try/except also catches
+        # transient session-acquisition failures (asyncpg connection drop,
+        # pool timeout) so one bad checkout cannot abort the weekly chain.
+        try:
+            async with async_session_factory() as db:
+                try:
+                    metrics = await engine.run_walk_forward(tkr, db, horizon_days=horizon_days)
 
-                # Look up the active model version for this ticker — required FK
-                mv_result = await db.execute(
-                    select(ModelVersion)
-                    .where(
-                        ModelVersion.ticker == tkr,
-                        ModelVersion.model_type == "prophet",
-                        ModelVersion.is_active.is_(True),
+                    # Look up the active model version for this ticker — required FK
+                    mv_result = await db.execute(
+                        select(ModelVersion)
+                        .where(
+                            ModelVersion.ticker == tkr,
+                            ModelVersion.model_type == "prophet",
+                            ModelVersion.is_active.is_(True),
+                        )
+                        .limit(1)
                     )
-                    .limit(1)
-                )
-                model_version = mv_result.scalar_one_or_none()
-                if model_version is None:
-                    logger.warning(
-                        "run_backtest_task: no active ModelVersion for %s — "
-                        "cannot persist BacktestRun row; marking as failed",
-                        tkr,
+                    model_version = mv_result.scalar_one_or_none()
+                    if model_version is None:
+                        logger.warning(
+                            "run_backtest_task: no active ModelVersion for %s — "
+                            "cannot persist BacktestRun row; marking as failed",
+                            tkr,
+                        )
+                        failed.append(tkr)
+                        continue
+
+                    today = datetime.now(timezone.utc).date()
+                    db.add(
+                        BacktestRun(
+                            ticker=tkr,
+                            model_version_id=model_version.id,
+                            config_label="walk_forward",
+                            # Use the model's training range as proxy for the
+                            # walk-forward window bounds (no per-window state stored)
+                            train_start=model_version.training_data_start,
+                            train_end=model_version.training_data_end,
+                            test_start=today,
+                            test_end=today,
+                            horizon_days=horizon_days,
+                            num_windows=metrics.num_windows,
+                            mape=metrics.mape,
+                            mae=metrics.mae,
+                            rmse=metrics.rmse,
+                            direction_accuracy=metrics.direction_accuracy,
+                            ci_containment=metrics.ci_containment,
+                        )
                     )
+                    await db.commit()
+                    successful_tickers.append(tkr)
+                    completed += 1
+
+                except Exception:
+                    await db.rollback()
+                    logger.exception("Backtest failed for %s", tkr)
                     failed.append(tkr)
-                    continue
+        except Exception:
+            # Failure to acquire a session — log and skip this ticker so the
+            # run continues. Without this guard a transient pool blip would
+            # abort the entire weekly chain with hundreds of tickers unprocessed.
+            logger.exception(
+                "Failed to acquire session for backtest of %s — skipping",
+                tkr,
+            )
+            failed.append(tkr)
 
-                today = date.today()
-                db.add(
-                    BacktestRun(
-                        ticker=tkr,
-                        model_version_id=model_version.id,
-                        config_label="walk_forward",
-                        # Use the model's training range as proxy for the
-                        # walk-forward window bounds (no per-window state stored)
-                        train_start=model_version.training_data_start,
-                        train_end=model_version.training_data_end,
-                        test_start=today,
-                        test_end=today,
-                        horizon_days=horizon_days,
-                        num_windows=metrics.num_windows,
-                        mape=metrics.mape,
-                        mae=metrics.mae,
-                        rmse=metrics.rmse,
-                        direction_accuracy=metrics.direction_accuracy,
-                        ci_containment=metrics.ci_containment,
-                    )
-                )
-                await db.commit()
-                await mark_stage_updated(tkr, "backtest")
-                completed += 1
-
-            except Exception:
-                await db.rollback()
-                logger.exception("Backtest failed for %s", tkr)
-                failed.append(tkr)
+    # ── Bulk-mark backtest stage for every successful ticker ──────────
+    # Single bulk upsert outside the per-ticker session loop. Fire-and-forget
+    # — observability state, must not roll back the BacktestRun rows we
+    # already persisted above.
+    if successful_tickers:
+        await mark_stages_updated(successful_tickers, "backtest")
 
     return {
         "status": "ok",

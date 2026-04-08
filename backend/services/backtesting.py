@@ -10,8 +10,8 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.news_sentiment import NewsSentimentDaily
 from backend.models.price import StockPrice
+from backend.services.sentiment_regressors import fetch_sentiment_regressors
 
 logger = logging.getLogger(__name__)
 
@@ -237,45 +237,6 @@ class BacktestEngine:
         row = target_row.iloc[0]
         return float(row["yhat"]), float(row["yhat_lower"]), float(row["yhat_upper"])
 
-    async def _fetch_sentiment_for_window(
-        self,
-        ticker: str,
-        start: date,
-        end: date,
-        db: AsyncSession,
-    ) -> pd.DataFrame | None:
-        """Fetch sentiment regressors for a training window.
-
-        Args:
-            ticker: Stock ticker symbol.
-            start: Window start date.
-            end: Window end date.
-            db: Async database session.
-
-        Returns:
-            DataFrame with [ds, stock_sentiment, sector_sentiment, macro_sentiment]
-            or None if no sentiment exists.
-        """
-        result = await db.execute(
-            select(
-                NewsSentimentDaily.date,
-                NewsSentimentDaily.stock_sentiment,
-                NewsSentimentDaily.sector_sentiment,
-                NewsSentimentDaily.macro_sentiment,
-            ).where(
-                NewsSentimentDaily.ticker == ticker,
-                NewsSentimentDaily.date >= start,
-                NewsSentimentDaily.date <= end,
-            )
-        )
-        rows = result.all()
-        if not rows:
-            return None
-        sentiment_cols = ["ds", "stock_sentiment", "sector_sentiment", "macro_sentiment"]
-        df = pd.DataFrame(rows, columns=pd.Index(sentiment_cols))
-        df["ds"] = pd.to_datetime(df["ds"])
-        return df
-
     async def run_walk_forward(
         self,
         ticker: str,
@@ -362,6 +323,36 @@ class BacktestEngine:
                 num_windows=0,
             )
 
+        # ── 3a. Pre-load sentiment ONCE for the full data range ────────────
+        # Previously this was fetched per-window inside the loop, which issued
+        # ~110 redundant queries per ticker against news_sentiment_daily.
+        # Now: one bounded-range query, then in-memory slice per window.
+        #
+        # Wrapped in try/except so a transient DB blip on the bulk fetch
+        # gracefully degrades to "no sentiment for this run" instead of
+        # killing all ~110 windows for the ticker (the per-window pattern
+        # would have only lost one window).
+        sentiment_df: pd.DataFrame | None
+        try:
+            sentiment_df = await fetch_sentiment_regressors(
+                ticker,
+                data_start,
+                data_end,
+                db,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to pre-load sentiment for %s backtest — "
+                "falling back to no sentiment regressors",
+                ticker,
+                exc_info=True,
+            )
+            sentiment_df = None
+
+        sentiment_indexed: pd.DataFrame | None = None
+        if sentiment_df is not None and not sentiment_df.empty:
+            sentiment_indexed = sentiment_df.set_index("ds").sort_index()
+
         # ── 3. Walk through windows ────────────────────────────────────────
         actuals: list[float] = []
         predicted: list[float] = []
@@ -402,13 +393,19 @@ class BacktestEngine:
                 }
             )
 
-            # Fetch sentiment regressors for this window (optional)
-            sentiment_df = await self._fetch_sentiment_for_window(
-                ticker, window.train_start, window.train_end, db
-            )
-            has_sentiment = sentiment_df is not None and not sentiment_df.empty
-            if has_sentiment and sentiment_df is not None:
-                train_df = train_df.merge(sentiment_df, on="ds", how="left").fillna(0.0)
+            # Slice the pre-loaded sentiment frame in memory (no DB call).
+            # .loc[start:end] is inclusive on both ends for a sorted index.
+            window_sentiment: pd.DataFrame | None = None
+            if sentiment_indexed is not None:
+                start_ts = pd.Timestamp(window.train_start)
+                end_ts = pd.Timestamp(window.train_end)
+                slice_df = sentiment_indexed.loc[start_ts:end_ts]
+                if not slice_df.empty:
+                    window_sentiment = slice_df.reset_index()
+
+            has_sentiment = window_sentiment is not None and not window_sentiment.empty
+            if has_sentiment and window_sentiment is not None:
+                train_df = train_df.merge(window_sentiment, on="ds", how="left").fillna(0.0)
 
             # Compute horizon from last train date to test date
             actual_horizon = (window.test_date - window.train_end).days

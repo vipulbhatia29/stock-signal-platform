@@ -342,3 +342,179 @@ async def test_news_dispatch_failure_does_not_abort_pipeline(mock_db, new_stock)
     # Pipeline result must still be returned despite dispatch failure
     assert result["ticker"] == "NEWCO"
     assert result["is_new"] is True
+
+
+# ---------------------------------------------------------------------------
+# KAN-436 follow-up: real-DB persistence assertion for Step 6b
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_ingest_ticker_persists_prices_signals_stage_against_real_db(db_session):
+    """KAN-436: ingest_ticker MUST persist the ticker_ingestion_state row.
+
+    The previous mock-based tests only verified that mark_stage_updated was
+    called — they did NOT exercise the new commit semantics added in KAN-436
+    (caller-owned session + explicit ``await db.commit()`` in Step 6b). This
+    test runs the pipeline against real Postgres via ``db_session`` and
+    asserts the row is durably persisted with both prices_updated_at and
+    signals_updated_at populated.
+
+    Patches every external network/CPU call (yfinance, signal computation,
+    fundamentals) so the only un-mocked code paths are the SQLAlchemy +
+    ticker_state interactions we want to validate.
+    """
+    from datetime import datetime, timezone
+
+    from sqlalchemy import text
+
+    from backend.models.stock import Stock
+
+    ticker = "RDB1"
+    now = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    db_session.add(
+        Stock(
+            ticker=ticker,
+            name="Real-DB Test Co",
+            exchange="TEST",
+            sector="Technology",
+            is_active=True,
+            last_fetched_at=now,  # is_new=False, skips Steps 7b/8/9 dispatches
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+
+    # Build a stub Stock that ensure_stock_exists will return — must match
+    # the real row so update_last_fetched_at finds it.
+    stock_stub = MagicMock()
+    stock_stub.ticker = ticker
+    stock_stub.name = "Real-DB Test Co"
+    stock_stub.last_fetched_at = now
+
+    delta_df = pd.DataFrame(
+        {"Close": [100.0]},
+        index=pd.date_range("2024-01-03", periods=1),
+    )
+    full_df = pd.DataFrame(
+        {"Close": [100.0, 101.0, 102.0]},
+        index=pd.date_range("2024-01-01", periods=3),
+    )
+
+    fundamentals = MagicMock()
+    fundamentals.piotroski_score = 5
+
+    signal_result = MagicMock()
+    signal_result.composite_score = 7.5
+    signal_result.ticker = ticker
+
+    with (
+        patch(f"{_BASE}.ensure_stock_exists", AsyncMock(return_value=stock_stub)),
+        patch(f"{_BASE}.fetch_prices_delta", AsyncMock(return_value=delta_df)),
+        patch(f"{_BASE}.load_prices_df", AsyncMock(return_value=full_df)),
+        patch(f"{_BASE}.fetch_fundamentals", MagicMock(return_value=fundamentals)),
+        patch(f"{_BASE}.fetch_analyst_data", MagicMock(return_value={})),
+        patch(f"{_BASE}.fetch_earnings_history", MagicMock(return_value=[])),
+        patch(f"{_BASE}.persist_enriched_fundamentals", AsyncMock()),
+        patch(f"{_BASE}.persist_earnings_snapshots", AsyncMock()),
+        patch(f"{_BASE}.compute_signals", MagicMock(return_value=signal_result)),
+        patch(f"{_BASE}.store_signal_snapshot", AsyncMock()),
+        patch(f"{_BASE}.update_last_fetched_at", AsyncMock()),
+        patch(f"{_BASE}.news_ingest_task", MagicMock()),
+        patch(f"{_BASE}.compute_convergence_snapshot_task", MagicMock()),
+    ):
+        # user_id=None → recommendation block is skipped, only Step 6b runs.
+        await ingest_ticker(ticker, db_session, user_id=None)
+
+    # Real-DB assertion: ticker_ingestion_state row was created with both
+    # stage timestamps populated AND committed.
+    db_session.expire_all()
+    result = await db_session.execute(
+        text(
+            "SELECT prices_updated_at, signals_updated_at "
+            "FROM ticker_ingestion_state WHERE ticker = :t"
+        ),
+        {"t": ticker},
+    )
+    row = result.fetchone()
+    assert row is not None, (
+        "Step 6b must persist a ticker_ingestion_state row to Postgres "
+        "(KAN-436 commit semantics regression guard)"
+    )
+    assert row[0] is not None, "prices_updated_at must be populated"
+    assert row[1] is not None, "signals_updated_at must be populated"
+
+
+@pytest.mark.regression
+@pytest.mark.asyncio
+async def test_ingest_step_6b_swallows_db_error_returns_200(db_session):
+    """C1 regression: a stage-mark DB failure must NOT bubble out to the router.
+
+    Patches mark_stage_updated to raise OperationalError. The pipeline must
+    log a warning, rollback the failed transaction, and continue — the
+    caller (ingest endpoint) sees a successful result. Without this guard,
+    the new caller-owned session pattern would turn an observability blip
+    into HTTP 500 on the user-facing ingest hot path.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    from backend.models.stock import Stock
+
+    ticker = "RDB2"
+    now = pd.Timestamp("2024-01-01", tz="UTC").to_pydatetime()
+    db_session.add(
+        Stock(
+            ticker=ticker,
+            name="Stage Fail Co",
+            exchange="TEST",
+            sector="Technology",
+            is_active=True,
+            last_fetched_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
+
+    stock_stub = MagicMock()
+    stock_stub.ticker = ticker
+    stock_stub.name = "Stage Fail Co"
+    stock_stub.last_fetched_at = now
+
+    delta_df = pd.DataFrame({"Close": [100.0]}, index=pd.date_range("2024-01-03", periods=1))
+    full_df = pd.DataFrame(
+        {"Close": [100.0, 101.0, 102.0]}, index=pd.date_range("2024-01-01", periods=3)
+    )
+    fundamentals = MagicMock()
+    fundamentals.piotroski_score = 5
+    signal_result = MagicMock()
+    signal_result.composite_score = 7.5
+    signal_result.ticker = ticker
+
+    failing_mark = AsyncMock(side_effect=OperationalError("simulated", {}, Exception("nope")))
+
+    with (
+        patch(f"{_BASE}.ensure_stock_exists", AsyncMock(return_value=stock_stub)),
+        patch(f"{_BASE}.fetch_prices_delta", AsyncMock(return_value=delta_df)),
+        patch(f"{_BASE}.load_prices_df", AsyncMock(return_value=full_df)),
+        patch(f"{_BASE}.fetch_fundamentals", MagicMock(return_value=fundamentals)),
+        patch(f"{_BASE}.fetch_analyst_data", MagicMock(return_value={})),
+        patch(f"{_BASE}.fetch_earnings_history", MagicMock(return_value=[])),
+        patch(f"{_BASE}.persist_enriched_fundamentals", AsyncMock()),
+        patch(f"{_BASE}.persist_earnings_snapshots", AsyncMock()),
+        patch(f"{_BASE}.compute_signals", MagicMock(return_value=signal_result)),
+        patch(f"{_BASE}.store_signal_snapshot", AsyncMock()),
+        patch(f"{_BASE}.update_last_fetched_at", AsyncMock()),
+        patch(f"{_BASE}.mark_stage_updated", failing_mark),
+        patch(f"{_BASE}.news_ingest_task", MagicMock()),
+        patch(f"{_BASE}.compute_convergence_snapshot_task", MagicMock()),
+    ):
+        # MUST NOT raise. The caller would otherwise see an HTTP 500.
+        result = await ingest_ticker(ticker, db_session, user_id=None)
+
+    assert result["ticker"] == ticker
+    assert result["composite_score"] == 7.5
+    # The mark was attempted (and raised); the result is still successful.
+    assert failing_mark.await_count >= 1

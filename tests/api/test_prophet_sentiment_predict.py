@@ -285,13 +285,13 @@ async def test_stale_model_fetches_post_training_sentiment(db_session) -> None:
     with freeze_time("2026-01-25 12:00:00"):
         forecasts_with_post = await predict_forecast(model_version, db_session)
 
-        # Second run: patch _fetch_sentiment_regressors to return None so the
+        # Second run: patch fetch_sentiment_regressors to return None so the
         # post-training fetch is empty. The projection then falls back to the
         # training-window tail only, which lacks the +0.9 spike.
         from unittest.mock import AsyncMock, patch
 
         with patch(
-            "backend.tools.forecasting._fetch_sentiment_regressors",
+            "backend.tools.forecasting.fetch_sentiment_regressors",
             AsyncMock(return_value=None),
         ):
             forecasts_without_post = await predict_forecast(model_version, db_session)

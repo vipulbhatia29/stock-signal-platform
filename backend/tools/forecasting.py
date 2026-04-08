@@ -14,9 +14,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
 from backend.models.forecast import ForecastResult, ModelVersion
-from backend.models.news_sentiment import NewsSentimentDaily
 from backend.models.price import StockPrice
 from backend.models.signal import SignalSnapshot
+
+# Re-export for backwards-compat — the canonical home is
+# ``backend.services.sentiment_regressors`` so the BacktestEngine can import
+# the helper without dragging Prophet into its module load chain. Tests that
+# previously patched ``backend.tools.forecasting.fetch_sentiment_regressors``
+# continue to work via this binding.
+from backend.services.sentiment_regressors import (  # noqa: F401  (re-export)
+    fetch_sentiment_regressors,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +86,7 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
     model = Prophet(**PROPHET_CONFIG)
 
     # ── Sentiment regressors (feature-flagged: only if data exists) ──
-    sentiment_df = await _fetch_sentiment_regressors(ticker, df["ds"].min(), df["ds"].max(), db)
+    sentiment_df = await fetch_sentiment_regressors(ticker, df["ds"].min(), df["ds"].max(), db)
     if sentiment_df is not None and not sentiment_df.empty:
         df = df.merge(sentiment_df, on="ds", how="left").fillna(0.0)
         model.add_regressor("stock_sentiment")
@@ -244,7 +252,7 @@ async def predict_forecast(
         if training_end < today:
             post_start = pd.Timestamp(training_end) + pd.Timedelta(days=1)
             post_end = pd.Timestamp(today)
-            post_df = await _fetch_sentiment_regressors(
+            post_df = await fetch_sentiment_regressors(
                 model_version.ticker, post_start, post_end, db
             )
             if post_df is not None and not post_df.empty:
@@ -382,51 +390,6 @@ async def predict_forecast(
         [f"+{h}d" for h in horizons],
     )
     return results
-
-
-async def _fetch_sentiment_regressors(
-    ticker: str,
-    start_date: datetime | pd.Timestamp,
-    end_date: datetime | pd.Timestamp,
-    db: AsyncSession,
-) -> pd.DataFrame | None:
-    """Fetch daily sentiment data as Prophet regressors.
-
-    Args:
-        ticker: Stock ticker symbol.
-        start_date: Training data start date.
-        end_date: Training data end date.
-        db: Async database session.
-
-    Returns:
-        DataFrame with columns [ds, stock_sentiment, sector_sentiment, macro_sentiment],
-        or None if no sentiment data exists for this ticker.
-    """
-    start_d = start_date.date() if hasattr(start_date, "date") else start_date
-    end_d = end_date.date() if hasattr(end_date, "date") else end_date
-
-    result = await db.execute(
-        select(
-            NewsSentimentDaily.date,
-            NewsSentimentDaily.stock_sentiment,
-            NewsSentimentDaily.sector_sentiment,
-            NewsSentimentDaily.macro_sentiment,
-        ).where(
-            NewsSentimentDaily.ticker == ticker,
-            NewsSentimentDaily.date >= start_d,
-            NewsSentimentDaily.date <= end_d,
-        )
-    )
-    rows = result.all()
-    if not rows:
-        return None
-
-    df = pd.DataFrame(
-        rows,
-        columns=["ds", "stock_sentiment", "sector_sentiment", "macro_sentiment"],
-    )
-    df["ds"] = pd.to_datetime(df["ds"]).dt.tz_localize(None)
-    return df
 
 
 async def compute_sharpe_direction(ticker: str, db: AsyncSession) -> str:
