@@ -305,7 +305,7 @@ async def test_backfill_skips_when_historical_price_missing(db_session) -> None:
             AsyncMock(return_value=[tkr]),
         ),
         patch(
-            "backend.tasks.convergence.mark_stage_updated",
+            "backend.tasks.convergence.mark_stages_updated",
             new_callable=AsyncMock,
         ),
     ):
@@ -321,9 +321,14 @@ async def test_backfill_skips_when_historical_price_missing(db_session) -> None:
     assert row.actual_return_90d is None
 
 
+@pytest.mark.regression
 @pytest.mark.asyncio
-async def test_mark_stage_updated_called_per_ticker(db_session) -> None:
-    """mark_stage_updated must be called once per successfully-processed ticker."""
+async def test_mark_stages_updated_called_once_with_full_ticker_list(db_session) -> None:
+    """KAN-436: mark_stages_updated must be called once with the full ticker list.
+
+    The convergence task previously looped mark_stage_updated per ticker
+    (~500 sequential round-trips). It now issues a single bulk upsert.
+    """
     t1 = _unique_ticker("MS")
     t2 = _unique_ticker("MS")
     tickers = [t1, t2]
@@ -339,17 +344,18 @@ async def test_mark_stage_updated_called_per_ticker(db_session) -> None:
             AsyncMock(return_value=tickers),
         ),
         patch(
-            "backend.tasks.convergence.mark_stage_updated",
+            "backend.tasks.convergence.mark_stages_updated",
             new_callable=AsyncMock,
         ) as mock_mark,
     ):
         await _compute_convergence_snapshot_async(_db=db_session)
 
-    assert mock_mark.call_count == len(tickers)
-    called_tickers = {call.args[0] for call in mock_mark.call_args_list}
-    assert called_tickers == set(tickers)
-    for call in mock_mark.call_args_list:
-        assert call.args[1] == "convergence"
+    # Single bulk call, not N per-ticker calls
+    assert mock_mark.call_count == 1
+    call = mock_mark.call_args_list[0]
+    # First positional arg is the ticker list, second is the stage
+    assert set(call.args[0]) == set(tickers)
+    assert call.args[1] == "convergence"
 
 
 @pytest.mark.asyncio
@@ -382,19 +388,19 @@ async def test_single_ticker_with_no_signals_still_marks_stage(db_session, monke
     returns empty, but the convergence stage must still be marked so the
     ticker_ingestion_state dashboard is not permanently stuck.
     """
-    marked: list[tuple[str, str]] = []
+    marked: list[tuple[tuple[str, ...], str]] = []
 
-    async def fake_mark(ticker: str, stage: str) -> None:
-        marked.append((ticker, stage))
+    async def fake_mark(tickers: list[str], stage: str, db=None) -> None:
+        marked.append((tuple(tickers), stage))
 
-    monkeypatch.setattr("backend.tasks.convergence.mark_stage_updated", fake_mark)
+    monkeypatch.setattr("backend.tasks.convergence.mark_stages_updated", fake_mark)
     with patch(
         "backend.services.signal_convergence.SignalConvergenceService.get_bulk_convergence",
         AsyncMock(return_value={}),
     ):
         result = await _compute_convergence_snapshot_async(ticker="NEWCO", _db=db_session)
 
-    assert ("NEWCO", "convergence") in marked, (
+    assert (("NEWCO",), "convergence") in marked, (
         "Stage must be marked even when convergence dict is empty"
     )
     assert result["computed"] == 0
@@ -413,12 +419,12 @@ async def test_get_bulk_convergence_failure_does_not_kill_backfill_or_stage(
     """One bad call to get_bulk_convergence must not kill the entire nightly
     Phase 3. Backfill should still run; stage should still be marked.
     """
-    marked: list[tuple[str, str]] = []
+    marked: list[tuple[tuple[str, ...], str]] = []
 
-    async def fake_mark(ticker: str, stage: str) -> None:
-        marked.append((ticker, stage))
+    async def fake_mark(tickers: list[str], stage: str, db=None) -> None:
+        marked.append((tuple(tickers), stage))
 
-    monkeypatch.setattr("backend.tasks.convergence.mark_stage_updated", fake_mark)
+    monkeypatch.setattr("backend.tasks.convergence.mark_stages_updated", fake_mark)
     monkeypatch.setattr(
         "backend.tasks.convergence.get_all_referenced_tickers",
         AsyncMock(return_value=["AAPL", "MSFT"]),
@@ -431,6 +437,7 @@ async def test_get_bulk_convergence_failure_does_not_kill_backfill_or_stage(
 
     assert result["status"] == "partial_failure"
     assert result["computed"] == 0
-    # Both tickers should still have stage marked even after the failure
-    assert ("AAPL", "convergence") in marked
-    assert ("MSFT", "convergence") in marked
+    # Single bulk call covering both tickers (KAN-436 — no per-ticker loop).
+    assert len(marked) == 1
+    assert set(marked[0][0]) == {"AAPL", "MSFT"}
+    assert marked[0][1] == "convergence"

@@ -125,9 +125,30 @@ async def ingest_ticker(
     await update_last_fetched_at(ticker, db)
 
     # ── Step 6b: Mark prices (and signals) stages as updated ─────────
-    await mark_stage_updated(ticker, "prices")
-    if composite_score is not None:
-        await mark_stage_updated(ticker, "signals")
+    # Reuses the caller's session to avoid 2 extra connection checkouts on
+    # this user-facing hot path, then commits explicitly (the FastAPI
+    # dependency will not auto-commit on session close, and downstream
+    # paths may not commit either when no recommendation is generated).
+    #
+    # Guarded with try/except: this is observability-only freshness state,
+    # and a failure here MUST NOT bubble out as HTTP 500 from the ingest
+    # endpoint. On any DB error we rollback the implicit transaction so
+    # the session stays usable for the recommendation step below.
+    try:
+        await mark_stage_updated(ticker, "prices", db=db)
+        if composite_score is not None:
+            await mark_stage_updated(ticker, "signals", db=db)
+        await db.commit()
+    except Exception:
+        logger.warning(
+            "Failed to mark prices/signals stages for %s — continuing",
+            ticker,
+            exc_info=True,
+        )
+        try:
+            await db.rollback()
+        except Exception:
+            logger.warning("Rollback after stage-mark failure also failed", exc_info=True)
 
     # ── Step 7b: Dispatch forecast training for new tickers (fire-and-forget) ──
     if is_new:
@@ -246,6 +267,24 @@ async def _generate_recommendation_with_context(
     await store_recommendation(rec, user_id, db)
 
     # ── Step 10: Mark recommendation stage as updated ─────────────────
-    await mark_stage_updated(ticker, "recommendation")
+    # store_recommendation just committed, so we're in a fresh implicit
+    # transaction. Reuse the caller's session for the upsert and commit
+    # explicitly — the FastAPI dependency will not auto-commit on close.
+    #
+    # Guarded with try/except so a stage-mark failure cannot turn a
+    # successful recommendation into a 500 from the ingest endpoint.
+    try:
+        await mark_stage_updated(ticker, "recommendation", db=db)
+        await db.commit()
+    except Exception:
+        logger.warning(
+            "Failed to mark recommendation stage for %s — continuing",
+            ticker,
+            exc_info=True,
+        )
+        try:
+            await db.rollback()
+        except Exception:
+            logger.warning("Rollback after stage-mark failure also failed", exc_info=True)
 
     return rec

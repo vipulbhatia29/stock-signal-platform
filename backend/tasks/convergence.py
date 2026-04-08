@@ -29,7 +29,7 @@ from backend.config import settings
 from backend.database import async_session_factory
 from backend.models.convergence import SignalConvergenceDaily
 from backend.models.price import StockPrice
-from backend.services.ticker_state import mark_stage_updated
+from backend.services.ticker_state import mark_stages_updated
 from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
 
@@ -424,13 +424,14 @@ async def _compute_convergence_snapshot_async(
                 await db.rollback()
             logger.exception("Convergence backfill failed")
 
-        # Mark each ticker's convergence stage as updated (Spec A ticker_state).
-        # Iterates over *tickers* (the input), not *convergences* (the result),
-        # so brand-new tickers with no signals still get their stage marked.
-        # Called after the main upsert commit so a crash here never rolls back DB writes.
-        # mark_stage_updated is fire-and-forget (errors are logged, not raised).
-        for tkr in tickers:
-            await mark_stage_updated(tkr, "convergence")
+        # Mark every input ticker's convergence stage as updated in a single
+        # bulk upsert (Spec A ticker_state). Uses *tickers* (the input list),
+        # not *convergences* (the result), so brand-new tickers with no
+        # signals still get their stage marked. Called after the main upsert
+        # commit so a crash here never rolls back DB writes. Fire-and-forget:
+        # opens its own session and swallows errors so an observability
+        # write failure cannot abort the nightly Phase 3 chain.
+        await mark_stages_updated(tickers, "convergence")
 
         status = "ok" if computed > 0 else "partial_failure" if tickers else "no_tickers"
         logger.info(
