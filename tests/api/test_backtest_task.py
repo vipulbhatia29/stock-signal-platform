@@ -246,6 +246,7 @@ async def test_per_ticker_failure_isolated(db_session):
     assert len(failure_rows) == 0
 
 
+@pytest.mark.regression
 @pytest.mark.asyncio
 async def test_mark_stage_updated_called_on_success_only(db_session):
     """mark_stage_updated is called only for tickers that succeed, not for failing ones.
@@ -296,6 +297,7 @@ async def test_mark_stage_updated_called_on_success_only(db_session):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.regression
 @pytest.mark.asyncio
 async def test_no_active_model_version_skips_row_and_marks_failed(db_session):
     """When no active ModelVersion exists for a ticker, the task must not
