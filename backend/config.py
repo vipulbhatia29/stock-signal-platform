@@ -3,6 +3,7 @@
 import logging
 from datetime import timedelta
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -147,13 +148,19 @@ class Settings(BaseSettings):
 
     # --- Spec D — Langfuse task tracking (non-agent paths) ---
     # Global kill switch for @tracked_task → Langfuse trace creation.
-    # Set False in environments where Langfuse isn't configured to keep
-    # worker logs clean. When False, `@tracked_task` still writes the
-    # PipelineRunner row (DB) but skips Langfuse wiring.
+    # This flag is dead config in KAN-420 PR1 — it lands here so operators
+    # can pre-configure environments, but enforcement ships with the
+    # `@tracked_task` adoption in KAN-420 PR1.5. Once enforced, False will
+    # cause `@tracked_task` to still write the PipelineRunner row (DB) but
+    # skip Langfuse wiring. Also ignored when `LANGFUSE_SECRET_KEY` is
+    # unset — `trace_task`'s no-op path (create_trace returning None) is
+    # the governing behavior in that case.
     LANGFUSE_TRACK_TASKS: bool = True
     # Sampling rate for including prompt/response text in sentiment
     # generation spans. Defaults to 25% to bound Langfuse storage cost.
-    LANGFUSE_SENTIMENT_IO_SAMPLING_RATE: float = 0.25
+    # Bounds are enforced at Settings construction time: values outside
+    # [0.0, 1.0] will raise at boot rather than silently mis-sampling.
+    LANGFUSE_SENTIMENT_IO_SAMPLING_RATE: float = Field(default=0.25, ge=0.0, le=1.0)
 
     # --- Spec D — Ingestion staleness SLA flags ---
     # Intentionally NOT added here. The original Plan D Task 1 proposed

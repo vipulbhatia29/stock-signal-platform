@@ -34,7 +34,17 @@ async def test_trace_task_no_op_when_langfuse_disabled() -> None:
 
     async with trace_task("x", langfuse=fake_langfuse, collector=fake_collector) as handle:
         handle.add_metadata(k=1)  # does not raise
-    # No exception, no trace object created.
+
+    # trace_task must still call create_trace on the disabled path —
+    # the no-op behavior comes from create_trace returning None, not
+    # from trace_task short-circuiting the call entirely. If a future
+    # refactor adds a pre-check that skips create_trace, this test
+    # should fail so the disabled-path contract stays explicit.
+    # (If _finalize tried to call .update() on the None trace, we'd
+    # already have AttributeError above — the success of the `async
+    # with` exit is the implicit assertion that no method access
+    # happened on the None trace.)
+    fake_langfuse.create_trace.assert_called_once()
 
 
 async def test_trace_task_creates_trace_when_enabled() -> None:
@@ -55,10 +65,22 @@ async def test_trace_task_creates_trace_when_enabled() -> None:
 
     fake_langfuse.create_trace.assert_called_once()
     fake_trace.update.assert_called_once()
+
+    # Initial metadata (passed at trace_task entry) must go to
+    # create_trace, NOT to the final update() — these are separate
+    # metadata bags with different lifecycles. Locking in the split.
+    create_metadata = fake_langfuse.create_trace.call_args.kwargs["metadata"]
+    assert create_metadata["task"] == "prophet_train"
+    assert create_metadata["ticker"] == "AAPL"
+
+    # Runtime metadata (add_metadata inside the block) is merged into
+    # the finalize update() call along with status/task/duration.
     update_kwargs = fake_trace.update.call_args.kwargs["metadata"]
     assert update_kwargs["task"] == "prophet_train"
     assert update_kwargs["mape"] == 0.03
     assert update_kwargs["status"] == "completed"
+    # Initial metadata (ticker) should NOT appear in the finalize update.
+    assert "ticker" not in update_kwargs
 
 
 async def test_trace_task_finalize_swallows_langfuse_errors() -> None:
@@ -73,10 +95,9 @@ async def test_trace_task_finalize_swallows_langfuse_errors() -> None:
     fake_langfuse.create_trace.return_value = fake_trace
     fake_collector = MagicMock()
 
-    async with trace_task("x", langfuse=fake_langfuse, collector=fake_collector) as handle:
+    async with trace_task("x", langfuse=fake_langfuse, collector=fake_collector) as _handle:
         pass  # finalize runs on exit; the raised error must be swallowed
     # If we reach this line without RuntimeError, the contract holds.
-    del handle  # silence unused-var lint if rules tighten later
 
 
 async def test_trace_task_records_llm_via_collector() -> None:
