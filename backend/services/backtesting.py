@@ -272,7 +272,7 @@ class BacktestEngine:
         if not rows:
             return None
         sentiment_cols = ["ds", "stock_sentiment", "sector_sentiment", "macro_sentiment"]
-        df = pd.DataFrame(rows, columns=sentiment_cols)
+        df = pd.DataFrame(rows, columns=pd.Index(sentiment_cols))
         df["ds"] = pd.to_datetime(df["ds"])
         return df
 
