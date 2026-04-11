@@ -14,6 +14,7 @@ from backend.tasks.evaluation import (
     _evaluate_forecasts_async,
 )
 from backend.tools.scorecard import compute_scorecard
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 # ---------------------------------------------------------------------------
 # Forecast evaluation
@@ -62,7 +63,7 @@ class TestForecastEvaluation:
         mock_session.execute = AsyncMock(side_effect=[pending_result, price_result, mape_result])
 
         with patch("backend.tasks.evaluation._update_model_mapes", new_callable=AsyncMock):
-            result = await _evaluate_forecasts_async()
+            result = await bypass_tracked(_evaluate_forecasts_async)(run_id=uuid.uuid4())
 
         assert fc.actual_price == 210.0
         assert fc.error_pct == pytest.approx(0.05, abs=0.001)  # |210-200|/200
@@ -82,7 +83,7 @@ class TestForecastEvaluation:
         empty_result.scalars.return_value.all.return_value = []
         mock_session.execute = AsyncMock(return_value=empty_result)
 
-        result = await _evaluate_forecasts_async()
+        result = await bypass_tracked(_evaluate_forecasts_async)(run_id=uuid.uuid4())
         assert result["status"] == "no_pending"
 
     def test_mape_computation(self) -> None:
@@ -145,7 +146,7 @@ class TestDriftDetection:
         backtest_result.all.return_value = []
         mock_session.execute = AsyncMock(side_effect=[models_result, backtest_result])
 
-        result = await _check_drift_async()
+        result = await bypass_tracked(_check_drift_async)(run_id=uuid.uuid4())
 
         assert "AAPL" in result["degraded"]
         assert "AAPL" in result["retrain_triggered"]
@@ -196,7 +197,7 @@ class TestDriftDetection:
         backtest_result.all.return_value = []
         mock_session.execute = AsyncMock(side_effect=[models_result, backtest_result])
 
-        result = await _check_drift_async()
+        result = await bypass_tracked(_check_drift_async)(run_id=uuid.uuid4())
 
         assert result["degraded"] == []
         assert result["retrain_triggered"] == []

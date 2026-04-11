@@ -13,10 +13,13 @@ the lookup site (the module where the name is bound):
 
 from __future__ import annotations
 
+import uuid
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 # ---------------------------------------------------------------------------
 # Registration + naming tests
@@ -147,7 +150,7 @@ class TestIngestNews:
         ):
             from backend.tasks.news_sentiment import _ingest_news
 
-            result = await _ingest_news(7)
+            result = await bypass_tracked(_ingest_news)(7, run_id=uuid.uuid4())
 
         mock_factory.__aenter__.assert_called_once()
         mock_factory.__aexit__.assert_called_once()
@@ -168,7 +171,7 @@ class TestIngestNews:
         ):
             from backend.tasks.news_sentiment import _ingest_news
 
-            await _ingest_news(7)
+            await bypass_tracked(_ingest_news)(7, run_id=uuid.uuid4())
 
         mock_service.ingest_stock_news.assert_called_once()
         mock_service.ingest_macro_news.assert_called_once()
@@ -196,7 +199,7 @@ class TestIngestNews:
         ):
             from backend.tasks.news_sentiment import _ingest_news
 
-            result = await _ingest_news(7)
+            result = await bypass_tracked(_ingest_news)(7, run_id=uuid.uuid4())
 
         assert result["status"] == "complete"
         assert result["stock"] == stock_stats
@@ -218,7 +221,7 @@ class TestIngestNews:
         ):
             from backend.tasks.news_sentiment import _ingest_news
 
-            await _ingest_news(14)
+            await bypass_tracked(_ingest_news)(14, run_id=uuid.uuid4())
 
         # since is the second positional arg to ingest_stock_news
         call_args = mock_service.ingest_stock_news.call_args
@@ -328,7 +331,7 @@ class TestScoreSentiment:
         ):
             from backend.tasks.news_sentiment import _score_sentiment
 
-            result = await _score_sentiment(7)
+            result = await bypass_tracked(_score_sentiment)(7, run_id=uuid.uuid4())
 
         assert result["status"] == "complete"
         assert result["scored"] == 0
@@ -354,7 +357,7 @@ class TestScoreSentiment:
         ):
             from backend.tasks.news_sentiment import _score_sentiment
 
-            await _score_sentiment(7)
+            await bypass_tracked(_score_sentiment)(7, run_id=uuid.uuid4())
 
         mock_scorer_instance.score_batch.assert_called_once()
         # score_batch was called with a list of RawArticle objects
@@ -380,7 +383,7 @@ class TestScoreSentiment:
         ):
             from backend.tasks.news_sentiment import _score_sentiment
 
-            result = await _score_sentiment(7)
+            result = await bypass_tracked(_score_sentiment)(7, run_id=uuid.uuid4())
 
         assert result["status"] == "complete"
         assert result["scored"] == 1
@@ -410,7 +413,7 @@ class TestScoreSentiment:
         ):
             from backend.tasks.news_sentiment import _score_sentiment
 
-            result = await _score_sentiment(7)
+            result = await bypass_tracked(_score_sentiment)(7, run_id=uuid.uuid4())
 
         assert result["status"] == "complete"
         assert result["scored"] == 0
@@ -435,7 +438,7 @@ class TestScoreSentiment:
         ):
             from backend.tasks.news_sentiment import _score_sentiment
 
-            await _score_sentiment(7)
+            await bypass_tracked(_score_sentiment)(7, run_id=uuid.uuid4())
 
         # Retrieve the mock session that was used
         mock_session = mock_factory.__aenter__.return_value
@@ -462,7 +465,9 @@ class TestIngestNewsTickersParam:
         ):
             from backend.tasks.news_sentiment import _ingest_news
 
-            result = await _ingest_news(30, tickers=["FOO", "BAR"])
+            result = await bypass_tracked(_ingest_news)(
+                30, tickers=["FOO", "BAR"], run_id=uuid.uuid4()
+            )
 
         # ingest_stock_news is still called — but with our explicit list
         mock_service.ingest_stock_news.assert_called_once()
@@ -483,7 +488,7 @@ class TestIngestNewsTickersParam:
         ):
             from backend.tasks.news_sentiment import _ingest_news
 
-            await _ingest_news(30, tickers=["foo", "bar"])
+            await bypass_tracked(_ingest_news)(30, tickers=["foo", "bar"], run_id=uuid.uuid4())
 
         call_args = mock_service.ingest_stock_news.call_args
         tickers_arg = call_args[0][0]
@@ -504,7 +509,7 @@ class TestIngestNewsTickersParam:
         ):
             from backend.tasks.news_sentiment import _ingest_news
 
-            result = await _ingest_news(7, tickers=None)
+            result = await bypass_tracked(_ingest_news)(7, tickers=None, run_id=uuid.uuid4())
 
         # DB session was entered (to query active tickers)
         mock_factory.__aenter__.assert_called_once()

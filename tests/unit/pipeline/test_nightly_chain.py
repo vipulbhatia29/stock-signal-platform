@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from backend.tasks.market_data import _nightly_price_refresh_async
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 # ---------------------------------------------------------------------------
 # Nightly price refresh with PipelineRunner
@@ -42,7 +44,7 @@ class TestNightlyPriceRefresh:
         mock_runner.complete_run = AsyncMock(return_value="success")
         mock_runner.update_watermark = AsyncMock()
 
-        result = await _nightly_price_refresh_async()
+        result = await bypass_tracked(_nightly_price_refresh_async)(run_id=uuid.uuid4())
 
         assert result["status"] == "success"
         assert result["tickers_total"] == 2
@@ -82,7 +84,7 @@ class TestNightlyPriceRefresh:
         mock_runner.complete_run = AsyncMock(return_value="partial")
         mock_runner.update_watermark = AsyncMock()
 
-        result = await _nightly_price_refresh_async()
+        result = await bypass_tracked(_nightly_price_refresh_async)(run_id=uuid.uuid4())
 
         assert result["status"] == "partial"
         mock_runner.record_ticker_success.assert_called_once()
@@ -98,7 +100,7 @@ class TestNightlyPriceRefresh:
         mock_gap.return_value = []
         mock_tickers.return_value = []
 
-        result = await _nightly_price_refresh_async()
+        result = await bypass_tracked(_nightly_price_refresh_async)(run_id=uuid.uuid4())
 
         assert result["status"] == "no_tickers"
         assert result["tickers_total"] == 0
@@ -122,7 +124,7 @@ class TestNightlyPriceRefresh:
         mock_runner.complete_run = AsyncMock(return_value="success")
         mock_runner.update_watermark = AsyncMock()
 
-        await _nightly_price_refresh_async()
+        await bypass_tracked(_nightly_price_refresh_async)(run_id=uuid.uuid4())
 
         mock_set_status.assert_called_once_with("price_refresh", "backfilling")
 
@@ -385,7 +387,7 @@ class TestGenerateRecommendationsAsync:
         mock_result.scalars.return_value.all.return_value = []
         mock_session.execute.return_value = mock_result
 
-        result = await _generate_recommendations_async()
+        result = await bypass_tracked(_generate_recommendations_async)(run_id=uuid.uuid4())
 
         assert result["status"] == "no_users"
         assert result["recommendations"] == 0

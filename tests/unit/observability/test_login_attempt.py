@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.models.login_attempt import LoginAttempt
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 
 class TestLoginAttemptModel:
@@ -88,7 +89,7 @@ class TestPurgeLoginAttempts:
         ):
             from backend.tasks.audit import _purge_login_attempts_async
 
-            await _purge_login_attempts_async()
+            await bypass_tracked(_purge_login_attempts_async)(run_id=uuid.uuid4())
 
         mock_session.execute.assert_called_once()
         mock_session.commit.assert_called_once()
@@ -111,6 +112,6 @@ class TestPurgeLoginAttempts:
         ):
             from backend.tasks.audit import _purge_login_attempts_async
 
-            await _purge_login_attempts_async()
+            await bypass_tracked(_purge_login_attempts_async)(run_id=uuid.uuid4())
 
         mock_session.execute.assert_called_once()

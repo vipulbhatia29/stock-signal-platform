@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.tasks.evaluation import DRIFT_FALLBACK_THRESHOLD, compute_calibrated_threshold
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -144,7 +145,7 @@ async def test_drift_detection_uses_backtest_mapes_when_rows_exist(db_session):
 
         from backend.tasks.evaluation import _check_drift_async
 
-        await _check_drift_async()
+        await bypass_tracked(_check_drift_async)(run_id=uuid.uuid4())
 
     # compute_calibrated_threshold must have been called with the seeded MAPE
     assert spy_threshold.call_count >= 1, "compute_calibrated_threshold was never called"
@@ -224,7 +225,7 @@ async def test_drift_uses_fallback_when_no_backtest_rows_exist(db_session):
 
         from backend.tasks.evaluation import _check_drift_async
 
-        await _check_drift_async()
+        await bypass_tracked(_check_drift_async)(run_id=uuid.uuid4())
 
     assert spy_threshold.call_count >= 1
     called_args = [call.args[0] for call in spy_threshold.call_args_list]

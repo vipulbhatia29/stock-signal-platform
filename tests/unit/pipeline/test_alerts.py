@@ -15,6 +15,7 @@ from backend.schemas.alerts import (
     UnreadCountResponse,
 )
 from backend.tasks.alerts import _create_alert, _generate_alerts_async
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 # ---------------------------------------------------------------------------
 # Alert generation
@@ -44,7 +45,7 @@ class TestAlertGeneration:
         mock_cm.__aexit__ = AsyncMock(return_value=False)
         mock_factory.return_value = mock_cm
 
-        result = await _generate_alerts_async()
+        result = await bypass_tracked(_generate_alerts_async)(run_id=uuid.uuid4())
 
         assert result["alerts_created"] == 2
         mock_buys.assert_called_once()
@@ -70,7 +71,9 @@ class TestAlertGeneration:
         mock_factory.return_value = mock_cm
 
         with patch("backend.tasks.alerts._create_alert", new_callable=AsyncMock, return_value=True):
-            result = await _generate_alerts_async({"degraded": ["AAPL", "TSLA"]})
+            result = await bypass_tracked(_generate_alerts_async)(
+                {"degraded": ["AAPL", "TSLA"]}, run_id=uuid.uuid4()
+            )
 
         assert result["alerts_created"] == 2
 
@@ -95,7 +98,9 @@ class TestAlertGeneration:
         mock_factory.return_value = mock_cm
 
         with patch("backend.tasks.alerts._create_alert", new_callable=AsyncMock, return_value=True):
-            result = await _generate_alerts_async({"price_refresh": {"status": "partial"}})
+            result = await bypass_tracked(_generate_alerts_async)(
+                {"price_refresh": {"status": "partial"}}, run_id=uuid.uuid4()
+            )
 
         assert result["alerts_created"] == 1
 
