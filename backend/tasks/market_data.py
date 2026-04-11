@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Literal, TypedDict
 
@@ -20,7 +21,7 @@ from backend.services.signals import (
 )
 from backend.services.stock_data import fetch_prices_delta, load_prices_df
 from backend.tasks import celery_app
-from backend.tasks.pipeline import PipelineRunner, detect_gap, set_watermark_status
+from backend.tasks.pipeline import PipelineRunner, detect_gap, set_watermark_status, tracked_task
 
 logger = logging.getLogger(__name__)
 
@@ -188,11 +189,53 @@ async def _get_all_referenced_tickers() -> list[str]:
         return await get_all_referenced_tickers(db)
 
 
+@tracked_task("price_refresh", trigger="scheduled")
+async def _nightly_price_refresh_work(
+    tickers: list[str],
+    spy_closes: "pd.Series | None",
+    *,
+    run_id: uuid.UUID,
+) -> dict:
+    """Per-ticker price refresh — the tracked inner helper.
+
+    Receives a pre-resolved ticker list so the no-work early-return path
+    (handled by `_nightly_price_refresh_async`) never reaches this function.
+    Pipeline row is created by the decorator before entry and finalized after
+    return.
+    """
+    succeeded = 0
+    failed = 0
+    for ticker in tickers:
+        try:
+            result = await _refresh_ticker_async(ticker, spy_closes=spy_closes)
+            status = result["status"]
+            if status == "ok":
+                await _runner.record_ticker_success(run_id, ticker)
+                succeeded += 1
+            else:
+                await _runner.record_ticker_failure(run_id, ticker, status)
+                failed += 1
+        except Exception:
+            await _runner.record_ticker_failure(run_id, ticker, "refresh failed")
+            logger.exception("Failed to refresh %s in nightly pipeline", ticker)
+            failed += 1
+    return {
+        "tickers_total": len(tickers),
+        "tickers_succeeded": succeeded,
+        "tickers_failed": failed,
+    }
+
+
 async def _nightly_price_refresh_async() -> dict:
-    """Price refresh with PipelineRunner tracking and gap detection.
+    """Nightly price refresh pipeline — outer orchestration wrapper.
+
+    Un-tracked. Handles pre-flight (stale-run detection, gap check, universe
+    resolution, no-work early return, SPY prefetch) and post-flight (watermark
+    advance) so the tracked inner helper only runs for cycles that actually
+    process tickers.
 
     Returns:
-        Dict with pipeline run results.
+        Dict with orchestration status and ticker counts.
     """
     # Detect stale runs from previous failures
     stale_ids = await _runner.detect_stale_runs()
@@ -204,7 +247,6 @@ async def _nightly_price_refresh_async() -> dict:
     if missing_days:
         logger.info("Backfilling %d missing days before nightly refresh", len(missing_days))
         await set_watermark_status("price_refresh", "backfilling")
-        # Gap backfill is best-effort — log but don't block the nightly run
 
     # Get all tickers to refresh
     tickers = await _get_all_referenced_tickers()
@@ -226,26 +268,20 @@ async def _nightly_price_refresh_async() -> dict:
     except Exception:
         logger.warning("Failed to load SPY closes for QuantStats — metrics will be null")
 
-    # Start tracked run
-    run_id = await _runner.start_run("price_refresh", "scheduled", len(tickers))
+    # Tracked inner work — decorator creates pipeline_runs row
+    work_result = await _nightly_price_refresh_work(tickers, spy_closes, tickers_total=len(tickers))
 
-    for ticker in tickers:
-        try:
-            result = await _refresh_ticker_async(ticker, spy_closes=spy_closes)
-            status = result["status"]
-            if status == "ok":
-                await _runner.record_ticker_success(run_id, ticker)
-            else:
-                # status narrowed to Literal["no_data"] — flows safely into TickerFailureReason
-                await _runner.record_ticker_failure(run_id, ticker, status)
-        except Exception:
-            await _runner.record_ticker_failure(run_id, ticker, "refresh failed")
-            logger.exception("Failed to refresh %s in nightly pipeline", ticker)
-
-    status = await _runner.complete_run(run_id)
+    # Post-work: advance watermark only after tracked helper returns successfully.
+    # If the inner raised, the decorator marked the run failed and re-raised;
+    # we never reach this line.
     await _runner.update_watermark("price_refresh", datetime.now(timezone.utc).date())
 
-    return {"status": status, "run_id": str(run_id), "tickers_total": len(tickers)}
+    return {
+        "status": "ok",
+        "tickers_total": work_result["tickers_total"],
+        "tickers_succeeded": work_result["tickers_succeeded"],
+        "tickers_failed": work_result["tickers_failed"],
+    }
 
 
 @celery_app.task(

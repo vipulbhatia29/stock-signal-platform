@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from backend.tasks.market_data import _nightly_price_refresh_async
+from backend.tasks.market_data import (
+    _nightly_price_refresh_async,
+    _nightly_price_refresh_work,
+)
 from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 # ---------------------------------------------------------------------------
@@ -24,32 +27,36 @@ class TestNightlyPriceRefresh:
     @patch("backend.tasks.market_data._load_spy_closes", new_callable=AsyncMock)
     @patch("backend.tasks.market_data._get_all_referenced_tickers", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.detect_gap", new_callable=AsyncMock)
-    @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
+    @patch(
+        "backend.tasks.market_data._nightly_price_refresh_work",
+        new_callable=AsyncMock,
+    )
     async def test_full_success(
         self,
-        mock_refresh,
+        mock_work,
         mock_gap,
         mock_tickers,
         mock_spy,
         mock_runner,
     ) -> None:
-        """Full nightly run with all tickers succeeding should return 'success'."""
+        """Full nightly run should call tracked inner and advance watermark."""
         mock_runner.detect_stale_runs = AsyncMock(return_value=[])
         mock_spy.return_value = None
         mock_gap.return_value = []
         mock_tickers.return_value = ["AAPL", "MSFT"]
-        mock_runner.start_run = AsyncMock(return_value="run-id")
-        mock_refresh.return_value = {"ticker": "X", "status": "ok"}
-        mock_runner.record_ticker_success = AsyncMock()
-        mock_runner.complete_run = AsyncMock(return_value="success")
         mock_runner.update_watermark = AsyncMock()
+        mock_work.return_value = {
+            "tickers_total": 2,
+            "tickers_succeeded": 2,
+            "tickers_failed": 0,
+        }
 
         result = await bypass_tracked(_nightly_price_refresh_async)(run_id=uuid.uuid4())
 
-        assert result["status"] == "success"
+        assert result["status"] == "ok"
         assert result["tickers_total"] == 2
-        assert mock_runner.record_ticker_success.call_count == 2
-        mock_runner.complete_run.assert_called_once()
+        assert result["tickers_succeeded"] == 2
+        mock_work.assert_called_once()
         mock_runner.update_watermark.assert_called_once()
 
     @pytest.mark.asyncio
@@ -57,38 +64,36 @@ class TestNightlyPriceRefresh:
     @patch("backend.tasks.market_data._load_spy_closes", new_callable=AsyncMock)
     @patch("backend.tasks.market_data._get_all_referenced_tickers", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.detect_gap", new_callable=AsyncMock)
-    @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
+    @patch(
+        "backend.tasks.market_data._nightly_price_refresh_work",
+        new_callable=AsyncMock,
+    )
     async def test_partial_failure(
         self,
-        mock_refresh,
+        mock_work,
         mock_gap,
         mock_tickers,
         mock_spy,
         mock_runner,
     ) -> None:
-        """Nightly run with some failures should return 'partial'."""
+        """Nightly run with partial inner result still returns 'ok' from outer."""
         mock_runner.detect_stale_runs = AsyncMock(return_value=[])
         mock_gap.return_value = []
         mock_tickers.return_value = ["AAPL", "TSLA"]
-        mock_spy.return_value = None  # SPY closes (not used in this test)
-        mock_runner.start_run = AsyncMock(return_value="run-id")
-
-        # SPY refresh first, then AAPL succeeds, TSLA fails
-        mock_refresh.side_effect = [
-            {"ticker": "SPY", "status": "ok"},  # explicit SPY refresh
-            {"ticker": "AAPL", "status": "ok"},
-            Exception("yfinance timeout"),
-        ]
-        mock_runner.record_ticker_success = AsyncMock()
-        mock_runner.record_ticker_failure = AsyncMock()
-        mock_runner.complete_run = AsyncMock(return_value="partial")
+        mock_spy.return_value = None
         mock_runner.update_watermark = AsyncMock()
+        mock_work.return_value = {
+            "tickers_total": 2,
+            "tickers_succeeded": 1,
+            "tickers_failed": 1,
+        }
 
         result = await bypass_tracked(_nightly_price_refresh_async)(run_id=uuid.uuid4())
 
-        assert result["status"] == "partial"
-        mock_runner.record_ticker_success.assert_called_once()
-        mock_runner.record_ticker_failure.assert_called_once()
+        assert result["status"] == "ok"
+        assert result["tickers_failed"] == 1
+        assert result["tickers_succeeded"] == 1
+        mock_work.assert_called_once()
 
     @pytest.mark.asyncio
     @patch("backend.tasks.market_data._runner")
@@ -110,23 +115,79 @@ class TestNightlyPriceRefresh:
     @patch("backend.tasks.market_data._get_all_referenced_tickers", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.detect_gap", new_callable=AsyncMock)
     @patch("backend.tasks.market_data.set_watermark_status", new_callable=AsyncMock)
-    @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
+    @patch(
+        "backend.tasks.market_data._nightly_price_refresh_work",
+        new_callable=AsyncMock,
+    )
     async def test_gap_detected_triggers_backfill_log(
-        self, mock_refresh, mock_set_status, mock_gap, mock_tickers, mock_runner
+        self, mock_work, mock_set_status, mock_gap, mock_tickers, mock_runner
     ) -> None:
         """Gap detection should set watermark to 'backfilling'."""
         mock_runner.detect_stale_runs = AsyncMock(return_value=[])
         mock_gap.return_value = [date(2026, 3, 19), date(2026, 3, 20)]
         mock_tickers.return_value = ["AAPL"]
-        mock_runner.start_run = AsyncMock(return_value="run-id")
-        mock_refresh.return_value = {"ticker": "AAPL", "status": "ok"}
-        mock_runner.record_ticker_success = AsyncMock()
-        mock_runner.complete_run = AsyncMock(return_value="success")
         mock_runner.update_watermark = AsyncMock()
+        mock_work.return_value = {
+            "tickers_total": 1,
+            "tickers_succeeded": 1,
+            "tickers_failed": 0,
+        }
 
         await bypass_tracked(_nightly_price_refresh_async)(run_id=uuid.uuid4())
 
         mock_set_status.assert_called_once_with("price_refresh", "backfilling")
+
+
+# ---------------------------------------------------------------------------
+# Inner tracked helper — _nightly_price_refresh_work
+# ---------------------------------------------------------------------------
+
+
+class TestNightlyPriceRefreshWork:
+    """Tests for the tracked inner helper that does per-ticker work."""
+
+    @pytest.mark.asyncio
+    @patch("backend.tasks.market_data._runner")
+    @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
+    async def test_success_and_failure_counting(self, mock_refresh, mock_runner) -> None:
+        """Inner helper counts successes/failures and calls runner methods."""
+        mock_runner.record_ticker_success = AsyncMock()
+        mock_runner.record_ticker_failure = AsyncMock()
+
+        # AAPL succeeds, TSLA returns no_data, MSFT raises
+        mock_refresh.side_effect = [
+            {"status": "ok"},
+            {"status": "no_data"},
+            Exception("timeout"),
+        ]
+
+        result = await bypass_tracked(_nightly_price_refresh_work)(
+            ["AAPL", "TSLA", "MSFT"], None, run_id=uuid.uuid4()
+        )
+
+        assert result["tickers_total"] == 3
+        assert result["tickers_succeeded"] == 1
+        assert result["tickers_failed"] == 2
+        mock_runner.record_ticker_success.assert_called_once()
+        assert mock_runner.record_ticker_failure.call_count == 2
+
+    @pytest.mark.asyncio
+    @patch("backend.tasks.market_data._runner")
+    @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
+    async def test_all_succeed(self, mock_refresh, mock_runner) -> None:
+        """All tickers succeeding should count correctly."""
+        mock_runner.record_ticker_success = AsyncMock()
+        mock_runner.record_ticker_failure = AsyncMock()
+        mock_refresh.return_value = {"status": "ok"}
+
+        result = await bypass_tracked(_nightly_price_refresh_work)(
+            ["AAPL", "MSFT"], None, run_id=uuid.uuid4()
+        )
+
+        assert result["tickers_succeeded"] == 2
+        assert result["tickers_failed"] == 0
+        assert mock_runner.record_ticker_success.call_count == 2
+        mock_runner.record_ticker_failure.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

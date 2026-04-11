@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -17,7 +18,7 @@ from backend.services.backtesting import BacktestEngine
 from backend.services.ticker_state import mark_stages_updated
 from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
-from backend.tasks.pipeline import PipelineRunner
+from backend.tasks.pipeline import PipelineRunner, tracked_task
 from backend.tools.forecasting import MIN_DATA_POINTS
 
 logger = logging.getLogger(__name__)
@@ -52,11 +53,12 @@ async def _get_price_data_counts(tickers: list[str], db: AsyncSession) -> dict[s
     return {row.ticker: row.cnt for row in result.all()}
 
 
-async def _model_retrain_all_async() -> dict:
+@tracked_task("model_retrain", trigger="scheduled")
+async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
     """Retrain Prophet models for all tickers and generate forecasts.
 
     Returns:
-        Dict with run status and counts.
+        Dict with training counts. Pipeline status lives in pipeline_runs row.
     """
     from backend.services.ticker_universe import get_all_referenced_tickers
     from backend.tools.forecasting import predict_forecast, train_prophet_model
@@ -65,9 +67,8 @@ async def _model_retrain_all_async() -> dict:
         tickers = await get_all_referenced_tickers(db)
     if not tickers:
         logger.info("No tickers to retrain")
-        return {"status": "no_tickers", "trained": 0}
+        return {"trained": 0, "total": 0}
 
-    run_id = await _runner.start_run("model_retrain", "scheduled", len(tickers))
     trained = 0
 
     async with async_session_factory() as db:
@@ -88,15 +89,15 @@ async def _model_retrain_all_async() -> dict:
                 await _runner.record_ticker_failure(run_id, ticker, "retrain failed")
                 logger.exception("Failed to retrain %s", ticker)
 
-    status = await _runner.complete_run(run_id)
-    return {"status": status, "trained": trained, "total": len(tickers)}
+    return {"trained": trained, "total": len(tickers)}
 
 
-async def _forecast_refresh_async() -> dict:
+@tracked_task("forecast_refresh", trigger="scheduled")
+async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
     """Refresh forecasts using existing active models (no retraining).
 
     Returns:
-        Dict with refresh status and counts.
+        Dict with refresh counts. Pipeline status lives in pipeline_runs row.
     """
     from backend.models.forecast import ModelVersion
     from backend.tools.forecasting import predict_forecast
@@ -112,9 +113,8 @@ async def _forecast_refresh_async() -> dict:
 
         if not active_models:
             logger.info("No active models — skipping forecast refresh")
-            return {"status": "no_models", "refreshed": 0}
+            return {"refreshed": 0, "total": 0}
 
-        run_id = await _runner.start_run("forecast_refresh", "scheduled", len(active_models))
         refreshed = 0
 
         for model_version in active_models:
@@ -129,8 +129,6 @@ async def _forecast_refresh_async() -> dict:
                 await db.rollback()
                 await _runner.record_ticker_failure(run_id, model_version.ticker, "refresh failed")
                 logger.exception("Failed to refresh forecast for %s", model_version.ticker)
-
-        status = await _runner.complete_run(run_id)
 
         # ── Phase 2: Dispatch training for new tickers without models ──
         try:
@@ -167,7 +165,7 @@ async def _forecast_refresh_async() -> dict:
         except Exception:
             logger.warning("Failed to dispatch new-ticker training", exc_info=True)
 
-        return {"status": status, "refreshed": refreshed, "total": len(active_models)}
+        return {"refreshed": refreshed, "total": len(active_models)}
 
 
 @celery_app.task(
