@@ -227,7 +227,32 @@ class TestPipelineRunnerCompleteRun:
         status = await runner.complete_run(run.id)
 
         assert status == "no_op"
+        assert run.status == "no_op"
         assert run.completed_at is not None
+
+    @pytest.mark.asyncio
+    @patch("backend.tasks.pipeline.async_session_factory")
+    async def test_nonzero_total_zero_processed_is_success(self, mock_factory: MagicMock) -> None:
+        """complete_run with tickers_total > 0 but succeeded=0 and failed=0 → 'success'.
+
+        Boundary case: task returned early before processing any tickers but
+        did NOT raise. The no_op guard requires ALL three counters == 0, so
+        this falls through to the 'tickers_failed == 0' branch → "success".
+        Documents the boundary so simplifications don't accidentally regress.
+        """
+        mock_cm, mock_session = _mock_session_factory()
+        mock_factory.return_value = mock_cm
+
+        run = _make_run(tickers_total=5, tickers_succeeded=0, tickers_failed=0)
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = run
+        mock_session.execute.return_value = mock_result
+
+        runner = PipelineRunner()
+        status = await runner.complete_run(run.id)
+
+        assert status == "success"
+        assert run.status == "success"
 
     @pytest.mark.asyncio
     @patch("backend.tasks.pipeline.async_session_factory")
@@ -269,6 +294,85 @@ class TestPipelineRunnerCompleteRun:
 
         added_run = mock_session.add.call_args[0][0]
         assert added_run.celery_task_id is None
+
+
+# ---------------------------------------------------------------------------
+# @tracked_task decorator — celery_task_id extraction
+# ---------------------------------------------------------------------------
+
+
+class TestTrackedTaskCeleryIdExtraction:
+    """Tests for the celery_task_id extraction logic in @tracked_task."""
+
+    @pytest.mark.asyncio
+    @patch("backend.tasks.pipeline.async_session_factory")
+    async def test_extracts_celery_task_id_from_current_task(self, mock_factory: MagicMock) -> None:
+        """@tracked_task should read celery.current_task.request.id and pass to start_run."""
+        from backend.tasks.pipeline import tracked_task
+
+        mock_cm, mock_session = _mock_session_factory()
+        mock_factory.return_value = mock_cm
+
+        @tracked_task("test_pipeline")
+        async def _my_task(*, run_id: uuid.UUID) -> dict:
+            return {"ok": True}
+
+        # Mock celery.current_task with a valid request.id.
+        # The wrapper does `from celery import current_task` — this resolves
+        # via sys.modules["celery"].current_task at import time.
+        mock_request = MagicMock()
+        mock_request.id = "celery-uuid-abc-123"
+        mock_current_task = MagicMock()
+        mock_current_task.request = mock_request
+        mock_celery_module = MagicMock()
+        mock_celery_module.current_task = mock_current_task
+
+        start_path = "backend.tasks.pipeline.PipelineRunner.start_run"
+        complete_path = "backend.tasks.pipeline.PipelineRunner.complete_run"
+
+        with patch.dict("sys.modules", {"celery": mock_celery_module}):
+            with patch(start_path, new_callable=AsyncMock) as mock_start:
+                mock_start.return_value = uuid.uuid4()
+                with patch(complete_path, new_callable=AsyncMock) as mock_complete:
+                    mock_complete.return_value = "no_op"
+                    await _my_task()
+
+                mock_start.assert_called_once()
+                call_kwargs = mock_start.call_args[1]
+                assert call_kwargs["celery_task_id"] == "celery-uuid-abc-123"
+
+    @pytest.mark.asyncio
+    @patch("backend.tasks.pipeline.async_session_factory")
+    async def test_celery_task_id_none_when_no_task_context(self, mock_factory: MagicMock) -> None:
+        """@tracked_task should pass celery_task_id=None when no Celery context exists."""
+        from backend.tasks.pipeline import tracked_task
+
+        mock_cm, mock_session = _mock_session_factory()
+        mock_factory.return_value = mock_cm
+
+        run = _make_run(tickers_total=0, tickers_succeeded=0, tickers_failed=0)
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = run
+        mock_session.execute.return_value = mock_result
+
+        @tracked_task("test_pipeline_no_ctx")
+        async def _my_task(*, run_id: uuid.UUID) -> dict:
+            return {"ok": True}
+
+        start_path = "backend.tasks.pipeline.PipelineRunner.start_run"
+        complete_path = "backend.tasks.pipeline.PipelineRunner.complete_run"
+
+        # Simulate ImportError when importing celery (no celery installed)
+        with patch.dict("sys.modules", {"celery": None}):
+            with patch(start_path, new_callable=AsyncMock) as mock_start:
+                mock_start.return_value = uuid.uuid4()
+                with patch(complete_path, new_callable=AsyncMock) as mock_complete:
+                    mock_complete.return_value = "no_op"
+                    await _my_task()
+
+                mock_start.assert_called_once()
+                call_kwargs = mock_start.call_args[1]
+                assert call_kwargs["celery_task_id"] is None
 
 
 # ---------------------------------------------------------------------------
