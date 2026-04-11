@@ -47,6 +47,7 @@ class PipelineRunner:
         pipeline_name: str,
         trigger: str = "scheduled",
         tickers_total: int = 0,
+        celery_task_id: str | None = None,
     ) -> uuid.UUID:
         """Create a PipelineRun row and return the run_id.
 
@@ -54,6 +55,11 @@ class PipelineRunner:
             pipeline_name: Name of the pipeline (e.g., "price_refresh").
             trigger: How the run was triggered ("scheduled", "backfill", "manual").
             tickers_total: Expected number of tickers to process.
+            celery_task_id: Celery task UUID (preserved across retries) or None
+                when invoked outside a Celery context. When populated by the
+                @tracked_task decorator reading celery.current_task.request.id,
+                PR2 dashboards can GROUP BY this column to aggregate retry
+                attempts of one logical invocation.
 
         Returns:
             UUID of the new PipelineRun row.
@@ -69,6 +75,7 @@ class PipelineRunner:
                 tickers_succeeded=0,
                 tickers_failed=0,
                 trigger=trigger,
+                celery_task_id=celery_task_id,
             )
             session.add(run)
             await session.commit()
@@ -157,11 +164,23 @@ class PipelineRunner:
     async def complete_run(self, run_id: uuid.UUID) -> str:
         """Complete a pipeline run — set status based on success/failure ratio.
 
+        Status classification:
+            - "no_op"   — zero-work run (tickers_total == tickers_succeeded == tickers_failed == 0).
+                          Distinguishes "pipeline ran but had nothing to do" from "pipeline
+                          ran and everything succeeded", which matters for dashboards that
+                          would otherwise report spurious green on empty-universe cycles.
+                          Introduced by KAN-420 PR1.5a for the @tracked_task adoption path
+                          where the decorator creates a pipeline_runs row before the helper
+                          body's early-return check runs.
+            - "success" — every attempted ticker succeeded (tickers_failed == 0 and work > 0).
+            - "failed"  — every attempted ticker failed (tickers_succeeded == 0 and work > 0).
+            - "partial" — mixed outcomes.
+
         Args:
             run_id: The PipelineRun UUID.
 
         Returns:
-            Final status string ("success", "partial", or "failed").
+            Final status string ("no_op", "success", "partial", or "failed").
         """
         async with async_session_factory() as session:
             result = await session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
@@ -174,7 +193,12 @@ class PipelineRunner:
                 # but pyright cannot narrow Mapped[datetime|None] across the assignment.
                 run.total_duration_seconds = (run.completed_at - run.started_at).total_seconds()  # pyright: ignore[reportOptionalOperand]
 
-            if run.tickers_failed == 0:
+            # Zero-work check MUST precede the success/failed/partial classification
+            # because `tickers_failed == 0` would otherwise match both a genuine
+            # zero-work run AND an all-success run.
+            if run.tickers_total == 0 and run.tickers_succeeded == 0 and run.tickers_failed == 0:
+                run.status = "no_op"
+            elif run.tickers_failed == 0:
                 run.status = "success"
             elif run.tickers_succeeded == 0:
                 run.status = "failed"
@@ -405,7 +429,7 @@ def tracked_task(
 
     Usage (adopted in Spec D, not this spec)::
 
-        @shared_task(name="tasks.news_sentiment")
+        @celery_app.task(name="backend.tasks.news_sentiment.nightly_news_sentiment_task")
         def nightly_news_sentiment_task() -> dict:
             return asyncio.run(_run())
 
@@ -439,10 +463,31 @@ def tracked_task(
             """Wrapper that runs the full PipelineRunner lifecycle."""
             tickers_total_raw = kwargs.pop("tickers_total", 0)
             tickers_total = int(tickers_total_raw)  # type: ignore[arg-type]
+
+            # Celery preserves current_task.request.id across retries, so
+            # storing it on pipeline_runs gives PR2's dashboard a natural
+            # GROUP BY key to aggregate retry attempts. Narrow the except
+            # to (ImportError, AttributeError, RuntimeError): ImportError
+            # if celery somehow is not installed, AttributeError if the
+            # LocalProxy returns None/lacks .request, RuntimeError if no
+            # task context is active. A broader catch would hide bugs.
+            celery_task_id: str | None = None
+            try:
+                from celery import current_task
+
+                req = getattr(current_task, "request", None)
+                if req is not None:
+                    task_id = getattr(req, "id", None)
+                    if isinstance(task_id, str):
+                        celery_task_id = task_id
+            except (ImportError, AttributeError, RuntimeError):
+                celery_task_id = None
+
             run_id = await runner.start_run(
                 pipeline_name=pipeline_name,
                 trigger=trigger,
                 tickers_total=tickers_total,
+                celery_task_id=celery_task_id,
             )
             try:
                 result = await fn(*args, run_id=run_id, **kwargs)

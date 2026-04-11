@@ -206,6 +206,70 @@ class TestPipelineRunnerCompleteRun:
 
         assert status == "failed"
 
+    @pytest.mark.asyncio
+    @patch("backend.tasks.pipeline.async_session_factory")
+    async def test_zero_work_is_no_op(self, mock_factory: MagicMock) -> None:
+        """complete_run with all counters zero should set status to 'no_op'.
+
+        Distinguishes "pipeline ran but had nothing to do" (empty universe)
+        from "everything succeeded" — prevents spurious green dashboards
+        on empty-input nightly cycles. Introduced by KAN-420 PR1.5a.
+        """
+        mock_cm, mock_session = _mock_session_factory()
+        mock_factory.return_value = mock_cm
+
+        run = _make_run(tickers_total=0, tickers_succeeded=0, tickers_failed=0)
+        mock_result = MagicMock()
+        mock_result.scalar_one.return_value = run
+        mock_session.execute.return_value = mock_result
+
+        runner = PipelineRunner()
+        status = await runner.complete_run(run.id)
+
+        assert status == "no_op"
+        assert run.completed_at is not None
+
+    @pytest.mark.asyncio
+    @patch("backend.tasks.pipeline.async_session_factory")
+    async def test_start_run_persists_celery_task_id(self, mock_factory: MagicMock) -> None:
+        """start_run forwards celery_task_id to the PipelineRun row.
+
+        Celery preserves task.request.id across retries — storing it gives
+        PR2 dashboards a GROUP BY key for retry aggregation.
+        """
+        mock_cm, mock_session = _mock_session_factory()
+        mock_factory.return_value = mock_cm
+
+        runner = PipelineRunner()
+        await runner.start_run(
+            pipeline_name="test_celery_id",
+            trigger="scheduled",
+            tickers_total=1,
+            celery_task_id="abc-123-celery-uuid",
+        )
+
+        # Verify the session.add received a PipelineRun with the celery_task_id
+        mock_session.add.assert_called_once()
+        added_run = mock_session.add.call_args[0][0]
+        assert isinstance(added_run, PipelineRun)
+        assert added_run.celery_task_id == "abc-123-celery-uuid"
+
+    @pytest.mark.asyncio
+    @patch("backend.tasks.pipeline.async_session_factory")
+    async def test_start_run_celery_task_id_defaults_to_none(self, mock_factory: MagicMock) -> None:
+        """start_run with no celery_task_id kwarg stores None (non-Celery context)."""
+        mock_cm, mock_session = _mock_session_factory()
+        mock_factory.return_value = mock_cm
+
+        runner = PipelineRunner()
+        await runner.start_run(
+            pipeline_name="test_no_celery",
+            trigger="scheduled",
+        )
+
+        added_run = mock_session.add.call_args[0][0]
+        assert added_run.celery_task_id is None
+
 
 # ---------------------------------------------------------------------------
 # PipelineRunner.update_watermark
