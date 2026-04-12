@@ -174,11 +174,17 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 
 | Ticket | Spec | Priority | Summary | Status |
 |--------|------|----------|---------|--------|
-| KAN-419 | Epic | High | Pipeline Architecture Overhaul | Refined ✅ |
-| KAN-421 | A | High | Ingestion Foundation — state table, SLAs, PipelineRunner contract, observability helpers | Refined ✅ |
-| KAN-422 | B | High | Pipeline Completeness — convergence, backtest, Prophet sentiment fix, news concurrency | Refined ✅ |
+| KAN-419 | Epic | High | Pipeline Architecture Overhaul | In Progress (3/8 specs shipped — A ✅, B ✅, D ✅) |
+| KAN-421 | A | High | Ingestion Foundation — state table, SLAs, PipelineRunner contract, observability helpers | ✅ Done (PR #206, Session 99) |
+| KAN-422 | B | High | Pipeline Completeness — convergence, backtest, Prophet sentiment fix, news concurrency | **✅ Done (PRs #207 + #208, Sessions 100-101)** |
+| &nbsp;&nbsp;↳ KAN-431 | B1 | High | Convergence task real implementation + backfill + nightly chain wiring | **✅ Done (PR #208, Session 101)** |
+| &nbsp;&nbsp;↳ KAN-432 | B2 | High | Backtest task real impl + BacktestEngine.run_walk_forward + weekly beat | **✅ Done (PR #208, Session 101)** |
+| &nbsp;&nbsp;↳ KAN-433 | B3 | Highest | **Prophet sentiment predict-time fix** (async + `model.history` source + post-training DB fetch + 7d projection) | **✅ Done (PR #207, Session 100)** |
+| &nbsp;&nbsp;↳ KAN-434 | B4 | Medium | News scoring concurrent batch dispatch (`asyncio.gather` + `Semaphore(5)`) | **✅ Done (PR #208, Session 101)** |
+| &nbsp;&nbsp;↳ KAN-435 | B5 | High | `ingest_ticker` extension — Steps 8/9/10 wiring news + convergence + `mark_stage_updated` (depends on B1) | **✅ Done (PR #208, Session 101)** |
 | KAN-423 | C | High | Entry Point Unification — watchlist, portfolio, chat, stale auto-refresh, bulk CSV | Refined ✅ |
-| KAN-420 | D | High | Admin + Observability — universal PipelineRunner, per-task trigger, ingestion health, Langfuse spans | Refined ✅ |
+| KAN-420 | D | High | Admin + Observability — universal PipelineRunner, per-task trigger, ingestion health, Langfuse spans | **✅ Done (PRs #210-214, Sessions 103-104)** |
+| &nbsp;&nbsp;↳ KAN-445 | D (follow-up) | Medium | Convert StalenessSLAs to env-tunable Pydantic settings (supersedes A-LOW-2) | **✅ Done (PR #215, Session 104)** |
 | KAN-424 | E | Medium | Forecast Quality & Scale — cap raise, weekly retrain, intraday fast/slow split | Refined ✅ |
 | KAN-425 | F | Medium | DQ + Retention + Rate Limiting — DQ scanner, token bucket, retention tasks, TimescaleDB compression | Refined ✅ |
 | KAN-426 | G | Medium | Frontend Polish — ingest progress, polling, stale badges, ticker search | Refined ✅ |
@@ -207,9 +213,41 @@ Batch A + F → Batch E ──────┤ E uses F3 yfinance rate limiter
 Batch C → Batch G (KAN-426) ┘ G uses C's API contract
 ```
 
-**Migration sequence:** Current head `b2351fa2d293` → 025 (Spec A) → 026 (Spec F) → 027 (Spec F).
+**Migration sequence:** Current head `e1f2a3b4c5d6` (migration 025 — Spec A ticker_ingestion_state, shipped Session 99) → 026 `8c13a01dd3fa` (KAN-420 PR1.5a: `celery_task_id` on `pipeline_runs`, coded on branch not yet merged) → 027 (Spec F) → 028 (Spec F).
+
+**KAN-420 Spec D PR breakdown (Session 103 decision — monolithic plan split into 4 PRs):**
+
+| PR | Scope | Status | Branch |
+|---|---|---|---|
+| PR1 (PR #210) | Config flags + trace_task consumer tests | ✅ Merged Session 103 | deleted |
+| PR1.5a | pipeline.py core: `no_op` status + `celery_task_id` column + docstring fix | Coded, needs review + push | `feat/KAN-420-pr1.5a-pipeline-core` |
+| PR1.5b | Test infrastructure: `bypass_tracked` shim + migrate ~56 test call sites to `.__wrapped__` | Planned, not started | — |
+| PR1.5c | Category A refactor: 3 helpers (`model_retrain`, `forecast_refresh`, `nightly_price_refresh` outer/inner split) | Planned, not started | — |
+| PR1.5d | Category B + B-hoist + B-wrap + B-fanout: ~28 helpers + AST enforcement test (3-layer) | Planned, not started | — |
+
+Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-task-adoption` branch (local, not merged — 2400-line planning artifact with 35-task audit table).
 
 **Critical fixes already applied to specs/plans** (review pre-merge, see resolutions doc): 25 cross-cutting fixes including `task_tracer` import path consolidation, `mark_stage_updated` signature lock, `Stage` Literal extension, Prophet sentiment async refactor, Postgres pool math correction, TimescaleDB compression downgrade fix, frontend Jest (not Vitest), Redis SETNX dedup, etc.
+
+**B3 review findings deferred as follow-ups** (not blocking PR 2): H-Callers (differentiate DB vs solver errors in `backend/tasks/forecasting.py` exception handlers), Domain H2 (evaluate training-window mean / AR(1) / exp-decay vs current 7d projection for 270d horizons), Domain M2 (evaluate multiplicative vs additive regressor mode), pre-existing bug (`make_future_dataframe` extends from `training_end` not `today` → stale-model target_date falls off the end).
+
+**Spec B persona pre-push review follow-ups** (Session 101 — filed as KAN-436..KAN-444, labels `spec-b-followup` + `kan-422`):
+
+| Key | Priority | Summary |
+|---|---|---|
+| KAN-436 | High | Bulk `mark_stages_updated` helper — 500 sequential round-trips → 1 query |
+| KAN-437 | High | Walk-forward sentiment N+1 — pre-load once per ticker (~55k → ~500 queries on weekly run) |
+| KAN-438 | High | Per-ticker DB session in `_run_backtest_async` (currently one session wraps full loop) |
+| KAN-439 | Medium | Backtest task returns `status="degraded"` when `failed > 0` (currently always `"ok"`) |
+| KAN-440 | Medium | `BacktestRun` UniqueConstraint + upsert (prevents duplicate rows on retry; drift uses MIN so no correctness impact today) |
+| KAN-441 | Medium | Celery `time_limit` / `soft_time_limit` on `run_backtest_task` (currently unbounded) |
+| KAN-442 | Low | Consolidate `_fetch_sentiment_for_window` into `_fetch_sentiment_regressors` (DRY cleanup) |
+| KAN-443 | Low | Pyright `pd.Index(...)` wrap at `backend/tools/forecasting.py:508` (sibling of Fix 1 in PR #208) |
+| KAN-444 | Low (Bug) | `test_forecast_has_correct_fields` fails due to ET production / UTC test TZ mismatch (pre-existing, confirmed on develop) |
+
+**Spec B deferrals to Spec D** (wiring dependencies, not defects):
+- `@tracked_task` decoration on convergence / backtest tasks — decorator only wraps `Callable[..., Awaitable[R]]`; must be applied to the async helpers (`_compute_convergence_snapshot_async`, `_run_backtest_async`) rather than the sync Celery wrappers.
+- `task_tracer` spans inside `SentimentScorer.score_batch` — observability integration tracked under Spec D.
 
 ---
 
@@ -297,8 +335,8 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 
 | Ticket | Priority | Summary | Status |
 |--------|----------|---------|--------|
-| KAN-405 | Medium | Sentiment scoring: concurrent batch dispatch + larger batch size (9 min → 30 sec) | To Do |
-| KAN-406 | Low | SPY ETF 2y history misaligned with 10y universe for QuantStats | To Do |
+| KAN-405 | Medium | Sentiment scoring: concurrent batch dispatch + larger batch size | Superseded by KAN-434 (Spec B4) |
+| KAN-406 | Low | SPY ETF 2y history misaligned with 10y universe for QuantStats | Folded into KAN-424 (Spec E) |
 
 ## Tech Debt
 
