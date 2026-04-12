@@ -21,6 +21,7 @@ from backend.services.signals import (
     store_signal_snapshot,
 )
 from backend.services.stock_data import fetch_prices_delta, load_prices_df
+from backend.services.ticker_state import mark_stage_updated
 from backend.tasks import celery_app
 from backend.tasks.pipeline import PipelineRunner, detect_gap, set_watermark_status, tracked_task
 
@@ -77,6 +78,7 @@ async def _refresh_ticker_fast(
                 signal_result.data_days = qs_metrics.get("data_days")
 
         await store_signal_snapshot(signal_result, db)
+        await mark_stage_updated(ticker, "signals", db=db)
         await db.commit()
         score = signal_result.composite_score
         logger.info("Refreshed %s (fast) — composite_score=%.1f", ticker, score)
@@ -131,6 +133,7 @@ async def _refresh_ticker_slow(ticker: str) -> RefreshTickerResult:
         except Exception:
             logger.warning("Failed to sync dividends for %s", ticker, exc_info=True)
 
+        await mark_stage_updated(ticker, "fundamentals", db=db)
         await db.commit()
         logger.info("Refreshed %s (slow) — yfinance info + dividends", ticker)
         return {"ticker": ticker, "status": "ok"}

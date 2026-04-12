@@ -195,15 +195,11 @@ def forecast_refresh_task() -> dict:
 
 
 @tracked_task("single_ticker_retrain")
-async def _retrain_single_ticker_async(
-    ticker: str, *, priority: bool = False, run_id: uuid.UUID
-) -> dict:
+async def _retrain_single_ticker_async(ticker: str, *, run_id: uuid.UUID) -> dict:
     """Async implementation: retrain a single ticker's Prophet model.
 
     Args:
         ticker: Stock ticker to retrain.
-        priority: If True, this is a user-initiated retrain that bypasses the
-            nightly sweep cap (Spec E.1).
         run_id: Pipeline run ID injected by @tracked_task.
 
     Returns:
@@ -239,7 +235,7 @@ def retrain_single_ticker_task(ticker: str, priority: bool = False) -> dict:
         Dict with training result.
     """
     logger.info("Retraining %s (priority=%s)", ticker, priority)
-    return asyncio.run(_retrain_single_ticker_async(ticker, priority=priority))  # type: ignore[arg-type]
+    return asyncio.run(_retrain_single_ticker_async(ticker))  # type: ignore[arg-type]
 
 
 @tracked_task("backtest")
