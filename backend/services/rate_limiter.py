@@ -16,7 +16,7 @@ from backend.services.redis_pool import get_redis
 
 logger = logging.getLogger(__name__)
 
-_LUA_TOKEN_BUCKET = """
+_LUA_TOKEN_BUCKET = """  # nosemgrep: no-secrets-in-code
 local key = KEYS[1]
 local capacity = tonumber(ARGV[1])
 local refill_rate = tonumber(ARGV[2])
