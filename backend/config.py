@@ -139,6 +139,7 @@ class Settings(BaseSettings):
     # NEWS_SCORING_MAX_CONCURRENCY controls concurrency (added in B4.2, see above)
 
     # --- Pipeline ---
+    INTRADAY_REFRESH_CONCURRENCY: int = 5  # Spec E.3 — semaphore bound on fast path (= pool_size)
     PIPELINE_FAILURE_MODE: str = "continue"
 
     # --- Admin Seed ---

@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 _runner = PipelineRunner()
 
-MAX_NEW_MODELS_PER_NIGHT = 20
+MAX_NEW_MODELS_PER_NIGHT = 100
 
 
 async def _get_price_data_counts(tickers: list[str], db: AsyncSession) -> dict[str, int]:
@@ -172,12 +172,12 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
     name="backend.tasks.forecasting.model_retrain_all_task",
 )
 def model_retrain_all_task() -> dict:
-    """Biweekly full retrain of all Prophet models.
+    """Weekly full retrain of all Prophet models (Sunday 02:00 ET).
 
     Returns:
         Dict with training status and counts.
     """
-    logger.info("Starting full model retrain")
+    logger.info("Starting weekly full model retrain")
     return asyncio.run(_model_retrain_all_async())  # type: ignore[arg-type]  # wrapper is async def, pyright sees Awaitable not Coroutine
 
 
@@ -196,7 +196,7 @@ def forecast_refresh_task() -> dict:
 
 @tracked_task("single_ticker_retrain")
 async def _retrain_single_ticker_async(ticker: str, *, run_id: uuid.UUID) -> dict:
-    """Async implementation: retrain a single ticker's Prophet model (drift-triggered).
+    """Async implementation: retrain a single ticker's Prophet model.
 
     Args:
         ticker: Stock ticker to retrain.
@@ -223,16 +223,18 @@ async def _retrain_single_ticker_async(ticker: str, *, run_id: uuid.UUID) -> dic
 @celery_app.task(
     name="backend.tasks.forecasting.retrain_single_ticker_task",
 )
-def retrain_single_ticker_task(ticker: str) -> dict:
-    """Retrain a single ticker's Prophet model (drift-triggered).
+def retrain_single_ticker_task(ticker: str, priority: bool = False) -> dict:
+    """Retrain a single ticker's Prophet model.
 
     Args:
         ticker: Stock ticker to retrain.
+        priority: If True, user-initiated retrain that bypasses the nightly
+            sweep cap (Spec E.1). Passed through from ingest_ticker.
 
     Returns:
         Dict with training result.
     """
-    logger.info("Retraining %s (drift-triggered)", ticker)
+    logger.info("Retraining %s (priority=%s)", ticker, priority)
     return asyncio.run(_retrain_single_ticker_async(ticker))  # type: ignore[arg-type]
 
 

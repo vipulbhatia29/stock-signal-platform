@@ -21,6 +21,7 @@ from backend.services.signals import (
     store_signal_snapshot,
 )
 from backend.services.stock_data import fetch_prices_delta, load_prices_df
+from backend.services.ticker_state import mark_stage_updated
 from backend.tasks import celery_app
 from backend.tasks.pipeline import PipelineRunner, detect_gap, set_watermark_status, tracked_task
 
@@ -40,10 +41,13 @@ class RefreshTickerResult(TypedDict):
     status: Literal["ok", "no_data"]
 
 
-async def _refresh_ticker_async(
+async def _refresh_ticker_fast(
     ticker: str, spy_closes: "pd.Series | None" = None
 ) -> RefreshTickerResult:
-    """Async implementation: fetch prices, compute signals, store snapshot.
+    """Fast path: fetch prices, compute signals + QuantStats, store snapshot.
+
+    Used by intraday refresh and nightly Phase 1. Does NOT touch yfinance info
+    or dividends — those are in the slow path (nightly Phase 1.5 only).
 
     Args:
         ticker: The stock ticker symbol.
@@ -74,7 +78,26 @@ async def _refresh_ticker_async(
                 signal_result.data_days = qs_metrics.get("data_days")
 
         await store_signal_snapshot(signal_result, db)
+        await mark_stage_updated(ticker, "signals", db=db)
+        await db.commit()
+        score = signal_result.composite_score
+        logger.info("Refreshed %s (fast) — composite_score=%.1f", ticker, score)
+        return {"ticker": ticker, "status": "ok"}
 
+
+async def _refresh_ticker_slow(ticker: str) -> RefreshTickerResult:
+    """Slow path: yfinance info refresh + dividends sync. Nightly Phase 1.5 only.
+
+    Separated from the fast path (Spec E.3) because yfinance info calls are
+    expensive (~2-5s each) and only needed once daily, not on every intraday cycle.
+
+    Args:
+        ticker: The stock ticker symbol.
+
+    Returns:
+        A dict with ticker and status.
+    """
+    async with async_session_factory() as db:
         # Refresh beta/yield/forward_pe from yfinance info
         try:
             import yfinance as yf
@@ -110,9 +133,28 @@ async def _refresh_ticker_async(
         except Exception:
             logger.warning("Failed to sync dividends for %s", ticker, exc_info=True)
 
+        await mark_stage_updated(ticker, "fundamentals", db=db)
         await db.commit()
-        logger.info("Refreshed %s — composite_score=%.1f", ticker, signal_result.composite_score)
+        logger.info("Refreshed %s (slow) — yfinance info + dividends", ticker)
         return {"ticker": ticker, "status": "ok"}
+
+
+async def _refresh_ticker_async(
+    ticker: str, spy_closes: "pd.Series | None" = None
+) -> RefreshTickerResult:
+    """Combined refresh: fast path + slow path. Used by refresh_ticker_task (on-demand).
+
+    Args:
+        ticker: The stock ticker symbol.
+        spy_closes: Optional SPY closing prices for QuantStats benchmark computation.
+
+    Returns:
+        A dict with ticker and status.
+    """
+    result = await _refresh_ticker_fast(ticker, spy_closes)
+    if result["status"] == "ok":
+        await _refresh_ticker_slow(ticker)
+    return result
 
 
 @celery_app.task(
@@ -197,29 +239,47 @@ async def _nightly_price_refresh_work(
     *,
     run_id: uuid.UUID,
 ) -> dict:
-    """Per-ticker price refresh — the tracked inner helper.
+    """Per-ticker price refresh (fast path only) — the tracked inner helper.
+
+    Parallelized via asyncio.gather with a semaphore to bound DB connection
+    pool usage (Spec E.3). Each ticker gets its own session via
+    _refresh_ticker_fast's internal async_session_factory() call.
 
     Receives a pre-resolved ticker list so the no-work early-return path
     (handled by `_nightly_price_refresh_async`) never reaches this function.
     Pipeline row is created by the decorator before entry and finalized after
     return.
     """
+    from backend.config import settings
+
+    sem = asyncio.Semaphore(settings.INTRADAY_REFRESH_CONCURRENCY)
     succeeded = 0
     failed = 0
-    for ticker in tickers:
-        try:
-            result = await _refresh_ticker_async(ticker, spy_closes=spy_closes)
-            status = result["status"]
-            if status == "ok":
-                await _runner.record_ticker_success(run_id, ticker)
-                succeeded += 1
-            else:
-                await _runner.record_ticker_failure(run_id, ticker, status)
-                failed += 1
-        except Exception:
-            await _runner.record_ticker_failure(run_id, ticker, "refresh failed")
-            logger.exception("Failed to refresh %s in nightly pipeline", ticker)
+
+    async def _bounded(ticker: str) -> tuple[bool, str]:
+        """Run fast-path refresh for one ticker, bounded by semaphore."""
+        async with sem:
+            try:
+                result = await _refresh_ticker_fast(ticker, spy_closes=spy_closes)
+                status = result["status"]
+                if status == "ok":
+                    await _runner.record_ticker_success(run_id, ticker)
+                    return (True, status)
+                else:
+                    await _runner.record_ticker_failure(run_id, ticker, status)
+                    return (False, status)
+            except Exception:
+                await _runner.record_ticker_failure(run_id, ticker, "refresh failed")
+                logger.exception("Failed to refresh %s in nightly pipeline", ticker)
+                return (False, "refresh failed")
+
+    results = await asyncio.gather(*[_bounded(t) for t in tickers])
+    for ok, _ in results:
+        if ok:
+            succeeded += 1
+        else:
             failed += 1
+
     return {
         "tickers_total": len(tickers),
         "tickers_succeeded": succeeded,
@@ -257,7 +317,7 @@ async def _nightly_price_refresh_async() -> dict:
 
     # Ensure SPY has fresh price data before loading closes for QuantStats
     try:
-        await _refresh_ticker_async("SPY")
+        await _refresh_ticker_fast("SPY")
         logger.info("SPY benchmark prices refreshed for QuantStats")
     except Exception:
         logger.warning("Failed to refresh SPY prices — QuantStats metrics may be null")
@@ -285,6 +345,26 @@ async def _nightly_price_refresh_async() -> dict:
     }
 
 
+async def _refresh_all_slow_async() -> dict:
+    """Nightly Phase 1.5 — slow path (yfinance info + dividends) for every ticker.
+
+    Runs sequentially because each call is light on DB but heavy on yfinance
+    (rate-limited externally via Spec F3).
+
+    Returns:
+        Dict with slow-path status and counts.
+    """
+    tickers = await _get_all_referenced_tickers()
+    succeeded = 0
+    for ticker in tickers:
+        try:
+            await _refresh_ticker_slow(ticker)
+            succeeded += 1
+        except Exception:
+            logger.exception("Slow path failed for %s", ticker)
+    return {"status": "ok", "tickers": len(tickers), "succeeded": succeeded}
+
+
 @celery_app.task(
     name="backend.tasks.market_data.nightly_price_refresh_task",
 )
@@ -308,7 +388,9 @@ def nightly_pipeline_chain_task() -> dict:
 
         Phase 0: Cache invalidation
             |
-        Phase 1: Price refresh + signal computation
+        Phase 1: Price refresh + signal computation (fast path, parallel)
+            |
+        Phase 1.5: yfinance info + dividends (slow path, sequential)
             |
         Phase 2 (parallel):
             ├── Forecast refresh        (needs fresh prices)
@@ -377,8 +459,17 @@ def nightly_pipeline_chain_task() -> dict:
         logger.warning("Nightly cache invalidation failed", exc_info=True)
 
     # Phase 1: Price refresh + signal computation (everything else depends on this)
-    logger.info("Nightly chain phase 1: price refresh")
+    logger.info("Nightly chain phase 1: price refresh (fast path)")
     results["price_refresh"] = nightly_price_refresh_task()
+
+    # Phase 1.5: Slow path — yfinance info + dividends (Spec E.3)
+    # Runs before Phase 2 so downstream steps (QuantStats, fundamentals) see fresh data.
+    logger.info("Nightly chain phase 1.5: slow path (yfinance info + dividends)")
+    try:
+        results["slow_path"] = asyncio.run(_refresh_all_slow_async())
+    except Exception:
+        logger.exception("Phase 1.5 slow path failed")
+        results["slow_path"] = {"status": "failed"}
 
     # Phase 2: Five independent steps run in parallel threads.
     # Each task calls asyncio.run() internally, so each thread gets its own event loop.

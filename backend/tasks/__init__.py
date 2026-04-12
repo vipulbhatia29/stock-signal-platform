@@ -68,7 +68,6 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.warm_data.sync_institutional_holders_task",
         "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET
     },
-    # ── Biweekly model retrain (every other Sunday 2 AM ET) ──
     # ── Audit trail purge (3 AM ET daily) ──
     "purge-login-attempts-daily": {
         "task": "backend.tasks.audit.purge_login_attempts_task",
@@ -78,10 +77,9 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.audit.purge_deleted_accounts_task",
         "schedule": crontab(hour=3, minute=15),
     },
-    "model-retrain-biweekly": {
+    "model-retrain-weekly": {
         "task": "backend.tasks.forecasting.model_retrain_all_task",
         "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET
-        # Biweekly filtering handled at task level (check last retrain date)
     },
     # ── News sentiment pipeline (4x daily during market hours) ──
     "news-ingest": {

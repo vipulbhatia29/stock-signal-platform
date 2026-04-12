@@ -59,7 +59,7 @@ class TestIngestForecastDispatch:
         mock_db = AsyncMock()
         result = await ingest_ticker("FORD", mock_db)
 
-        mock_retrain_task.delay.assert_called_once_with("FORD")
+        mock_retrain_task.delay.assert_called_once_with("FORD", priority=True)
         assert result["ticker"] == "FORD"
 
     @pytest.mark.asyncio

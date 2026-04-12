@@ -182,10 +182,14 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 | &nbsp;&nbsp;↳ KAN-433 | B3 | Highest | **Prophet sentiment predict-time fix** (async + `model.history` source + post-training DB fetch + 7d projection) | **✅ Done (PR #207, Session 100)** |
 | &nbsp;&nbsp;↳ KAN-434 | B4 | Medium | News scoring concurrent batch dispatch (`asyncio.gather` + `Semaphore(5)`) | **✅ Done (PR #208, Session 101)** |
 | &nbsp;&nbsp;↳ KAN-435 | B5 | High | `ingest_ticker` extension — Steps 8/9/10 wiring news + convergence + `mark_stage_updated` (depends on B1) | **✅ Done (PR #208, Session 101)** |
-| KAN-423 | C | High | Entry Point Unification — watchlist, portfolio, chat, stale auto-refresh, bulk CSV | Refined ✅ |
+| KAN-423 | C | High | Entry Point Unification — watchlist, portfolio, chat, stale auto-refresh, bulk CSV | Split into 4 PRs ✅ |
+| &nbsp;&nbsp;↳ KAN-449 | C1+C6 | High | Watchlist auto-ingest + Redis dedup infra | To Do |
+| &nbsp;&nbsp;↳ KAN-450 | C2+C3 | High | Portfolio sync-ingest + Chat canonical ingest | To Do (blocked by KAN-449) |
+| &nbsp;&nbsp;↳ KAN-451 | C4 | Medium | Stale auto-refresh + Redis debounce | To Do (blocked by KAN-449) |
+| &nbsp;&nbsp;↳ KAN-452 | C5 | Medium | Bulk CSV upload (endpoint + component) | To Do (blocked by KAN-449) |
 | KAN-420 | D | High | Admin + Observability — universal PipelineRunner, per-task trigger, ingestion health, Langfuse spans | **✅ Done (PRs #210-214, Sessions 103-104)** |
 | &nbsp;&nbsp;↳ KAN-445 | D (follow-up) | Medium | Convert StalenessSLAs to env-tunable Pydantic settings (supersedes A-LOW-2) | **✅ Done (PR #215, Session 104)** |
-| KAN-424 | E | Medium | Forecast Quality & Scale — cap raise, weekly retrain, intraday fast/slow split | Refined ✅ |
+| KAN-424 | E | Medium | Forecast Quality & Scale — cap raise, weekly retrain, intraday fast/slow split | **✅ Done (PR #225, Session 107)** |
 | KAN-425 | F2/F3/F4 | Medium | Rate Limiters — Redis token bucket for yfinance + news providers + ingest endpoint | **✅ Done (PR #220, Session 106)** |
 | &nbsp;&nbsp;↳ KAN-446 | F1 | Medium | DQ Scanner — nightly 10-check scan + alert generation + migration 027 | **✅ Done (PR #222, Session 106)** |
 | &nbsp;&nbsp;↳ KAN-447 | F5 | Medium | Retention Tasks — purge forecasts (30d) + news (90d) | **✅ Done (PR #223, Session 106)** |
