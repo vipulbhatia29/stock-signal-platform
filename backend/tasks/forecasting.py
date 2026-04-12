@@ -178,7 +178,7 @@ def model_retrain_all_task() -> dict:
         Dict with training status and counts.
     """
     logger.info("Starting full model retrain")
-    return asyncio.run(_model_retrain_all_async())
+    return asyncio.run(_model_retrain_all_async())  # type: ignore[arg-type]  # wrapper is async def, pyright sees Awaitable not Coroutine
 
 
 @celery_app.task(
@@ -191,7 +191,7 @@ def forecast_refresh_task() -> dict:
         Dict with refresh status and counts.
     """
     logger.info("Starting nightly forecast refresh")
-    return asyncio.run(_forecast_refresh_async())
+    return asyncio.run(_forecast_refresh_async())  # type: ignore[arg-type]  # wrapper is async def, pyright sees Awaitable not Coroutine
 
 
 @celery_app.task(
