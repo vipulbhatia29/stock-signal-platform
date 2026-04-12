@@ -3,7 +3,7 @@
 Verifies that _forecast_refresh_async() Phase 2 correctly:
 - Dispatches retrain_single_ticker_task for tickers with enough data but no ModelVersion
 - Skips tickers with < MIN_DATA_POINTS price data
-- Caps dispatches at MAX_NEW_MODELS_PER_NIGHT (20)
+- Caps dispatches at MAX_NEW_MODELS_PER_NIGHT (100)
 """
 
 from __future__ import annotations
@@ -139,15 +139,15 @@ class TestForecastNewTickerDispatch:
 
     @pytest.mark.asyncio
     async def test_caps_dispatch_at_max_new_models_per_night(self) -> None:
-        """Dispatches at most MAX_NEW_MODELS_PER_NIGHT (20) new-ticker training tasks per run.
+        """Dispatches at most MAX_NEW_MODELS_PER_NIGHT (100) new-ticker training tasks per run.
 
-        When there are more new tickers than the nightly cap, only the first 20
+        When there are more new tickers than the nightly cap, only the first 100
         should be dispatched to prevent overloading Celery workers in a single run.
         """
         existing_mv = _make_model_version("AAPL")
 
-        # 25 new tickers, all with enough data — only 20 should be dispatched
-        new_tickers = [f"TICK{i:02d}" for i in range(25)]
+        # 120 new tickers, all with enough data — only 100 should be dispatched
+        new_tickers = [f"TICK{i:03d}" for i in range(120)]
         all_tickers = ["AAPL"] + new_tickers
         mock_session_ctx, _ = _make_db_session([existing_mv])
 

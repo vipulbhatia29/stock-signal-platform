@@ -155,8 +155,8 @@ async def ingest_ticker(
         try:
             from backend.tasks.forecasting import retrain_single_ticker_task
 
-            retrain_single_ticker_task.delay(ticker)
-            logger.info("Dispatched forecast training for %s", ticker)
+            retrain_single_ticker_task.delay(ticker, priority=True)
+            logger.info("Dispatched forecast training for %s (priority=True)", ticker)
         except Exception:
             logger.warning("Failed to dispatch forecast for %s", ticker, exc_info=True)
 

@@ -148,7 +148,7 @@ class TestNightlyPriceRefreshWork:
 
     @pytest.mark.asyncio
     @patch("backend.tasks.market_data._runner")
-    @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
+    @patch("backend.tasks.market_data._refresh_ticker_fast", new_callable=AsyncMock)
     async def test_success_and_failure_counting(self, mock_refresh, mock_runner) -> None:
         """Inner helper counts successes/failures and calls runner methods."""
         mock_runner.record_ticker_success = AsyncMock()
@@ -173,7 +173,7 @@ class TestNightlyPriceRefreshWork:
 
     @pytest.mark.asyncio
     @patch("backend.tasks.market_data._runner")
-    @patch("backend.tasks.market_data._refresh_ticker_async", new_callable=AsyncMock)
+    @patch("backend.tasks.market_data._refresh_ticker_fast", new_callable=AsyncMock)
     async def test_all_succeed(self, mock_refresh, mock_runner) -> None:
         """All tickers succeeding should count correctly."""
         mock_runner.record_ticker_success = AsyncMock()
