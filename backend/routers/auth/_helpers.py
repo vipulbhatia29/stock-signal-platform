@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -12,6 +13,7 @@ from fastapi import Response
 from backend.config import settings
 from backend.dependencies import (
     COOKIE_ACCESS_TOKEN,
+    COOKIE_CSRF_TOKEN,
     COOKIE_PATH,
     COOKIE_REFRESH_TOKEN,
     COOKIE_SAMESITE,
@@ -54,7 +56,7 @@ def _get_token_remaining_ttl(token: str) -> int:
 
 
 def _set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
-    """Set httpOnly auth cookies on the response.
+    """Set httpOnly auth cookies + non-httpOnly CSRF cookie on the response.
 
     Args:
         response: FastAPI Response object.
@@ -79,12 +81,22 @@ def _set_auth_cookies(response: Response, access_token: str, refresh_token: str)
         path=COOKIE_PATH,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
     )
+    response.set_cookie(
+        key=COOKIE_CSRF_TOKEN,
+        value=secrets.token_urlsafe(32),
+        httponly=False,  # Frontend must read this via document.cookie
+        secure=settings.COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        path=COOKIE_PATH,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
 
 
 def _clear_auth_cookies(response: Response) -> None:
-    """Clear httpOnly auth cookies from the response."""
+    """Clear auth cookies + CSRF cookie from the response."""
     response.delete_cookie(key=COOKIE_ACCESS_TOKEN, path=COOKIE_PATH)
     response.delete_cookie(key=COOKIE_REFRESH_TOKEN, path=COOKIE_PATH)
+    response.delete_cookie(key=COOKIE_CSRF_TOKEN, path=COOKIE_PATH)
 
 
 def _record_login_attempt_bg(

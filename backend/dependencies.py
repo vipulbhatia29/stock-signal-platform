@@ -58,6 +58,7 @@ class CachedUser(BaseModel):
 # Cookie configuration constants
 COOKIE_ACCESS_TOKEN = "access_token"  # nosemgrep: no-secrets-in-code — cookie key, not a secret
 COOKIE_REFRESH_TOKEN = "refresh_token"  # nosemgrep: no-secrets-in-code — cookie key, not a secret
+COOKIE_CSRF_TOKEN = "csrf_token"  # nosemgrep: no-secrets-in-code — cookie key, not a secret
 COOKIE_SAMESITE = "lax"
 COOKIE_PATH = "/"
 

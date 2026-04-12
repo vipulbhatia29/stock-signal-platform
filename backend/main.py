@@ -326,18 +326,37 @@ app.state.limiter = limiter
 # broader ExceptionHandler protocol. The runtime contract is correct.
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # pyright: ignore[reportArgumentType]
 
+from backend.middleware.csrf import CSRFMiddleware  # noqa: E402
+from backend.middleware.error_handler import ErrorHandlerMiddleware  # noqa: E402
+from backend.observability.metrics.http_middleware import HttpMetricsMiddleware  # noqa: E402
+
+# Middleware — added in reverse order of execution (last = outermost)
+# Stack (outermost → innermost): ErrorHandler → CORS → CSRF → HttpMetrics → app
+app.add_middleware(HttpMetricsMiddleware)
+app.add_middleware(
+    CSRFMiddleware,
+    csrf_exempt_paths={
+        "/api/v1/auth/login",
+        "/api/v1/auth/register",
+        "/api/v1/auth/refresh",
+        "/api/v1/auth/logout",
+        "/api/v1/auth/forgot-password",
+        "/api/v1/auth/reset-password",
+        "/api/v1/auth/verify-email",
+        "/api/v1/auth/google/callback",
+        "/api/v1/health",
+        "/api/v1/health/detail",
+        "/docs",
+        "/openapi.json",
+    },
+)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
 )
-
-from backend.middleware.error_handler import ErrorHandlerMiddleware  # noqa: E402
-from backend.observability.metrics.http_middleware import HttpMetricsMiddleware  # noqa: E402
-
-app.add_middleware(HttpMetricsMiddleware)
 app.add_middleware(ErrorHandlerMiddleware)
 
 

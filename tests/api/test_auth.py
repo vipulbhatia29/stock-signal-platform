@@ -108,7 +108,7 @@ class TestLogin:
         assert data["expires_in"] > 0
 
     async def test_login_sets_cookies(self, client: AsyncClient) -> None:
-        """Login sets httpOnly access_token and refresh_token cookies."""
+        """Login sets httpOnly access_token, refresh_token, and csrf_token cookies."""
         creds = await self._register_user(client)
         response = await client.post("/api/v1/auth/login", json=creds)
         assert response.status_code == 200
@@ -116,17 +116,20 @@ class TestLogin:
         cookies = response.cookies
         assert "access_token" in cookies
         assert "refresh_token" in cookies
+        assert "csrf_token" in cookies
 
     async def test_login_cookies_are_httponly(self, client: AsyncClient) -> None:
-        """Login cookies have httpOnly flag set."""
+        """Auth cookies are httpOnly; CSRF cookie is NOT httpOnly."""
         creds = await self._register_user(client)
         response = await client.post("/api/v1/auth/login", json=creds)
 
-        # Check Set-Cookie headers for httponly
         set_cookie_headers = response.headers.get_list("set-cookie")
-        assert len(set_cookie_headers) >= 2
+        assert len(set_cookie_headers) >= 3
         for header in set_cookie_headers:
-            assert "httponly" in header.lower()
+            if header.startswith("csrf_token="):
+                assert "httponly" not in header.lower(), "CSRF cookie must not be httpOnly"
+            else:
+                assert "httponly" in header.lower(), f"Auth cookie missing httpOnly: {header}"
 
     async def test_login_wrong_password(self, client: AsyncClient) -> None:
         """Wrong password returns 401."""
@@ -229,7 +232,7 @@ class TestRefreshToken:
         assert "refresh_token" in data
 
     async def test_refresh_sets_cookies(self, client: AsyncClient) -> None:
-        """Refresh endpoint updates httpOnly cookies."""
+        """Refresh endpoint updates httpOnly cookies and rotates CSRF token."""
         tokens = await self._get_tokens(client)
         response = await client.post(
             "/api/v1/auth/refresh",
@@ -239,6 +242,7 @@ class TestRefreshToken:
         cookies = response.cookies
         assert "access_token" in cookies
         assert "refresh_token" in cookies
+        assert "csrf_token" in cookies
 
     async def test_refresh_with_access_token_fails(self, client: AsyncClient) -> None:
         """Using an access token as refresh token returns 401."""
@@ -262,7 +266,7 @@ class TestLogout:
     """Tests for POST /api/v1/auth/logout."""
 
     async def test_logout_clears_cookies(self, client: AsyncClient) -> None:
-        """Logout clears auth cookies by setting max-age=0."""
+        """Logout clears auth cookies and CSRF cookie by setting max-age=0."""
         response = await client.post("/api/v1/auth/logout")
         assert response.status_code == 204
 
@@ -270,6 +274,7 @@ class TestLogout:
         cookie_names = [h.split("=")[0] for h in set_cookie_headers]
         assert "access_token" in cookie_names
         assert "refresh_token" in cookie_names
+        assert "csrf_token" in cookie_names
 
     async def test_logout_without_auth_succeeds(self, client: AsyncClient) -> None:
         """Logout works even without being logged in (idempotent)."""
