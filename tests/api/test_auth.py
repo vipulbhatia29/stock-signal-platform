@@ -11,12 +11,12 @@ def _mock_blocklist():
     """Mock Redis blocklist for all auth API tests to avoid real Redis calls."""
     with (
         patch(
-            "backend.routers.auth.is_blocklisted",
+            "backend.routers.auth.core.is_blocklisted",
             new_callable=AsyncMock,
             return_value=False,
         ) as mock_check,
         patch(
-            "backend.routers.auth.add_to_blocklist",
+            "backend.routers.auth.core.add_to_blocklist",
             new_callable=AsyncMock,
         ) as mock_add,
         patch(
