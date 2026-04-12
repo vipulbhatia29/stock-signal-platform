@@ -303,7 +303,7 @@ jobs:
       - name: Pyright on changed files
         shell: bash
         run: |
-          CHANGED=$(git diff --name-only origin/develop -- 'backend/**.py' | head -50)
+          CHANGED=$(git diff --name-only origin/develop -- 'backend/**.py' | while read -r f; do [ -f "$f" ] && echo "$f"; done | head -50)
           if [ -z "$CHANGED" ]; then
             echo "No backend Python files changed — skipping pyright"
             exit 0

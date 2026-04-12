@@ -256,11 +256,14 @@ class TestCookieFlags:
 
         # Check Set-Cookie headers
         cookies = resp.headers.get_list("set-cookie")
-        assert len(cookies) >= 2, "Expected at least 2 Set-Cookie headers (access + refresh)"
+        assert len(cookies) >= 3, "Expected at least 3 Set-Cookie headers (access + refresh + csrf)"
 
         for cookie in cookies:
             cookie_lower = cookie.lower()
-            assert "httponly" in cookie_lower, f"Missing HttpOnly flag: {cookie}"
+            if cookie_lower.startswith("csrf_token="):
+                assert "httponly" not in cookie_lower, "CSRF cookie must NOT be httpOnly"
+            else:
+                assert "httponly" in cookie_lower, f"Missing HttpOnly flag: {cookie}"
             assert "samesite=lax" in cookie_lower, f"Missing SameSite=Lax: {cookie}"
 
 

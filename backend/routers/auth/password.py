@@ -75,7 +75,11 @@ async def forgot_password(
             token = generate_token()
             redis = await get_redis()
             if redis:
-                await redis.set(f"password_reset:{token}", str(user.id), ex=3600)  # 1h TTL
+                await redis.set(  # nosemgrep: no-unbounded-redis-key
+                    f"password_reset:{token}",
+                    str(user.id),
+                    ex=3600,
+                )
             asyncio.create_task(_send_reset_email_bg(user.email, token))
 
     # Always return same response (no email enumeration)
