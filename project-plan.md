@@ -186,9 +186,12 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 | KAN-420 | D | High | Admin + Observability — universal PipelineRunner, per-task trigger, ingestion health, Langfuse spans | **✅ Done (PRs #210-214, Sessions 103-104)** |
 | &nbsp;&nbsp;↳ KAN-445 | D (follow-up) | Medium | Convert StalenessSLAs to env-tunable Pydantic settings (supersedes A-LOW-2) | **✅ Done (PR #215, Session 104)** |
 | KAN-424 | E | Medium | Forecast Quality & Scale — cap raise, weekly retrain, intraday fast/slow split | Refined ✅ |
-| KAN-425 | F | Medium | DQ + Retention + Rate Limiting — DQ scanner, token bucket, retention tasks, TimescaleDB compression | Refined ✅ |
+| KAN-425 | F2/F3/F4 | Medium | Rate Limiters — Redis token bucket for yfinance + news providers + ingest endpoint | **In PR (Session 106)** |
+| &nbsp;&nbsp;↳ KAN-446 | F1 | Medium | DQ Scanner — nightly 10-check scan + alert generation + migration 027 | To Do |
+| &nbsp;&nbsp;↳ KAN-447 | F5 | Medium | Retention Tasks — purge forecasts (30d) + news (90d) | To Do |
+| &nbsp;&nbsp;↳ KAN-448 | F6 | Low | TimescaleDB Compression — compression policies on 3 hypertables | To Do |
 | KAN-426 | G | Medium | Frontend Polish — ingest progress, polling, stale badges, ticker search | Refined ✅ |
-| KAN-427 | Z | Medium | Quick Wins — registry typo, news LIMIT 50, task rename, frontend invalidation, WelcomeBanner | Refined ✅ |
+| KAN-427 | Z | Medium | Quick Wins — Z1/Z2/Z4/Z5/Z6 (Z3 deferred to after F2/F3) | **✅ Done (PR #219, Session 106)** |
 
 **Superseded tickets** (commented in JIRA, will close when corresponding KAN- ticket lands):
 - KAN-405 (sentiment concurrent) → folded into KAN-422
