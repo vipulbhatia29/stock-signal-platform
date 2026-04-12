@@ -1,7 +1,7 @@
 """Redis-backed token bucket rate limiter for outbound API calls.
 
 Uses an atomic Lua script for correctness across concurrent workers.
-Falls back to permissive (allow all) when Redis is unavailable.
+Falls back to permissive (allow all) when Redis is unavailable or errors.
 """
 
 from __future__ import annotations
@@ -9,6 +9,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+
+from redis.exceptions import ResponseError
 
 from backend.services.redis_pool import get_redis
 
@@ -41,6 +43,11 @@ end
 class TokenBucketLimiter:
     """Atomic Redis token bucket rate limiter.
 
+    This is a **best-effort throttler**. Callers do not need to check the return
+    value of ``acquire()`` — the purpose is to slow down outbound calls, not to
+    hard-block them. If Redis is down or the bucket is exhausted, the call
+    proceeds anyway (permissive fallback).
+
     Args:
         name: Unique limiter name (used as Redis key suffix).
         capacity: Maximum burst size (tokens).
@@ -57,21 +64,30 @@ class TokenBucketLimiter:
         """Acquire a token, blocking up to timeout seconds.
 
         Returns:
-            True if token acquired, False if timed out.
-            Always returns True if Redis is unavailable (permissive fallback).
+            True if token acquired or Redis unavailable (permissive fallback).
+            False if timed out waiting for a token.
         """
-        redis = await get_redis()
-        if redis is None:
+        try:
+            redis = await get_redis()
+        except Exception:
+            logger.warning("Rate limiter cannot reach Redis for %s", self.name, exc_info=True)
             return True
-
-        if self._sha is None:
-            self._sha = await redis.script_load(_LUA_TOKEN_BUCKET)
 
         key = f"ratelimit:{self.name}"
         deadline = time.monotonic() + timeout
         backoff = 1.0 / self.refill_per_sec
 
         while time.monotonic() < deadline:
+            # Load/reload Lua script if needed (e.g. after Redis restart)
+            if self._sha is None:
+                try:
+                    self._sha = await redis.script_load(_LUA_TOKEN_BUCKET)
+                except Exception:
+                    logger.warning(
+                        "Rate limiter script_load failed for %s", self.name, exc_info=True
+                    )
+                    return True
+
             try:
                 ok = await redis.evalsha(
                     self._sha,
@@ -83,11 +99,18 @@ class TokenBucketLimiter:
                 )
                 if int(ok) == 1:
                     return True
+            except ResponseError as exc:
+                if "NOSCRIPT" in str(exc):
+                    self._sha = None  # Force reload on next iteration
+                    continue
+                logger.warning("Rate limiter Redis error for %s", self.name, exc_info=True)
+                return True
             except Exception:
                 logger.warning("Rate limiter Redis error for %s", self.name, exc_info=True)
                 return True  # Permissive on error
 
-            await asyncio.sleep(min(backoff, deadline - time.monotonic()))
+            sleep_dur = max(0.0, min(backoff, deadline - time.monotonic()))
+            await asyncio.sleep(sleep_dur)
 
         logger.warning("Rate limiter timeout for %s after %.1fs", self.name, timeout)
         return False

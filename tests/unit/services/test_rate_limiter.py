@@ -46,13 +46,15 @@ class TestTokenBucketLimiter:
             assert elapsed >= 0.4  # Waited at least close to timeout
 
     @pytest.mark.asyncio
-    async def test_acquire_noop_when_redis_unavailable(self) -> None:
-        """If Redis is down, acquire returns True (permissive fallback)."""
+    async def test_acquire_noop_when_script_load_fails(self) -> None:
+        """If script_load raises, acquire returns True (permissive fallback)."""
         from backend.services.rate_limiter import TokenBucketLimiter
 
         limiter = TokenBucketLimiter("test", capacity=5, refill_per_sec=1.0)
         with patch("backend.services.rate_limiter.get_redis") as mock_redis_fn:
-            mock_redis_fn.return_value = None
+            mock_redis = AsyncMock()
+            mock_redis.script_load.side_effect = ConnectionError("refused")
+            mock_redis_fn.return_value = mock_redis
 
             result = await limiter.acquire(timeout=1.0)
             assert result is True
@@ -97,6 +99,61 @@ class TestTokenBucketLimiter:
             await limiter.acquire(timeout=1.0)
 
             assert mock_redis.script_load.call_count == 1
+
+
+class TestRedisFallbackPaths:
+    """Tests for Redis error scenarios — the actual production fallback paths."""
+
+    @pytest.mark.asyncio
+    async def test_acquire_returns_true_on_connection_error(self) -> None:
+        """If Redis raises ConnectionError, acquire permits the request."""
+        from backend.services.rate_limiter import TokenBucketLimiter
+
+        limiter = TokenBucketLimiter("test", capacity=5, refill_per_sec=1.0)
+        with patch("backend.services.rate_limiter.get_redis") as mock_redis_fn:
+            mock_redis_fn.side_effect = ConnectionError("Redis unavailable")
+
+            result = await limiter.acquire(timeout=1.0)
+            assert result is True
+
+    @pytest.mark.asyncio
+    async def test_acquire_recovers_from_noscript_error(self) -> None:
+        """NOSCRIPT error resets _sha and retries on next iteration."""
+        from redis.exceptions import ResponseError
+
+        from backend.services.rate_limiter import TokenBucketLimiter
+
+        limiter = TokenBucketLimiter("test", capacity=5, refill_per_sec=1.0)
+        with patch("backend.services.rate_limiter.get_redis") as mock_redis_fn:
+            mock_redis = AsyncMock()
+            mock_redis.script_load.return_value = "new-sha"
+            # First evalsha raises NOSCRIPT, second succeeds
+            mock_redis.evalsha.side_effect = [
+                ResponseError("NOSCRIPT No matching script"),
+                1,
+            ]
+            mock_redis_fn.return_value = mock_redis
+
+            result = await limiter.acquire(timeout=2.0)
+            assert result is True
+            # SHA was reset and script reloaded
+            assert mock_redis.script_load.call_count == 2
+            assert limiter._sha == "new-sha"
+
+    @pytest.mark.asyncio
+    async def test_acquire_returns_true_on_unexpected_redis_error(self) -> None:
+        """Unexpected Redis errors are permissive (allow request)."""
+        from backend.services.rate_limiter import TokenBucketLimiter
+
+        limiter = TokenBucketLimiter("test", capacity=5, refill_per_sec=1.0)
+        with patch("backend.services.rate_limiter.get_redis") as mock_redis_fn:
+            mock_redis = AsyncMock()
+            mock_redis.script_load.return_value = "sha"
+            mock_redis.evalsha.side_effect = RuntimeError("unexpected")
+            mock_redis_fn.return_value = mock_redis
+
+            result = await limiter.acquire(timeout=1.0)
+            assert result is True
 
 
 class TestNamedLimiterInstances:
