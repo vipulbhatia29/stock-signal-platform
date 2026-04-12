@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import date, datetime, timezone
 
@@ -11,11 +10,9 @@ import httpx
 from backend.config import settings
 from backend.services.http_client import get_http_client
 from backend.services.news.base import NewsProvider, RawArticle
+from backend.services.rate_limiter import edgar_limiter
 
 logger = logging.getLogger(__name__)
-
-# SEC EDGAR rate limit: 10 requests/sec
-EDGAR_RATE_LIMIT_DELAY = 0.15
 
 # Map 8-K item numbers to event types
 ITEM_EVENT_MAP: dict[str, str] = {
@@ -57,6 +54,7 @@ class EdgarProvider(NewsProvider):
         }
         headers = {"User-Agent": self._user_agent}
 
+        await edgar_limiter.acquire()
         try:
             client = get_http_client()
             resp = await client.get(url, params=params, headers=headers, timeout=30)
@@ -97,7 +95,6 @@ class EdgarProvider(NewsProvider):
             except (KeyError, ValueError, TypeError, IndexError):
                 logger.warning("Skipping malformed EDGAR filing", exc_info=True)
 
-        await asyncio.sleep(EDGAR_RATE_LIMIT_DELAY)
         return articles
 
     async def fetch_macro_news(self, since: date) -> list[RawArticle]:
