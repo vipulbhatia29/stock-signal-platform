@@ -38,6 +38,18 @@ def test_settings_staleness_slas_property_returns_instance() -> None:
     assert isinstance(settings.staleness_slas, StalenessSLAs)
 
 
+def test_staleness_slas_env_override(monkeypatch) -> None:
+    """StalenessSLAs fields can be overridden via STALENESS_SLA_* env vars."""
+    from backend.config import StalenessSLAs
+
+    # Pydantic v2 timedelta accepts ISO 8601 duration strings
+    monkeypatch.setenv("STALENESS_SLA_PRICES", "PT2H")  # 2 hours
+    sla = StalenessSLAs()
+    assert sla.prices == timedelta(hours=2)
+    # Other fields retain defaults
+    assert sla.signals == timedelta(hours=4)
+
+
 def _make_state_row(**overrides):
     """Build a TickerIngestionState instance with sensible defaults."""
     from backend.models.ticker_ingestion_state import TickerIngestionState
