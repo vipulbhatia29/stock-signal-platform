@@ -70,16 +70,13 @@ async def _ingest_news(
     if tickers is not None:
         ticker_list = [t.upper() for t in tickers]
     else:
-        from sqlalchemy import select
-
         from backend.database import async_session_factory
-        from backend.models.stock import Stock
+        from backend.services.ticker_universe import get_all_referenced_tickers
 
         async with async_session_factory() as session:
-            result = await session.execute(
-                select(Stock.ticker).where(Stock.is_active.is_(True)).limit(50)
-            )
-            ticker_list = [row[0] for row in result.all()]
+            all_tickers = await get_all_referenced_tickers(session)
+            # Cap at 200 to control API quota (rate limiters in place via F2/F3)
+            ticker_list = all_tickers[:200]
 
     # Ingest stock news
     stock_result = await service.ingest_stock_news(ticker_list, since)
