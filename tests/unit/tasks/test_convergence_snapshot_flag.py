@@ -4,9 +4,12 @@ No database session required — the flag check is the first statement inside
 _compute_convergence_snapshot_async, before any session is opened.
 """
 
+import uuid
 from unittest.mock import patch
 
 import pytest
+
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 
 @pytest.mark.asyncio
@@ -19,6 +22,8 @@ async def test_convergence_snapshot_disabled_returns_status():
 
     with patch("backend.tasks.convergence.settings") as mock_settings:
         mock_settings.CONVERGENCE_SNAPSHOT_ENABLED = False
-        result = await _compute_convergence_snapshot_async(ticker="AAPL")
+        result = await bypass_tracked(_compute_convergence_snapshot_async)(
+            ticker="AAPL", run_id=uuid.uuid4()
+        )
 
     assert result == {"status": "disabled"}

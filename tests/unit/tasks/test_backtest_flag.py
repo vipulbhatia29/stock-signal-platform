@@ -4,9 +4,12 @@ No database session required — the flag check is the first statement inside
 _run_backtest_async, before any session is opened.
 """
 
+import uuid
 from unittest.mock import patch
 
 import pytest
+
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 
 @pytest.mark.asyncio
@@ -19,6 +22,8 @@ async def test_backtest_disabled_returns_status():
 
     with patch("backend.tasks.forecasting.settings") as mock_settings:
         mock_settings.BACKTEST_ENABLED = False
-        result = await _run_backtest_async(ticker=None, horizon_days=90)
+        result = await bypass_tracked(_run_backtest_async)(
+            ticker=None, horizon_days=90, run_id=uuid.uuid4()
+        )
 
     assert result == {"status": "disabled"}

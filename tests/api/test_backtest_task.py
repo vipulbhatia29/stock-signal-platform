@@ -20,6 +20,7 @@ from sqlalchemy import select
 from backend.models.backtest import BacktestRun
 from backend.services.backtesting import BacktestMetrics
 from backend.tasks.forecasting import _run_backtest_async
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 # ---------------------------------------------------------------------------
 # Shared fixtures / helpers
@@ -130,7 +131,7 @@ async def test_single_ticker_inserts_one_row(db_session):
             return_value=_make_mock_factory(db_session),
         ),
     ):
-        result = await _run_backtest_async(ticker, 90)
+        result = await bypass_tracked(_run_backtest_async)(ticker, 90, run_id=uuid.uuid4())
 
     rows = (
         (await db_session.execute(select(BacktestRun).where(BacktestRun.ticker == ticker)))
@@ -175,7 +176,7 @@ async def test_universe_mode_three_tickers(db_session):
             return_value=_make_mock_factory(db_session),
         ),
     ):
-        result = await _run_backtest_async(None, 90)
+        result = await bypass_tracked(_run_backtest_async)(None, 90, run_id=uuid.uuid4())
 
     rows = (
         (await db_session.execute(select(BacktestRun).where(BacktestRun.ticker.in_(tickers))))
@@ -223,7 +224,7 @@ async def test_per_ticker_failure_isolated(db_session):
             return_value=_make_mock_factory(db_session),
         ),
     ):
-        result = await _run_backtest_async(None, 90)
+        result = await bypass_tracked(_run_backtest_async)(None, 90, run_id=uuid.uuid4())
 
     assert result["failed"] == 1
     assert result["completed"] == 2
@@ -285,7 +286,7 @@ async def test_mark_stages_updated_called_with_successful_tickers_only(db_sessio
             return_value=_make_mock_factory(db_session),
         ),
     ):
-        await _run_backtest_async(None, 90)
+        await bypass_tracked(_run_backtest_async)(None, 90, run_id=uuid.uuid4())
 
     # Single bulk call after the loop, only with the successful ticker.
     assert mock_mark.await_count == 1
@@ -354,7 +355,7 @@ async def test_session_acquisition_failure_for_one_ticker_does_not_kill_run(db_s
             side_effect=_factory,
         ),
     ):
-        result = await _run_backtest_async(None, 90)
+        result = await bypass_tracked(_run_backtest_async)(None, 90, run_id=uuid.uuid4())
 
     # XS1 and XS3 succeeded; XS2 was skipped due to acquisition failure.
     assert result["completed"] == 2
@@ -407,7 +408,7 @@ async def test_per_ticker_session_isolation_against_pending_rollback(db_session)
             return_value=_make_mock_factory(db_session),
         ),
     ):
-        result = await _run_backtest_async(None, 90)
+        result = await bypass_tracked(_run_backtest_async)(None, 90, run_id=uuid.uuid4())
 
     # PI1 + PI3 must complete; PI2 must be in failed (not blocking PI3).
     assert result["completed"] == 2
@@ -481,7 +482,7 @@ async def test_per_ticker_session_factory_called_once_per_iteration(db_session):
             side_effect=_counting_factory,
         ),
     ):
-        await _run_backtest_async(None, 90)
+        await bypass_tracked(_run_backtest_async)(None, 90, run_id=uuid.uuid4())
 
     # 1 for initial ticker-list resolution + 1 per ticker iteration
     assert factory_call_count == len(tickers) + 1, (
@@ -543,7 +544,7 @@ async def test_no_active_model_version_skips_row_and_marks_failed(db_session):
             return_value=_make_mock_factory(db_session),
         ),
     ):
-        result = await _run_backtest_async(ticker, 90)
+        result = await bypass_tracked(_run_backtest_async)(ticker, 90, run_id=uuid.uuid4())
 
     # No BacktestRun row should have been written
     rows = (

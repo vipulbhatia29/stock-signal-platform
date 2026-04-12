@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.tasks.forecasting import MAX_NEW_MODELS_PER_NIGHT, _forecast_refresh_async
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 
 def _make_model_version(ticker: str) -> MagicMock:
@@ -103,7 +104,7 @@ class TestForecastNewTickerDispatch:
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
         ):
-            result = await _forecast_refresh_async()
+            result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
         mock_retrain_task.delay.assert_called_once_with(new_ticker)
         assert result["status"] == "ok"
@@ -151,7 +152,7 @@ class TestForecastNewTickerDispatch:
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
         ):
-            result = await _forecast_refresh_async()
+            result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
         mock_retrain_task.delay.assert_not_called()
         assert result["status"] == "ok"
@@ -202,7 +203,7 @@ class TestForecastNewTickerDispatch:
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
         ):
-            result = await _forecast_refresh_async()
+            result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
         assert mock_retrain_task.delay.call_count == MAX_NEW_MODELS_PER_NIGHT
         dispatched_tickers = {call.args[0] for call in mock_retrain_task.delay.call_args_list}
@@ -247,7 +248,7 @@ class TestForecastNewTickerDispatch:
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
         ):
             # Should NOT raise — Phase 2 exceptions are caught internally
-            result = await _forecast_refresh_async()
+            result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
         # Phase 1 completed normally; Phase 2 failure did not propagate
         assert result["status"] == "ok"

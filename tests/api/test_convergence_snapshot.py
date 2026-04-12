@@ -24,6 +24,7 @@ from backend.models.signal import SignalSnapshot
 from backend.models.stock import Stock
 from backend.tasks.convergence import _compute_convergence_snapshot_async
 from tests.factories.convergence import SignalConvergenceDailyFactory
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -120,7 +121,9 @@ async def test_empty_universe_returns_no_tickers(db_session) -> None:
         "backend.tasks.convergence.get_all_referenced_tickers",
         AsyncMock(return_value=[]),
     ):
-        result = await _compute_convergence_snapshot_async(_db=db_session)
+        result = await bypass_tracked(_compute_convergence_snapshot_async)(
+            _db=db_session, run_id=uuid.uuid4()
+        )
 
     assert result["status"] == "no_tickers"
     assert result["computed"] == 0
@@ -142,7 +145,9 @@ async def test_universe_mode_inserts_one_row_per_ticker(db_session) -> None:
         "backend.tasks.convergence.get_all_referenced_tickers",
         AsyncMock(return_value=tickers),
     ):
-        result = await _compute_convergence_snapshot_async(_db=db_session)
+        result = await bypass_tracked(_compute_convergence_snapshot_async)(
+            _db=db_session, run_id=uuid.uuid4()
+        )
 
     assert result["status"] == "ok"
     assert result["computed"] == len(tickers)
@@ -171,7 +176,9 @@ async def test_single_ticker_mode(db_session) -> None:
     await _seed_signal(db_session, t2)
     await db_session.commit()
 
-    result = await _compute_convergence_snapshot_async(ticker=t1, _db=db_session)
+    result = await bypass_tracked(_compute_convergence_snapshot_async)(
+        ticker=t1, _db=db_session, run_id=uuid.uuid4()
+    )
 
     assert result["status"] == "ok"
     assert result["computed"] == 1
@@ -196,8 +203,12 @@ async def test_rerun_same_day_updates_via_on_conflict(db_session) -> None:
     await _seed_signal(db_session, tkr)
     await db_session.commit()
 
-    await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
-    result = await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
+    await bypass_tracked(_compute_convergence_snapshot_async)(
+        ticker=tkr, _db=db_session, run_id=uuid.uuid4()
+    )
+    result = await bypass_tracked(_compute_convergence_snapshot_async)(
+        ticker=tkr, _db=db_session, run_id=uuid.uuid4()
+    )
 
     assert result["status"] == "ok"
 
@@ -243,7 +254,9 @@ async def test_backfill_actual_return_90d(db_session) -> None:
         "backend.tasks.convergence.get_all_referenced_tickers",
         AsyncMock(return_value=[tkr]),
     ):
-        result = await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
+        result = await bypass_tracked(_compute_convergence_snapshot_async)(
+            ticker=tkr, _db=db_session, run_id=uuid.uuid4()
+        )
 
     assert result["backfilled"] >= 1
 
@@ -274,7 +287,9 @@ async def test_backfill_noop_when_already_populated(db_session) -> None:
         "backend.tasks.convergence.get_all_referenced_tickers",
         AsyncMock(return_value=[tkr]),
     ):
-        await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
+        await bypass_tracked(_compute_convergence_snapshot_async)(
+            ticker=tkr, _db=db_session, run_id=uuid.uuid4()
+        )
 
     await db_session.refresh(row)
     # Must remain unchanged
@@ -310,7 +325,9 @@ async def test_backfill_skips_when_historical_price_missing(db_session) -> None:
         ),
     ):
         # Must not raise
-        result = await _compute_convergence_snapshot_async(ticker=tkr, _db=db_session)
+        result = await bypass_tracked(_compute_convergence_snapshot_async)(
+            ticker=tkr, _db=db_session, run_id=uuid.uuid4()
+        )
 
     # No crash — status can be ok, partial_failure, or no_tickers
     # depending on signal availability for this ticker
@@ -348,7 +365,9 @@ async def test_mark_stages_updated_called_once_with_full_ticker_list(db_session)
             new_callable=AsyncMock,
         ) as mock_mark,
     ):
-        await _compute_convergence_snapshot_async(_db=db_session)
+        await bypass_tracked(_compute_convergence_snapshot_async)(
+            _db=db_session, run_id=uuid.uuid4()
+        )
 
     # Single bulk call, not N per-ticker calls
     assert mock_mark.call_count == 1
@@ -398,7 +417,9 @@ async def test_single_ticker_with_no_signals_still_marks_stage(db_session, monke
         "backend.services.signal_convergence.SignalConvergenceService.get_bulk_convergence",
         AsyncMock(return_value={}),
     ):
-        result = await _compute_convergence_snapshot_async(ticker="NEWCO", _db=db_session)
+        result = await bypass_tracked(_compute_convergence_snapshot_async)(
+            ticker="NEWCO", _db=db_session, run_id=uuid.uuid4()
+        )
 
     assert (("NEWCO",), "convergence") in marked, (
         "Stage must be marked even when convergence dict is empty"
@@ -433,7 +454,9 @@ async def test_get_bulk_convergence_failure_does_not_kill_backfill_or_stage(
         "backend.services.signal_convergence.SignalConvergenceService.get_bulk_convergence",
         AsyncMock(side_effect=RuntimeError("simulated")),
     ):
-        result = await _compute_convergence_snapshot_async(_db=db_session)
+        result = await bypass_tracked(_compute_convergence_snapshot_async)(
+            _db=db_session, run_id=uuid.uuid4()
+        )
 
     assert result["status"] == "partial_failure"
     assert result["computed"] == 0
