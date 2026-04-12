@@ -13,12 +13,8 @@ from backend.routers.backtesting import (
     get_backtest_result,
     get_backtest_summary,
     trigger_backtest,
-    trigger_calibration,
 )
-from backend.schemas.backtesting import (
-    BacktestTriggerRequest,
-    CalibrateTriggerRequest,
-)
+from backend.schemas.backtesting import BacktestTriggerRequest
 
 
 @pytest.fixture
@@ -232,35 +228,6 @@ class TestTriggerBacktest:
         with pytest.raises(HTTPException) as exc_info:
             await trigger_backtest(
                 request=BacktestTriggerRequest(ticker="AAPL"),
-                current_user=regular_user,
-            )
-        assert exc_info.value.status_code == 403
-
-
-class TestTriggerCalibration:
-    """Tests for POST /backtests/calibrate (admin only)."""
-
-    @pytest.mark.asyncio
-    @patch("backend.tasks.forecasting.calibrate_seasonality_task")
-    async def test_admin_can_trigger(self, mock_task, admin_user):
-        """Admin user can trigger calibration."""
-        mock_task.delay.return_value = MagicMock(id="task-456")
-
-        result = await trigger_calibration(
-            request=CalibrateTriggerRequest(ticker=None),
-            current_user=admin_user,
-        )
-        assert result.task_id == "task-456"
-        mock_task.delay.assert_called_once_with(ticker=None)
-
-    @pytest.mark.asyncio
-    async def test_regular_user_rejected(self, regular_user):
-        """Non-admin user gets 403."""
-        from fastapi import HTTPException
-
-        with pytest.raises(HTTPException) as exc_info:
-            await trigger_calibration(
-                request=CalibrateTriggerRequest(),
                 current_user=regular_user,
             )
         assert exc_info.value.status_code == 403

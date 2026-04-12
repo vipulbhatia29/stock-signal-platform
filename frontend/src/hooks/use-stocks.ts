@@ -113,8 +113,23 @@ export function useIngestTicker() {
     mutationFn: (ticker: string) =>
       post<IngestResponse>(`/stocks/${ticker}/ingest`),
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ["signals", data.ticker] });
-      queryClient.invalidateQueries({ queryKey: ["prices", data.ticker] });
+      const tickerKeys = [
+        ["signals", data.ticker],
+        ["prices", data.ticker],
+        ["fundamentals", data.ticker],
+        ["stock-news", data.ticker],
+        ["stock-intelligence", data.ticker],
+        ["forecast", data.ticker],
+        ["benchmark", data.ticker],
+        ["stock-analytics", data.ticker],
+        ["ingest-state", data.ticker],
+      ];
+      for (const key of tickerKeys) {
+        queryClient.invalidateQueries({ queryKey: key });
+      }
+      queryClient.invalidateQueries({ queryKey: ["watchlist"] });
+      queryClient.invalidateQueries({ queryKey: ["bulk-signals"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio", "positions"] });
     },
   });
 }

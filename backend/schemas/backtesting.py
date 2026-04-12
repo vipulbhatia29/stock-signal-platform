@@ -64,16 +64,3 @@ class BacktestTriggerResponse(BaseModel):
 
     task_id: str
     status: str = "queued"
-
-
-class CalibrateTriggerRequest(BaseModel):
-    """Request to trigger seasonality calibration."""
-
-    ticker: str | None = Field(None, description="Specific ticker, or None for all")
-
-
-class CalibrateTriggerResponse(BaseModel):
-    """Response after triggering calibration."""
-
-    task_id: str
-    status: str = "queued"

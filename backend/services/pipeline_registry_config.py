@@ -314,8 +314,8 @@ def build_registry() -> PipelineRegistry:
     # ── 3. Intraday group ───────────────────────────────────────────────────────
     registry.register(
         TaskDefinition(
-            name="backend.tasks.market_data.refresh_all_watchlist_tickers_task",
-            display_name="Refresh Watchlist Tickers",
+            name="backend.tasks.market_data.intraday_refresh_all_task",
+            display_name="Intraday Refresh All",
             group="intraday",
             order=1,
             schedule="Every 30 min during market hours",
@@ -414,17 +414,6 @@ def build_registry() -> PipelineRegistry:
             rationale="Walk-forward backtest after retrain; runs in parallel with calibration",
         )
     )
-    registry.register(
-        TaskDefinition(
-            name="backend.tasks.forecasting.calibrate_seasonality_task",
-            display_name="Calibrate Seasonality",
-            group="model_training",
-            order=2,
-            depends_on=["backend.tasks.forecasting.model_retrain_all_task"],
-            estimated_duration="10-20 min",
-            rationale="Seasonality calibration after retrain; runs in parallel with backtest",
-        )
-    )
 
     # ── 7. News sentiment group (Spec B placeholder) ────────────────────────────
     registry.register(
@@ -440,7 +429,7 @@ def build_registry() -> PipelineRegistry:
     )
     registry.register(
         TaskDefinition(
-            name="backend.tasks.news_sentiment.sentiment_scoring_task",
+            name="backend.tasks.news_sentiment.news_sentiment_scoring_task",
             display_name="Sentiment Scoring",
             group="news_sentiment",
             order=2,

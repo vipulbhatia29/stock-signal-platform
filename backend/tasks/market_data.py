@@ -455,13 +455,14 @@ def _run_tasks_parallel(tasks: dict[str, "Callable[[], object]"]) -> dict:
 
 
 @celery_app.task(
-    name="backend.tasks.market_data.refresh_all_watchlist_tickers_task",
+    name="backend.tasks.market_data.intraday_refresh_all_task",
 )
-def refresh_all_watchlist_tickers_task() -> dict:
-    """Fan-out: enqueue a refresh_ticker_task for every watchlisted ticker.
+def intraday_refresh_all_task() -> dict:
+    """Fan-out: enqueue a refresh_ticker_task for every referenced ticker.
 
     Runs on the Celery Beat schedule (intraday). Queries all unique tickers
-    across all user watchlists, then dispatches one refresh_ticker_task per ticker.
+    across all user watchlists and portfolios, then dispatches one
+    refresh_ticker_task per ticker.
 
     Returns:
         A dict with the count of tasks dispatched.
@@ -474,3 +475,18 @@ def refresh_all_watchlist_tickers_task() -> dict:
         logger.info("Beat: enqueued refresh for %s", ticker)
     logger.info("Beat: dispatched %d refresh tasks", dispatched)
     return {"dispatched": dispatched, "tickers": tickers}
+
+
+@celery_app.task(
+    name="backend.tasks.market_data.refresh_all_watchlist_tickers_task",
+)
+def refresh_all_watchlist_tickers_task() -> dict:
+    """DEPRECATED — use intraday_refresh_all_task. Will be removed next release."""
+    import warnings
+
+    warnings.warn(
+        "refresh_all_watchlist_tickers_task is deprecated; use intraday_refresh_all_task",
+        DeprecationWarning,
+        stacklevel=1,
+    )
+    return intraday_refresh_all_task()

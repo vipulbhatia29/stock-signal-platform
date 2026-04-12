@@ -202,12 +202,12 @@ class TestNightlyGroup:
 class TestIntradayGroup:
     """Tests for the 'intraday' task group."""
 
-    def test_intraday_has_watchlist_task(self) -> None:
-        """Intraday group contains the watchlist refresh task."""
+    def test_intraday_has_refresh_all_task(self) -> None:
+        """Intraday group contains the intraday refresh all task."""
         from backend.services.pipeline_registry_config import build_registry
 
         registry = build_registry()
-        task = registry.get_task("backend.tasks.market_data.refresh_all_watchlist_tickers_task")
+        task = registry.get_task("backend.tasks.market_data.intraday_refresh_all_task")
         assert task is not None
         assert task.group == "intraday"
 
@@ -276,13 +276,13 @@ class TestMaintenanceGroup:
 class TestModelTrainingGroup:
     """Tests for the 'model_training' task group."""
 
-    def test_model_training_has_three_tasks(self) -> None:
-        """Model training group has exactly 3 tasks."""
+    def test_model_training_has_two_tasks(self) -> None:
+        """Model training group has exactly 2 tasks (retrain + backtest)."""
         from backend.services.pipeline_registry_config import build_registry
 
         registry = build_registry()
         tasks = registry.get_group("model_training")
-        assert len(tasks) == 3
+        assert len(tasks) == 2
 
     def test_model_retrain_is_first(self) -> None:
         """Model retrain task is order=1 (before backtest and calibration)."""
@@ -293,18 +293,14 @@ class TestModelTrainingGroup:
         assert task is not None
         assert task.order == 1
 
-    def test_backtest_and_calibrate_are_parallel(self) -> None:
-        """Backtest and calibration tasks are order=2 (run in parallel after retrain)."""
+    def test_backtest_is_order_two(self) -> None:
+        """Backtest task is order=2 (runs after retrain)."""
         from backend.services.pipeline_registry_config import build_registry
 
         registry = build_registry()
-        for name in [
-            "backend.tasks.forecasting.run_backtest_task",
-            "backend.tasks.forecasting.calibrate_seasonality_task",
-        ]:
-            task = registry.get_task(name)
-            assert task is not None, f"Task '{name}' not found"
-            assert task.order == 2, f"Task '{name}' has order {task.order}, expected 2"
+        task = registry.get_task("backend.tasks.forecasting.run_backtest_task")
+        assert task is not None
+        assert task.order == 2
 
 
 class TestNewsSentimentGroup:
@@ -332,6 +328,69 @@ class TestNewsSentimentGroup:
         from backend.services.pipeline_registry_config import build_registry
 
         registry = build_registry()
-        task = registry.get_task("backend.tasks.news_sentiment.sentiment_scoring_task")
+        task = registry.get_task("backend.tasks.news_sentiment.news_sentiment_scoring_task")
         assert task is not None
         assert task.order == 2
+
+
+class TestRegistryTaskResolution:
+    """Tests that every registered task name resolves to a real importable Celery task."""
+
+    def test_every_registered_task_resolves_to_real_celery_task(self) -> None:
+        """All task names in the registry must be importable as real Celery tasks.
+
+        This catches typos or stale references that would cause 'Received unregistered task'
+        errors at runtime.
+        """
+        from importlib import import_module
+
+        from backend.services.pipeline_registry_config import build_registry
+
+        registry = build_registry()
+        unresolved: list[str] = []
+
+        for _group_name, tasks in registry.get_groups().items():
+            for task in tasks:
+                # Task name format: "backend.tasks.module.function_name"
+                parts = task.name.rsplit(".", 1)
+                if len(parts) != 2:
+                    unresolved.append(f"{task.name} (invalid format)")
+                    continue
+                module_path, func_name = parts
+                try:
+                    module = import_module(module_path)
+                except ImportError:
+                    unresolved.append(f"{task.name} (module not importable)")
+                    continue
+                if not hasattr(module, func_name):
+                    unresolved.append(f"{task.name} (function not found in module)")
+
+        assert unresolved == [], (
+            f"Registry contains {len(unresolved)} unresolvable task(s):\n"
+            + "\n".join(f"  - {t}" for t in unresolved)
+        )
+
+
+class TestCalibrateSeasonalityDeleted:
+    """Future-proof tests ensuring calibrate_seasonality_task stays deleted."""
+
+    def test_calibrate_seasonality_task_not_importable(self) -> None:
+        """calibrate_seasonality_task must not be importable from backend.tasks.forecasting.
+
+        Deleted in KAN-427 Z2. If calibration is re-introduced, it must go through
+        a proper spec with backtest baselines.
+        """
+        from backend.tasks import forecasting
+
+        assert not hasattr(forecasting, "calibrate_seasonality_task"), (
+            "calibrate_seasonality_task was re-introduced without a spec — "
+            "delete this test only after a proper calibration spec is approved"
+        )
+
+    def test_calibrate_seasonality_not_in_registry(self) -> None:
+        """calibrate_seasonality_task must not appear in the pipeline registry."""
+        from backend.services.pipeline_registry_config import build_registry
+
+        registry = build_registry()
+        task = registry.get_task("backend.tasks.forecasting.calibrate_seasonality_task")
+        assert task is None, "calibrate_seasonality_task found in registry after deletion"

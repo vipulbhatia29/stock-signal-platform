@@ -363,18 +363,3 @@ def run_backtest_task(ticker: str | None = None, horizon_days: int = 90) -> dict
     """
     logger.info("Backtest task started: ticker=%s, horizon=%d", ticker or "all", horizon_days)
     return asyncio.run(_run_backtest_async(ticker, horizon_days))  # type: ignore[arg-type]
-
-
-@celery_app.task(name="backend.tasks.forecasting.calibrate_seasonality_task")
-def calibrate_seasonality_task(ticker: str | None = None) -> dict:
-    """Run seasonality calibration (4 configs per ticker, pick best).
-
-    Args:
-        ticker: Specific ticker, or None for all active tickers.
-
-    Returns:
-        Dict with calibration results.
-    """
-    logger.info("Calibration task started: ticker=%s", ticker or "all")
-    # Full implementation wired in Sprint 4 integration
-    return {"status": "ok", "ticker": ticker}

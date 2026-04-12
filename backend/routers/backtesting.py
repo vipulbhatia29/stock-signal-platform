@@ -16,15 +16,13 @@ from backend.schemas.backtesting import (
     BacktestSummaryResponse,
     BacktestTriggerRequest,
     BacktestTriggerResponse,
-    CalibrateTriggerRequest,
-    CalibrateTriggerResponse,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/backtests", tags=["backtesting"])
 
-# NOTE: Literal routes (/summary/all, /run, /calibrate) MUST be declared
+# NOTE: Literal routes (/summary/all, /run) MUST be declared
 # before path-param routes (/{ticker}) to avoid FastAPI matching "summary"
 # as a ticker value.
 
@@ -126,40 +124,6 @@ async def trigger_backtest(
         request.horizon_days,
     )
     return BacktestTriggerResponse(task_id=task.id)
-
-
-@router.post(
-    "/calibrate",
-    response_model=CalibrateTriggerResponse,
-    summary="Trigger seasonality calibration (admin only)",
-    status_code=202,
-)
-async def trigger_calibration(
-    request: CalibrateTriggerRequest,
-    current_user: User = Depends(get_current_user),
-) -> CalibrateTriggerResponse:
-    """Trigger seasonality calibration for a ticker or all tickers.
-
-    Requires admin role. Calibration runs asynchronously via Celery.
-
-    Args:
-        request: Calibration trigger parameters.
-        current_user: Authenticated user (must be admin).
-
-    Returns:
-        Task ID for tracking progress.
-    """
-    require_admin(current_user)
-
-    from backend.tasks.forecasting import calibrate_seasonality_task
-
-    task = calibrate_seasonality_task.delay(ticker=request.ticker)
-    logger.info(
-        "Calibration triggered by %s: ticker=%s",
-        current_user.email,
-        request.ticker or "all",
-    )
-    return CalibrateTriggerResponse(task_id=task.id)
 
 
 @router.get(
