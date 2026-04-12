@@ -11,28 +11,32 @@ logger = logging.getLogger(__name__)
 _INSECURE_JWT_DEFAULT = "change-me-in-production"
 
 
-class StalenessSLAs:
+class StalenessSLAs(BaseSettings):
     """Green-threshold freshness SLAs per pipeline stage.
 
     Yellow = 2x green. Red = >2x green. See services/ticker_state.py for
     the bucketing logic.
 
-    These are module-level constants (immutable) rather than a Pydantic
-    settings class because they are a product decision, not an env knob.
-    If a deployment wants tighter SLAs, bump the constants in a PR — don't
-    flip them per-environment.
+    Env-tunable: override any SLA via STALENESS_SLA_<FIELD>=<seconds>.
+    Defaults are product decisions; override per-environment for tighter
+    monitoring or relaxed staging thresholds.
     """
 
-    prices: timedelta = timedelta(hours=4)
-    signals: timedelta = timedelta(hours=4)
-    fundamentals: timedelta = timedelta(hours=24)
-    forecast: timedelta = timedelta(hours=24)
-    forecast_retrain: timedelta = timedelta(days=14)
-    news: timedelta = timedelta(hours=6)
-    sentiment: timedelta = timedelta(hours=6)
-    convergence: timedelta = timedelta(hours=24)
-    backtest: timedelta = timedelta(days=7)
-    recommendation: timedelta = timedelta(hours=24)
+    model_config = SettingsConfigDict(
+        env_prefix="STALENESS_SLA_",
+        extra="ignore",
+    )
+
+    prices: timedelta = Field(default=timedelta(hours=4))
+    signals: timedelta = Field(default=timedelta(hours=4))
+    fundamentals: timedelta = Field(default=timedelta(hours=24))
+    forecast: timedelta = Field(default=timedelta(hours=24))
+    forecast_retrain: timedelta = Field(default=timedelta(days=14))
+    news: timedelta = Field(default=timedelta(hours=6))
+    sentiment: timedelta = Field(default=timedelta(hours=6))
+    convergence: timedelta = Field(default=timedelta(hours=24))
+    backtest: timedelta = Field(default=timedelta(days=7))
+    recommendation: timedelta = Field(default=timedelta(hours=24))
 
 
 class Settings(BaseSettings):
@@ -162,19 +166,15 @@ class Settings(BaseSettings):
     # [0.0, 1.0] will raise at boot rather than silently mis-sampling.
     LANGFUSE_SENTIMENT_IO_SAMPLING_RATE: float = Field(default=0.25, ge=0.0, le=1.0)
 
-    # --- Spec D — Ingestion staleness SLA flags ---
-    # Intentionally NOT added here. The original Plan D Task 1 proposed
-    # `INGESTION_SLA_*_HOURS: int` fields, but Spec A (PR #206) already
-    # shipped the immutable `StalenessSLAs` class above with tighter
-    # product-defensible defaults. Duplicating them as env vars with
-    # looser values would regress behavior. The principled refactor
-    # (env-tunable frozen dataclass + regression tests) is tracked under
-    # KAN-445 and will land between KAN-420 PR1 and PR2.
-
     @property
     def staleness_slas(self) -> StalenessSLAs:
-        """Return the staleness SLA constants (see StalenessSLAs docstring)."""
-        return StalenessSLAs()
+        """Return env-tunable staleness SLAs (cached after first access).
+
+        Override via STALENESS_SLA_PRICES=<seconds> etc. in .env or environment.
+        """
+        if not hasattr(self, "_staleness_slas_cache"):
+            object.__setattr__(self, "_staleness_slas_cache", StalenessSLAs())
+        return self._staleness_slas_cache  # type: ignore[return-value]
 
     @property
     def cors_origins_list(self) -> list[str]:
