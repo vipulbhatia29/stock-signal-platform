@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.price import StockPrice
 from backend.models.stock import Stock
+from backend.services.rate_limiter import yfinance_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +200,7 @@ async def ensure_stock_exists(
         return stock
 
     # ── Look up stock info from yfinance ─────────────────────────────
+    await yfinance_limiter.acquire()
     info = await asyncio.to_thread(_get_ticker_info, ticker)
 
     if not info or info.get("regularMarketPrice") is None:
@@ -377,6 +379,7 @@ async def fetch_prices(
     Raises:
         ValueError: If the ticker is invalid or yfinance returns no data.
     """
+    await yfinance_limiter.acquire()
     df = await asyncio.to_thread(_download_ticker, ticker, period)
 
     if df.empty:
@@ -422,6 +425,7 @@ async def fetch_prices_delta(
     start_date = max_time.strftime("%Y-%m-%d")
     logger.info("Delta fetch for %s from %s", ticker, start_date)
 
+    await yfinance_limiter.acquire()
     df = await asyncio.to_thread(_download_ticker_range, ticker, start_date)
 
     if df.empty:

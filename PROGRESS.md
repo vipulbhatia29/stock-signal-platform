@@ -127,3 +127,35 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - Tests: 1962 unit + 441 API
 - 2 JIRA tickets completed (KAN-420, KAN-445)
 - Resume: KAN-412 (split oversized routers — spec+plan ready from Session 97)
+
+---
+
+## Session 106 — KAN-408 Close + KAN-427 Quick Wins + KAN-425 Rate Limiters (2026-04-12)
+
+### KAN-408 — Epic closed (all subtasks shipped in S105)
+
+### KAN-427 — Quick Wins Z1/Z2/Z4/Z5/Z6 (PR #219 merged)
+- **Z1:** Registry typo fix `sentiment_scoring_task` → `news_sentiment_scoring_task` + enforcement test
+- **Z2:** Deleted `calibrate_seasonality_task` stub + `/calibrate` endpoint + orphaned schemas
+- **Z4:** Renamed `refresh_all_watchlist_tickers_task` → `intraday_refresh_all_task` with deprecation alias
+- **Z5:** `useIngestTicker` cache invalidation expanded to 12 query keys (was 2)
+- **Z6:** `WelcomeBanner` mounted on cold-start dashboard (loading-state gated)
+- **Z3 deferred:** gated on Spec F2/F3 rate limiters
+- 2-persona review found 3 CRITICALs (query key mismatches, orphaned schemas, stacklevel) — all fixed
+- Tests: 1980 unit + 448 API
+
+### KAN-425 — Spec F Rate Limiters F2/F3/F4 (PR pending)
+- `TokenBucketLimiter` class with atomic Lua script + NOSCRIPT recovery
+- Integrated into 4 news providers (replacing crude sleep patterns)
+- Integrated into `stock_data.py` (3 yfinance call sites)
+- `@limiter.limit("20/hour")` on ingest endpoint + frontend 429 handling
+- Autouse conftest fixture for rate limiter no-op in all unit tests
+- 2-persona review found 2 CRITICALs (dead None check, stale SHA) — fixed
+- Tests: 1995 unit (net +15)
+- Filed: KAN-446 (DQ scanner), KAN-447 (retention), KAN-448 (compression) — deferred from Spec F
+
+### Session 106 Totals
+- 1 PR merged (#219), 1 PR pending (rate limiters)
+- Tests: 1995 unit + 448 API
+- 4 JIRA tickets completed (KAN-408, KAN-427), 3 filed (KAN-446/447/448)
+- Resume: Merge rate limiter PR, then Z3 (news LIMIT 50→200) is unblocked

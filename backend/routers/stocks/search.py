@@ -17,6 +17,7 @@ from backend.database import get_async_session
 from backend.dependencies import get_current_user
 from backend.models.stock import Stock
 from backend.models.user import User
+from backend.rate_limit import limiter
 from backend.schemas.stock import IngestResponse, StockSearchResponse
 from backend.services.exceptions import IngestFailedError
 from backend.services.http_client import get_http_client
@@ -145,6 +146,7 @@ async def search_stocks(
 
 
 @router.post("/{ticker}/ingest", response_model=IngestResponse)
+@limiter.limit("20/hour")
 async def ingest_ticker(
     ticker: TickerPath,
     request: Request,

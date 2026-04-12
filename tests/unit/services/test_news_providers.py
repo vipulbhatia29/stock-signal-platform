@@ -195,12 +195,9 @@ class TestFinnhubProvider:
         resp = _mock_response(json_data=fixture)
         client = _mock_client(resp)
 
-        with (
-            patch(
-                "backend.services.news.finnhub_provider.get_http_client",
-                return_value=client,
-            ),
-            patch("backend.services.news.finnhub_provider.asyncio.sleep"),
+        with patch(
+            "backend.services.news.finnhub_provider.get_http_client",
+            return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
             articles = await provider.fetch_stock_news("AAPL", date(2024, 3, 1))
@@ -214,12 +211,9 @@ class TestFinnhubProvider:
         resp = _mock_response(json_data=fixture)
         client = _mock_client(resp)
 
-        with (
-            patch(
-                "backend.services.news.finnhub_provider.get_http_client",
-                return_value=client,
-            ),
-            patch("backend.services.news.finnhub_provider.asyncio.sleep"),
+        with patch(
+            "backend.services.news.finnhub_provider.get_http_client",
+            return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
             articles = await provider.fetch_stock_news("aapl", date(2024, 3, 1))
@@ -233,12 +227,9 @@ class TestFinnhubProvider:
         resp = _mock_response(json_data=fixture)
         client = _mock_client(resp)
 
-        with (
-            patch(
-                "backend.services.news.finnhub_provider.get_http_client",
-                return_value=client,
-            ),
-            patch("backend.services.news.finnhub_provider.asyncio.sleep"),
+        with patch(
+            "backend.services.news.finnhub_provider.get_http_client",
+            return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
             articles = await provider.fetch_stock_news("AAPL", date(2024, 3, 1))
@@ -252,12 +243,9 @@ class TestFinnhubProvider:
         resp = _mock_response(json_data=fixture)
         client = _mock_client(resp)
 
-        with (
-            patch(
-                "backend.services.news.finnhub_provider.get_http_client",
-                return_value=client,
-            ),
-            patch("backend.services.news.finnhub_provider.asyncio.sleep"),
+        with patch(
+            "backend.services.news.finnhub_provider.get_http_client",
+            return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
             articles = await provider.fetch_stock_news("AAPL", date(2024, 3, 1))
@@ -297,12 +285,9 @@ class TestFinnhubProvider:
         resp = _mock_response(json_data=fixture)
         client = _mock_client(resp)
 
-        with (
-            patch(
-                "backend.services.news.finnhub_provider.get_http_client",
-                return_value=client,
-            ),
-            patch("backend.services.news.finnhub_provider.asyncio.sleep"),
+        with patch(
+            "backend.services.news.finnhub_provider.get_http_client",
+            return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
             articles = await provider.fetch_stock_news("AAPL", date(2024, 3, 1))
@@ -316,12 +301,9 @@ class TestFinnhubProvider:
         resp = _mock_response(json_data=fixture)
         client = _mock_client(resp)
 
-        with (
-            patch(
-                "backend.services.news.finnhub_provider.get_http_client",
-                return_value=client,
-            ),
-            patch("backend.services.news.finnhub_provider.asyncio.sleep"),
+        with patch(
+            "backend.services.news.finnhub_provider.get_http_client",
+            return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
             articles = await provider.fetch_stock_news("AAPL", date(2024, 3, 1))
@@ -336,12 +318,9 @@ class TestFinnhubProvider:
         resp = _mock_response(json_data=fixture)
         client = _mock_client(resp)
 
-        with (
-            patch(
-                "backend.services.news.finnhub_provider.get_http_client",
-                return_value=client,
-            ),
-            patch("backend.services.news.finnhub_provider.asyncio.sleep"),
+        with patch(
+            "backend.services.news.finnhub_provider.get_http_client",
+            return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
             articles = await provider.fetch_stock_news("AAPL", date(2024, 3, 1))

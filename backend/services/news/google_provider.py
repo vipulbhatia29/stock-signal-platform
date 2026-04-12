@@ -11,6 +11,7 @@ from defusedxml.ElementTree import fromstring as safe_fromstring
 
 from backend.services.http_client import get_http_client
 from backend.services.news.base import NewsProvider, RawArticle
+from backend.services.rate_limiter import google_news_limiter
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class GoogleNewsProvider(NewsProvider):
         """Fetch and parse Google News RSS feed."""
         params = {"q": query, "hl": "en-US", "gl": "US", "ceid": "US:en"}
 
+        await google_news_limiter.acquire()
         try:
             client = get_http_client()
             resp = await client.get(GOOGLE_NEWS_RSS, params=params, timeout=30)

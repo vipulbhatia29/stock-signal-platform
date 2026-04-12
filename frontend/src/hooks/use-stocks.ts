@@ -131,6 +131,12 @@ export function useIngestTicker() {
       queryClient.invalidateQueries({ queryKey: ["bulk-signals"] });
       queryClient.invalidateQueries({ queryKey: ["portfolio", "positions"] });
     },
+    onError: (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("429") || message.includes("rate limit")) {
+        toast.error("Hourly ingest limit reached. Try again later.");
+      }
+    },
   });
 }
 

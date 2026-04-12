@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import date, datetime, timezone
 
@@ -11,11 +10,9 @@ import httpx
 from backend.config import settings
 from backend.services.http_client import get_http_client
 from backend.services.news.base import NewsProvider, RawArticle
+from backend.services.rate_limiter import finnhub_limiter
 
 logger = logging.getLogger(__name__)
-
-# Finnhub free tier: 60 calls/min, use 55 to be safe
-RATE_LIMIT_DELAY = 1.1  # seconds between calls
 
 
 class FinnhubProvider(NewsProvider):
@@ -44,6 +41,7 @@ class FinnhubProvider(NewsProvider):
             "token": self._api_key,
         }
 
+        await finnhub_limiter.acquire()
         try:
             client = get_http_client()
             resp = await client.get(url, params=params, timeout=30)
@@ -71,7 +69,6 @@ class FinnhubProvider(NewsProvider):
             except (KeyError, ValueError, TypeError):
                 logger.warning("Skipping malformed Finnhub article", exc_info=True)
 
-        await asyncio.sleep(RATE_LIMIT_DELAY)
         return articles
 
     async def fetch_macro_news(self, since: date) -> list[RawArticle]:
@@ -82,6 +79,7 @@ class FinnhubProvider(NewsProvider):
         url = f"{self._base_url}/news"
         params = {"category": "general", "token": self._api_key}
 
+        await finnhub_limiter.acquire()
         try:
             client = get_http_client()
             resp = await client.get(url, params=params, timeout=30)
@@ -110,7 +108,6 @@ class FinnhubProvider(NewsProvider):
             except (KeyError, ValueError, TypeError):
                 logger.warning("Skipping malformed Finnhub article", exc_info=True)
 
-        await asyncio.sleep(RATE_LIMIT_DELAY)
         return articles
 
 

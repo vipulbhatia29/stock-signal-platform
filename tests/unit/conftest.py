@@ -80,6 +80,24 @@ def db_session():
 
 
 # ---------------------------------------------------------------------------
+# Rate limiter — stub Redis out so unit tests never hit a real Redis instance.
+# The TokenBucketLimiter falls back to permissive (allow-all) when get_redis()
+# returns None, so no patching of individual acquire() calls is needed.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _stub_rate_limiter_redis(monkeypatch):
+    """Return None from get_redis so rate limiters are no-ops in unit tests."""
+    from unittest.mock import AsyncMock
+
+    monkeypatch.setattr(
+        "backend.services.rate_limiter.get_redis",
+        AsyncMock(return_value=None),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Singleton cleanup — resets task_tracer module singletons after every test
 # so stale references don't bleed across tests that patch them.
 # ---------------------------------------------------------------------------
