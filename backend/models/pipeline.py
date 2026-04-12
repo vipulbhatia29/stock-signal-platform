@@ -42,6 +42,17 @@ class PipelineRun(UUIDPrimaryKeyMixin, Base):
     total_duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     trigger: Mapped[str] = mapped_column(String(20), nullable=False, default="scheduled")
+    celery_task_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        index=True,
+        doc=(
+            "Celery task UUID preserved across retries — use to GROUP BY "
+            "logical invocation and aggregate attempts. Populated by "
+            "@tracked_task from celery.current_task.request.id when a "
+            "Celery task context exists; None in non-Celery callers."
+        ),
+    )
 
     def __repr__(self) -> str:
         return (
