@@ -110,8 +110,10 @@ async def oidc_authorize(
         params["state"] = state
     redirect_url = f"{redirect_uri}?{urlencode(params)}"
 
-    # nosemgrep: no-open-redirect — redirect_url built from trusted FRONTEND_BASE_URL + params
-    return RedirectResponse(url=redirect_url, status_code=status.HTTP_302_FOUND)
+    return RedirectResponse(  # nosemgrep: no-open-redirect
+        url=redirect_url,
+        status_code=status.HTTP_302_FOUND,
+    )
 
 
 @router.post("/token")

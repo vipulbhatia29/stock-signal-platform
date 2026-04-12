@@ -85,9 +85,9 @@ async def compute_quantstats_portfolio(
     try:
         import math
 
-        def _safe_round(val: float, digits: int = 4) -> float | None:
-            """Round a float, returning None for NaN/Inf."""
-            f = float(val)
+        def _safe_round(val: object, digits: int = 4) -> float | None:
+            """Round a float-like value, returning None for NaN/Inf."""
+            f = float(val)  # type: ignore[arg-type]  # QuantStats returns Series|float
             return round(f, digits) if math.isfinite(f) else None
 
         metrics: dict = {
@@ -289,7 +289,7 @@ def _optimize(
         returns_df = prices_df.pct_change().dropna()
         hrp = HRPOpt(returns_df)
         hrp.optimize()
-        return hrp.clean_weights(cutoff=0.001)
+        return dict(hrp.clean_weights(cutoff=0.001))
 
     mu = expected_returns.mean_historical_return(prices_df)
     s = risk_models.sample_cov(prices_df)
@@ -300,7 +300,7 @@ def _optimize(
     else:  # min_volatility (default)
         ef.min_volatility()
 
-    return ef.clean_weights(cutoff=0.001)
+    return dict(ef.clean_weights(cutoff=0.001))
 
 
 def _equal_weight_fallback(
