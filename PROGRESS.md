@@ -176,3 +176,31 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 3 JIRA tickets filed (KAN-446/447/448) — 446+447 now Done, 448 remains
 - Flaky CI test fixed (Redis pool teardown)
 - Resume: KAN-448 (compression, Low), KAN-423 (entry points), KAN-424 (forecast quality)
+
+---
+
+## Session 107 — KAN-424 Spec E Forecast Quality & Scale (2026-04-12)
+
+**Branch:** `feat/KAN-424-forecast-quality-scale` → develop | **PR #225**
+
+### KAN-424 — Spec E: Forecast Quality & Scale
+- **E1:** `MAX_NEW_MODELS_PER_NIGHT` 20→100 + `priority=True` bypass on `retrain_single_ticker_task` for user-initiated adds via `ingest_ticker`
+- **E2:** Beat entry renamed `model-retrain-biweekly` → `model-retrain-weekly`, removed misleading comment (no biweekly filter existed)
+- **E3:** Split `_refresh_ticker_async` → `_refresh_ticker_fast` (prices + signals + QuantStats) + `_refresh_ticker_slow` (yfinance info + dividends). Parallelized nightly fast path via `asyncio.gather + Semaphore(5)`. Added `_refresh_all_slow_async` + Phase 1.5 in nightly chain.
+- `INTRADAY_REFRESH_CONCURRENCY: int = 5` added to config (env-tunable)
+- `mark_stage_updated` wired into both fast ("signals") and slow ("fundamentals") paths (Spec A integration)
+- Code review caught 2 IMPORTANT: missing stage updates + dead param — both fixed
+- Tests: 2023 → 2037 unit (+14)
+
+### KAN-423 — Spec C: Entry Point Unification (prep)
+- Split monolithic plan (~800 lines) into 4 PRs per Hard Rule #12
+- Created `docs/superpowers/plans/2026-04-06-pipeline-overhaul-plan-C-entry-points-v2.md`
+- Created 4 JIRA subtasks: KAN-449 (C1+C6), KAN-450 (C2+C3), KAN-451 (C4), KAN-452 (C5)
+- Added blocking links: KAN-449 blocks KAN-450/451/452
+- Gap analysis: 7 issues identified (missing exceptions, wrong test framework, line drift)
+
+### Session 107 Totals
+- 1 PR (#225)
+- Tests: 2037 unit + 448 API
+- 1 JIRA ticket shipped (KAN-424), 4 filed (KAN-449–452)
+- Resume: KAN-449 (watchlist auto-ingest, PR1 of Spec C)
