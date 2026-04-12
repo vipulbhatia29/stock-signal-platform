@@ -171,15 +171,9 @@ export async function registerRequest(
 }
 
 export async function logoutRequest(): Promise<void> {
-  const headers: Record<string, string> = {};
-  const csrfToken = getCsrfToken();
-  if (csrfToken) {
-    headers["X-CSRF-Token"] = csrfToken;
-  }
   await fetch(`${API_BASE}/auth/logout`, {
     method: "POST",
     credentials: "include",
-    headers,
   });
 }
 

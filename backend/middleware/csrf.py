@@ -7,6 +7,7 @@ header (Bearer token) are CSRF-safe and skip validation.
 
 from __future__ import annotations
 
+import hmac
 import logging
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -57,7 +58,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         csrf_cookie = request.cookies.get("csrf_token", "")
         csrf_header = request.headers.get("x-csrf-token", "")
 
-        if not csrf_cookie or not csrf_header or csrf_cookie != csrf_header:
+        if not csrf_cookie or not csrf_header or not hmac.compare_digest(csrf_cookie, csrf_header):
             logger.warning(
                 "CSRF validation failed: path=%s method=%s",
                 request.url.path,
