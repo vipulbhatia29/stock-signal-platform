@@ -44,33 +44,56 @@ class TestRefreshTickerTask:
         assert refresh_ticker_task.name == "backend.tasks.market_data.refresh_ticker_task"
 
 
-class TestRefreshAllWatchlistTask:
-    """Tests for refresh_all_watchlist_tickers_task."""
+class TestIntradayRefreshAllTask:
+    """Tests for intraday_refresh_all_task (renamed from refresh_all_watchlist_tickers_task)."""
 
-    def test_refresh_all_watchlist_dispatches_per_ticker(self) -> None:
-        """Task fans out one refresh_ticker_task per watchlisted ticker."""
+    def test_intraday_refresh_all_dispatches_per_ticker(self) -> None:
+        """Task fans out one refresh_ticker_task per referenced ticker."""
         with (
             patch("asyncio.run", return_value=["AAPL", "MSFT"]) as mock_run,
             patch("backend.tasks.market_data.refresh_ticker_task") as mock_task,
         ):
-            from backend.tasks.market_data import refresh_all_watchlist_tickers_task
+            from backend.tasks.market_data import intraday_refresh_all_task
 
-            result = refresh_all_watchlist_tickers_task.run()
+            result = intraday_refresh_all_task.run()
             mock_run.assert_called_once()
             assert mock_task.delay.call_count == 2
             assert result["dispatched"] == 2
 
-    def test_refresh_all_watchlist_empty_watchlist(self) -> None:
-        """Empty watchlist results in 0 dispatched tasks."""
+    def test_intraday_refresh_all_empty_universe(self) -> None:
+        """Empty universe results in 0 dispatched tasks."""
         with (
             patch("asyncio.run", return_value=[]),
             patch("backend.tasks.market_data.refresh_ticker_task") as mock_task,
         ):
-            from backend.tasks.market_data import refresh_all_watchlist_tickers_task
+            from backend.tasks.market_data import intraday_refresh_all_task
 
-            result = refresh_all_watchlist_tickers_task.run()
+            result = intraday_refresh_all_task.run()
             mock_task.delay.assert_not_called()
             assert result["dispatched"] == 0
+
+    def test_intraday_refresh_all_task_registered_with_new_name(self) -> None:
+        """Task is registered under the new canonical Celery name."""
+        from backend.tasks.market_data import intraday_refresh_all_task
+
+        expected = "backend.tasks.market_data.intraday_refresh_all_task"
+        assert intraday_refresh_all_task.name == expected
+
+    def test_legacy_alias_warns_and_delegates(self) -> None:
+        """Deprecated alias emits DeprecationWarning and delegates to new task."""
+        import warnings
+
+        with (
+            patch("asyncio.run", return_value=["AAPL"]),
+            patch("backend.tasks.market_data.refresh_ticker_task"),
+        ):
+            from backend.tasks.market_data import refresh_all_watchlist_tickers_task
+
+            with warnings.catch_warnings(record=True) as w:
+                warnings.simplefilter("always")
+                result = refresh_all_watchlist_tickers_task.run()
+                assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+                assert result["dispatched"] == 1
 
 
 # ---------------------------------------------------------------------------

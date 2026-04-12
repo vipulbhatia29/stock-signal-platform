@@ -477,10 +477,10 @@ class TestBeatSchedule:
         assert entry["task"] == "backend.tasks.market_data.nightly_pipeline_chain_task"
 
     def test_intraday_refresh_in_schedule(self) -> None:
-        """Beat schedule should still include the intraday watchlist refresh."""
+        """Beat schedule should still include the intraday refresh."""
         from backend.tasks import celery_app
 
-        assert "refresh-all-watchlist-tickers" in celery_app.conf.beat_schedule
+        assert "intraday-refresh-all" in celery_app.conf.beat_schedule
 
     def test_portfolio_snapshot_in_schedule(self) -> None:
         """Beat schedule should include daily portfolio snapshots."""

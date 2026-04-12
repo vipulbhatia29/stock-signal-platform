@@ -28,8 +28,8 @@ def test_refresh_ticker_task_retries_on_exception():
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
-def test_refresh_all_watchlist_tickers_task_dispatches_per_ticker():
-    """refresh_all_watchlist_tickers_task fans out one task per watchlisted ticker."""
+def test_intraday_refresh_all_task_dispatches_per_ticker():
+    """intraday_refresh_all_task fans out one task per referenced ticker."""
     with (
         patch(
             "asyncio.run",
@@ -37,9 +37,9 @@ def test_refresh_all_watchlist_tickers_task_dispatches_per_ticker():
         ) as mock_run,
         patch("backend.tasks.market_data.refresh_ticker_task") as mock_task,
     ):
-        from backend.tasks.market_data import refresh_all_watchlist_tickers_task
+        from backend.tasks.market_data import intraday_refresh_all_task
 
-        result = refresh_all_watchlist_tickers_task.run()
+        result = intraday_refresh_all_task.run()
 
         mock_run.assert_called_once()
         assert mock_task.delay.call_count == 2
@@ -50,15 +50,15 @@ def test_refresh_all_watchlist_tickers_task_dispatches_per_ticker():
 
 
 @pytest.mark.filterwarnings("ignore::RuntimeWarning")
-def test_refresh_all_watchlist_tickers_task_handles_empty_watchlist():
-    """refresh_all_watchlist_tickers_task returns 0 dispatched when no tickers."""
+def test_intraday_refresh_all_task_handles_empty_universe():
+    """intraday_refresh_all_task returns 0 dispatched when no tickers."""
     with (
         patch("asyncio.run", return_value=[]) as mock_run,
         patch("backend.tasks.market_data.refresh_ticker_task") as mock_task,
     ):
-        from backend.tasks.market_data import refresh_all_watchlist_tickers_task
+        from backend.tasks.market_data import intraday_refresh_all_task
 
-        result = refresh_all_watchlist_tickers_task.run()
+        result = intraday_refresh_all_task.run()
 
         mock_run.assert_called_once()
         mock_task.delay.assert_not_called()
@@ -71,9 +71,9 @@ def test_beat_schedule_contains_refresh_job():
     """Celery beat_schedule includes the 30-minute watchlist refresh job."""
     from backend.tasks import celery_app
 
-    assert "refresh-all-watchlist-tickers" in celery_app.conf.beat_schedule
-    entry = celery_app.conf.beat_schedule["refresh-all-watchlist-tickers"]
-    assert entry["task"] == "backend.tasks.market_data.refresh_all_watchlist_tickers_task"
+    assert "intraday-refresh-all" in celery_app.conf.beat_schedule
+    entry = celery_app.conf.beat_schedule["intraday-refresh-all"]
+    assert entry["task"] == "backend.tasks.market_data.intraday_refresh_all_task"
     assert entry["schedule"] == 30 * 60
 
 

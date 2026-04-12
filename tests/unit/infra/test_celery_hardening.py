@@ -12,14 +12,14 @@ import pytest
 class TestBeatSchedule:
     """Verify Celery beat schedule is properly configured."""
 
-    def test_beat_schedule_has_watchlist_refresh(self):
-        """Beat schedule includes 30-minute watchlist refresh job."""
+    def test_beat_schedule_has_intraday_refresh(self):
+        """Beat schedule includes 30-minute intraday refresh job."""
         from backend.tasks import celery_app
 
         schedule = celery_app.conf.beat_schedule
-        assert "refresh-all-watchlist-tickers" in schedule
-        entry = schedule["refresh-all-watchlist-tickers"]
-        assert entry["task"] == "backend.tasks.market_data.refresh_all_watchlist_tickers_task"
+        assert "intraday-refresh-all" in schedule
+        entry = schedule["intraday-refresh-all"]
+        assert entry["task"] == "backend.tasks.market_data.intraday_refresh_all_task"
         assert entry["schedule"] == 30 * 60
 
     def test_beat_schedule_has_portfolio_snapshot(self):
@@ -84,16 +84,16 @@ class TestRefreshTickerTask:
 
 
 # ===========================================================================
-# refresh_all_watchlist_tickers_task (fan-out)
+# intraday_refresh_all_task (fan-out, renamed from refresh_all_watchlist_tickers_task)
 # ===========================================================================
 
 
-class TestRefreshAllWatchlistTask:
-    """Test watchlist fan-out task."""
+class TestIntradayRefreshAllTask:
+    """Test intraday fan-out task."""
 
     @pytest.mark.filterwarnings("ignore::RuntimeWarning")
     def test_fan_out_dispatches_per_ticker(self):
-        """Fan-out task dispatches one refresh_ticker_task per watched ticker."""
+        """Fan-out task dispatches one refresh_ticker_task per referenced ticker."""
         with (
             patch(
                 "backend.tasks.market_data.asyncio.run",
@@ -101,22 +101,22 @@ class TestRefreshAllWatchlistTask:
             ),
             patch("backend.tasks.market_data.refresh_ticker_task") as mock_task,
         ):
-            from backend.tasks.market_data import refresh_all_watchlist_tickers_task
+            from backend.tasks.market_data import intraday_refresh_all_task
 
-            result = refresh_all_watchlist_tickers_task.run()
+            result = intraday_refresh_all_task.run()
             assert mock_task.delay.call_count == 3
             assert result["dispatched"] == 3
 
     @pytest.mark.filterwarnings("ignore::RuntimeWarning")
-    def test_fan_out_empty_watchlist(self):
-        """Empty watchlist dispatches zero tasks."""
+    def test_fan_out_empty_universe(self):
+        """Empty universe dispatches zero tasks."""
         with (
             patch("backend.tasks.market_data.asyncio.run", return_value=[]),
             patch("backend.tasks.market_data.refresh_ticker_task") as mock_task,
         ):
-            from backend.tasks.market_data import refresh_all_watchlist_tickers_task
+            from backend.tasks.market_data import intraday_refresh_all_task
 
-            result = refresh_all_watchlist_tickers_task.run()
+            result = intraday_refresh_all_task.run()
             mock_task.delay.assert_not_called()
             assert result["dispatched"] == 0
 

@@ -35,8 +35,8 @@ from celery.schedules import crontab  # noqa: E402
 
 celery_app.conf.beat_schedule = {
     # ── Intraday refresh (every 30 min during market hours) ──
-    "refresh-all-watchlist-tickers": {
-        "task": "backend.tasks.market_data.refresh_all_watchlist_tickers_task",
+    "intraday-refresh-all": {
+        "task": "backend.tasks.market_data.intraday_refresh_all_task",
         "schedule": 30 * 60,  # 30 minutes in seconds
     },
     # ── Nightly pipeline chain (9:30 PM ET — after market data settles) ──
