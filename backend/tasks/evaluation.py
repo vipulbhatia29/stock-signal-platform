@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import uuid
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
@@ -9,11 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import async_session_factory
 from backend.tasks import celery_app
-from backend.tasks.pipeline import PipelineRunner
+from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
-
-_runner = PipelineRunner()
 
 # Drift thresholds
 VOLATILITY_SPIKE_MULTIPLIER = 2.0
@@ -70,7 +69,8 @@ def should_demote_to_experimental(
 # ---------------------------------------------------------------------------
 
 
-async def _evaluate_forecasts_async() -> dict:
+@tracked_task("forecast_evaluation")
+async def _evaluate_forecasts_async(*, run_id: uuid.UUID) -> dict:
     """Fill actual prices for matured forecasts and compute error metrics.
 
     Returns:
@@ -212,7 +212,8 @@ async def _update_model_mapes(db: AsyncSession) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _check_drift_async() -> dict:
+@tracked_task("drift_check")
+async def _check_drift_async(*, run_id: uuid.UUID) -> dict:
     """Check for model drift using per-ticker calibrated baselines.
 
     Uses backtest MAPE × 1.5 as threshold instead of flat 20%.
@@ -407,7 +408,8 @@ async def _check_vix_regime() -> str:
 # ---------------------------------------------------------------------------
 
 
-async def _evaluate_recommendations_async() -> dict:
+@tracked_task("recommendation_evaluation")
+async def _evaluate_recommendations_async(*, run_id: uuid.UUID) -> dict:
     """Evaluate past BUY/SELL recommendations at 30/90/180d horizons.
 
     Returns:
@@ -561,7 +563,7 @@ def evaluate_forecasts_task() -> dict:
         Dict with evaluation status.
     """
     logger.info("Starting forecast evaluation")
-    return asyncio.run(_evaluate_forecasts_async())
+    return asyncio.run(_evaluate_forecasts_async())  # type: ignore[arg-type]
 
 
 @celery_app.task(name="backend.tasks.evaluation.check_drift_task")
@@ -572,7 +574,7 @@ def check_drift_task() -> dict:
         Dict with drift detection results.
     """
     logger.info("Starting drift detection")
-    return asyncio.run(_check_drift_async())
+    return asyncio.run(_check_drift_async())  # type: ignore[arg-type]
 
 
 @celery_app.task(name="backend.tasks.evaluation.evaluate_recommendations_task")
@@ -583,4 +585,4 @@ def evaluate_recommendations_task() -> dict:
         Dict with evaluation status.
     """
     logger.info("Starting recommendation evaluation")
-    return asyncio.run(_evaluate_recommendations_async())
+    return asyncio.run(_evaluate_recommendations_async())  # type: ignore[arg-type]

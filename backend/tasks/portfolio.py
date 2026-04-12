@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import uuid
 
 from backend.database import async_session_factory
 from backend.services.portfolio import (
@@ -11,11 +12,13 @@ from backend.services.portfolio import (
     snapshot_portfolio_value,
 )
 from backend.tasks import celery_app
+from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
 
 
-async def _snapshot_all_portfolios_async() -> dict:
+@tracked_task("portfolio_snapshot")
+async def _snapshot_all_portfolios_async(*, run_id: uuid.UUID) -> dict:
     """Async implementation: snapshot every portfolio with open positions.
 
     Returns:
@@ -86,7 +89,7 @@ def snapshot_all_portfolios_task(self) -> dict:
     """
     try:
         logger.info("Starting daily portfolio snapshots (attempt %d)", self.request.retries + 1)
-        return asyncio.run(_snapshot_all_portfolios_async())
+        return asyncio.run(_snapshot_all_portfolios_async())  # type: ignore[arg-type]
     except Exception:
         logger.exception(
             "snapshot_all_portfolios_task failed (attempt %d/%d)",
@@ -96,7 +99,8 @@ def snapshot_all_portfolios_task(self) -> dict:
         raise
 
 
-async def _snapshot_health_async() -> dict:
+@tracked_task("portfolio_health")
+async def _snapshot_health_async(*, run_id: uuid.UUID) -> dict:
     """Compute and store health snapshots for all portfolios.
 
     Returns:
@@ -185,10 +189,11 @@ def snapshot_health_task(self) -> dict:
     Runs on Celery Beat schedule, 15 minutes after value snapshots.
     """
     logger.info("Starting health snapshots (attempt %d)", self.request.retries + 1)
-    return asyncio.run(_snapshot_health_async())
+    return asyncio.run(_snapshot_health_async())  # type: ignore[arg-type]
 
 
-async def _materialize_rebalancing_async() -> dict:
+@tracked_task("rebalancing")
+async def _materialize_rebalancing_async(*, run_id: uuid.UUID) -> dict:
     """Compute and store rebalancing suggestions for all portfolios.
 
     Returns:
@@ -229,4 +234,4 @@ def materialize_rebalancing_task(self) -> dict:
     Runs as part of the nightly pipeline Phase 4.
     """
     logger.info("Starting rebalancing materialization (attempt %d)", self.request.retries + 1)
-    return asyncio.run(_materialize_rebalancing_async())
+    return asyncio.run(_materialize_rebalancing_async())  # type: ignore[arg-type]

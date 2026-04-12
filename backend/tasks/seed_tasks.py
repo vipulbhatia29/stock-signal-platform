@@ -6,8 +6,10 @@ Tasks use bind=True to report progress via self.update_state().
 
 import asyncio
 import logging
+import uuid
 
 from backend.tasks import celery_app
+from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
 
@@ -199,7 +201,8 @@ def seed_portfolio_task(self, csv_path: str, email: str, password: str) -> dict:
 # ── Admin user seed ────────────────────────────────────────────────────────────
 
 
-async def _seed_admin_user() -> dict:
+@tracked_task("seed_admin_user")
+async def _seed_admin_user(*, run_id: uuid.UUID) -> dict:
     """Create admin user from environment variables.
 
     Reads ADMIN_EMAIL and ADMIN_PASSWORD from settings.
@@ -256,4 +259,4 @@ def seed_admin_user_task(self) -> dict:
     Returns:
         Dict with status and email (or reason if skipped).
     """
-    return asyncio.run(_seed_admin_user())
+    return asyncio.run(_seed_admin_user())  # type: ignore[arg-type]

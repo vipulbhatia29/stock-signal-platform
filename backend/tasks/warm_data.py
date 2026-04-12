@@ -9,11 +9,13 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 
 import redis
 
 from backend.config import settings
 from backend.tasks import celery_app
+from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +99,33 @@ async def _fetch_and_cache_holders(ticker: str, r: redis.Redis) -> None:
         logger.warning("Failed to fetch holders for %s: %s", ticker, result.error)
 
 
+# ── Module-level async helpers (hoisted from inline closures) ─────────────────
+
+
+@tracked_task("sync_analyst_consensus")
+async def _sync_analyst_consensus_async(
+    tickers: list[str], r: redis.Redis, *, run_id: uuid.UUID
+) -> None:
+    """Async implementation: fetch and cache analyst ratings for all tickers."""
+    for ticker in tickers:
+        await _fetch_and_cache_analyst(ticker, r)
+
+
+@tracked_task("sync_fred_indicators")
+async def _sync_fred_indicators_async(r: redis.Redis, *, run_id: uuid.UUID) -> None:
+    """Async implementation: fetch and cache FRED economic indicators."""
+    await _fetch_and_cache_fred(r)
+
+
+@tracked_task("sync_institutional_holders")
+async def _sync_institutional_holders_async(
+    tickers: list[str], r: redis.Redis, *, run_id: uuid.UUID
+) -> None:
+    """Async implementation: fetch and cache institutional holders for all tickers."""
+    for ticker in tickers:
+        await _fetch_and_cache_holders(ticker, r)
+
+
 # ── Celery Tasks ──────────────────────────────────────────────────────────────
 
 
@@ -114,12 +143,7 @@ def sync_analyst_consensus_task() -> dict:
     """
     tickers = _get_watched_tickers()
     r = _get_redis_client()
-
-    async def _run() -> None:
-        for ticker in tickers:
-            await _fetch_and_cache_analyst(ticker, r)
-
-    asyncio.run(_run())
+    asyncio.run(_sync_analyst_consensus_async(tickers, r))  # type: ignore[arg-type]
     logger.info("Synced analyst consensus for %d tickers", len(tickers))
     return {"tickers_processed": len(tickers), "tickers": tickers}
 
@@ -137,7 +161,7 @@ def sync_fred_indicators_task() -> dict:
         Dict with status.
     """
     r = _get_redis_client()
-    asyncio.run(_fetch_and_cache_fred(r))
+    asyncio.run(_sync_fred_indicators_async(r))  # type: ignore[arg-type]
     logger.info("Synced FRED indicators")
     return {"status": "ok", "series": _FRED_SERIES}
 
@@ -156,11 +180,6 @@ def sync_institutional_holders_task() -> dict:
     """
     tickers = _get_watched_tickers()
     r = _get_redis_client()
-
-    async def _run() -> None:
-        for ticker in tickers:
-            await _fetch_and_cache_holders(ticker, r)
-
-    asyncio.run(_run())
+    asyncio.run(_sync_institutional_holders_async(tickers, r))  # type: ignore[arg-type]
     logger.info("Synced institutional holders for %d tickers", len(tickers))
     return {"tickers_processed": len(tickers), "tickers": tickers}

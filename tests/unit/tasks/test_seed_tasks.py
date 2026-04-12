@@ -5,9 +5,12 @@ Verifies task registration, naming, and admin user seeding logic.
 
 from __future__ import annotations
 
+import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from tests.unit.tasks._tracked_helper_bypass import bypass_tracked
 
 # ---------------------------------------------------------------------------
 # Import / registration tests
@@ -215,7 +218,7 @@ class TestSeedAdminUser:
 
             from backend.tasks.seed_tasks import _seed_admin_user
 
-            result = await _seed_admin_user()
+            result = await bypass_tracked(_seed_admin_user)(run_id=uuid.uuid4())
 
         assert result["status"] == "created"
         assert result["email"] == "admin@example.com"
@@ -244,7 +247,7 @@ class TestSeedAdminUser:
 
             from backend.tasks.seed_tasks import _seed_admin_user
 
-            result = await _seed_admin_user()
+            result = await bypass_tracked(_seed_admin_user)(run_id=uuid.uuid4())
 
         assert result["status"] == "exists"
         assert result["email"] == "admin@example.com"
@@ -272,7 +275,7 @@ class TestSeedAdminUser:
 
             from backend.tasks.seed_tasks import _seed_admin_user
 
-            result = await _seed_admin_user()
+            result = await bypass_tracked(_seed_admin_user)(run_id=uuid.uuid4())
 
         assert result["status"] == "promoted"
         assert result["email"] == "user@example.com"
@@ -288,7 +291,7 @@ class TestSeedAdminUser:
 
             from backend.tasks.seed_tasks import _seed_admin_user
 
-            result = await _seed_admin_user()
+            result = await bypass_tracked(_seed_admin_user)(run_id=uuid.uuid4())
 
         assert result["status"] == "skipped"
         assert "ADMIN_EMAIL" in result["reason"]
@@ -302,7 +305,7 @@ class TestSeedAdminUser:
 
             from backend.tasks.seed_tasks import _seed_admin_user
 
-            result = await _seed_admin_user()
+            result = await bypass_tracked(_seed_admin_user)(run_id=uuid.uuid4())
 
         assert result["status"] == "skipped"
         assert "ADMIN_PASSWORD" in result["reason"]
@@ -316,6 +319,6 @@ class TestSeedAdminUser:
 
             from backend.tasks.seed_tasks import _seed_admin_user
 
-            result = await _seed_admin_user()
+            result = await bypass_tracked(_seed_admin_user)(run_id=uuid.uuid4())
 
         assert result["status"] == "skipped"

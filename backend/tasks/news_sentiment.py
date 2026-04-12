@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from backend.tasks import celery_app
+from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
 
@@ -39,12 +41,15 @@ def news_ingest_task(
         Dict with stock and macro ingestion stats.
     """
     self.update_state(state="PROGRESS", meta={"step": "ingesting_news"})
-    return asyncio.run(_ingest_news(lookback_days, tickers=tickers))
+    return asyncio.run(_ingest_news(lookback_days, tickers=tickers))  # type: ignore[arg-type]
 
 
+@tracked_task("news_ingest")
 async def _ingest_news(
     lookback_days: int,
     tickers: list[str] | None = None,
+    *,
+    run_id: uuid.UUID,
 ) -> dict:
     """Async implementation of news ingestion.
 
@@ -106,10 +111,11 @@ def news_sentiment_scoring_task(self, lookback_days: int = NEWS_LOOKBACK_DAYS) -
         Dict with scoring stats.
     """
     self.update_state(state="PROGRESS", meta={"step": "scoring_sentiment"})
-    return asyncio.run(_score_sentiment(lookback_days))
+    return asyncio.run(_score_sentiment(lookback_days))  # type: ignore[arg-type]
 
 
-async def _score_sentiment(lookback_days: int) -> dict:
+@tracked_task("news_scoring")
+async def _score_sentiment(lookback_days: int, *, run_id: uuid.UUID) -> dict:
     """Async implementation of sentiment scoring."""
     from sqlalchemy import update
     from sqlalchemy.dialects.postgresql import insert as pg_insert

@@ -2,17 +2,17 @@
 
 import asyncio
 import logging
+import uuid
 
 from backend.database import async_session_factory
 from backend.tasks import celery_app
-from backend.tasks.pipeline import PipelineRunner
+from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
 
-_runner = PipelineRunner()
 
-
-async def _generate_recommendations_async() -> dict:
+@tracked_task("recommendations")
+async def _generate_recommendations_async(*, run_id: uuid.UUID) -> dict:
     """Generate recommendations for all users with portfolios/watchlists.
 
     For each user, gets their watchlist + portfolio tickers, loads the latest
@@ -147,4 +147,4 @@ def generate_recommendations_task() -> dict:
         Dict with generation status and counts.
     """
     logger.info("Starting nightly recommendation generation")
-    return asyncio.run(_generate_recommendations_async())
+    return asyncio.run(_generate_recommendations_async())  # type: ignore[arg-type]
