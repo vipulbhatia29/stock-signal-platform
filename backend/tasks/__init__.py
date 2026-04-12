@@ -21,6 +21,7 @@ celery_app = Celery(
         "backend.tasks.convergence",
         "backend.tasks.seed_tasks",
         "backend.tasks.news_sentiment",
+        "backend.tasks.dq_scan",
     ],
 )
 
@@ -89,6 +90,11 @@ celery_app.conf.beat_schedule = {
     "news-sentiment-scoring": {
         "task": "backend.tasks.news_sentiment.news_sentiment_scoring_task",
         "schedule": crontab(hour="7,11,15,19", minute=0),  # 1h after ingest
+    },
+    # ── Nightly DQ scan (4 AM ET daily) ──
+    "dq-scan-daily": {
+        "task": "backend.tasks.dq_scan.dq_scan_task",
+        "schedule": crontab(hour=4, minute=0),
     },
     # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {

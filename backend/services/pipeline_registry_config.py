@@ -1,6 +1,6 @@
 """Pipeline registry configuration — all task group definitions.
 
-Registers all 7 pipeline task groups into a PipelineRegistry.
+Registers all 8 pipeline task groups into a PipelineRegistry.
 Import build_registry() at application start-up or in admin endpoints.
 """
 
@@ -18,9 +18,10 @@ def build_registry() -> PipelineRegistry:
     5. maintenance   — audit record purges
     6. model_training — Prophet retraining + backtest + calibration
     7. news_sentiment — (Spec B placeholder) news ingestion + scoring
+    8. data_quality  — nightly DQ checks + alert generation
 
     Returns:
-        PipelineRegistry with all 7 task groups registered.
+        PipelineRegistry with all 8 task groups registered.
     """
     registry = PipelineRegistry()
 
@@ -437,6 +438,20 @@ def build_registry() -> PipelineRegistry:
             estimated_duration="5-15 min",
             incremental=True,
             rationale="[Spec B placeholder] Score ingested articles after ingest completes",
+        )
+    )
+
+    # ── 8. Data quality group ───────────────────────────────────────────────────
+    registry.register(
+        TaskDefinition(
+            name="backend.tasks.dq_scan.dq_scan_task",
+            display_name="DQ Scan",
+            group="data_quality",
+            order=1,
+            schedule="4:00 AM ET daily",
+            estimated_duration="1-5 min",
+            idempotent=True,
+            rationale="Run 10 data quality checks; persist findings and fire critical alerts",
         )
     )
 

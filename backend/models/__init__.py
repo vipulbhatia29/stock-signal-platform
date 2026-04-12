@@ -8,6 +8,7 @@ from backend.models.base import Base
 from backend.models.chat import ChatMessage, ChatSession
 from backend.models.convergence import SignalConvergenceDaily
 from backend.models.dividend import DividendPayment
+from backend.models.dq_check_history import DqCheckHistory  # noqa: F401
 from backend.models.earnings import EarningsSnapshot
 from backend.models.forecast import ForecastResult, ModelVersion, RecommendationOutcome
 from backend.models.index import StockIndex, StockIndexMembership
@@ -41,6 +42,7 @@ __all__ = [
     "ChatMessage",
     "ChatSession",
     "DividendPayment",
+    "DqCheckHistory",
     "SignalConvergenceDaily",
     "EarningsSnapshot",
     "ForecastResult",
