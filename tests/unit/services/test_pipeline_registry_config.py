@@ -255,13 +255,13 @@ class TestWarmDataGroup:
 class TestMaintenanceGroup:
     """Tests for the 'maintenance' task group."""
 
-    def test_maintenance_has_two_tasks(self) -> None:
-        """Maintenance group has exactly 2 tasks."""
+    def test_maintenance_has_four_tasks(self) -> None:
+        """Maintenance group has exactly 4 tasks."""
         from backend.services.pipeline_registry_config import build_registry
 
         registry = build_registry()
         tasks = registry.get_group("maintenance")
-        assert len(tasks) == 2
+        assert len(tasks) == 4
 
     def test_maintenance_purge_login_before_accounts(self) -> None:
         """Login attempt purge (order=1) runs before account purge (order=2)."""

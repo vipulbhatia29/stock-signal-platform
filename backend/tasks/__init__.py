@@ -22,6 +22,7 @@ celery_app = Celery(
         "backend.tasks.seed_tasks",
         "backend.tasks.news_sentiment",
         "backend.tasks.dq_scan",
+        "backend.tasks.retention",
     ],
 )
 
@@ -95,6 +96,15 @@ celery_app.conf.beat_schedule = {
     "dq-scan-daily": {
         "task": "backend.tasks.dq_scan.dq_scan_task",
         "schedule": crontab(hour=4, minute=0),
+    },
+    # ── Nightly retention purges ──
+    "forecast-retention-daily": {
+        "task": "backend.tasks.retention.purge_old_forecasts_task",
+        "schedule": crontab(hour=3, minute=30),
+    },
+    "news-retention-daily": {
+        "task": "backend.tasks.retention.purge_old_news_articles_task",
+        "schedule": crontab(hour=3, minute=45),
     },
     # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {

@@ -13,15 +13,24 @@ import os
 import pytest
 
 import backend.services.http_client as _http_mod
+import backend.services.redis_pool as _redis_mod
 
 
 @pytest.fixture(autouse=True)
-async def _reset_http_client():
-    """Reset shared httpx client between API tests to avoid stale event-loop references."""
+async def _reset_shared_clients():
+    """Reset shared clients between API tests to avoid stale event-loop references.
+
+    Both httpx and Redis create connections bound to the current event loop.
+    If not closed before the loop teardown, asyncio raises 'Event loop is closed'
+    during the transport's call_connection_lost callback.
+    """
     yield
     if _http_mod._client is not None:
         await _http_mod._client.aclose()
         _http_mod._client = None
+    if _redis_mod._pool is not None:
+        await _redis_mod._pool.aclose()
+        _redis_mod._pool = None
 
 
 # Only override db_url when running in CI — otherwise the root conftest's
