@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Literal, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict, cast
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -360,9 +361,11 @@ def nightly_pipeline_chain_task() -> dict:
         for pattern in ("app:screener:*", "app:sectors:*", "app:signals:*", "app:forecast:*"):
             cursor = 0
             while True:
-                # TODO(KAN-pyright-cleanup): redis-py stubs declare scan() async-overload
-                # in some sync contexts; runtime path uses sync redis client.
-                cursor, keys = r.scan(cursor=cursor, match=pattern, count=100)  # pyright: ignore[reportGeneralTypeIssues]
+                scan_result = cast(
+                    "tuple[int, list[str]]",
+                    r.scan(cursor=cursor, match=pattern, count=100),
+                )
+                cursor, keys = scan_result
                 if keys:
                     r.delete(*keys)
                     deleted += len(keys)
@@ -424,7 +427,7 @@ def nightly_pipeline_chain_task() -> dict:
     return results
 
 
-def _run_tasks_parallel(tasks: dict[str, object]) -> dict:
+def _run_tasks_parallel(tasks: dict[str, "Callable[[], object]"]) -> dict:
     """Run multiple no-arg Celery task functions concurrently in threads.
 
     Each task calls asyncio.run() internally, so each thread gets its own
@@ -440,10 +443,7 @@ def _run_tasks_parallel(tasks: dict[str, object]) -> dict:
 
     results: dict = {}
     with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
-        # TODO(KAN-pyright-cleanup): tasks values are typed as object since this helper
-        # accepts heterogeneous Callables; ThreadPoolExecutor.submit's ParamSpec inference
-        # cannot resolve through dict.values(). Runtime contract is enforced by callers.
-        futures = {executor.submit(fn): name for name, fn in tasks.items()}  # pyright: ignore[reportCallIssue, reportArgumentType]
+        futures = {executor.submit(fn): name for name, fn in tasks.items()}
         for future in as_completed(futures):
             name = futures[future]
             try:

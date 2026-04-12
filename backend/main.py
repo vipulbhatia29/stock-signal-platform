@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import cast
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.requests import Request
+from starlette.responses import Response
 
 from backend.config import settings
 from backend.rate_limit import limiter
@@ -149,18 +152,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         from backend.services.cache import CacheTier
 
         async with async_session_factory() as warmup_db:
-            # TODO(KAN-pyright-cleanup): StockIndex was relocated to backend.models.index
-            # in an earlier refactor; this import path is stale but functional via re-export.
-            from backend.models.stock import (
-                StockIndex,  # pyright: ignore[reportAttributeAccessIssue]
-            )
+            from backend.models.index import StockIndex
 
             idx_result = await warmup_db.execute(select(StockIndex))
             indexes = idx_result.scalars().all()
             if indexes:
                 import json
 
-                idx_data = json.dumps([{"ticker": i.ticker, "name": i.name} for i in indexes])
+                idx_data = json.dumps([{"slug": i.slug, "name": i.name} for i in indexes])
                 await cache_service.set("app:indexes", idx_data, CacheTier.STABLE)
                 logger.info("Cache warmup: %d index entries", len(indexes))
     except Exception:
@@ -321,10 +320,11 @@ app = FastAPI(
 
 # --- Middleware ---
 app.state.limiter = limiter
-# TODO(KAN-pyright-cleanup): slowapi's _rate_limit_exceeded_handler is typed against its
-# concrete RateLimitExceeded subclass, while FastAPI.add_exception_handler accepts the
-# broader ExceptionHandler protocol. The runtime contract is correct.
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # pyright: ignore[reportArgumentType]
+_rate_limit_handler = cast(
+    "Callable[[Request, Exception], Response | Awaitable[Response]]",
+    _rate_limit_exceeded_handler,
+)
+app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 app.add_middleware(
     CORSMiddleware,

@@ -185,13 +185,12 @@ class PipelineRunner:
         async with async_session_factory() as session:
             result = await session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
             run = result.scalar_one()
-            run.completed_at = datetime.now(timezone.utc)
+            completed = datetime.now(timezone.utc)
+            run.completed_at = completed
 
             # Compute total duration
             if run.started_at:
-                # TODO(KAN-pyright-cleanup): run.completed_at was set on the line above
-                # but pyright cannot narrow Mapped[datetime|None] across the assignment.
-                run.total_duration_seconds = (run.completed_at - run.started_at).total_seconds()  # pyright: ignore[reportOptionalOperand]
+                run.total_duration_seconds = (completed - run.started_at).total_seconds()
 
             # Zero-work check MUST precede the success/failed/partial classification
             # because `tickers_failed == 0` would otherwise match both a genuine
