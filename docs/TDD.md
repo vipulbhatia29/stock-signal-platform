@@ -663,7 +663,7 @@ GET /api/v1/indexes/{slug}/stocks
 POST /api/v1/stocks/{ticker}/ingest
   Response: { ticker, name, rows_fetched, composite_score, status: "created"|"updated" }
   Auth:     Required
-  Rate:     5 requests/minute (expensive: yfinance + signal computation)
+  Rate:     20 requests/hour per user (expensive: yfinance + signal computation)
   Behavior: If ticker has no data → full 10Y fetch
             If ticker has data → delta fetch from last_fetched_at
             Always recomputes signals after fetch
@@ -1124,7 +1124,8 @@ GET /api/v1/observability/my-queries/{query_id}
 | `RationaleGenerator` | `backend/services/rationale.py` | Natural-language rationale generation for convergence signals. Explains signal alignment, divergence alerts, and forecast context in user-friendly text. |
 | `NewsIngestionService` | `backend/services/news/ingestion.py` | Multi-provider stock + macro news ingestion. Parallel fetching via `asyncio.gather`. Batch dedup (no N+1). Stores to `news_articles` table. |
 | `SentimentScorer` | `backend/services/news/sentiment_scorer.py` | LLM-based article sentiment scoring (GPT-4o-mini). Batch scoring, event_type allowlist, exponential decay daily aggregation. Produces 3 regressor channels (stock, sector, macro). |
-| `PipelineRegistry` | `backend/services/pipeline_registry.py` | Task registry with dependency resolution. TaskDefinition dataclass, topological sort execution plans, 7 task groups. See section 6.4. |
+| `TokenBucketLimiter` | `backend/services/rate_limiter.py` | Redis-backed token bucket for outbound API rate limiting. Atomic Lua script, NOSCRIPT recovery, permissive fallback. Named instances: yfinance (30 RPM), finnhub (60 RPM), edgar (10 RPS), google_news (20 RPM), fed (30 RPM). |
+| `PipelineRegistry` | `backend/services/pipeline_registry.py` | Task registry with dependency resolution. TaskDefinition dataclass, topological sort execution plans, 8 task groups. See section 6.4. |
 | `GroupRunManager` | `backend/services/pipeline_registry.py` | Redis-based pipeline run lifecycle. Atomic SET NX for concurrent protection, per-task status tracking, run history (capped at 50). |
 | News Providers | `backend/services/news/` | 4 providers implementing `NewsProvider` ABC: `FinnhubProvider` (premium API), `EdgarProvider` (SEC 8-K/10-K), `FedRssProvider` (Fed RSS + FRED), `GoogleNewsProvider` (RSS fallback). Uses `defusedxml` for XXE safety. |
 
@@ -1434,16 +1435,19 @@ flowchart TB
 | 2:00 AM Sun | `sync_institutional_holders_task` | Weekly | warm_data |
 | 3:00 AM | `purge_login_attempts_task` | Daily | maintenance |
 | 3:15 AM | `purge_deleted_accounts_task` | Daily | maintenance |
+| 3:30 AM | `purge_old_forecasts_task` | Daily | maintenance |
+| 3:45 AM | `purge_old_news_articles_task` | Daily | maintenance |
+| 4:00 AM | `dq_scan_task` | Daily | data_quality |
 | 6:00 AM | `sync_analyst_consensus_task` | Daily | warm_data |
 | 6:00, 10:00, 14:00, 18:00 | `news_ingest_task` | 4x/day | news_sentiment |
 | 7:00, 11:00, 15:00, 19:00 | `news_sentiment_scoring_task` | 4x/day (1hr after ingest) | news_sentiment |
 | 7:00 AM | `sync_fred_indicators_task` | Daily | warm_data |
-| Every 30 min | `refresh_all_watchlist_tickers_task` | Intraday | intraday |
+| Every 30 min | `intraday_refresh_all_task` | Intraday | intraday |
 | 4:00 PM | `snapshot_all_portfolios_task` | Daily | nightly |
 | 4:15 PM | `snapshot_health_task` | Daily | nightly |
 | 9:30 PM | `nightly_pipeline_chain_task` (11 steps) | Daily | nightly |
 
-**Task files** (15 in `backend/tasks/`): `market_data`, `portfolio`, `forecasting`, `evaluation`, `convergence`, `alerts`, `recommendations`, `news_sentiment`, `audit`, `warm_data`, `assessment_runner`, `scoring_engine`, `pipeline`, `golden_dataset`, `seed_tasks`.
+**Task files** (17 in `backend/tasks/`): `market_data`, `portfolio`, `forecasting`, `evaluation`, `convergence`, `alerts`, `recommendations`, `news_sentiment`, `audit`, `warm_data`, `assessment_runner`, `scoring_engine`, `pipeline`, `golden_dataset`, `seed_tasks`, `dq_scan`, `retention`.
 
 Timezone: `US/Eastern`. Tasks use `asyncio.run()` bridge for async code.
 
@@ -1543,11 +1547,12 @@ run_id = await run_group(
 |-------|-------|---------|--------------|---------|
 | **seed** | 9 tasks: admin_user → sp500 → [indexes, etfs] → [prices, dividends, fundamentals] → [forecasts, reason_tier] | First-run data hydration | stop_on_failure | 14,400 (4 hrs) |
 | **nightly** | 11 tasks: price_refresh → [forecasts, evals] → [drift, convergence] → [alerts, health, rebalancing] | Daily EOD refresh | continue | 10,800 (3 hrs) |
-| **intraday** | 1 task: watchlist_refresh | 30-minute incremental refresh | continue | 1,800 (30 min) |
+| **intraday** | 1 task: intraday_refresh_all | 30-minute incremental refresh | continue | 1,800 (30 min) |
 | **warm_data** | 3 parallel tasks: analyst_consensus, fred_indicators, institutional_holders | 7 AM daily | continue | 3,600 (1 hr) |
-| **maintenance** | 2 sequential: purge_login_attempts, purge_deleted_accounts | 3-3:15 AM daily | continue | 1,800 (30 min) |
-| **model_training** | 3 sequential: retrain_all → [backtest, calibrate] | Sunday 2 AM biweekly | stop_on_failure | 7,200 (2 hrs) |
-| **news_sentiment** | 2 placeholder tasks (Spec B) | News ingestion pipeline | continue | 3,600 (1 hr) |
+| **maintenance** | 4 sequential: purge_login_attempts → purge_deleted_accounts → purge_old_forecasts → purge_old_news_articles | 3-3:45 AM daily | continue | 1,800 (30 min) |
+| **model_training** | 2 sequential: retrain_all → backtest | Sunday 2 AM biweekly | stop_on_failure | 7,200 (2 hrs) |
+| **news_sentiment** | 2 tasks: news_ingest → news_sentiment_scoring | News ingestion pipeline | continue | 3,600 (1 hr) |
+| **data_quality** | 1 task: dq_scan (10 checks) | 4 AM daily — negative prices, RSI range, forecast extremes, orphan positions, etc. | continue | 300 (5 min) |
 
 #### Failure Modes
 
