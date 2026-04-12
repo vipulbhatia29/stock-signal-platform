@@ -392,6 +392,29 @@ def build_registry() -> PipelineRegistry:
         )
     )
 
+    registry.register(
+        TaskDefinition(
+            name="backend.tasks.retention.purge_old_forecasts_task",
+            display_name="Forecast Retention (30d)",
+            group="maintenance",
+            order=3,
+            schedule="3:30 AM ET daily",
+            estimated_duration="< 1 min",
+            rationale="Purge forecast rows older than 30 days to bound DB growth",
+        )
+    )
+    registry.register(
+        TaskDefinition(
+            name="backend.tasks.retention.purge_old_news_articles_task",
+            display_name="News Retention (90d)",
+            group="maintenance",
+            order=3,
+            schedule="3:45 AM ET daily",
+            estimated_duration="< 1 min",
+            rationale="Purge raw news articles older than 90 days; daily aggregates retained",
+        )
+    )
+
     # ── 6. Model training group ─────────────────────────────────────────────────
     registry.register(
         TaskDefinition(
