@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 
 from backend.tasks import celery_app
+from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
 
@@ -16,10 +18,11 @@ def purge_login_attempts_task() -> None:
 
     Batch delete to avoid lock contention. CCPA/GDPR compliant retention.
     """
-    asyncio.run(_purge_login_attempts_async())
+    asyncio.run(_purge_login_attempts_async())  # type: ignore[arg-type]
 
 
-async def _purge_login_attempts_async() -> None:
+@tracked_task("purge_login_attempts")
+async def _purge_login_attempts_async(*, run_id: uuid.UUID) -> None:
     """Async implementation of login attempt purge."""
     from datetime import datetime, timedelta, timezone
 
@@ -44,10 +47,11 @@ def purge_deleted_accounts_task() -> None:
     CASCADE foreign keys handle child record cleanup.
     Runs daily at 3:15 AM ET (after login attempt purge).
     """
-    asyncio.run(_purge_deleted_accounts_async())
+    asyncio.run(_purge_deleted_accounts_async())  # type: ignore[arg-type]
 
 
-async def _purge_deleted_accounts_async() -> None:
+@tracked_task("purge_deleted_accounts")
+async def _purge_deleted_accounts_async(*, run_id: uuid.UUID) -> None:
     """Async implementation of deleted account purge."""
     from datetime import datetime, timedelta, timezone
 

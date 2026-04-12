@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import async_session_factory
 from backend.models.alert import InAppAlert
 from backend.tasks import celery_app
+from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
 
@@ -106,8 +107,11 @@ async def _create_alert(
         return any_created
 
 
+@tracked_task("alerts")
 async def _generate_alerts_async(
     pipeline_context: dict | None = None,
+    *,
+    run_id: uuid.UUID,
 ) -> dict:
     """Generate in-app alerts based on pipeline results and signal changes.
 
@@ -450,4 +454,4 @@ def generate_alerts_task(pipeline_context: dict | None = None) -> dict:
         Dict with alert creation counts.
     """
     logger.info("Starting alert generation")
-    return asyncio.run(_generate_alerts_async(pipeline_context))
+    return asyncio.run(_generate_alerts_async(pipeline_context))  # type: ignore[arg-type]

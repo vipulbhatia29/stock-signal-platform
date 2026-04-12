@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from typing import AsyncGenerator
@@ -32,6 +33,7 @@ from backend.models.price import StockPrice
 from backend.services.ticker_state import mark_stages_updated
 from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
+from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
 
@@ -309,10 +311,12 @@ async def _backfill_actual_returns(
 # ---------------------------------------------------------------------------
 
 
+@tracked_task("convergence_snapshot")
 async def _compute_convergence_snapshot_async(
     ticker: str | None = None,
     *,
     _db: AsyncSession | None = None,
+    run_id: uuid.UUID,
 ) -> dict:
     """Compute and store daily convergence snapshot.
 
@@ -460,4 +464,4 @@ def compute_convergence_snapshot_task(ticker: str | None = None) -> dict:
     Returns:
         Status dict with computed/backfilled counts.
     """
-    return asyncio.run(_compute_convergence_snapshot_async(ticker=ticker))
+    return asyncio.run(_compute_convergence_snapshot_async(ticker=ticker))  # type: ignore[arg-type]

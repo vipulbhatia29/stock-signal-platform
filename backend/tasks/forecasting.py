@@ -194,6 +194,32 @@ def forecast_refresh_task() -> dict:
     return asyncio.run(_forecast_refresh_async())  # type: ignore[arg-type]  # wrapper is async def, pyright sees Awaitable not Coroutine
 
 
+@tracked_task("single_ticker_retrain")
+async def _retrain_single_ticker_async(ticker: str, *, run_id: uuid.UUID) -> dict:
+    """Async implementation: retrain a single ticker's Prophet model (drift-triggered).
+
+    Args:
+        ticker: Stock ticker to retrain.
+        run_id: Pipeline run ID injected by @tracked_task.
+
+    Returns:
+        Dict with training result.
+    """
+    from backend.tools.forecasting import predict_forecast, train_prophet_model
+
+    async with async_session_factory() as db:
+        model_version = await train_prophet_model(ticker, db)
+        forecasts = await predict_forecast(model_version, db)
+        for fc in forecasts:
+            db.add(fc)
+        await db.commit()
+        return {
+            "ticker": ticker,
+            "version": model_version.version,
+            "forecasts": len(forecasts),
+        }
+
+
 @celery_app.task(
     name="backend.tasks.forecasting.retrain_single_ticker_task",
 )
@@ -206,27 +232,12 @@ def retrain_single_ticker_task(ticker: str) -> dict:
     Returns:
         Dict with training result.
     """
-
-    async def _retrain() -> dict:
-        from backend.tools.forecasting import predict_forecast, train_prophet_model
-
-        async with async_session_factory() as db:
-            model_version = await train_prophet_model(ticker, db)
-            forecasts = await predict_forecast(model_version, db)
-            for fc in forecasts:
-                db.add(fc)
-            await db.commit()
-            return {
-                "ticker": ticker,
-                "version": model_version.version,
-                "forecasts": len(forecasts),
-            }
-
     logger.info("Retraining %s (drift-triggered)", ticker)
-    return asyncio.run(_retrain())
+    return asyncio.run(_retrain_single_ticker_async(ticker))  # type: ignore[arg-type]
 
 
-async def _run_backtest_async(ticker: str | None, horizon_days: int) -> dict:
+@tracked_task("backtest")
+async def _run_backtest_async(ticker: str | None, horizon_days: int, *, run_id: uuid.UUID) -> dict:
     """Async implementation of walk-forward backtest for one or all tickers.
 
     Args:
@@ -351,7 +362,7 @@ def run_backtest_task(ticker: str | None = None, horizon_days: int = 90) -> dict
         Dict with backtest results summary.
     """
     logger.info("Backtest task started: ticker=%s, horizon=%d", ticker or "all", horizon_days)
-    return asyncio.run(_run_backtest_async(ticker, horizon_days))
+    return asyncio.run(_run_backtest_async(ticker, horizon_days))  # type: ignore[arg-type]
 
 
 @celery_app.task(name="backend.tasks.forecasting.calibrate_seasonality_task")
