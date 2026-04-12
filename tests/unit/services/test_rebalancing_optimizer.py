@@ -102,7 +102,7 @@ class TestComputeRebalancing:
         p = MagicMock(ticker="AAPL", shares=10, market_value=1000.0)
 
         with patch(
-            "backend.services.portfolio.get_positions_with_pnl",
+            "backend.services.portfolio.analytics.get_positions_with_pnl",
             return_value=[p],
         ):
             result = await compute_rebalancing(uuid4(), "min_volatility", db)
@@ -115,7 +115,7 @@ class TestComputeRebalancing:
         """No positions → empty list."""
         db = AsyncMock()
         with patch(
-            "backend.services.portfolio.get_positions_with_pnl",
+            "backend.services.portfolio.analytics.get_positions_with_pnl",
             return_value=[],
         ):
             result = await compute_rebalancing(uuid4(), "min_volatility", db)

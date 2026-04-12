@@ -5,6 +5,14 @@ import type { ApiError } from "@/types/api";
 
 const API_BASE = "/api/v1";
 
+function getCsrfToken(): string | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("csrf_token="));
+  return match ? match.split("=")[1] : null;
+}
+
 export class ApiRequestError extends Error {
   status: number;
   detail: string;
@@ -35,13 +43,24 @@ async function request<T>(
 ): Promise<T> {
   const url = `${API_BASE}${path}`;
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options.headers as Record<string, string>),
+  };
+
+  // Attach CSRF token for mutating requests (cookie-auth only)
+  const method = (options.method || "GET").toUpperCase();
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+    const csrfToken = getCsrfToken();
+    if (csrfToken) {
+      headers["X-CSRF-Token"] = csrfToken;
+    }
+  }
+
   const config: RequestInit = {
     ...options,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...options.headers,
-    },
+    headers,
   };
 
   let res = await fetch(url, config);
