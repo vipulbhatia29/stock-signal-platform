@@ -98,8 +98,8 @@ class TestListPipelineGroups:
     async def test_returns_all_groups(self, admin_user: User) -> None:
         """Returns a PipelineGroupListResponse with all registered groups."""
         result = await list_pipeline_groups(user=admin_user)
-        # build_registry() registers 7 groups
-        assert len(result.groups) == 7
+        # build_registry() registers 8 groups
+        assert len(result.groups) == 8
         group_names = {g.name for g in result.groups}
         assert "seed" in group_names
         assert "nightly" in group_names

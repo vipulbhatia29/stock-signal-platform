@@ -14,6 +14,7 @@ EXPECTED_GROUPS = {
     "maintenance",
     "model_training",
     "news_sentiment",
+    "data_quality",
 }
 
 
@@ -28,8 +29,8 @@ class TestBuildRegistry:
         registry = build_registry()
         assert isinstance(registry, PipelineRegistry)
 
-    def test_all_seven_groups_present(self) -> None:
-        """Registry contains all 7 expected task groups."""
+    def test_all_eight_groups_present(self) -> None:
+        """Registry contains all 8 expected task groups."""
         from backend.services.pipeline_registry_config import build_registry
 
         registry = build_registry()
@@ -369,6 +370,36 @@ class TestRegistryTaskResolution:
             f"Registry contains {len(unresolved)} unresolvable task(s):\n"
             + "\n".join(f"  - {t}" for t in unresolved)
         )
+
+
+class TestDataQualityGroup:
+    """Tests for the 'data_quality' task group (KAN-446)."""
+
+    def test_data_quality_has_one_task(self) -> None:
+        """Data quality group has exactly 1 task (dq_scan_task)."""
+        from backend.services.pipeline_registry_config import build_registry
+
+        registry = build_registry()
+        tasks = registry.get_group("data_quality")
+        assert len(tasks) == 1
+
+    def test_dq_scan_task_is_order_one(self) -> None:
+        """DQ scan task is order=1."""
+        from backend.services.pipeline_registry_config import build_registry
+
+        registry = build_registry()
+        task = registry.get_task("backend.tasks.dq_scan.dq_scan_task")
+        assert task is not None
+        assert task.order == 1
+
+    def test_dq_scan_task_is_idempotent(self) -> None:
+        """DQ scan task is marked idempotent (safe to re-run)."""
+        from backend.services.pipeline_registry_config import build_registry
+
+        registry = build_registry()
+        task = registry.get_task("backend.tasks.dq_scan.dq_scan_task")
+        assert task is not None
+        assert task.idempotent is True
 
 
 class TestCalibrateSeasonalityDeleted:
