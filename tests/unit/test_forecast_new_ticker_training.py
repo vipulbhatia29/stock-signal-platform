@@ -78,18 +78,8 @@ class TestForecastNewTickerDispatch:
                 return_value=mock_session_ctx,
             ),
             patch(
-                "backend.tasks.forecasting._runner.start_run",
-                new_callable=AsyncMock,
-                return_value="run-1",
-            ),
-            patch(
                 "backend.tasks.forecasting._runner.record_ticker_success",
                 new_callable=AsyncMock,
-            ),
-            patch(
-                "backend.tasks.forecasting._runner.complete_run",
-                new_callable=AsyncMock,
-                return_value="ok",
             ),
             patch("backend.tools.forecasting.predict_forecast", new=AsyncMock(return_value=[])),
             patch(
@@ -107,7 +97,7 @@ class TestForecastNewTickerDispatch:
             result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
         mock_retrain_task.delay.assert_called_once_with(new_ticker)
-        assert result["status"] == "ok"
+        assert result["refreshed"] == 1
 
     @pytest.mark.asyncio
     async def test_skips_ticker_with_insufficient_data(self) -> None:
@@ -126,18 +116,8 @@ class TestForecastNewTickerDispatch:
                 return_value=mock_session_ctx,
             ),
             patch(
-                "backend.tasks.forecasting._runner.start_run",
-                new_callable=AsyncMock,
-                return_value="run-1",
-            ),
-            patch(
                 "backend.tasks.forecasting._runner.record_ticker_success",
                 new_callable=AsyncMock,
-            ),
-            patch(
-                "backend.tasks.forecasting._runner.complete_run",
-                new_callable=AsyncMock,
-                return_value="ok",
             ),
             patch("backend.tools.forecasting.predict_forecast", new=AsyncMock(return_value=[])),
             patch(
@@ -155,7 +135,7 @@ class TestForecastNewTickerDispatch:
             result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
         mock_retrain_task.delay.assert_not_called()
-        assert result["status"] == "ok"
+        assert result["refreshed"] == 1
 
     @pytest.mark.asyncio
     async def test_caps_dispatch_at_max_new_models_per_night(self) -> None:
@@ -177,18 +157,8 @@ class TestForecastNewTickerDispatch:
                 return_value=mock_session_ctx,
             ),
             patch(
-                "backend.tasks.forecasting._runner.start_run",
-                new_callable=AsyncMock,
-                return_value="run-1",
-            ),
-            patch(
                 "backend.tasks.forecasting._runner.record_ticker_success",
                 new_callable=AsyncMock,
-            ),
-            patch(
-                "backend.tasks.forecasting._runner.complete_run",
-                new_callable=AsyncMock,
-                return_value="ok",
             ),
             patch("backend.tools.forecasting.predict_forecast", new=AsyncMock(return_value=[])),
             patch(
@@ -208,7 +178,7 @@ class TestForecastNewTickerDispatch:
         assert mock_retrain_task.delay.call_count == MAX_NEW_MODELS_PER_NIGHT
         dispatched_tickers = {call.args[0] for call in mock_retrain_task.delay.call_args_list}
         assert dispatched_tickers.issubset(set(new_tickers))
-        assert result["status"] == "ok"
+        assert result["refreshed"] == 1
 
     @pytest.mark.asyncio
     async def test_phase2_exception_does_not_break_phase1_results(self) -> None:
@@ -226,18 +196,8 @@ class TestForecastNewTickerDispatch:
                 return_value=mock_session_ctx,
             ),
             patch(
-                "backend.tasks.forecasting._runner.start_run",
-                new_callable=AsyncMock,
-                return_value="run-1",
-            ),
-            patch(
                 "backend.tasks.forecasting._runner.record_ticker_success",
                 new_callable=AsyncMock,
-            ),
-            patch(
-                "backend.tasks.forecasting._runner.complete_run",
-                new_callable=AsyncMock,
-                return_value="ok",
             ),
             patch("backend.tools.forecasting.predict_forecast", new=AsyncMock(return_value=[])),
             patch(
@@ -251,6 +211,6 @@ class TestForecastNewTickerDispatch:
             result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
         # Phase 1 completed normally; Phase 2 failure did not propagate
-        assert result["status"] == "ok"
+        assert result["refreshed"] == 1
         # No new-ticker dispatch should have occurred
         mock_retrain_task.delay.assert_not_called()
