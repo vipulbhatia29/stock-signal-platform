@@ -565,10 +565,10 @@ Remaining fundamental signals (P/E, PEG, FCF Yield, Debt/Equity, Interest Covera
 - Feedback stored as "up"/"down" on ChatMessage model
 
 **FR-8.10: Onboarding Experience** ✅ IMPLEMENTED
-- Welcome banner on first visit (localStorage-based detection, dismissible)
+- Welcome banner on dashboard when watchlist AND positions are empty (loading-state gated to prevent flash)
+- Also dismissible via localStorage
 - Banner shows 5 suggested tickers (AAPL, MSFT, GOOGL, TSLA, NVDA) as one-click add buttons
 - Quick-add: ingests stock data + adds to watchlist in one action
-- Empty watchlist state shows quick-add buttons for popular tickers
 - Trending stocks section on dashboard (top 5 by composite score, visible even with empty watchlist)
 - Uses existing `GET /stocks/signals/bulk?sort_by=composite_score&limit=5` endpoint
 
@@ -599,6 +599,17 @@ Remaining fundamental signals (P/E, PEG, FCF Yield, Debt/Equity, Interest Covera
   today's recommendations, any triggered alerts
 - Quiet hours: no notifications between quiet_hours_start and quiet_hours_end
   (from UserPreference)
+
+**FR-9.4: Data Quality Alerts** ✅ IMPLEMENTED
+- Nightly DQ scanner runs 10 checks (negative prices, RSI range, composite score range, null sectors, extreme forecasts, orphan positions, duplicate signals, stale coverage, negative volume, bollinger violations)
+- Critical findings auto-create in-app alerts via dedup_key
+- Findings persisted to `dq_check_history` table for trend tracking
+- Beat schedule: 04:00 ET daily
+
+**FR-9.5: Data Retention**  ✅ IMPLEMENTED
+- Forecast results purged after 30 days
+- News articles purged after 90 days (daily aggregates retained forever)
+- Beat schedule: 03:30/03:45 ET daily
 
 ### FR-10: Recommendation Evaluation ✅ IMPLEMENTED
 

@@ -144,18 +144,35 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 2-persona review found 3 CRITICALs (query key mismatches, orphaned schemas, stacklevel) — all fixed
 - Tests: 1980 unit + 448 API
 
-### KAN-425 — Spec F Rate Limiters F2/F3/F4 (PR pending)
+### KAN-425 — Spec F Rate Limiters F2/F3/F4 (PR #220 merged)
 - `TokenBucketLimiter` class with atomic Lua script + NOSCRIPT recovery
 - Integrated into 4 news providers (replacing crude sleep patterns)
 - Integrated into `stock_data.py` (3 yfinance call sites)
 - `@limiter.limit("20/hour")` on ingest endpoint + frontend 429 handling
 - Autouse conftest fixture for rate limiter no-op in all unit tests
 - 2-persona review found 2 CRITICALs (dead None check, stale SHA) — fixed
-- Tests: 1995 unit (net +15)
-- Filed: KAN-446 (DQ scanner), KAN-447 (retention), KAN-448 (compression) — deferred from Spec F
+
+### KAN-427 Z3 — News LIMIT 50→200 (PR #221 merged)
+- Replaced `select(Stock.ticker).limit(50)` with `get_all_referenced_tickers()[:200]`
+- Now safe with rate limiters in place
+
+### KAN-446 — DQ Scanner (PR #222 merged)
+- 10 nightly data quality checks in `backend/tasks/dq_scan.py`
+- `DqCheckHistory` model + migration 027
+- PipelineRegistry "data_quality" group (8th group)
+- Critical findings generate in-app alerts
+- Beat schedule at 04:00 ET daily
+
+### KAN-447 — Retention Tasks (PR #223 merged)
+- `purge_old_forecasts_task` — 30d window on ForecastResult
+- `purge_old_news_articles_task` — 90d window on NewsArticle
+- Beat schedule at 03:30/03:45 ET daily
+- **Bonus:** Fixed flaky `test_refresh_issues_new_csrf_token` — Redis pool not reset between API tests caused event loop teardown crash
 
 ### Session 106 Totals
-- 1 PR merged (#219), 1 PR pending (rate limiters)
-- Tests: 1995 unit + 448 API
-- 4 JIRA tickets completed (KAN-408, KAN-427), 3 filed (KAN-446/447/448)
-- Resume: Merge rate limiter PR, then Z3 (news LIMIT 50→200) is unblocked
+- 5 PRs merged (#219-223)
+- Tests: 2023 unit + 448 API
+- 5 JIRA tickets completed (KAN-408, KAN-425, KAN-427, KAN-446, KAN-447)
+- 3 JIRA tickets filed (KAN-446/447/448) — 446+447 now Done, 448 remains
+- Flaky CI test fixed (Redis pool teardown)
+- Resume: KAN-448 (compression, Low), KAN-423 (entry points), KAN-424 (forecast quality)
