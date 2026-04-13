@@ -144,6 +144,8 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
           score={signals?.composite_score ?? null}
           isInWatchlist={isInWatchlist}
           onToggleWatchlist={handleToggleWatchlist}
+          isRefreshing={signals?.is_refreshing}
+          isStale={signals?.is_stale}
         />
       )}
 

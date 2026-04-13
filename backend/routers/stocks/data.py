@@ -56,6 +56,48 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Refresh debounce constants
+# ─────────────────────────────────────────────────────────────────────────────
+
+REFRESH_DEBOUNCE_KEY = "refresh:debounce:{ticker}"
+REFRESH_DEBOUNCE_TTL = 300  # 5 minutes
+
+
+async def _try_dispatch_refresh(ticker: str) -> bool:
+    """Dispatch a background refresh if not recently dispatched.
+
+    Uses Redis SETNX with 5-min TTL to debounce. Returns True if a refresh
+    was dispatched (or Redis is unavailable — fail-open), False if debounced.
+
+    Args:
+        ticker: Stock ticker symbol.
+
+    Returns:
+        True if refresh was dispatched, False if debounced.
+    """
+    try:
+        from backend.services.redis_pool import get_redis
+
+        redis = await get_redis()
+        acquired = await redis.set(
+            REFRESH_DEBOUNCE_KEY.format(ticker=ticker.upper()),
+            "1",
+            ex=REFRESH_DEBOUNCE_TTL,
+            nx=True,
+        )
+        if not acquired:
+            return False  # debounced — already dispatched recently
+    except Exception:
+        logger.warning("Redis unavailable for refresh debounce %s", ticker, exc_info=True)
+        # fail-open: dispatch anyway
+
+    from backend.tasks.market_data import refresh_ticker_task
+
+    refresh_ticker_task.delay(ticker)
+    logger.info("Dispatched background refresh for stale ticker %s", ticker)
+    return True
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Price history
@@ -174,9 +216,15 @@ async def get_signals(
         )
 
     is_stale = False
+    is_refreshing = False
     if snapshot.computed_at:
         age = datetime.now(timezone.utc) - snapshot.computed_at.replace(tzinfo=timezone.utc)
         is_stale = age > timedelta(hours=24)
+
+    # Auto-dispatch background refresh for stale signals (Spec C.4)
+    if is_stale:
+        await _try_dispatch_refresh(ticker)
+        is_refreshing = True  # optimistic: either we dispatched or another request did
 
     response = SignalResponse(
         ticker=snapshot.ticker,
@@ -204,8 +252,9 @@ async def get_signals(
         ),
         composite_score=snapshot.composite_score,
         is_stale=is_stale,
+        is_refreshing=is_refreshing,
     )
-    if cache:
+    if cache and not is_stale:
         from backend.services.cache import CacheTier
 
         await cache.set(cache_key, response.model_dump_json(), CacheTier.STANDARD)
