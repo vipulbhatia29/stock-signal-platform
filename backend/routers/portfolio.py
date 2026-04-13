@@ -6,7 +6,7 @@ import logging
 import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,8 +15,10 @@ from backend.database import get_async_session
 from backend.dependencies import get_current_user, require_verified_email
 from backend.models.signal import SignalSnapshot
 from backend.models.user import User
+from backend.rate_limit import limiter
 from backend.routers.preferences import _get_or_create_preference
 from backend.schemas.portfolio import (
+    BulkTransactionResponse,
     DivestmentAlert,
     DividendSummaryResponse,
     PortfolioAnalyticsResponse,
@@ -51,6 +53,11 @@ from backend.services.portfolio import (
 from backend.services.portfolio import delete_transaction as svc_delete_transaction
 from backend.services.portfolio import get_health_history as svc_get_health_history
 from backend.services.portfolio import list_transactions as svc_list_transactions
+from backend.services.portfolio.bulk_import import (
+    MAX_FILE_SIZE,
+    ingest_new_tickers,
+    parse_csv,
+)
 from backend.services.portfolio_forecast import PortfolioForecastResult, PortfolioForecastService
 from backend.services.recommendations import calculate_position_size
 from backend.services.stock_data import ensure_stock_exists, get_latest_price
@@ -791,4 +798,113 @@ async def get_portfolio_forecast_components(
     return PortfolioForecastComponentsResponse(
         portfolio_id=portfolio_id,
         components=[],
+    )
+
+
+@router.post(
+    "/transactions/bulk",
+    response_model=BulkTransactionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Bulk upload transactions via CSV",
+)
+@limiter.limit("3/hour")
+async def bulk_upload_transactions(
+    request: Request,
+    file: UploadFile = File(...),
+    validate_only: bool = Query(
+        False, description="Dry-run: validate CSV without creating transactions"
+    ),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> BulkTransactionResponse:
+    """Upload a CSV file of portfolio transactions.
+
+    Accepts a multipart CSV with columns: ticker, transaction_type, shares,
+    price_per_share, transacted_at, notes (optional). Max 500 rows, 256KB.
+    New tickers are auto-ingested with bounded concurrency.
+
+    Set validate_only=true for a dry-run that returns errors without creating
+    transactions.
+    """
+    require_verified_email(current_user)
+
+    # Validate content type
+    if file.content_type not in ("text/csv", "application/csv", "text/plain"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be a CSV (text/csv).",
+        )
+
+    # Read and check size
+    content_bytes = await file.read()
+    if len(content_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // 1024}KB.",
+        )
+
+    try:
+        content = content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be UTF-8 encoded.",
+        )
+
+    # Parse CSV
+    rows, parse_errors = parse_csv(content)
+
+    if not rows and parse_errors:
+        return BulkTransactionResponse(
+            created=0,
+            skipped=0,
+            errors=parse_errors,
+            validate_only=validate_only,
+        )
+
+    if validate_only:
+        return BulkTransactionResponse(
+            created=len(rows),
+            skipped=0,
+            errors=parse_errors,
+            validate_only=True,
+        )
+
+    # Ingest new tickers
+    ingest_errors = await ingest_new_tickers(rows, db, str(current_user.id))
+    failed_tickers = {e.ticker for e in ingest_errors if e.ticker}
+
+    # Create transactions (skip rows for failed tickers)
+    from backend.models.portfolio import Transaction
+
+    portfolio = await get_or_create_portfolio(current_user.id, db)
+
+    created = 0
+    all_errors = parse_errors + ingest_errors
+
+    for row in rows:
+        if row.ticker in failed_tickers:
+            continue
+        txn = Transaction(
+            portfolio_id=portfolio.id,
+            ticker=row.ticker,
+            transaction_type=row.transaction_type,
+            shares=row.shares,
+            price_per_share=row.price_per_share,
+            transacted_at=row.transacted_at,
+            notes=row.notes,
+        )
+        db.add(txn)
+        created += 1
+
+    if created > 0:
+        await db.commit()
+
+    skipped = len(rows) - created
+
+    return BulkTransactionResponse(
+        created=created,
+        skipped=skipped,
+        errors=all_errors,
+        validate_only=False,
     )

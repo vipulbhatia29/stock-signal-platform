@@ -122,6 +122,21 @@ export function del<T>(path: string): Promise<T> {
   return request<T>(path, { method: "DELETE" });
 }
 
+export async function postMultipart<T>(path: string, formData: FormData): Promise<T> {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+    // Do NOT set Content-Type — browser sets it with boundary automatically
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new ApiRequestError(res.status, body.detail || res.statusText);
+  }
+  return res.json();
+}
+
 // ── Auth (no auto-redirect on failure) ────────────────────────────────────────
 
 export async function loginRequest(

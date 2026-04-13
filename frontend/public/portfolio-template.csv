@@ -1,0 +1,4 @@
+ticker,transaction_type,shares,price_per_share,transacted_at,notes
+AAPL,BUY,10,150.50,2024-01-15T10:00:00,Initial position
+MSFT,BUY,5,380.00,2024-02-01T14:30:00,
+GOOGL,SELL,3,140.25,2024-03-10T09:15:00,Partial exit

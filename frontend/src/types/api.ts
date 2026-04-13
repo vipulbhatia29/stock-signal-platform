@@ -1194,3 +1194,16 @@ export interface PipelineGroup {
   tasks: PipelineTask[];
   is_running: boolean;
 }
+
+export interface BulkTransactionError {
+  row: number;
+  ticker: string | null;
+  error: string;
+}
+
+export interface BulkTransactionResponse {
+  created: number;
+  skipped: number;
+  errors: BulkTransactionError[];
+  validate_only: boolean;
+}

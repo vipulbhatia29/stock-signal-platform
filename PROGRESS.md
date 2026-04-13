@@ -155,7 +155,15 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - **Frontend**: `useSignals` polls every 5s when refreshing, `StockHeader` shows blue "Refreshing" / amber "Outdated" badges
 - 1-persona Opus review (BA): no issues
 
+### KAN-452 — C5: Bulk CSV Upload
+- **`bulk_import.py`** (new): `parse_csv` + `ingest_new_tickers` (Semaphore(5), dedup lock)
+- **`portfolio.py`**: `POST /portfolio/transactions/bulk` — multipart, rate limited 3/hr, 256KB, validate_only
+- **Schemas**: `BulkTransactionRow/Error/Response`
+- **Frontend**: `postMultipart`, `useBulkUploadTransactions`, `BulkTransactionUpload` component, template CSV
+- 2-persona Opus review: no CRITICALs
+
 ### Session 108 Totals
-- Tests: 2037 → 2069 unit (+32 new across KAN-449 + KAN-450 + KAN-451)
-- 3 JIRA tickets shipped (KAN-449, KAN-450, KAN-451)
-- Resume: KAN-452 (bulk CSV upload, PR4 of Spec C — last PR to complete Spec C)
+- Tests: 2037 → 2080 unit (+43 new across KAN-449/450/451/452)
+- 4 JIRA tickets shipped (KAN-449, KAN-450, KAN-451, KAN-452) — **Spec C complete**
+- 4 PRs merged (#229, #230, #231, #232)
+- Resume: KAN-426 (Spec G frontend polish) or KAN-429 (JIRA automation bug)

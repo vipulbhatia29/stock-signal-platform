@@ -222,3 +222,42 @@ class PortfolioAnalyticsResponse(BaseModel):
     data_days: int | None = None
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Bulk CSV upload (Spec C.5)
+# ---------------------------------------------------------------------------
+
+
+class BulkTransactionRow(BaseModel):
+    """A single row from a CSV bulk upload."""
+
+    ticker: str = Field(..., min_length=1, max_length=10)
+    transaction_type: str = Field(..., pattern="^(BUY|SELL)$")
+    shares: Decimal = Field(..., gt=0)
+    price_per_share: Decimal = Field(..., gt=0)
+    transacted_at: datetime
+    notes: str | None = None
+
+    @field_validator("ticker")
+    @classmethod
+    def uppercase_ticker(cls, v: str) -> str:
+        """Normalise ticker to uppercase and strip whitespace."""
+        return v.upper().strip()
+
+
+class BulkTransactionError(BaseModel):
+    """Per-row error in a bulk upload."""
+
+    row: int
+    ticker: str | None = None
+    error: str
+
+
+class BulkTransactionResponse(BaseModel):
+    """Response from bulk CSV upload endpoint."""
+
+    created: int = 0
+    skipped: int = 0
+    errors: list[BulkTransactionError] = []
+    validate_only: bool = False
