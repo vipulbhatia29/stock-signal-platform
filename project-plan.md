@@ -186,7 +186,7 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 | &nbsp;&nbsp;↳ KAN-449 | C1+C6 | High | Watchlist auto-ingest + Redis dedup infra | **✅ Done (Session 108)** |
 | &nbsp;&nbsp;↳ KAN-450 | C2+C3 | High | Portfolio sync-ingest + Chat canonical ingest | **✅ Done (Session 108)** |
 | &nbsp;&nbsp;↳ KAN-451 | C4 | Medium | Stale auto-refresh + Redis debounce | **✅ Done (Session 108)** |
-| &nbsp;&nbsp;↳ KAN-452 | C5 | Medium | Bulk CSV upload (endpoint + component) | To Do (blocked by KAN-449) |
+| &nbsp;&nbsp;↳ KAN-452 | C5 | Medium | Bulk CSV upload (endpoint + component) | **✅ Done (Session 108)** |
 | KAN-420 | D | High | Admin + Observability — universal PipelineRunner, per-task trigger, ingestion health, Langfuse spans | **✅ Done (PRs #210-214, Sessions 103-104)** |
 | &nbsp;&nbsp;↳ KAN-445 | D (follow-up) | Medium | Convert StalenessSLAs to env-tunable Pydantic settings (supersedes A-LOW-2) | **✅ Done (PR #215, Session 104)** |
 | KAN-424 | E | Medium | Forecast Quality & Scale — cap raise, weekly retrain, intraday fast/slow split | **✅ Done (PR #225, Session 107)** |

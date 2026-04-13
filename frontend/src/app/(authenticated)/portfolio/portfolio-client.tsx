@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { get, post, del } from "@/lib/api";
 import { useRebalancing, usePositions, usePortfolioSummary, usePortfolioHistory } from "@/hooks/use-stocks";
@@ -28,6 +29,7 @@ import { SectionHeading } from "@/components/section-heading";
 import { StatTile } from "@/components/stat-tile";
 import { ChangeIndicator } from "@/components/change-indicator";
 import { LogTransactionDialog } from "@/components/log-transaction-dialog";
+import { BulkTransactionUpload } from "@/components/bulk-transaction-upload";
 import { PortfolioValueChart } from "@/components/portfolio-value-chart";
 import { PortfolioSettingsSheet } from "@/components/portfolio-settings-sheet";
 import { RebalancingPanel } from "@/components/rebalancing-panel";
@@ -361,6 +363,7 @@ export function PortfolioClient() {
     usePortfolioConvergence(portfolioId);
   const logTransaction = useLogTransaction();
   const deleteTransaction = useDeleteTransaction();
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
 
   return (
     <PageTransition className="mx-auto max-w-7xl space-y-6 px-4 py-6">
@@ -368,12 +371,28 @@ export function PortfolioClient() {
         <SectionHeading>Portfolio</SectionHeading>
         <div className="flex items-center gap-2">
           <PortfolioSettingsSheet />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowBulkUpload((prev) => !prev)}
+          >
+            {showBulkUpload ? "Hide CSV Upload" : "Upload CSV"}
+          </Button>
           <LogTransactionDialog
             onSubmit={(data) => logTransaction.mutate(data)}
             isLoading={logTransaction.isPending}
           />
         </div>
       </div>
+
+      {showBulkUpload && (
+        <div className="rounded-lg border p-4">
+          <h2 className="mb-3 text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+            Bulk CSV Upload
+          </h2>
+          <BulkTransactionUpload onClose={() => setShowBulkUpload(false)} />
+        </div>
+      )}
 
       {/* KPI row */}
       {summary && <KpiRow summary={summary} />}
