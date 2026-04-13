@@ -213,6 +213,11 @@ export function useSignals(ticker: string) {
     queryKey: ["signals", ticker],
     queryFn: () => get<SignalResponse>(`/stocks/${ticker}/signals`),
     staleTime: 5 * 60 * 1000,
+    refetchInterval: (query) => {
+      // Poll every 5s while signals are refreshing, stop when fresh
+      const data = query.state.data;
+      return data?.is_refreshing ? 5000 : false;
+    },
   });
 }
 

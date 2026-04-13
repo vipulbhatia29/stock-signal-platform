@@ -111,6 +111,7 @@ export interface SignalResponse {
   returns: ReturnsMetrics;
   composite_score: number | null;
   is_stale: boolean;
+  is_refreshing: boolean;
 }
 
 export interface StockAnalyticsResponse {

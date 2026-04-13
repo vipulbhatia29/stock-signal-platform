@@ -194,6 +194,9 @@ class SignalResponse(BaseModel):
     # Whether the signals are stale (older than 24 hours)
     is_stale: bool = False
 
+    # Whether a background refresh has been dispatched (optimistic)
+    is_refreshing: bool = False
+
 
 class StockAnalyticsResponse(BaseModel):
     """QuantStats per-stock analytics from the latest signal snapshot."""

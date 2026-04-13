@@ -148,7 +148,14 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - **`use-stream-chat.ts`**: `tool_result` case invalidates `stocks`/`signals` when `analyze_stock` completes
 - 2-persona Opus review (BA + TE): no CRITICALs, removed 3 duplicate ingest_lock tests
 
+### KAN-451 — C4: Stale Auto-Refresh + Redis Debounce
+- **`data.py`**: `_try_dispatch_refresh` helper — Redis SETNX 5-min debounce, dispatches `refresh_ticker_task.delay`
+- **`get_signals`**: wired stale detection → auto-dispatch, `is_refreshing=True` optimistic, skip cache on stale
+- **`SignalResponse`**: added `is_refreshing: bool`
+- **Frontend**: `useSignals` polls every 5s when refreshing, `StockHeader` shows blue "Refreshing" / amber "Outdated" badges
+- 1-persona Opus review (BA): no issues
+
 ### Session 108 Totals
-- Tests: 2037 → 2060 unit (+24 new across KAN-449 + KAN-450)
-- 2 JIRA tickets shipped (KAN-449, KAN-450)
-- Resume: KAN-451 (stale auto-refresh, PR3 of Spec C) or KAN-452 (bulk CSV, PR4)
+- Tests: 2037 → 2069 unit (+32 new across KAN-449 + KAN-450 + KAN-451)
+- 3 JIRA tickets shipped (KAN-449, KAN-450, KAN-451)
+- Resume: KAN-452 (bulk CSV upload, PR4 of Spec C — last PR to complete Spec C)
