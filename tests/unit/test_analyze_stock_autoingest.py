@@ -1,10 +1,13 @@
-"""Tests for AnalyzeStockTool auto-ingest behaviour (KAN-404)."""
+"""Tests for AnalyzeStockTool canonical ingest behaviour (KAN-450).
+
+PR2 of Spec C rewrites AnalyzeStockTool to use ingest_ticker (canonical pipeline)
+then reload signals from DB via get_latest_signals. These tests verify the new path.
+"""
 
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
 import pytest
 
 from backend.tools.analyze_stock import AnalyzeStockTool
@@ -22,25 +25,20 @@ def _make_session_cm(session: AsyncMock) -> AsyncMock:
     return cm
 
 
-def _fake_signals() -> MagicMock:
-    """Return a MagicMock that looks like a SignalResult."""
-    s = MagicMock()
-    s.composite_score = 7.5
-    s.rsi_value = 45.0
-    s.rsi_signal = "neutral"
-    s.macd_value = 0.12
-    s.macd_signal_label = "bullish"
-    s.sma_signal = "above"
-    s.bb_position = 0.6
-    s.annual_return = 0.18
-    s.volatility = 0.22
-    s.sharpe_ratio = 1.1
-    return s
-
-
-def _non_empty_df() -> pd.DataFrame:
-    """Return a minimal non-empty price DataFrame."""
-    return pd.DataFrame({"close": [150.0, 151.0]})
+def _fake_snapshot() -> MagicMock:
+    """Return a MagicMock that looks like a SignalSnapshot ORM row."""
+    snap = MagicMock()
+    snap.composite_score = 7.5
+    snap.rsi_value = 45.0
+    snap.rsi_signal = "neutral"
+    snap.macd_signal_label = "bullish"
+    snap.sma_signal = "above_sma50"
+    snap.bb_position = "mid"
+    snap.annual_return = 0.18
+    snap.volatility = 0.22
+    snap.sharpe_ratio = 1.1
+    snap.computed_at = None
+    return snap
 
 
 # ---------------------------------------------------------------------------
@@ -48,20 +46,97 @@ def _non_empty_df() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 
-class TestAnalyzeStockAutoIngest:
-    """Tests for the auto-ingest path in AnalyzeStockTool.execute."""
+class TestAnalyzeStockCanonicalIngest:
+    """Tests for the canonical ingest path in AnalyzeStockTool._run (KAN-450)."""
 
     @pytest.mark.asyncio
-    async def test_autoingest_when_no_price_data_returns_signals(self) -> None:
-        """First load_prices_df returns empty df; after auto-ingest second call returns data."""
+    async def test_analyze_stock_calls_ingest_ticker(self) -> None:
+        """ingest_ticker is called when lock is acquired."""
+        tool = AnalyzeStockTool()
+        session = AsyncMock()
+        snapshot = _fake_snapshot()
+
+        acquire_mock = AsyncMock(return_value=True)
+        release_mock = AsyncMock()
+        ingest_mock = AsyncMock()
+        signals_mock = AsyncMock(return_value=snapshot)
+
+        with (
+            patch(
+                "backend.database.async_session_factory",
+                return_value=_make_session_cm(session),
+            ),
+            patch("backend.services.ingest_lock.acquire_ingest_lock", acquire_mock),
+            patch("backend.services.ingest_lock.release_ingest_lock", release_mock),
+            patch("backend.services.pipelines.ingest_ticker", ingest_mock),
+            patch("backend.services.signals.get_latest_signals", signals_mock),
+        ):
+            result = await tool.execute({"ticker": "AAPL"})
+
+        assert result.status == "ok"
+        ingest_mock.assert_awaited_once()
+        acquire_mock.assert_awaited_once_with("AAPL")
+        release_mock.assert_awaited_once_with("AAPL")
+
+    @pytest.mark.asyncio
+    async def test_analyze_stock_returns_persisted_signals(self) -> None:
+        """Signals returned come from DB snapshot, not inline computation."""
+        tool = AnalyzeStockTool()
+        session = AsyncMock()
+        snapshot = _fake_snapshot()
+
+        with (
+            patch(
+                "backend.database.async_session_factory",
+                return_value=_make_session_cm(session),
+            ),
+            patch("backend.services.ingest_lock.acquire_ingest_lock", AsyncMock(return_value=True)),
+            patch("backend.services.ingest_lock.release_ingest_lock", AsyncMock()),
+            patch("backend.services.pipelines.ingest_ticker", AsyncMock()),
+            patch("backend.services.signals.get_latest_signals", AsyncMock(return_value=snapshot)),
+        ):
+            result = await tool.execute({"ticker": "TSLA"})
+
+        assert result.status == "ok"
+        assert result.data["ticker"] == "TSLA"
+        assert result.data["composite_score"] == 7.5
+        assert result.data["rsi_value"] == 45.0
+        assert result.data["rsi_signal"] == "neutral"
+        assert result.data["macd_signal"] == "bullish"
+
+    @pytest.mark.asyncio
+    async def test_analyze_stock_ingest_fails_returns_error(self) -> None:
+        """When ingest fails AND no snapshot exists, returns safe error message."""
         tool = AnalyzeStockTool()
         session = AsyncMock()
 
-        # load_prices_df: first call empty, second call populated
-        load_prices_df_mock = AsyncMock(side_effect=[pd.DataFrame(), _non_empty_df()])
-        ensure_stock_exists_mock = AsyncMock(return_value=None)
-        fetch_prices_delta_mock = AsyncMock(return_value=None)
-        compute_signals_mock = MagicMock(return_value=_fake_signals())
+        with (
+            patch(
+                "backend.database.async_session_factory",
+                return_value=_make_session_cm(session),
+            ),
+            patch("backend.services.ingest_lock.acquire_ingest_lock", AsyncMock(return_value=True)),
+            patch("backend.services.ingest_lock.release_ingest_lock", AsyncMock()),
+            patch(
+                "backend.services.pipelines.ingest_ticker",
+                AsyncMock(side_effect=RuntimeError("yfinance down")),
+            ),
+            patch("backend.services.signals.get_latest_signals", AsyncMock(return_value=None)),
+        ):
+            result = await tool.execute({"ticker": "XYZW"})
+
+        assert result.status == "error"
+        assert "No analysis data available" in result.error
+        # Hard Rule #10: must not leak raw exception text
+        assert "yfinance" not in result.error
+
+    @pytest.mark.asyncio
+    async def test_analyze_stock_lock_contention_still_reads_snapshot(self) -> None:
+        """When lock is NOT acquired, still reads existing snapshot from DB."""
+        tool = AnalyzeStockTool()
+        session = AsyncMock()
+        snapshot = _fake_snapshot()
+        ingest_mock = AsyncMock()
 
         with (
             patch(
@@ -69,34 +144,23 @@ class TestAnalyzeStockAutoIngest:
                 return_value=_make_session_cm(session),
             ),
             patch(
-                "backend.tools.market_data.load_prices_df",
-                load_prices_df_mock,
+                "backend.services.ingest_lock.acquire_ingest_lock",
+                AsyncMock(return_value=False),
             ),
-            patch(
-                "backend.tools.signals.compute_signals",
-                compute_signals_mock,
-            ),
-            patch(
-                "backend.services.stock_data.ensure_stock_exists",
-                ensure_stock_exists_mock,
-            ),
-            patch(
-                "backend.services.stock_data.fetch_prices_delta",
-                fetch_prices_delta_mock,
-            ),
+            patch("backend.services.ingest_lock.release_ingest_lock", AsyncMock()),
+            patch("backend.services.pipelines.ingest_ticker", ingest_mock),
+            patch("backend.services.signals.get_latest_signals", AsyncMock(return_value=snapshot)),
         ):
-            result = await tool.execute({"ticker": "NVDA"})
+            result = await tool.execute({"ticker": "MSFT"})
 
         assert result.status == "ok"
-        assert result.data["ticker"] == "NVDA"
-        assert result.data["composite_score"] == 7.5
-        ensure_stock_exists_mock.assert_awaited_once()
-        fetch_prices_delta_mock.assert_awaited_once()
-        assert load_prices_df_mock.await_count == 2
+        assert result.data["ticker"] == "MSFT"
+        # ingest_ticker must NOT be called when lock was not acquired
+        ingest_mock.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_invalid_ticker_format_returns_error(self) -> None:
-        """Ticker containing digits or too long should be rejected before any DB call."""
+        """Ticker containing digits or too long is rejected before any DB call."""
         tool = AnalyzeStockTool()
 
         for bad_ticker in ("INVALID123", "12345", "TOOLONG", "A B", ""):
@@ -111,138 +175,42 @@ class TestAnalyzeStockAutoIngest:
                 )
 
     @pytest.mark.asyncio
-    async def test_ingest_failure_returns_ticker_error(self) -> None:
-        """When ensure_stock_exists raises ValueError, returns error to verify the ticker."""
+    async def test_no_snapshot_returns_no_data_error(self) -> None:
+        """When ingest succeeds but no snapshot in DB, returns no-data error."""
         tool = AnalyzeStockTool()
         session = AsyncMock()
-
-        load_prices_df_mock = AsyncMock(return_value=pd.DataFrame())  # always empty
-        ensure_stock_exists_mock = AsyncMock(side_effect=ValueError("unknown ticker"))
 
         with (
             patch(
                 "backend.database.async_session_factory",
                 return_value=_make_session_cm(session),
             ),
-            patch(
-                "backend.tools.market_data.load_prices_df",
-                load_prices_df_mock,
-            ),
-            patch(
-                "backend.services.stock_data.ensure_stock_exists",
-                ensure_stock_exists_mock,
-            ),
+            patch("backend.services.ingest_lock.acquire_ingest_lock", AsyncMock(return_value=True)),
+            patch("backend.services.ingest_lock.release_ingest_lock", AsyncMock()),
+            patch("backend.services.pipelines.ingest_ticker", AsyncMock()),
+            patch("backend.services.signals.get_latest_signals", AsyncMock(return_value=None)),
         ):
-            result = await tool.execute({"ticker": "FAKE"})
+            result = await tool.execute({"ticker": "NEWT"})
 
         assert result.status == "error"
-        assert "Verify" in result.error or "verify" in result.error
+        assert "No analysis data available" in result.error
 
     @pytest.mark.asyncio
-    async def test_happy_path_no_ingest_needed(self) -> None:
-        """When price data already exists, signals are returned without calling ingest functions."""
-        tool = AnalyzeStockTool()
-        session = AsyncMock()
+    async def test_unexpected_exception_returns_generic_error(self) -> None:
+        """Unexpected exception from ingest triggers the base class catch-all.
 
-        load_prices_df_mock = AsyncMock(return_value=_non_empty_df())
-        ensure_stock_exists_mock = AsyncMock()
-        fetch_prices_delta_mock = AsyncMock()
-        compute_signals_mock = MagicMock(return_value=_fake_signals())
-
-        with (
-            patch(
-                "backend.database.async_session_factory",
-                return_value=_make_session_cm(session),
-            ),
-            patch(
-                "backend.tools.market_data.load_prices_df",
-                load_prices_df_mock,
-            ),
-            patch(
-                "backend.tools.signals.compute_signals",
-                compute_signals_mock,
-            ),
-            patch(
-                "backend.services.stock_data.ensure_stock_exists",
-                ensure_stock_exists_mock,
-            ),
-            patch(
-                "backend.services.stock_data.fetch_prices_delta",
-                fetch_prices_delta_mock,
-            ),
-        ):
-            result = await tool.execute({"ticker": "AAPL"})
-
-        assert result.status == "ok"
-        assert result.data["ticker"] == "AAPL"
-        ensure_stock_exists_mock.assert_not_awaited()
-        fetch_prices_delta_mock.assert_not_awaited()
-        assert load_prices_df_mock.await_count == 1
-
-    @pytest.mark.asyncio
-    async def test_ingest_succeeds_but_still_no_data_returns_error(self) -> None:
-        """When ingest succeeds but load_prices_df is still empty, returns a no-data error."""
-        tool = AnalyzeStockTool()
-        session = AsyncMock()
-
-        # Both calls return empty DataFrame
-        load_prices_df_mock = AsyncMock(return_value=pd.DataFrame())
-        ensure_stock_exists_mock = AsyncMock(return_value=None)
-        fetch_prices_delta_mock = AsyncMock(return_value=None)
-
-        with (
-            patch(
-                "backend.database.async_session_factory",
-                return_value=_make_session_cm(session),
-            ),
-            patch(
-                "backend.tools.market_data.load_prices_df",
-                load_prices_df_mock,
-            ),
-            patch(
-                "backend.services.stock_data.ensure_stock_exists",
-                ensure_stock_exists_mock,
-            ),
-            patch(
-                "backend.services.stock_data.fetch_prices_delta",
-                fetch_prices_delta_mock,
-            ),
-        ):
-            result = await tool.execute({"ticker": "XYZW"})
-
-        assert result.status == "error"
-        assert "after ingestion" in result.error
-
-    @pytest.mark.asyncio
-    async def test_unexpected_exception_in_compute_signals_returns_generic_error(
-        self,
-    ) -> None:
-        """Unexpected exception from compute_signals triggers the outer catch-all.
-
-        The outer except block must return the generic 'Stock analysis failed'
-        message rather than leaking stack trace or raw exception text to the caller.
+        The base class execute() wraps _run() exceptions in a safe generic message
+        rather than leaking stack trace or raw exception text to the caller.
         """
         tool = AnalyzeStockTool()
-        session = AsyncMock()
 
-        load_prices_df_mock = AsyncMock(return_value=_non_empty_df())
-        compute_signals_mock = MagicMock(side_effect=RuntimeError("unexpected internal error"))
-
-        with (
-            patch(
-                "backend.database.async_session_factory",
-                return_value=_make_session_cm(session),
-            ),
-            patch(
-                "backend.tools.market_data.load_prices_df",
-                load_prices_df_mock,
-            ),
-            patch(
-                "backend.tools.signals.compute_signals",
-                compute_signals_mock,
-            ),
+        with patch(
+            "backend.database.async_session_factory",
+            side_effect=RuntimeError("DB connection failed"),
         ):
             result = await tool.execute({"ticker": "AAPL"})
 
         assert result.status == "error"
         assert result.error == "Failed to execute analyze_stock. Please try again."
+        # Hard Rule #10: raw exception text must not appear
+        assert "DB connection failed" not in result.error

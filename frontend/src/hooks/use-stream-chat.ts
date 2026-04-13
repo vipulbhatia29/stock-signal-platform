@@ -164,6 +164,14 @@ export function useStreamChat() {
                   status: event.status ?? "ok",
                   data: event.data,
                 });
+                // Invalidate stock data caches when analyze_stock completes (Spec C.2)
+                if (event.tool === "analyze_stock" && event.status === "ok") {
+                  const ticker = (event.data as Record<string, unknown>)?.ticker;
+                  if (typeof ticker === "string") {
+                    queryClient.invalidateQueries({ queryKey: ["stocks"] });
+                    queryClient.invalidateQueries({ queryKey: ["signals", ticker.toUpperCase()] });
+                  }
+                }
                 break;
               case "done":
                 // Flush any remaining tokens
