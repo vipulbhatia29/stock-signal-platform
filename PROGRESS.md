@@ -141,7 +141,14 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
   - Double toast (hook + caller both firing)
 - Both fixed + 1 MEDIUM (missing edge-case test) added
 
+### KAN-450 — C2+C3: Portfolio Sync-Ingest + Chat Canonical Ingest
+- **`portfolio.py`**: `create_transaction` now checks `stock.last_fetched_at is None` → calls `ingest_ticker` with dedup lock (non-fatal on failure)
+- **`analyze_stock.py`**: Rewrote `_run` to use canonical `ingest_ticker` + reload signals via `get_latest_signals`. Timeout 15→45s. Chat and stock page now agree.
+- **`portfolio-client.tsx`**: `useLogTransaction.onSuccess` invalidates `stocks`, `signals`, `watchlist` caches
+- **`use-stream-chat.ts`**: `tool_result` case invalidates `stocks`/`signals` when `analyze_stock` completes
+- 2-persona Opus review (BA + TE): no CRITICALs, removed 3 duplicate ingest_lock tests
+
 ### Session 108 Totals
-- Tests: 2037 → 2052 unit (+16 new: 8 ingest_lock, 8 watchlist_ingest)
-- 1 JIRA ticket shipped (KAN-449)
-- Resume: KAN-450 (portfolio sync-ingest + chat canonical ingest, PR2 of Spec C)
+- Tests: 2037 → 2060 unit (+24 new across KAN-449 + KAN-450)
+- 2 JIRA tickets shipped (KAN-449, KAN-450)
+- Resume: KAN-451 (stale auto-refresh, PR3 of Spec C) or KAN-452 (bulk CSV, PR4)

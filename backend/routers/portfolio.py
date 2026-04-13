@@ -117,6 +117,24 @@ async def create_transaction(
             detail=f"Ticker '{ticker_upper}' not recognized. Verify the symbol is correct.",
         )
 
+    # Check if full ingest is needed (stock row exists but no price data) (Spec C.2)
+    from backend.models.stock import Stock
+
+    stock_result = await db.execute(select(Stock).where(Stock.ticker == ticker_upper))
+    stock = stock_result.scalar_one_or_none()
+    if stock and stock.last_fetched_at is None:
+        from backend.services.ingest_lock import acquire_ingest_lock, release_ingest_lock
+        from backend.services.pipelines import ingest_ticker
+
+        if await acquire_ingest_lock(ticker_upper):
+            try:
+                await ingest_ticker(ticker_upper, db, user_id=str(current_user.id))
+            except Exception:
+                logger.warning("Portfolio ingest failed for %s", ticker_upper, exc_info=True)
+                # Non-fatal: transaction still proceeds, data populates on next nightly run
+            finally:
+                await release_ingest_lock(ticker_upper)
+
     txn = Transaction(
         portfolio_id=portfolio.id,
         ticker=ticker_upper,

@@ -1,8 +1,9 @@
-"""AnalyzeStockTool — complete stock analysis combining technicals + fundamentals."""
+"""AnalyzeStockTool — canonical ingest-based stock analysis (Spec C PR2)."""
 
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -35,17 +36,26 @@ class AnalyzeStockTool(BaseTool):
         "required": ["ticker"],
     }
     args_schema = AnalyzeStockInput
-    timeout_seconds = 15.0
+    timeout_seconds = 45.0
 
     async def _run(self, params: dict[str, Any]) -> ToolResult:
-        """Run full stock analysis pipeline, auto-ingesting if needed."""
-        import re
+        """Run full stock analysis pipeline, auto-ingesting if needed.
 
+        Uses canonical ingest_ticker (idempotent — skips if data is fresh),
+        then reloads signals from DB via get_latest_signals. This ensures chat
+        and the stock page always agree on signal values.
+
+        Args:
+            params: Dict with required key ``ticker`` (stock symbol, 1-5 letters).
+
+        Returns:
+            ToolResult with status='ok' and signal data, or status='error'
+            with a safe user-facing message.
+        """
         ticker = str(params.get("ticker", "")).upper()
         if not ticker:
             return ToolResult(status="error", error="Missing required param: ticker")
 
-        # Validate ticker format (1-5 uppercase letters)
         if not re.match(r"^[A-Z]{1,5}$", ticker):
             return ToolResult(
                 status="error",
@@ -53,48 +63,43 @@ class AnalyzeStockTool(BaseTool):
             )
 
         from backend.database import async_session_factory
-        from backend.tools.market_data import load_prices_df
-        from backend.tools.signals import compute_signals
+        from backend.services.ingest_lock import acquire_ingest_lock, release_ingest_lock
+        from backend.services.pipelines import ingest_ticker
+        from backend.services.signals import get_latest_signals
 
         async with async_session_factory() as session:
-            df = await load_prices_df(ticker, session)
-
-            if df.empty:
-                # Auto-ingest: lightweight path (stock record + prices only)
-                from backend.services.stock_data import ensure_stock_exists, fetch_prices_delta
-
+            # Run canonical ingest (idempotent — skips if data is fresh)
+            if await acquire_ingest_lock(ticker):
                 try:
-                    await ensure_stock_exists(ticker, session)
-                    await fetch_prices_delta(ticker, session)
-                    await session.commit()
+                    await ingest_ticker(ticker, session)
                 except Exception:
-                    logger.warning("Auto-ingest failed for %s", ticker, exc_info=True)
-                    return ToolResult(
-                        status="error",
-                        error=f"No data available for {ticker}. Verify the ticker is correct.",
-                    )
+                    logger.warning("Ingest failed for %s in analyze_stock", ticker, exc_info=True)
+                finally:
+                    await release_ingest_lock(ticker)
 
-                df = await load_prices_df(ticker, session)
-                if df.empty:
-                    return ToolResult(
-                        status="error",
-                        error=f"No price data available for {ticker} after ingestion.",
-                    )
+            # Reload persisted signals from DB
+            snapshot = await get_latest_signals(ticker, session)
+            if snapshot is None:
+                return ToolResult(
+                    status="error",
+                    error=f"No analysis data available for {ticker}.",
+                )
 
-            signals = compute_signals(ticker, df)
             return ToolResult(
                 status="ok",
                 data={
                     "ticker": ticker,
-                    "composite_score": signals.composite_score,
-                    "rsi_value": signals.rsi_value,
-                    "rsi_signal": signals.rsi_signal,
-                    "macd_value": signals.macd_value,
-                    "macd_signal": signals.macd_signal_label,
-                    "sma_signal": signals.sma_signal,
-                    "bb_position": signals.bb_position,
-                    "annual_return": signals.annual_return,
-                    "volatility": signals.volatility,
-                    "sharpe_ratio": signals.sharpe_ratio,
+                    "composite_score": snapshot.composite_score,
+                    "rsi_value": snapshot.rsi_value,
+                    "rsi_signal": snapshot.rsi_signal,
+                    "macd_signal": snapshot.macd_signal_label,
+                    "sma_signal": snapshot.sma_signal,
+                    "bb_position": snapshot.bb_position,
+                    "annual_return": snapshot.annual_return,
+                    "volatility": snapshot.volatility,
+                    "sharpe_ratio": snapshot.sharpe_ratio,
+                    "computed_at": (
+                        snapshot.computed_at.isoformat() if snapshot.computed_at else None
+                    ),
                 },
             )

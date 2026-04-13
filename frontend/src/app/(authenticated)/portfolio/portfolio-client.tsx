@@ -64,8 +64,11 @@ function useLogTransaction() {
   return useMutation({
     mutationFn: (data: TransactionCreate) =>
       post<Transaction>("/portfolio/transactions", data),
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["portfolio"] });
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["signals", variables.ticker.toUpperCase()] });
+      queryClient.invalidateQueries({ queryKey: ["watchlist"] });
       toast.success("Transaction logged");
     },
     onError: (err: Error) => {
