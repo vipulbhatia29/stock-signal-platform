@@ -183,7 +183,7 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 | &nbsp;&nbsp;↳ KAN-434 | B4 | Medium | News scoring concurrent batch dispatch (`asyncio.gather` + `Semaphore(5)`) | **✅ Done (PR #208, Session 101)** |
 | &nbsp;&nbsp;↳ KAN-435 | B5 | High | `ingest_ticker` extension — Steps 8/9/10 wiring news + convergence + `mark_stage_updated` (depends on B1) | **✅ Done (PR #208, Session 101)** |
 | KAN-423 | C | High | Entry Point Unification — watchlist, portfolio, chat, stale auto-refresh, bulk CSV | Split into 4 PRs ✅ |
-| &nbsp;&nbsp;↳ KAN-449 | C1+C6 | High | Watchlist auto-ingest + Redis dedup infra | To Do |
+| &nbsp;&nbsp;↳ KAN-449 | C1+C6 | High | Watchlist auto-ingest + Redis dedup infra | **✅ Done (Session 108)** |
 | &nbsp;&nbsp;↳ KAN-450 | C2+C3 | High | Portfolio sync-ingest + Chat canonical ingest | To Do (blocked by KAN-449) |
 | &nbsp;&nbsp;↳ KAN-451 | C4 | Medium | Stale auto-refresh + Redis debounce | To Do (blocked by KAN-449) |
 | &nbsp;&nbsp;↳ KAN-452 | C5 | Medium | Bulk CSV upload (endpoint + component) | To Do (blocked by KAN-449) |

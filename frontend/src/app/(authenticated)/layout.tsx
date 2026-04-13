@@ -6,7 +6,8 @@ import { Topbar } from "@/components/topbar";
 import { ChatPanel } from "@/components/chat-panel";
 import { ArtifactBar } from "@/components/chat/artifact-bar";
 import { ChatProvider, useChat } from "@/contexts/chat-context";
-import { useAddToWatchlist, useIngestTicker, useWatchlist } from "@/hooks/use-stocks";
+import { useAddToWatchlist, useWatchlist } from "@/hooks/use-stocks";
+import { ApiRequestError } from "@/lib/api";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { toast } from "sonner";
 
@@ -19,7 +20,6 @@ function AuthenticatedShell({ children }: { children: React.ReactNode }) {
   } | null>(null);
   const { data: watchlist } = useWatchlist();
   const addToWatchlist = useAddToWatchlist();
-  const ingestTicker = useIngestTicker();
 
   const handleAddTicker = useCallback(
     async (ticker: string) => {
@@ -28,16 +28,19 @@ function AuthenticatedShell({ children }: { children: React.ReactNode }) {
         toast.info(`${ticker} is already in your watchlist`);
         return;
       }
-      toast.loading(`Fetching data for ${ticker}...`, { id: `ingest-${ticker}` });
+      toast.loading(`Adding ${ticker} to watchlist…`, { id: `add-${ticker}` });
       try {
-        await ingestTicker.mutateAsync(ticker);
-        toast.success(`${ticker} data loaded`, { id: `ingest-${ticker}` });
-        addToWatchlist.mutate(ticker);
-      } catch {
-        toast.error(`Failed to fetch data for ${ticker}`, { id: `ingest-${ticker}` });
+        await addToWatchlist.mutateAsync(ticker);
+        toast.success(`${ticker} added to watchlist`, { id: `add-${ticker}` });
+      } catch (err) {
+        if (err instanceof ApiRequestError && err.status === 409) {
+          toast.info(err.detail, { id: `add-${ticker}` });
+        } else {
+          toast.error(`Failed to add ${ticker} to watchlist`, { id: `add-${ticker}` });
+        }
       }
     },
-    [watchlist, ingestTicker, addToWatchlist]
+    [watchlist, addToWatchlist]
   );
 
   return (

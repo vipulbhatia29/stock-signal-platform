@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -107,24 +107,26 @@ async def test_get_watchlist_empty() -> None:
 
 @pytest.mark.asyncio
 async def test_add_to_watchlist_success() -> None:
-    """add_to_watchlist creates entry when stock exists and not a duplicate."""
+    """add_to_watchlist creates entry when stock exists and not a duplicate.
+
+    New execute order (Spec C.6): 1) duplicate check, 2) count, 3) stock lookup.
+    When stock already exists in DB, ingest is skipped.
+    """
     user_id = uuid.uuid4()
     db = _make_session()
     stock = _make_stock()
 
-    # execute calls: 1) stock lookup, 2) count, 3) duplicate check
-    stock_result = MagicMock()
-    stock_result.scalar_one_or_none.return_value = stock
+    dup_result = MagicMock()
+    dup_result.scalar_one_or_none.return_value = None  # no duplicate
 
     count_result = MagicMock()
     count_result.scalar_one.return_value = 5  # under limit
 
-    dup_result = MagicMock()
-    dup_result.scalar_one_or_none.return_value = None  # no duplicate
+    stock_result = MagicMock()
+    stock_result.scalar_one_or_none.return_value = stock  # stock exists — no ingest needed
 
-    db.execute.side_effect = [stock_result, count_result, dup_result]
+    db.execute.side_effect = [dup_result, count_result, stock_result]
 
-    # refresh populates the entry attrs (mock does this automatically)
     result = await add_to_watchlist(user_id, "aapl", db)
 
     assert result["ticker"] == "AAPL"  # uppercased
@@ -136,33 +138,44 @@ async def test_add_to_watchlist_success() -> None:
 
 @pytest.mark.asyncio
 async def test_add_to_watchlist_stock_not_found() -> None:
-    """add_to_watchlist raises StockNotFoundError when ticker not in DB."""
-    db = _make_session()
-    stock_result = MagicMock()
-    stock_result.scalar_one_or_none.return_value = None
-    db.execute.return_value = stock_result
+    """add_to_watchlist raises StockNotFoundError when WATCHLIST_AUTO_INGEST is False.
 
-    with pytest.raises(StockNotFoundError):
-        await add_to_watchlist(uuid.uuid4(), "FAKE", db)
+    With the feature flag disabled, missing tickers still raise StockNotFoundError.
+    """
+    db = _make_session()
+
+    dup_result = MagicMock()
+    dup_result.scalar_one_or_none.return_value = None
+
+    count_result = MagicMock()
+    count_result.scalar_one.return_value = 0
+
+    stock_result = MagicMock()
+    stock_result.scalar_one_or_none.return_value = None  # not found
+
+    db.execute.side_effect = [dup_result, count_result, stock_result]
+
+    with (
+        patch("backend.services.watchlist.settings") as mock_settings,
+    ):
+        mock_settings.WATCHLIST_AUTO_INGEST = False
+        with pytest.raises(StockNotFoundError):
+            await add_to_watchlist(uuid.uuid4(), "FAKE", db)
 
 
 @pytest.mark.asyncio
 async def test_add_to_watchlist_duplicate() -> None:
-    """add_to_watchlist raises DuplicateWatchlistError when already on list."""
+    """add_to_watchlist raises DuplicateWatchlistError when already on list.
+
+    Duplicate check happens FIRST in the new order, before size and ingest.
+    """
     user_id = uuid.uuid4()
     db = _make_session()
-    stock = _make_stock()
-
-    stock_result = MagicMock()
-    stock_result.scalar_one_or_none.return_value = stock
-
-    count_result = MagicMock()
-    count_result.scalar_one.return_value = 5
 
     dup_result = MagicMock()
     dup_result.scalar_one_or_none.return_value = _make_watchlist_entry()  # exists
 
-    db.execute.side_effect = [stock_result, count_result, dup_result]
+    db.execute.side_effect = [dup_result]
 
     with pytest.raises(DuplicateWatchlistError):
         await add_to_watchlist(user_id, "AAPL", db)
@@ -173,15 +186,14 @@ async def test_add_to_watchlist_full() -> None:
     """add_to_watchlist raises ValueError when watchlist is at the size limit."""
     user_id = uuid.uuid4()
     db = _make_session()
-    stock = _make_stock()
 
-    stock_result = MagicMock()
-    stock_result.scalar_one_or_none.return_value = stock
+    dup_result = MagicMock()
+    dup_result.scalar_one_or_none.return_value = None  # no duplicate
 
     count_result = MagicMock()
     count_result.scalar_one.return_value = 100  # at limit
 
-    db.execute.side_effect = [stock_result, count_result]
+    db.execute.side_effect = [dup_result, count_result]
 
     with pytest.raises(ValueError, match="full"):
         await add_to_watchlist(user_id, "AAPL", db)

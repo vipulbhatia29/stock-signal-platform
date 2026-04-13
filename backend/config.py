@@ -136,6 +136,8 @@ class Settings(BaseSettings):
     CONVERGENCE_SNAPSHOT_ENABLED: bool = True
     BACKTEST_ENABLED: bool = True
     PROPHET_REAL_SENTIMENT_ENABLED: bool = True
+    # Spec C.6 — auto-ingest on watchlist add (kill-switch: set False to revert to 404 behaviour)
+    WATCHLIST_AUTO_INGEST: bool = True
     # NEWS_SCORING_MAX_CONCURRENCY controls concurrency (added in B4.2, see above)
 
     # --- Pipeline ---

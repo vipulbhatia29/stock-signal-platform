@@ -16,7 +16,11 @@ from backend.dependencies import get_current_user, require_verified_email
 from backend.models.user import User
 from backend.rate_limit import limiter
 from backend.schemas.stock import WatchlistAddRequest, WatchlistItemResponse
-from backend.services.exceptions import DuplicateWatchlistError, StockNotFoundError
+from backend.services.exceptions import (
+    DuplicateWatchlistError,
+    IngestInProgressError,
+    StockNotFoundError,
+)
 from backend.services.watchlist import (
     acknowledge_price,
     get_watchlist_tickers,
@@ -83,6 +87,11 @@ async def add_to_watchlist(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"'{body.ticker.upper()}' is already in your watchlist.",
+        )
+    except IngestInProgressError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=exc.safe_message,
         )
     except ValueError:
         raise HTTPException(
