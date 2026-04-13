@@ -1,8 +1,8 @@
 ---
 scope: project
 category: domain
-updated_by: session-91
-phase: Phase 8.6+ COMPLETE — 25 internal tools, convergence/sentiment as data source (not direct agent access), guardrails, enriched data, response_type routing
+updated_by: session-107
+phase: Phase 8.6+ COMPLETE — 25 internal tools (convergence is API-only, NOT an agent tool), guardrails, enriched data, response_type routing
 ---
 
 # Agent Tools Domain
@@ -34,8 +34,8 @@ Full spec: `docs/superpowers/specs/2026-03-20-phase-4d-agent-intelligence-design
 - `get_stock_intelligence` — analyst upgrades/downgrades, insider transactions, earnings calendar, EPS revisions (wraps intelligence.py)
 - `recommend_stocks` — multi-signal consensus (signals 35%, fundamentals 25%, momentum 20%, portfolio fit 20%)
 
-**Phase 8.6+ (1 — Session 89):**
-- `get_signal_convergence` — 5 technical classifiers (RSI, MACD, SMA, Piotroski, forecast) + sentiment alignment, divergence detection, historical hit rate from signal_convergence_daily
+**Phase 8.6+ (0 — convergence is API-only, not an agent tool):**
+- Convergence data accessed via API endpoints (`GET /api/v1/convergence/{ticker}/history`), NOT through agent tool registry. Agent tool count remains 25.
 
 ### Phase 8.6+ Data Access Patterns
 - **Convergence & Sentiment:** Available via dedicated API endpoints (`GET /api/v1/signals/{ticker}/convergence`, `GET /api/v1/signals/{ticker}/sentiment`)

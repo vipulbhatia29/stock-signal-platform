@@ -657,6 +657,140 @@ HttpMetricsMiddleware stores request metrics in Redis sorted sets with 5-minute 
 
 ---
 
+## ADR-023: Intraday Refresh Fast/Slow Path Split
+
+**Date:** 2026-04-12 | **Status:** Implemented (Session 107, PR #225, KAN-424)
+
+### Decision
+Split `_refresh_ticker_async` into `_refresh_ticker_fast` (parallelized) and `_refresh_ticker_slow` (sequential nightly only). Fast path uses `asyncio.gather + Semaphore(5)`. Slow path runs as Phase 1.5 in the nightly chain before Phase 2.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Unified async with higher concurrency** | Simpler single function | yfinance blocks signals unnecessarily |
+| **B) Fast/slow split** | Fast path parallelized (~0.1s/ticker), slow path isolated (~3s/ticker) | Two code paths to maintain |
+| **C) Thread pool for slow path** | True parallelism for blocking calls | Adds complexity, asyncio.gather is simpler |
+
+### Rationale
+- The single `_refresh_ticker_async` function combined fast operations (prices + signals + QuantStats, ~0.1s/ticker) with slow operations (yfinance info + dividends, ~3s/ticker). With 600 tickers, the combined sequential loop took ~50 minutes — exceeding the 30-minute beat schedule interval.
+- Splitting allows the fast path to run 600 tickers in ~2 min (was ~50 min) via `asyncio.gather + Semaphore(5)`.
+- Phase 1.5 adds ~20 min for slow path but doesn't block signal computation.
+- `_refresh_ticker_async` preserved as backward-compatible wrapper for on-demand refresh.
+
+### Consequences
+- Nightly fast path: 600 tickers in ~2 min (was ~50 min).
+- Phase 1.5 adds ~20 min for slow path but doesn't block signal computation.
+- `_refresh_ticker_async` preserved as backward-compatible wrapper for on-demand refresh.
+
+---
+
+## ADR-024: Semaphore Bound = DB Pool Size
+
+**Date:** 2026-04-12 | **Status:** Implemented (Session 107, PR #225, KAN-424)
+
+### Decision
+Set `INTRADAY_REFRESH_CONCURRENCY=5` (= `pool_size`). This ensures concurrent refreshes never exhaust the base pool, leaving all 10 overflow connections for API traffic and other tasks.
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Semaphore=10 (use overflow)** | Higher throughput | API traffic would compete for connections during nightly refresh |
+| **B) Semaphore=pool_size (5)** | Leaves overflow for API traffic, predictable resource usage | Slightly lower throughput |
+| **C) Semaphore=pool_size/2** | Very conservative, large headroom | Over-conservative; nightly runs off-peak when API traffic is minimal |
+
+### Rationale
+- The fast path parallelizes ticker refreshes via `asyncio.gather`. Each refresh needs one DB connection from `async_session_factory()`. Postgres pool is configured as `pool_size=5, max_overflow=10` (effective peak 15).
+- Setting concurrency to `pool_size` ensures base pool is used, overflow is reserved for API traffic and other tasks.
+- Nightly refresh runs off-peak, so `pool_size/2` is unnecessarily conservative.
+
+### Consequences
+- Config is env-tunable via `INTRADAY_REFRESH_CONCURRENCY` in backend/.env.
+- If `DB_POOL_SIZE` changes, `INTRADAY_REFRESH_CONCURRENCY` should be updated in tandem.
+
+---
+
+## ADR-025: @tracked_task Decorator for Pipeline Observability
+
+**Date:** 2026-04-07 | **Status:** Implemented (Sessions 99-104, KAN-420, PRs #210-214)
+
+### Decision
+Wrap all Celery async helpers in `@tracked_task(pipeline_name, trigger)` which:
+1. Creates a `PipelineRun` row before execution (status: running)
+2. Injects `run_id: uuid.UUID` as a keyword argument
+3. On success: marks run as completed with timing
+4. On exception: marks run as failed with generic error summary (Hard Rule #10), re-raises
+
+### Pattern
+```python
+@tracked_task("model_retrain", trigger="scheduled")
+async def _retrain_all_async(*, run_id: uuid.UUID) -> dict:
+    ...  # run_id auto-injected by decorator
+```
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Manual tracking in each task** | No decorator magic | Boilerplate in 24 tasks, inconsistent lifecycle handling |
+| **B) @tracked_task decorator** | Unified lifecycle, consistent error handling, auto-injected run_id | Decorator indirection |
+| **C) Celery signals (task_prerun/postrun)** | No code changes per task | No per-ticker granularity, can't inject run_id |
+
+### Rationale
+- Celery tasks had no unified lifecycle tracking. Failures were logged but not persisted. Admin dashboard couldn't show per-task execution history, per-ticker outcomes, or pipeline health.
+- The decorator pattern provides consistent lifecycle tracking across all 24 Celery task helpers.
+- `bypass_tracked` test shim (PR #212) allows unit tests without DB setup.
+- `celery_task_id` column links PipelineRun to Celery retry chain.
+
+### Consequences
+- All 24 Celery task helpers now have PipelineRun lifecycle tracking.
+- Admin dashboard shows per-run: start/end time, duration, ticker success/failure counts.
+- `bypass_tracked` test shim (PR #212) allows unit tests without DB setup.
+- `celery_task_id` column links PipelineRun to Celery retry chain.
+
+---
+
+## ADR-026: PipelineRunner State Machine
+
+**Date:** 2026-04-07 | **Status:** Implemented (Sessions 99-104, KAN-420/421)
+
+### Decision
+`PipelineRunner` class provides:
+- `start_run(pipeline_name, trigger, tickers_total)` — creates PipelineRun row
+- `record_ticker_success(run_id, ticker)` / `record_ticker_failure(run_id, ticker, reason)` — per-ticker tracking
+- `complete_run(run_id)` — finalizes with end time and status
+- `update_watermark(pipeline_name, date)` — advances high-water mark for gap detection
+- `detect_stale_runs()` — cleans up runs stuck in "running" state (crash recovery)
+
+### Models
+
+| Model | Key Fields |
+|-------|------------|
+| `PipelineRun` | id, pipeline_name, trigger, status (running/completed/failed), tickers_total, succeeded_count, failed_count, started_at, completed_at, error_summary, celery_task_id |
+| `PipelineWatermark` | pipeline_name (unique), last_completed_date, last_completed_at, status |
+
+### Options Considered
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **A) Flat log table** | Simple append-only | No state transitions, no watermarks, no crash recovery |
+| **B) State machine with watermarks** | Resumable runs, gap detection, stale run cleanup | More complex model layer |
+| **C) External orchestrator (Airflow/Prefect)** | Battle-tested state machines | Heavy dependency for ~24 tasks, operational overhead |
+
+### Rationale
+- The `@tracked_task` decorator needs a backing state machine to manage run lifecycle, per-ticker outcomes, and watermarks for gap detection.
+- Pipeline execution is resumable — failed tickers can be reprocessed without re-running successes.
+- Watermark prevents gap-filling from reprocessing already-completed dates.
+- An external orchestrator is overkill for 24 tasks — the state machine is ~200 lines of Python.
+
+### Consequences
+- Pipeline execution is resumable — failed tickers can be reprocessed without re-running successes.
+- Watermark prevents gap-filling from reprocessing already-completed dates.
+- PipelineRun table grows ~50 rows/night — retention policy recommended (90 day archive).
+
+---
+
 ## ADR Index
 
 | # | Decision | Phase | Date |
@@ -683,3 +817,7 @@ HttpMetricsMiddleware stores request metrics in Redis sorted sets with 5-minute 
 | 020 | Template-based rationale (LLM only for complex divergences) | 8.6+ | 2026-04-03 |
 | 021 | Observability as bounded package (backend/observability/) | B.5 | 2026-04-03 |
 | 022 | Redis-backed HTTP metrics (not in-memory counters) | B.5 | 2026-04-03 |
+| 023 | Intraday refresh fast/slow path split | F | 2026-04-12 |
+| 024 | Semaphore bound = DB pool size | F | 2026-04-12 |
+| 025 | @tracked_task decorator for pipeline observability | E | 2026-04-07 |
+| 026 | PipelineRunner state machine | E | 2026-04-07 |

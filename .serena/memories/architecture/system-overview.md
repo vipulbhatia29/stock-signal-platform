@@ -1,7 +1,7 @@
 ---
 scope: project
 category: architecture
-updated_by: session-91
+updated_by: session-107
 ---
 
 # System Architecture Overview
@@ -41,6 +41,7 @@ updated_by: session-91
 
 **Core:** alert, chat, dividend, earnings, forecast, index, llm_config, logs, pipeline, portfolio, portfolio_health, price, recommendation, signal, stock, user, base
 **Phase 8.6+ additions (11+):** backtest, convergence, news_sentiment, audit (admin audit log), oauth_account, login_attempt, sentiment_score, cache_entry, forecast_component, rate_limit_event, agent_metadata
+**Pipeline Overhaul additions (2):** ticker_ingestion_state (migration 025), dq_check_history (migration 027)
 
 ## Frontend Pages & Components
 
@@ -78,6 +79,7 @@ updated_by: session-91
 
 **Original (8):** alerts, evaluation, forecasting, market_data, pipeline, portfolio, recommendations, warm_data
 **Phase 8.6+ additions (7):** convergence, news_sentiment, audit, warm_data (extended), assessment_runner, scoring_engine, golden_dataset, seed_tasks
+**Pipeline Overhaul additions (2):** dq_scan, retention
 
 ## Observability Package (backend/observability/, 8 files)
 
@@ -106,8 +108,9 @@ Data-driven cascade from `llm_model_config` DB table (migration 012). TokenBudge
 
 ## DB Migrations
 
-Alembic head: `b2351fa2d293` (migration 024 — Phase 8.6+ schema: backtesting, convergence, sentiment, news, audit tables).
-Alembic down_revision chain: 023 → 024 (no gaps).
+Alembic head: migration 027 (`dq_check_history`).
+Recent migrations: 025 (ticker_ingestion_state), 026 (celery_task_id on pipeline_runs), 027 (dq_check_history).
+No gaps in revision chain.
 
 ## Core Architecture Patterns
 
