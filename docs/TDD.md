@@ -330,9 +330,44 @@ erDiagram
         string target "nullable"
         jsonb metadata_
     }
+
+    ticker_ingestion_state {
+        uuid id PK
+        string ticker FK
+        string stage "prices|signals|fundamentals|forecast|sentiment|convergence|backtest|recommendation"
+        datetime last_updated_at
+        datetime created_at
+    }
+
+    dq_check_history {
+        uuid id PK
+        string check_name
+        string severity "critical|high|medium|low"
+        string ticker "nullable"
+        text message
+        jsonb metadata_
+        datetime detected_at
+    }
+
+    pipeline_watermark {
+        uuid id PK
+        string pipeline_name UK
+        date last_completed_date
+        datetime last_completed_at
+        string status
+    }
+
+    stocks ||--o{ ticker_ingestion_state : tracks
 ```
 
-> 30 tables total. Hypertables: `stock_prices`, `signal_snapshots`, `portfolio_snapshots`, `news_articles`. Full schema in `docs/data-architecture.md`.
+> 30+ tables total. Hypertables: `stock_prices`, `signal_snapshots`, `portfolio_snapshots`, `news_articles`. Full schema in `docs/data-architecture.md`.
+
+**Additional models (not in ER diagram):**
+
+- **TickerIngestionState** (`backend/models/ticker_ingestion_state.py`, migration 025): Tracks per-ticker, per-stage ingestion freshness. FK to `stocks(ticker)` with CASCADE.
+- **DqCheckHistory** (`backend/models/dq_check_history.py`, migration 027): Stores data quality check findings from the nightly DQ scanner.
+- **PipelineWatermark** (`backend/models/pipeline.py`): Tracks last successful completion date per pipeline stage for gap detection.
+- **PipelineRun** update: `celery_task_id` column (String(64), nullable, indexed) added in migration 026.
 
 ### 2.2 Layer Responsibilities
 
@@ -437,6 +472,39 @@ GET /api/v1/admin/users
 
 GET /api/v1/admin/users/{user_id}
   Response: UserAdminDetail
+```
+
+### 3.2.2 Auth Endpoints (OIDC & Account Management)
+
+```
+GET /api/v1/auth/.well-known/openid-configuration
+  Response: OIDC discovery document (issuer, jwks_uri, supported scopes)
+  Auth:     None (public endpoint)
+  Note:     Enables Langfuse SSO. Disabled when OIDC is unconfigured.
+
+GET /api/v1/auth/userinfo
+  Response: { sub, email, name }
+  Auth:     Required (Bearer token)
+  Note:     OIDC userinfo endpoint for Langfuse SSO integration.
+
+POST /api/v1/auth/set-password
+  Request:  { new_password: string }
+  Response: { message: string }
+  Auth:     Required
+  Note:     Sets password for OAuth-only accounts (hashed_password is null).
+  Errors:   400 (already has password)
+
+POST /api/v1/auth/google/unlink
+  Response: { message: string }
+  Auth:     Required
+  Note:     Unlinks Google OAuth from account. Requires existing password.
+  Errors:   400 (no password set — would lock out user), 404 (no linked account)
+
+GET /api/v1/auth/account
+  Response: { id, email, role, email_verified, has_password, has_google,
+              created_at }
+  Auth:     Required
+  Note:     Account info including linked providers and password status.
 ```
 
 ### 3.3 Stock & Signal Endpoints
@@ -642,6 +710,25 @@ GET /api/v1/stocks/{ticker}/fundamentals
   Auth:     Required
   Note:     Enriched fields from Stock model (materialized during ingestion).
             P/E, PEG, FCF yield, Piotroski still fetched live from yfinance.
+```
+
+### 3.6.4 Stock Intelligence Endpoint
+
+```
+GET /api/v1/stocks/{ticker}/intelligence
+  Response: { ticker, summary, key_drivers, risks, opportunities, generated_at }
+  Auth:     Required
+  Note:     AI-generated stock intelligence summary combining signals,
+            fundamentals, forecast, and news context.
+```
+
+### 3.6.5 Stock News Endpoint
+
+```
+GET /api/v1/stocks/{ticker}/news
+  Response: [{ title, link, publisher, published, source, ticker }]
+  Auth:     Required
+  Note:     Recent news articles for a specific ticker.
 ```
 
 ### 3.7 Index Endpoints
@@ -1127,6 +1214,8 @@ GET /api/v1/observability/my-queries/{query_id}
 | `TokenBucketLimiter` | `backend/services/rate_limiter.py` | Redis-backed token bucket for outbound API rate limiting. Atomic Lua script, NOSCRIPT recovery, permissive fallback. Named instances: yfinance (30 RPM), finnhub (60 RPM), edgar (10 RPS), google_news (20 RPM), fed (30 RPM). |
 | `PipelineRegistry` | `backend/services/pipeline_registry.py` | Task registry with dependency resolution. TaskDefinition dataclass, topological sort execution plans, 8 task groups. See section 6.4. |
 | `GroupRunManager` | `backend/services/pipeline_registry.py` | Redis-based pipeline run lifecycle. Atomic SET NX for concurrent protection, per-task status tracking, run history (capped at 50). |
+| `TickerStateService` | `backend/services/ticker_state.py` | Manages `TickerIngestionState` records. Key functions: `mark_stage_updated(ticker, stage, db)`, `mark_stages_updated(tickers, stage)`, `get_ticker_readiness(ticker, db)`, `get_universe_health(db)`. Used by pipeline tasks to track data freshness per SLA thresholds. |
+| `PipelineRunner` | `backend/tasks/pipeline.py` | Lifecycle manager for Celery task execution. Creates `PipelineRun` rows, tracks per-ticker success/failure, manages watermarks. Used via `@tracked_task` decorator on all background tasks. |
 | News Providers | `backend/services/news/` | 4 providers implementing `NewsProvider` ABC: `FinnhubProvider` (premium API), `EdgarProvider` (SEC 8-K/10-K), `FedRssProvider` (Fed RSS + FRED), `GoogleNewsProvider` (RSS fallback). Uses `defusedxml` for XXE safety. |
 
 ### 4.1 Service Pattern
@@ -1398,18 +1487,16 @@ flowchart TB
         W["Task Executor"]
     end
 
-    subgraph Chain["Nightly Pipeline (11 steps)"]
+    subgraph Chain["Nightly Pipeline (6 phases)"]
         direction TB
-        S1["1. Price Refresh"] --> S2["2. Forecast Refresh"]
-        S2 --> S3["3. Recommendations"]
-        S3 --> S4["4. Forecast Eval"]
-        S4 --> S5["5. Rec Eval"]
-        S5 --> S6["6. Drift Detection"]
-        S6 --> S7["7. Convergence Snapshot"]
-        S7 --> S8["8. Alerts"]
-        S8 --> S9["9. Health Snapshots"]
-        S9 --> S10["10. Rebalancing"]
-        S10 --> S11["11. Portfolio Snapshots"]
+        P0["Phase 0: Cache Invalidation"]
+        P1["Phase 1: Price Refresh + Signals<br/>(parallel, Semaphore(5))"]
+        P1_5["Phase 1.5: yfinance info + dividends<br/>(slow path, sequential)"]
+        P2["Phase 2 (parallel):<br/>Forecasts | Recs | Forecast Eval<br/>| Rec Eval | Portfolio Snapshots"]
+        P3["Phase 3: Convergence Snapshot"]
+        P4["Phase 4: Drift Detection"]
+        P5["Phase 5 (parallel):<br/>Alerts | Health Snapshots<br/>| Rebalancing"]
+        P0 --> P1 --> P1_5 --> P2 --> P3 --> P4 --> P5
     end
 
     subgraph Infra["Infrastructure"]
@@ -1423,9 +1510,15 @@ flowchart TB
     Worker --> Chain
     Worker --> PG
     Worker --> FS
-    S6 -.->|"drift detected"| RT["retrain_single_ticker_task"]
+    P4 -.->|"drift detected"| RT["retrain_single_ticker_task"]
     RT --> Worker
 ```
+
+**Nightly pipeline notes:**
+- Phase 1 uses `asyncio.gather + Semaphore(settings.INTRADAY_REFRESH_CONCURRENCY)` (default 5) for concurrent per-ticker price refresh + signal computation.
+- Phase 1.5 (yfinance info + dividends) was added in KAN-424 (PR #225) as a separate slow-path phase to avoid blocking the fast price/signal path.
+- Phase 2 tasks run in parallel via `asyncio.gather`.
+- Phase 5 tasks run in parallel via `asyncio.gather`.
 
 ### 6.2 Beat Schedule (US/Eastern)
 
@@ -1445,7 +1538,7 @@ flowchart TB
 | Every 30 min | `intraday_refresh_all_task` | Intraday | intraday |
 | 4:00 PM | `snapshot_all_portfolios_task` | Daily | nightly |
 | 4:15 PM | `snapshot_health_task` | Daily | nightly |
-| 9:30 PM | `nightly_pipeline_chain_task` (11 steps) | Daily | nightly |
+| 9:30 PM | `nightly_pipeline_chain_task` (6 phases) | Daily | nightly |
 
 **Task files** (17 in `backend/tasks/`): `market_data`, `portfolio`, `forecasting`, `evaluation`, `convergence`, `alerts`, `recommendations`, `news_sentiment`, `audit`, `warm_data`, `assessment_runner`, `scoring_engine`, `pipeline`, `golden_dataset`, `seed_tasks`, `dq_scan`, `retention`.
 
@@ -1546,7 +1639,7 @@ run_id = await run_group(
 | Group | Tasks | Purpose | Failure Mode | Timeout |
 |-------|-------|---------|--------------|---------|
 | **seed** | 9 tasks: admin_user → sp500 → [indexes, etfs] → [prices, dividends, fundamentals] → [forecasts, reason_tier] | First-run data hydration | stop_on_failure | 14,400 (4 hrs) |
-| **nightly** | 11 tasks: price_refresh → [forecasts, evals] → [drift, convergence] → [alerts, health, rebalancing] | Daily EOD refresh | continue | 10,800 (3 hrs) |
+| **nightly** | 6 phases: cache_invalidation → price_refresh+signals (Semaphore(5)) → yfinance_info+dividends → [forecasts, recs, forecast_eval, rec_eval, portfolio_snapshots] → convergence → drift → [alerts, health, rebalancing] | Daily EOD refresh | continue | 10,800 (3 hrs) |
 | **intraday** | 1 task: intraday_refresh_all | 30-minute incremental refresh | continue | 1,800 (30 min) |
 | **warm_data** | 3 parallel tasks: analyst_consensus, fred_indicators, institutional_holders | 7 AM daily | continue | 3,600 (1 hr) |
 | **maintenance** | 4 sequential: purge_login_attempts → purge_deleted_accounts → purge_old_forecasts → purge_old_news_articles | 3-3:45 AM daily | continue | 1,800 (30 min) |

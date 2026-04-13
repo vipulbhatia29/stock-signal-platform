@@ -680,7 +680,7 @@ After 3+ months of data accumulation, the following metrics become available:
 
 ```mermaid
 flowchart TD
-    subgraph Training["Training (biweekly)"]
+    subgraph Training["Training (weekly)"]
         A["Stock Prices<br/>(2 years, min 200 points)"] --> B["Prophet Model<br/>changepoint_prior=0.05"]
         B --> C["Serialize to JSON"]
         C --> D["ModelVersion row<br/>version auto-increment"]
@@ -1145,6 +1145,90 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - `GET /admin/chat-sessions` — paginated list of all user sessions (filterable by user, date)
 - `GET /admin/chat-sessions/{session_id}` — full transcript with tool calls, costs, latency per step
 - `GET /admin/chat-stats` — aggregate usage (sessions/day, avg cost, top tools, error rate)
+
+### FR-29: Forecast Quality & Scale — DONE (KAN-424, Spec E)
+
+> Raises nightly new-model cap, switches Prophet retrain to weekly, and splits intraday refresh into fast/slow paths.
+
+**FR-29.1: Nightly Model Cap** ✅ IMPLEMENTED
+- `MAX_NEW_MODELS_PER_NIGHT` raised from 20 to 100
+- User-initiated retrain via `ingest_ticker` passes `priority=True` to bypass the nightly sweep cap
+
+**FR-29.2: Weekly Prophet Retrain** ✅ IMPLEMENTED
+- Prophet retrain schedule changed from biweekly to weekly (Sunday 2 AM ET)
+- Beat entry renamed `model-retrain-biweekly` → `model-retrain-weekly`
+
+**FR-29.3: Intraday Fast/Slow Path Split** ✅ IMPLEMENTED
+- Fast path: prices + signals + QuantStats, parallelized via `Semaphore(5)`
+- Slow path: yfinance info + dividends, sequential — runs only in nightly Phase 1.5
+- Config: `INTRADAY_REFRESH_CONCURRENCY=5`
+
+**Acceptance:**
+- New-ticker forecast cap = 100 per nightly sweep
+- User-initiated ingest bypasses cap via `priority=True`
+- Weekly Sunday 02:00 ET retrain (not biweekly)
+- Fast path completes 600 tickers in ~2 min via Semaphore(5)
+- Slow path runs only in nightly Phase 1.5
+
+### FR-30: API Rate Limiting — DONE (KAN-425, Spec F2/F3/F4)
+
+> Redis-backed token-bucket rate limiters for all outbound API calls and per-user ingest endpoint.
+
+**FR-30.1: Token Bucket Limiter** ✅ IMPLEMENTED
+- Redis-backed `TokenBucketLimiter` with atomic Lua script and NOSCRIPT recovery
+
+**FR-30.2: Named Provider Instances** ✅ IMPLEMENTED
+- yfinance (30 RPM), Finnhub (60 RPM), EDGAR (10 RPS), Google News (20 RPM), FRED (30 RPM)
+
+**FR-30.3: Per-User Ingest Limit** ✅ IMPLEMENTED
+- `@limiter.limit("20/hour")` on `POST /stocks/{ticker}/ingest`
+
+**FR-30.4: Graceful Degradation** ✅ IMPLEMENTED
+- Fail-open if Redis unavailable — rate limiting bypassed, operations continue
+
+**Acceptance:**
+- All outbound API calls rate-limited per provider
+- Ingest endpoint limited to 20/hour per user
+- Redis failure doesn't block operations
+
+### FR-31: Data Quality Scanning — DONE (KAN-446, Spec F1)
+
+> Automated nightly data quality checks with findings persisted and critical alerts generated.
+
+**FR-31.1: Nightly DQ Scan** ✅ IMPLEMENTED
+- 10 automated checks at 4 AM ET via `dq_scan_task`
+
+**FR-31.2: Check Suite** ✅ IMPLEMENTED
+- Negative prices, RSI out of range, composite score out of range, null sectors, extreme forecast ratios, orphan positions, duplicate snapshots, stale universe coverage, negative volume, Bollinger Band violations
+
+**FR-31.3: Findings Persistence** ✅ IMPLEMENTED
+- Findings persisted to `DqCheckHistory` table
+- Critical findings auto-generate in-app alerts
+
+**Acceptance:**
+- 10 checks run nightly at 4 AM ET
+- Critical findings create alerts
+- All findings persisted with metadata
+
+### FR-32: Nightly Retention Purge — DONE (KAN-447, Spec F5)
+
+> Automated nightly purge of stale forecasts and news articles to control table growth.
+
+**FR-32.1: Forecast Purge** ✅ IMPLEMENTED
+- `purge_old_forecasts_task` — deletes `ForecastResult` rows older than 30 days
+- Runs 3:30 AM ET
+
+**FR-32.2: News Purge** ✅ IMPLEMENTED
+- `purge_old_news_articles_task` — deletes `NewsArticle` rows older than 90 days
+- Runs 3:45 AM ET
+
+**FR-32.3: Sentiment Retention** ✅ IMPLEMENTED
+- Daily sentiment aggregates retained indefinitely (no purge)
+
+**Acceptance:**
+- Forecasts older than 30 days purged nightly
+- News articles older than 90 days purged nightly
+- Sentiment aggregates never purged
 
 ---
 

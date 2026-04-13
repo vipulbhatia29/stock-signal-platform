@@ -144,7 +144,7 @@ AI-synthesized market overview combining sector performance, top movers, and mac
 
 ### 5.14 Forecast Engine (P1)
 
-Prophet-based price forecasting for stocks (90/180/270-day), 11 sector ETFs, and portfolio-level weighted aggregation. Biweekly retrain, daily predict-only refresh. **Per-ticker calibrated drift detection** (threshold = `backtest_mape × 1.5`, 3-failure self-healing demotion). News sentiment regressors (stock, sector, macro — feature-flagged). Recommendation evaluation at 30/90/180 days vs SPY. See [FSD.md FR-11](FSD.md).
+Prophet-based price forecasting for stocks (90/180/270-day), 11 sector ETFs, and portfolio-level weighted aggregation. Weekly retrain (Sunday 2 AM ET), daily predict-only refresh. Nightly cap of 100 new models; user-initiated ingests bypass cap via priority flag. **Per-ticker calibrated drift detection** (threshold = `backtest_mape × 1.5`, 3-failure self-healing demotion). News sentiment regressors (stock, sector, macro — feature-flagged). Recommendation evaluation at 30/90/180 days vs SPY. See [FSD.md FR-11](FSD.md).
 
 ### 5.15 Admin Command Center (P1)
 
