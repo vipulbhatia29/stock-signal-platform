@@ -121,3 +121,27 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - Tests: 2037 unit + 448 API
 - 1 JIRA ticket shipped (KAN-424), 4 filed (KAN-449–452)
 - Resume: KAN-449 (watchlist auto-ingest, PR1 of Spec C)
+
+---
+
+## Session 108 — KAN-449 Spec C PR1: Watchlist Auto-Ingest (2026-04-12)
+
+**Branch:** `feat/KAN-449-watchlist-auto-ingest` → develop
+
+### KAN-449 — C1+C6: Watchlist Auto-Ingest + Redis Dedup Infra
+- **`ingest_lock.py`** (new): Redis SETNX dedup lock using shared `get_redis()` pool, fail-open, 60s TTL
+- **`IngestInProgressError`** (new): 409 exception with safe_message
+- **`WATCHLIST_AUTO_INGEST`** feature flag in config.py
+- **`add_to_watchlist`** rewritten: dup→size→lock→ingest→insert ordering. Auto-ingests unknown tickers via canonical `ingest_ticker`. `IngestFailedError` → `StockNotFoundError` with `from exc` chain.
+- **Watchlist router**: 409 handler for `IngestInProgressError`
+- **Frontend layout.tsx**: Removed two-phase `useIngestTicker` hack — single `addToWatchlist.mutateAsync()` call
+- **`useAddToWatchlist`**: Broader query invalidation (`watchlist`, `stocks`, `signals`), toasts only in caller
+- 3-persona Opus review (Backend Architect + Test Engineer + Reliability) caught 2 CRITICALs:
+  - Missing `from exc` on exception chain
+  - Double toast (hook + caller both firing)
+- Both fixed + 1 MEDIUM (missing edge-case test) added
+
+### Session 108 Totals
+- Tests: 2037 → 2052 unit (+16 new: 8 ingest_lock, 8 watchlist_ingest)
+- 1 JIRA ticket shipped (KAN-449)
+- Resume: KAN-450 (portfolio sync-ingest + chat canonical ingest, PR2 of Spec C)

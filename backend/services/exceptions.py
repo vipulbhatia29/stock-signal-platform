@@ -82,3 +82,19 @@ class IngestFailedError(ServiceError):
         self.ticker = ticker
         self.step = step
         super().__init__(f"Ingest failed for {ticker} at step: {step}")
+
+
+class IngestInProgressError(ServiceError):
+    """Another caller is already ingesting this ticker."""
+
+    status_code = 409
+    safe_message = "Ingestion already in progress for this ticker, please retry shortly."
+
+    def __init__(self, ticker: str) -> None:
+        """Initialise with the ticker being ingested.
+
+        Args:
+            ticker: The ticker symbol that is currently being ingested.
+        """
+        super().__init__(f"Ingestion in progress for {ticker}")
+        self.ticker = ticker

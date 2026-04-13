@@ -20,10 +20,18 @@ from datetime import datetime, timezone
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import settings
 from backend.models.price import StockPrice
 from backend.models.signal import SignalSnapshot
 from backend.models.stock import Stock, Watchlist
-from backend.services.exceptions import DuplicateWatchlistError, StockNotFoundError
+from backend.services.exceptions import (
+    DuplicateWatchlistError,
+    IngestFailedError,
+    IngestInProgressError,
+    StockNotFoundError,
+)
+from backend.services.ingest_lock import acquire_ingest_lock, release_ingest_lock
+from backend.services.pipelines import ingest_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -116,39 +124,31 @@ async def add_to_watchlist(
     ticker: str,
     db: AsyncSession,
 ) -> dict:
-    """Add a ticker to the user's watchlist.
+    """Add a ticker to the user's watchlist, triggering auto-ingest if needed.
+
+    Ordering: duplicate → size → ingest (if enabled) → insert.
+
+    If ``settings.WATCHLIST_AUTO_INGEST`` is True (default) and the stock does
+    not yet exist in the DB, the full ingest pipeline is run inline so the
+    ticker is available immediately after the call returns.
 
     Args:
         user_id: The authenticated user's UUID.
-        ticker: Stock ticker symbol (should already be uppercased).
+        ticker: Stock ticker symbol (case-insensitive, uppercased internally).
         db: Async database session.
 
     Returns:
         Dict matching WatchlistItemResponse shape.
 
     Raises:
-        StockNotFoundError: If the ticker is not in the stocks table.
         DuplicateWatchlistError: If the ticker is already on the watchlist.
         ValueError: If the watchlist is at the size limit.
+        IngestInProgressError: If another caller is already ingesting the ticker.
+        StockNotFoundError: If the ticker is invalid / ingest fails.
     """
-    ticker = ticker.upper()
+    ticker = ticker.upper().strip()
 
-    # Verify the stock exists
-    stock_result = await db.execute(select(Stock).where(Stock.ticker == ticker))
-    stock = stock_result.scalar_one_or_none()
-    if stock is None:
-        raise StockNotFoundError(ticker)
-
-    # Check watchlist size limit
-    count_result = await db.execute(
-        select(func.count()).select_from(Watchlist).where(Watchlist.user_id == user_id)
-    )
-    watchlist_count = count_result.scalar_one()
-    if watchlist_count >= MAX_WATCHLIST_SIZE:
-        msg = f"Watchlist is full (maximum {MAX_WATCHLIST_SIZE} tickers)"
-        raise ValueError(msg)
-
-    # Check for duplicate
+    # 1. Check for duplicate first — avoids wasted ingest work
     existing = await db.execute(
         select(Watchlist).where(
             Watchlist.user_id == user_id,
@@ -158,7 +158,44 @@ async def add_to_watchlist(
     if existing.scalar_one_or_none() is not None:
         raise DuplicateWatchlistError(ticker)
 
-    # Create the watchlist entry
+    # 2. Check watchlist size limit
+    count_result = await db.execute(
+        select(func.count()).select_from(Watchlist).where(Watchlist.user_id == user_id)
+    )
+    watchlist_count = count_result.scalar_one()
+    if watchlist_count >= MAX_WATCHLIST_SIZE:
+        msg = f"Watchlist is full (maximum {MAX_WATCHLIST_SIZE} tickers)"
+        raise ValueError(msg)
+
+    # 3. Auto-ingest if feature flag is on and stock not yet in DB
+    if settings.WATCHLIST_AUTO_INGEST:
+        stock_result = await db.execute(select(Stock).where(Stock.ticker == ticker))
+        stock = stock_result.scalar_one_or_none()
+
+        if stock is None:
+            if not await acquire_ingest_lock(ticker):
+                raise IngestInProgressError(ticker)
+            try:
+                await ingest_ticker(ticker, db, user_id=str(user_id))
+            except IngestFailedError as exc:
+                logger.warning("Ingest failed for %s — returning StockNotFoundError", ticker)
+                raise StockNotFoundError(ticker) from exc
+            finally:
+                await release_ingest_lock(ticker)
+
+            # Re-fetch after ingest
+            stock_result = await db.execute(select(Stock).where(Stock.ticker == ticker))
+            stock = stock_result.scalar_one_or_none()
+            if stock is None:
+                raise StockNotFoundError(ticker)
+    else:
+        # Feature flag off — original behaviour: 404 if stock missing
+        stock_result = await db.execute(select(Stock).where(Stock.ticker == ticker))
+        stock = stock_result.scalar_one_or_none()
+        if stock is None:
+            raise StockNotFoundError(ticker)
+
+    # 4. Create the watchlist entry
     entry = Watchlist(user_id=user_id, ticker=ticker)
     db.add(entry)
     await db.commit()

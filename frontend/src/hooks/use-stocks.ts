@@ -60,11 +60,11 @@ export function useAddToWatchlist() {
     mutationFn: (ticker: string) =>
       post<WatchlistItem>("/stocks/watchlist", { ticker }),
     onSuccess: (_data, ticker) => {
+      // Invalidate watchlist + downstream caches populated by auto-ingest
+      // Toasts are handled by the caller (layout.tsx handleAddTicker)
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-      toast.success(`${ticker.toUpperCase()} added to watchlist`);
-    },
-    onError: (err) => {
-      toast.error(err instanceof Error ? err.message : "Failed to add");
+      queryClient.invalidateQueries({ queryKey: ["stocks"] });
+      queryClient.invalidateQueries({ queryKey: ["signals", ticker.toUpperCase()] });
     },
   });
 }
