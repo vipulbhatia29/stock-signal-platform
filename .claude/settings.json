@@ -30,7 +30,16 @@
       "Bash(node *)",
       "Bash(ruff *)",
       "Bash(mkdocs *)",
-      "Bash(gh *)"
+      "Bash(gh *)",
+      "mcp__obsidian__obsidian_simple_search",
+      "mcp__obsidian__obsidian_append_content",
+      "mcp__obsidian__obsidian_get_file_contents",
+      "mcp__obsidian__obsidian_list_files_in_vault",
+      "mcp__obsidian__obsidian_list_files_in_dir",
+      "mcp__obsidian__obsidian_patch_content",
+      "mcp__obsidian__obsidian_complex_search",
+      "mcp__obsidian__obsidian_batch_get_file_contents",
+      "mcp__obsidian__obsidian_get_recent_changes"
     ],
     "deny": [
       "Bash(rm -rf /)",

@@ -9,10 +9,11 @@ Before writing any code:
 2. Read `PROGRESS.md` — where we left off
 3. Read Serena memory `conventions/jira-sdlc-workflow` — **mandatory SDLC process**
 4. Run `git status && git log --oneline -5`
-5. Query JIRA board: `project = KAN AND status != Done ORDER BY rank ASC`
-6. Identify current phase of active Epics (Refinement? Implementation?)
-7. Pick next unblocked Subtask and present to PM for approval
-8. Run `uv run pytest tests/unit/ -q --tb=short` — confirm baseline green
+5. **Obsidian context** — after identifying the current task (step 6-8), search the vault using `mcp__obsidian__obsidian_simple_search` with 2-3 keywords from the task (e.g., "forecast drift" or "portfolio health"). If results found, read the top match with `mcp__obsidian__obsidian_get_file_contents` and use it as background context. If Obsidian MCP is unavailable, skip silently. Key vault paths: `1-projects/stock-signal-platform/` (project overview), `2-domain/` (domain knowledge and architecture patterns).
+6. Query JIRA board: `project = KAN AND status != Done ORDER BY rank ASC`
+7. Identify current phase of active Epics (Refinement? Implementation?)
+8. Pick next unblocked Subtask and present to PM for approval
+9. Run `uv run pytest tests/unit/ -q --tb=short` — confirm baseline green
 
 ## Memory Map
 
