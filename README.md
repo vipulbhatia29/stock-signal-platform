@@ -75,7 +75,7 @@ Features token budgeting per tier, per-query cost tracking, and Redis-backed rat
 
 - Stock-level + 11 SPDR sector ETF + portfolio-level forecasts
 - 90/180/270-day prediction horizons with confidence intervals
-- Biweekly model retraining with **per-ticker calibrated drift detection** (threshold = `backtest_mape × 1.5`, self-healing demotion after 3 consecutive failures)
+- Weekly model retraining (Sunday 2 AM ET) with **per-ticker calibrated drift detection** (threshold = `backtest_mape × 1.5`, self-healing demotion after 3 consecutive failures). Nightly cap: 100 new models; user-initiated ingests bypass cap.
 - Walk-forward backtesting engine with 5 metrics (MAPE, MAE, RMSE, direction accuracy, CI containment)
 - VIX regime overlay for forecast confidence
 - AccuracyBadge component showing model accuracy tier (Excellent/Good/Fair/Poor)
@@ -129,21 +129,21 @@ Features token budgeting per tier, per-query cost tracking, and Redis-backed rat
 
 ### Nightly Automation Pipeline
 
-An 11-step Celery Beat pipeline runs at 9:30 PM ET every trading day:
+A 6-phase Celery Beat pipeline runs at 9:30 PM ET every trading day:
 
-1. **Price refresh** — fetch latest prices, recompute all signals
-2. **Forecast refresh** — re-predict using active Prophet models
-3. **Recommendations** — generate BUY/SELL/WATCH/AVOID per user
-4. **Forecast evaluation** — compare matured predictions vs actuals
-5. **Recommendation evaluation** — compare past calls vs SPY benchmark at 30/90/180d
-6. **Drift detection** — per-ticker calibrated thresholds + volatility spikes + VIX regime
-7. **Convergence snapshot** — compute 5-signal alignment for all tracked tickers
-8. **Alert generation** — signal flips, new buy opportunities, drift warnings, divergence alerts
-9. **Health snapshots** — portfolio health grade computation
-10. **Rebalancing** — materialize optimized position suggestions
-11. **Portfolio snapshots** — capture end-of-day portfolio value
+| Phase | What | Duration |
+|-------|------|----------|
+| **0** | Cache invalidation (stale screener/signal keys) | <1 min |
+| **1** | Price refresh + signal computation (fast path, parallel via `Semaphore(5)`) | ~2 min |
+| **1.5** | yfinance info + dividends (slow path, sequential) | ~20 min |
+| **2** | Forecast refresh, recommendations, forecast/rec evaluation, portfolio snapshots (parallel) | ~10 min |
+| **3** | Convergence snapshot (5-signal alignment for all tickers) | ~2 min |
+| **4** | Drift detection (per-ticker calibrated thresholds) | ~1 min |
+| **5** | Alert generation, health snapshots, rebalancing (parallel) | ~2 min |
 
-Additionally: news ingestion runs 4x/day (6, 10, 14, 18 ET), sentiment scoring 1 hour after each ingest, and warm data syncs (analyst consensus, FRED, institutional holders) run at 6-7 AM ET daily.
+Additionally: data quality scanning (10 checks) at 4 AM ET, retention purge (forecasts 30d, news 90d) at 3:30 AM ET, news ingestion 4x/day, sentiment scoring 1h after each ingest, warm data syncs at 6-7 AM ET. All outbound API calls rate-limited via Redis token-bucket (`TokenBucketLimiter`).
+
+All pipeline tasks tracked via `@tracked_task` decorator with `PipelineRunner` lifecycle (per-ticker success/failure recording, watermark-based gap detection).
 
 ### Authentication & Account Management
 
