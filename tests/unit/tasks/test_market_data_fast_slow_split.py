@@ -60,6 +60,8 @@ async def test_refresh_ticker_slow_does_not_compute_signals() -> None:
         patch.object(mod, "compute_signals") as mock_sig,
         patch.object(mod, "store_signal_snapshot", new=AsyncMock()) as mock_store,
         patch.object(mod, "async_session_factory") as mock_factory,
+        patch.object(mod, "yfinance_limiter", AsyncMock(acquire=AsyncMock(return_value=True))),
+        patch.object(mod, "mark_stage_updated", new=AsyncMock()),
     ):
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()
@@ -213,3 +215,42 @@ def test_refresh_ticker_async_calls_both_paths() -> None:
     source = inspect.getsource(market_data._refresh_ticker_async)
     assert "_refresh_ticker_fast" in source
     assert "_refresh_ticker_slow" in source
+
+
+# ---------------------------------------------------------------------------
+# Spec F gap: yfinance_limiter in _refresh_ticker_slow
+# ---------------------------------------------------------------------------
+
+
+def test_slow_path_uses_yfinance_limiter() -> None:
+    """Spec F: _refresh_ticker_slow acquires yfinance_limiter before yf.Ticker calls."""
+    import inspect
+
+    from backend.tasks import market_data
+
+    source = inspect.getsource(market_data._refresh_ticker_slow)
+    # limiter.acquire() must appear before yf.Ticker() calls
+    limiter_pos = source.find("yfinance_limiter.acquire()")
+    yf_pos = source.find("yf.Ticker(")
+    assert limiter_pos != -1, "yfinance_limiter.acquire() not found in _refresh_ticker_slow"
+    assert yf_pos != -1, "yf.Ticker() not found in _refresh_ticker_slow"
+    assert limiter_pos < yf_pos, "yfinance_limiter must be acquired before yf.Ticker call"
+
+
+def test_slow_path_acquires_limiter_before_dividends() -> None:
+    """Spec F: _refresh_ticker_slow acquires yfinance_limiter before fetch_dividends call."""
+    import inspect
+
+    from backend.tasks import market_data
+
+    source = inspect.getsource(market_data._refresh_ticker_slow)
+    # Find second limiter acquire (for dividends) — must be before the actual call
+    first_acquire = source.find("yfinance_limiter.acquire()")
+    second_acquire = source.find("yfinance_limiter.acquire()", first_acquire + 1)
+    # Look for the actual function call, not the import line
+    dividends_call = source.find("fetch_dividends, ticker")
+    assert second_acquire != -1, "Second yfinance_limiter.acquire() not found"
+    assert dividends_call != -1, "fetch_dividends call not found in _refresh_ticker_slow"
+    assert second_acquire < dividends_call, (
+        "yfinance_limiter must be acquired before fetch_dividends call"
+    )

@@ -93,6 +93,7 @@ class TestForecastNewTickerDispatch:
                 return_value={new_ticker: 250},  # Above MIN_DATA_POINTS=200
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
+            patch("backend.tasks.forecasting.mark_stages_updated", new_callable=AsyncMock),
         ):
             result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
@@ -131,6 +132,7 @@ class TestForecastNewTickerDispatch:
                 return_value={new_ticker: 50},  # Below MIN_DATA_POINTS=200
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
+            patch("backend.tasks.forecasting.mark_stages_updated", new_callable=AsyncMock),
         ):
             result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
@@ -172,6 +174,7 @@ class TestForecastNewTickerDispatch:
                 return_value={t: 300 for t in new_tickers},  # All tickers have sufficient data
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
+            patch("backend.tasks.forecasting.mark_stages_updated", new_callable=AsyncMock),
         ):
             result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
@@ -206,6 +209,7 @@ class TestForecastNewTickerDispatch:
                 side_effect=Exception("DB connection lost"),
             ),
             patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
+            patch("backend.tasks.forecasting.mark_stages_updated", new_callable=AsyncMock),
         ):
             # Should NOT raise — Phase 2 exceptions are caught internally
             result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())

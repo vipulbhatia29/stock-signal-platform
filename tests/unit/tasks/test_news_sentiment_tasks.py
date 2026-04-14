@@ -394,6 +394,10 @@ class TestScoreSentiment:
                 "backend.services.news.sentiment_scorer.SentimentScorer",
                 mock_scorer_cls,
             ),
+            patch(
+                "backend.services.ticker_state.mark_stages_updated",
+                new_callable=AsyncMock,
+            ),
         ):
             from backend.tasks.news_sentiment import _score_sentiment
 
@@ -419,6 +423,10 @@ class TestScoreSentiment:
             patch(
                 "backend.services.news.sentiment_scorer.SentimentScorer",
                 mock_scorer_cls,
+            ),
+            patch(
+                "backend.services.ticker_state.mark_stages_updated",
+                new_callable=AsyncMock,
             ),
         ):
             from backend.tasks.news_sentiment import _score_sentiment
@@ -474,6 +482,10 @@ class TestScoreSentiment:
             patch(
                 "backend.services.news.sentiment_scorer.SentimentScorer",
                 mock_scorer_cls,
+            ),
+            patch(
+                "backend.services.ticker_state.mark_stages_updated",
+                new_callable=AsyncMock,
             ),
         ):
             from backend.tasks.news_sentiment import _score_sentiment
@@ -556,3 +568,60 @@ class TestIngestNewsTickersParam:
             result = await bypass_tracked(_ingest_news)(7, tickers=None, run_id=uuid.uuid4())
 
         assert result["tickers_processed"] == 2
+
+
+# ---------------------------------------------------------------------------
+# Tests: mark_stage_updated calls (Spec A gap fixes)
+# ---------------------------------------------------------------------------
+
+
+class TestStageTracking:
+    """Verify _ingest_news and _score_sentiment call mark_stages_updated."""
+
+    @pytest.mark.asyncio
+    async def test_ingest_news_marks_news_stage(self) -> None:
+        """_ingest_news calls mark_stages_updated with 'news' for processed tickers."""
+        mock_factory = _make_mock_session_factory([])
+        mock_service = _make_mock_ingestion_service()
+
+        with (
+            patch("backend.database.async_session_factory", return_value=mock_factory),
+            patch(
+                "backend.services.ticker_universe.get_all_referenced_tickers",
+                AsyncMock(return_value=["AAPL", "MSFT"]),
+            ),
+            patch(
+                "backend.services.news.ingestion.NewsIngestionService",
+                return_value=mock_service,
+            ),
+            patch(
+                "backend.services.ticker_state.mark_stages_updated",
+                new_callable=AsyncMock,
+            ) as mock_mark,
+        ):
+            from backend.tasks.news_sentiment import _ingest_news
+
+            await bypass_tracked(_ingest_news)(7, run_id=uuid.uuid4())
+
+        mock_mark.assert_called_once_with(["AAPL", "MSFT"], "news")
+
+    @pytest.mark.asyncio
+    async def test_ingest_news_marks_news_stage_with_explicit_tickers(self) -> None:
+        """_ingest_news marks news stage for explicitly provided tickers."""
+        mock_service = _make_mock_ingestion_service()
+
+        with (
+            patch(
+                "backend.services.news.ingestion.NewsIngestionService",
+                return_value=mock_service,
+            ),
+            patch(
+                "backend.services.ticker_state.mark_stages_updated",
+                new_callable=AsyncMock,
+            ) as mock_mark,
+        ):
+            from backend.tasks.news_sentiment import _ingest_news
+
+            await bypass_tracked(_ingest_news)(7, tickers=["goog"], run_id=uuid.uuid4())
+
+        mock_mark.assert_called_once_with(["GOOG"], "news")

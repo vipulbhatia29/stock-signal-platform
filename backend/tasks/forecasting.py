@@ -117,6 +117,7 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
             return {"refreshed": 0, "total": 0}
 
         refreshed = 0
+        refreshed_tickers: list[str] = []
 
         for model_version in active_models:
             try:
@@ -125,6 +126,7 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
                     db.add(fc)
                 await db.commit()
                 await _runner.record_ticker_success(run_id, model_version.ticker)
+                refreshed_tickers.append(model_version.ticker)
                 refreshed += 1
             except Exception:
                 await db.rollback()
@@ -165,6 +167,10 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
                     logger.info("Dispatched training for %d new tickers", dispatched)
         except Exception:
             logger.warning("Failed to dispatch new-ticker training", exc_info=True)
+
+        # Mark forecast stage freshness for all successfully refreshed tickers
+        if refreshed_tickers:
+            await mark_stages_updated(refreshed_tickers, "forecast")
 
         return {"refreshed": refreshed, "total": len(active_models)}
 

@@ -15,19 +15,25 @@ from backend.dependencies import get_current_user, require_admin
 from backend.models.audit import AdminAuditLog
 from backend.models.user import User
 from backend.schemas.admin_pipeline import (
+    AuditLogEntry,
+    AuditLogResponse,
     CacheClearRequest,
     CacheClearResponse,
+    HealthResponse,
     PipelineGroupListResponse,
     PipelineGroupResponse,
     PipelineRunResponse,
     RunHistoryResponse,
+    StageStatus,
     TaskDefinitionResponse,
     TriggerGroupRequest,
     TriggerGroupResponse,
+    TriggerTaskResponse,
 )
 from backend.services.pipeline_registry import GroupRunManager, TaskDefinition, run_group
 from backend.services.pipeline_registry_config import build_registry
 from backend.services.redis_pool import get_redis
+from backend.tasks import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -493,4 +499,180 @@ async def clear_all_caches(
             f"Cleared {total_deleted} keys across all"
             f" {len(CACHE_CLEAR_WHITELIST)} whitelisted patterns"
         ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# D2: Per-task trigger
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/tasks/{task_name:path}/run",
+    response_model=TriggerTaskResponse,
+    status_code=202,
+    summary="Trigger a single pipeline task",
+    description=(
+        "Dispatch a single Celery task by its fully-qualified name. "
+        "Returns 202 immediately. The task runs asynchronously."
+    ),
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not admin"},
+        404: {"description": "Task not found in pipeline registry"},
+    },
+)
+async def trigger_task_run(
+    task_name: str,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_async_session)],
+) -> TriggerTaskResponse:
+    """Dispatch a single pipeline task by name."""
+    require_admin(user)
+
+    registry = build_registry()
+    task_def = registry.get_task(task_name)
+    if not task_def:
+        raise HTTPException(status_code=404, detail="Task not found in pipeline registry")
+
+    # Dynamically resolve and dispatch the Celery task
+    celery_task = celery_app.tasks.get(task_name)
+    if celery_task is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Task registered in pipeline registry but not found in Celery app",
+        )
+
+    result = celery_task.delay()
+
+    audit = AdminAuditLog(
+        user_id=user.id,
+        action="trigger_task",
+        target=task_name,
+        metadata_={"celery_task_id": result.id},
+    )
+    db.add(audit)
+    await db.commit()
+
+    logger.info("Admin %s triggered task '%s' (celery_id=%s)", user.email, task_name, result.id)
+
+    return TriggerTaskResponse(
+        task_name=task_name,
+        status="accepted",
+        message=f"Task '{task_def.display_name}' dispatched (id={result.id})",
+    )
+
+
+# ---------------------------------------------------------------------------
+# D3: Ingestion health
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/health",
+    response_model=HealthResponse,
+    summary="Get ingestion health for all tickers",
+    description=(
+        "Returns per-stage readiness status for every ticker in the universe. "
+        "Each stage is 'green', 'yellow', 'red', or 'unknown'. "
+        "Results are sorted: red first, then yellow, unknown, green."
+    ),
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not admin"},
+    },
+)
+async def get_ingestion_health(
+    user: Annotated[User, Depends(get_current_user)],
+    status: Annotated[str | None, Query(description="Filter by overall status")] = None,
+) -> HealthResponse:
+    """Return ingestion health for all tickers in the universe."""
+    require_admin(user)
+
+    from backend.services.ticker_state import get_universe_health
+
+    rows = await get_universe_health()
+
+    if status:
+        rows = [r for r in rows if r.overall == status]
+
+    tickers = [
+        StageStatus(
+            ticker=r.ticker,
+            prices=r.prices,
+            signals=r.signals,
+            fundamentals=r.fundamentals,
+            forecast=r.forecast,
+            forecast_retrain=r.forecast_retrain,
+            news=r.news,
+            sentiment=r.sentiment,
+            convergence=r.convergence,
+            backtest=r.backtest,
+            recommendation=r.recommendation,
+            overall=r.overall,
+        )
+        for r in rows
+    ]
+
+    return HealthResponse(total=len(tickers), tickers=tickers)
+
+
+# ---------------------------------------------------------------------------
+# D6: Audit log listing
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/audit-log",
+    response_model=AuditLogResponse,
+    summary="List admin audit log entries",
+    description="Paginated listing of admin actions, newest first.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not admin"},
+    },
+)
+async def list_audit_log(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_async_session)],
+    action: Annotated[str | None, Query(description="Filter by action type")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> AuditLogResponse:
+    """Return paginated admin audit log entries."""
+    require_admin(user)
+
+    from sqlalchemy import func, select
+
+    # Count query
+    count_q = select(func.count()).select_from(AdminAuditLog)
+    if action:
+        count_q = count_q.where(AdminAuditLog.action == action)
+    total = (await db.execute(count_q)).scalar_one()
+
+    # Data query
+    query = (
+        select(AdminAuditLog).order_by(AdminAuditLog.created_at.desc()).limit(limit).offset(offset)
+    )
+    if action:
+        query = query.where(AdminAuditLog.action == action)
+
+    result = await db.execute(query)
+    entries = result.scalars().all()
+
+    return AuditLogResponse(
+        total=total,
+        limit=limit,
+        offset=offset,
+        entries=[
+            AuditLogEntry(
+                id=str(e.id),
+                user_id=str(e.user_id),
+                action=e.action,
+                target=e.target,
+                metadata=e.metadata_,
+                created_at=e.created_at.isoformat() if e.created_at else "",
+            )
+            for e in entries
+        ],
     )
