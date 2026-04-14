@@ -4,6 +4,7 @@ import { ExternalLinkIcon } from "lucide-react";
 import { SectionHeading } from "@/components/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/error-state";
+import { StalenessBadge } from "@/components/staleness-badge";
 import { formatRelativeTime } from "@/lib/format";
 import type { StockNewsResponse } from "@/types/api";
 
@@ -52,7 +53,10 @@ export function NewsCard({ news, isLoading, isError, onRetry }: NewsCardProps) {
 
   return (
     <div className="space-y-4">
-      <SectionHeading>News</SectionHeading>
+      <div className="flex items-center gap-3">
+        <SectionHeading>News</SectionHeading>
+        <StalenessBadge lastUpdated={news.fetched_at} slaHours={6} />
+      </div>
       <ul className="space-y-2">
         {news.articles.slice(0, MAX_ARTICLES).map((article, i) => (
           <li

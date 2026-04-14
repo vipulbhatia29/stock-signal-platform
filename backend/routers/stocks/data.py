@@ -25,6 +25,9 @@ from backend.schemas.stock import (
     BenchmarkSeries,
     BollingerResponse,
     FundamentalsResponse,
+    IngestStageStatus,
+    IngestStateResponse,
+    IngestStateStages,
     MACDResponse,
     OHLCResponse,
     PiotroskiBreakdown,
@@ -35,6 +38,7 @@ from backend.schemas.stock import (
     RSIResponse,
     SignalResponse,
     SMAResponse,
+    StageInfo,
     StockAnalyticsResponse,
 )
 from backend.services.signals import get_latest_signals as get_latest_signals_svc
@@ -676,4 +680,99 @@ async def get_stock_analytics(
         alpha=snapshot.alpha,
         beta=snapshot.beta,
         data_days=snapshot.data_days,
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ingest state (Spec G.1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _classify_stage(updated_at: datetime | None, sla_hours: float) -> IngestStageStatus:
+    """Classify stage freshness against SLA threshold."""
+    if updated_at is None:
+        return IngestStageStatus.MISSING
+    age_secs = (datetime.now(timezone.utc) - updated_at).total_seconds()
+    if age_secs <= sla_hours * 3600:
+        return IngestStageStatus.FRESH
+    if age_secs <= 2 * sla_hours * 3600:
+        return IngestStageStatus.STALE
+    return IngestStageStatus.PENDING
+
+
+@router.get(
+    "/{ticker}/ingest-state",
+    response_model=IngestStateResponse,
+    summary="Get per-stage ingest freshness for a ticker",
+    description=(
+        "Returns 7-stage freshness breakdown with SLA-based classification. "
+        "Backs the IngestProgressToast and StalenessBadge on stock detail."
+    ),
+    responses={
+        401: {"description": "Not authenticated"},
+        404: {"description": "Ticker not found in ingestion state table"},
+    },
+)
+async def get_ingest_state(
+    ticker: TickerPath,
+    db: AsyncSession = Depends(get_async_session),
+    current_user: User = Depends(get_current_user),
+) -> IngestStateResponse:
+    """Return per-stage ingest freshness for one ticker."""
+    from backend.config import settings
+    from backend.models.ticker_ingestion_state import TickerIngestionState
+
+    t = ticker.upper()
+    row = (
+        await db.execute(select(TickerIngestionState).where(TickerIngestionState.ticker == t))
+    ).scalar_one_or_none()
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="Ticker not found")
+
+    slas = settings.staleness_slas
+
+    def _stage(col_name: str, sla_hours: float) -> StageInfo:
+        ts = getattr(row, col_name, None)
+        return StageInfo(updated_at=ts, status=_classify_stage(ts, sla_hours))
+
+    def _sla_hours(td: timedelta) -> float:
+        return td.total_seconds() / 3600
+
+    stages = IngestStateStages(
+        prices=_stage("prices_updated_at", _sla_hours(slas.prices)),
+        signals=_stage("signals_updated_at", _sla_hours(slas.signals)),
+        fundamentals=_stage("fundamentals_updated_at", _sla_hours(slas.fundamentals)),
+        forecast=_stage("forecast_updated_at", _sla_hours(slas.forecast)),
+        news=_stage("news_updated_at", _sla_hours(slas.news)),
+        sentiment=_stage("sentiment_updated_at", _sla_hours(slas.sentiment)),
+        convergence=_stage("convergence_updated_at", _sla_hours(slas.convergence)),
+    )
+
+    all_stages = [
+        stages.prices,
+        stages.signals,
+        stages.fundamentals,
+        stages.forecast,
+        stages.news,
+        stages.sentiment,
+        stages.convergence,
+    ]
+    fresh_count = sum(1 for s in all_stages if s.status == IngestStageStatus.FRESH)
+    completion = round(fresh_count / 7 * 100)
+
+    if fresh_count == 7:
+        overall = "ready"
+    elif any(
+        s.status in (IngestStageStatus.PENDING, IngestStageStatus.MISSING) for s in all_stages
+    ):
+        overall = "ingesting"
+    else:
+        overall = "stale"
+
+    return IngestStateResponse(
+        ticker=t,
+        stages=stages,
+        overall_status=overall,
+        completion_pct=completion,
     )

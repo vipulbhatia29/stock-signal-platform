@@ -1207,3 +1207,26 @@ export interface BulkTransactionResponse {
   errors: BulkTransactionError[];
   validate_only: boolean;
 }
+
+// Ingest state types (Spec G.1)
+export type IngestStageStatus = "fresh" | "stale" | "pending" | "missing";
+
+export interface StageInfo {
+  updated_at: string | null;
+  status: IngestStageStatus;
+}
+
+export interface IngestState {
+  ticker: string;
+  stages: {
+    prices: StageInfo;
+    signals: StageInfo;
+    fundamentals: StageInfo;
+    forecast: StageInfo;
+    news: StageInfo;
+    sentiment: StageInfo;
+    convergence: StageInfo;
+  };
+  overall_status: "ready" | "ingesting" | "stale" | "missing";
+  completion_pct: number;
+}

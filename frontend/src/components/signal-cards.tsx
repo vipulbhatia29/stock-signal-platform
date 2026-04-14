@@ -10,6 +10,7 @@ import {
   SENTIMENT_BORDER_CLASSES,
 } from "@/lib/signals";
 import { cn } from "@/lib/utils";
+import { StalenessBadge } from "@/components/staleness-badge";
 import type { SignalResponse } from "@/types/api";
 
 interface SignalCardsProps {
@@ -102,7 +103,13 @@ export function SignalCards({ signals, isLoading }: SignalCardsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="space-y-3">
+      <StalenessBadge
+        lastUpdated={signals.computed_at ?? null}
+        slaHours={4}
+        refreshing={signals.is_refreshing}
+      />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       {cards.map((card, i) => {
         const sentiment = signalToSentiment(card.signal, card.type);
         return (
@@ -138,6 +145,7 @@ export function SignalCards({ signals, isLoading }: SignalCardsProps) {
           </Card>
         );
       })}
+    </div>
     </div>
   );
 }

@@ -32,6 +32,7 @@ import { IntelligenceCard } from "@/components/intelligence-card";
 import { NewsCard } from "@/components/news-card";
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeading } from "@/components/section-heading";
+import { IngestProgressToast } from "@/components/ingest-progress-toast";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
@@ -98,10 +99,17 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
       id: `ingest-${ticker}`,
     });
     try {
-      const result = await ingestTicker.mutateAsync(ticker);
-      toast.success(`${result.rows_fetched} data points loaded`, {
-        id: `ingest-${ticker}`,
-      });
+      await ingestTicker.mutateAsync(ticker);
+      toast.dismiss(`ingest-${ticker}`);
+      toast.custom(
+        (t) => (
+          <IngestProgressToast
+            ticker={ticker}
+            onComplete={() => toast.dismiss(t)}
+          />
+        ),
+        { duration: Infinity, id: `ingest-${ticker}` },
+      );
     } catch {
       toast.error(`Failed to fetch data for ${ticker}`, {
         id: `ingest-${ticker}`,
@@ -145,7 +153,7 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
           isInWatchlist={isInWatchlist}
           onToggleWatchlist={handleToggleWatchlist}
           isRefreshing={signals?.is_refreshing}
-          isStale={signals?.is_stale}
+          computedAt={signals?.computed_at}
         />
       )}
 

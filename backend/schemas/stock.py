@@ -16,6 +16,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -405,3 +406,45 @@ class BenchmarkComparisonResponse(BaseModel):
     ticker: str
     period: str
     series: list[BenchmarkSeries]  # up to 3 series: stock, ^GSPC, ^IXIC
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ingest state schemas (Spec G.1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class IngestStageStatus(str, Enum):
+    """Per-stage freshness classification."""
+
+    FRESH = "fresh"
+    STALE = "stale"
+    PENDING = "pending"
+    MISSING = "missing"
+
+
+class StageInfo(BaseModel):
+    """Single stage freshness info."""
+
+    updated_at: datetime | None = None
+    status: IngestStageStatus
+
+
+class IngestStateStages(BaseModel):
+    """Per-stage breakdown for a ticker."""
+
+    prices: StageInfo
+    signals: StageInfo
+    fundamentals: StageInfo
+    forecast: StageInfo
+    news: StageInfo
+    sentiment: StageInfo
+    convergence: StageInfo
+
+
+class IngestStateResponse(BaseModel):
+    """Response for GET /stocks/{ticker}/ingest-state."""
+
+    ticker: str
+    stages: IngestStateStages
+    overall_status: Literal["ready", "ingesting", "stale", "missing"]
+    completion_pct: int
