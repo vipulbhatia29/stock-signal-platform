@@ -167,3 +167,34 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 4 JIRA tickets shipped (KAN-449, KAN-450, KAN-451, KAN-452) — **Spec C complete**
 - 4 PRs merged (#229, #230, #231, #232)
 - Resume: KAN-426 (Spec G frontend polish) or KAN-429 (JIRA automation bug)
+
+---
+
+## Session 109 — KAN-448 TimescaleDB Compression + Spec B Follow-ups (2026-04-13)
+
+**Branch:** `feat/KAN-448-timescaledb-compression` → develop | **PR #233**
+
+### KAN-448 — TimescaleDB Compression Policies
+- Migration 028: compression on stock_prices (180d), signal_snapshots (180d), news_articles (60d, segmentby=ticker)
+- Refactored news retention from row-level DELETE to `drop_chunks()` (compression-compatible)
+- Pre-implementation audit caught 4 blocking conflicts (upserts, UPDATEs, DELETEs on compressed chunks) — thresholds adjusted
+- 3-persona review (Backend Architect + Test Engineer + DB/SQL Expert) caught 7 issues — all fixed
+
+### Spec B Follow-ups (KAN-439/440/441/443/444)
+- **KAN-439:** Backtest returns `status="degraded"` when `failed > 0`, includes `failed_tickers` list
+- **KAN-440:** BacktestRun UniqueConstraint + `pg_insert` upsert (migration 029 with dedup guard)
+- **KAN-441:** Celery `time_limit=3600` / `soft_time_limit=3300` on `run_backtest_task`
+- **KAN-443:** Already fixed in Spec B refactor (`sentiment_regressors.py:67`) — closed with audit
+- **KAN-444:** Forecast test TZ flake fixed with `freezegun` pin
+
+### JIRA Cleanup
+- KAN-212, KAN-214: → Done (work confirmed in codebase, folded into prior PRs)
+- KAN-419: → In Progress (6/8 specs shipped)
+- KAN-406: NOT fixed despite project-plan claim — comment added, kept open
+
+### Session 109 Totals
+- Tests: 2080 → 2096 unit (+16 new), 0 failures (KAN-444 flake resolved)
+- 6 JIRA tickets resolved (KAN-448, KAN-439, KAN-440, KAN-441, KAN-443, KAN-444)
+- 2 stale tickets closed (KAN-212, KAN-214)
+- 1 PR (#233)
+- Resume: KAN-426 (Spec G frontend polish), KAN-429 (JIRA automation bug)
