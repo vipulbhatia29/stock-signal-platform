@@ -193,7 +193,7 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 | KAN-425 | F2/F3/F4 | Medium | Rate Limiters — Redis token bucket for yfinance + news providers + ingest endpoint | **✅ Done (PR #220, Session 106)** |
 | &nbsp;&nbsp;↳ KAN-446 | F1 | Medium | DQ Scanner — nightly 10-check scan + alert generation + migration 027 | **✅ Done (PR #222, Session 106)** |
 | &nbsp;&nbsp;↳ KAN-447 | F5 | Medium | Retention Tasks — purge forecasts (30d) + news (90d) | **✅ Done (PR #223, Session 106)** |
-| &nbsp;&nbsp;↳ KAN-448 | F6 | Low | TimescaleDB Compression — compression policies on 3 hypertables | To Do |
+| &nbsp;&nbsp;↳ KAN-448 | F6 | Low | TimescaleDB Compression — compression policies on 3 hypertables | **✅ Done (PR #233, Session 109)** |
 | KAN-426 | G | Medium | Frontend Polish — ingest progress, polling, stale badges, ticker search | Refined ✅ |
 | KAN-427 | Z | Medium | Quick Wins — Z1/Z2/Z4/Z5/Z6 (Z3 deferred to after F2/F3) | **✅ Done (PR #219, Session 106)** |
 
@@ -245,12 +245,12 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 | KAN-436 | High | Bulk `mark_stages_updated` helper — 500 sequential round-trips → 1 query |
 | KAN-437 | High | Walk-forward sentiment N+1 — pre-load once per ticker (~55k → ~500 queries on weekly run) |
 | KAN-438 | High | Per-ticker DB session in `_run_backtest_async` (currently one session wraps full loop) |
-| KAN-439 | Medium | Backtest task returns `status="degraded"` when `failed > 0` (currently always `"ok"`) |
-| KAN-440 | Medium | `BacktestRun` UniqueConstraint + upsert (prevents duplicate rows on retry; drift uses MIN so no correctness impact today) |
-| KAN-441 | Medium | Celery `time_limit` / `soft_time_limit` on `run_backtest_task` (currently unbounded) |
+| KAN-439 | Medium | Backtest task returns `status="degraded"` when `failed > 0` | **✅ Done (PR #233, S109)** |
+| KAN-440 | Medium | `BacktestRun` UniqueConstraint + upsert | **✅ Done (PR #233, S109)** |
+| KAN-441 | Medium | Celery `time_limit` / `soft_time_limit` on `run_backtest_task` | **✅ Done (PR #233, S109)** |
 | KAN-442 | Low | Consolidate `_fetch_sentiment_for_window` into `_fetch_sentiment_regressors` (DRY cleanup) |
-| KAN-443 | Low | Pyright `pd.Index(...)` wrap at `backend/tools/forecasting.py:508` (sibling of Fix 1 in PR #208) |
-| KAN-444 | Low (Bug) | `test_forecast_has_correct_fields` fails due to ET production / UTC test TZ mismatch (pre-existing, confirmed on develop) |
+| KAN-443 | Low | Pyright `pd.Index(...)` wrap — already fixed in Spec B refactor | **✅ Done (S109 audit)** |
+| KAN-444 | Low (Bug) | Forecast test TZ mismatch — freezegun fix | **✅ Done (PR #233, S109)** |
 
 **Spec B deferrals to Spec D** (wiring dependencies, not defects):
 - `@tracked_task` decoration on convergence / backtest tasks — decorator only wraps `Callable[..., Awaitable[R]]`; must be applied to the async helpers (`_compute_convergence_snapshot_async`, `_run_backtest_async`) rather than the sync Celery wrappers.
@@ -258,7 +258,7 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 ---
 
-### Epic KAN-408: Backend Code Health & Security Hardening (IN PROGRESS — Session 97)
+### Epic KAN-408: Backend Code Health & Security Hardening ✅ (Sessions 97-105)
 
 > Refined this session. Spec + plan written, 2 rounds of staff + test engineer reviews complete.
 > **Spec:** `docs/superpowers/specs/2026-04-06-backend-code-health-final.md`
@@ -274,9 +274,9 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 | KAN-415 | High | Backend code health batch 3 | ✅ Done (PR #200) |
 | KAN-416 | High | Backend code health batch 1 | ✅ Done (PR #198) |
 | KAN-418 | High | Backend code health batch 2 | ✅ Done (PR #199) |
-| **KAN-412** | **High** | **Split oversized routers (auth.py 1263L, portfolio.py 776L)** | **Refinement ✅ — Ready to implement (tasks 1-5)** |
-| **KAN-413** | **High** | **Split portfolio service into focused modules** | **Refinement ✅ — Ready to implement (tasks 6-8)** |
-| **KAN-417** | **Medium** | **Add CSRF protection for cookie-based auth** | **Refinement ✅ — Ready to implement (tasks 9-13)** |
+| KAN-412 | High | Split oversized routers (auth.py 1263L, portfolio.py 776L) | ✅ Done (S105) |
+| KAN-413 | High | Split portfolio service into focused modules | ✅ Done (S105) |
+| KAN-417 | Medium | Add CSRF protection for cookie-based auth | ✅ Done (S105) |
 
 **Plan highlights:**
 - 14 tasks total, TDD-style (failing tests before implementation)

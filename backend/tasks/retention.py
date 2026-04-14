@@ -1,4 +1,10 @@
-"""Nightly retention enforcement — purge old forecasts and news articles."""
+"""Nightly retention enforcement — purge old forecasts and news articles.
+
+news_articles uses TimescaleDB drop_chunks() instead of row-level DELETE
+because the table has a compression policy (migration 028). Compressed
+chunks cannot be deleted row-by-row; drop_chunks() handles both compressed
+and uncompressed chunks transparently.
+"""
 
 from __future__ import annotations
 
@@ -7,11 +13,10 @@ import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete
+from sqlalchemy import delete, text
 
 from backend.database import async_session_factory
 from backend.models.forecast import ForecastResult
-from backend.models.news_sentiment import NewsArticle
 from backend.tasks import celery_app
 from backend.tasks.pipeline import tracked_task
 
@@ -47,12 +52,24 @@ def purge_old_news_articles_task(run_id: uuid.UUID | None = None) -> dict:
 
 
 async def _purge_old_news_articles_async() -> dict:
-    """Keep 90 days of raw news articles; daily aggregates retained forever."""
-    # NewsArticle.published_at is naive (TIMESTAMP WITHOUT TIME ZONE)
-    cutoff = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(days=NEWS_RETENTION_DAYS)
+    """Drop TimescaleDB chunks older than 90 days from news_articles.
+
+    Uses drop_chunks() instead of row-level DELETE because the table has a
+    compression policy. drop_chunks() handles compressed chunks transparently
+    and is significantly faster than row-level deletion on large tables.
+    Daily aggregates (news_sentiment_daily) are retained forever.
+    """
     async with async_session_factory() as db:
-        result = await db.execute(delete(NewsArticle).where(NewsArticle.published_at < cutoff))
+        result = await db.execute(
+            text("SELECT drop_chunks('news_articles', older_than => INTERVAL :interval)"),
+            {"interval": f"{NEWS_RETENTION_DAYS} days"},
+        )
+        rows = result.fetchall()
+        dropped = len(rows)
         await db.commit()
-        deleted = result.rowcount or 0
-    logger.info("News retention: deleted %d articles older than %s", deleted, cutoff.date())
-    return {"status": "ok", "deleted": deleted, "cutoff": cutoff.isoformat()}
+    logger.info(
+        "News retention: dropped %s chunks older than %d days",
+        dropped,
+        NEWS_RETENTION_DAYS,
+    )
+    return {"status": "ok", "dropped_chunks": dropped, "retention_days": NEWS_RETENTION_DAYS}

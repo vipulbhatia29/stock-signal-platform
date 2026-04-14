@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import numpy as np
 import pandas as pd
 import pytest
+from freezegun import freeze_time
 
 from backend.models.forecast import ForecastResult, ModelVersion
 from backend.tools.forecasting import (
@@ -202,6 +203,7 @@ class TestPredictForecast:
         assert horizons == [90, 180, 270]
 
     @pytest.mark.asyncio
+    @freeze_time("2026-04-13 23:59:00", tz_offset=0)
     @patch("backend.tools.forecasting.model_from_json")
     async def test_forecast_has_correct_fields(self, mock_from_json) -> None:
         """Each ForecastResult should have predicted price, lower, upper, target date."""
@@ -221,7 +223,7 @@ class TestPredictForecast:
         assert fc.ticker == "AAPL"
         assert fc.predicted_price > 0
         assert fc.predicted_lower < fc.predicted_upper
-        assert fc.target_date == date.today() + timedelta(days=90)
+        assert fc.target_date == date(2026, 7, 12)  # 2026-04-13 + 90d
         assert fc.actual_price is None
         assert fc.model_version_id == mv.id
 

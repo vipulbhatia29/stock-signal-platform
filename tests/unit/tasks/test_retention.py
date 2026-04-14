@@ -74,13 +74,13 @@ class TestPurgeOldForecasts:
 
 
 class TestPurgeOldNewsArticles:
-    """Tests for _purge_old_news_articles_async."""
+    """Tests for _purge_old_news_articles_async using drop_chunks."""
 
     @pytest.mark.asyncio
-    async def test_deletes_articles_older_than_90_days(self) -> None:
-        """News articles older than 90 days are deleted."""
+    async def test_calls_drop_chunks_with_90_day_interval(self) -> None:
+        """News retention uses TimescaleDB drop_chunks instead of row-level DELETE."""
         mock_result = MagicMock()
-        mock_result.rowcount = 150
+        mock_result.fetchall.return_value = [("chunk1",), ("chunk2",), ("chunk3",)]
 
         mock_session = AsyncMock()
         mock_session.execute = AsyncMock(return_value=mock_result)
@@ -96,14 +96,22 @@ class TestPurgeOldNewsArticles:
             result = await _purge_old_news_articles_async()
 
         assert result["status"] == "ok"
-        assert result["deleted"] == 150
+        assert result["dropped_chunks"] == 3
+        assert result["retention_days"] == 90
+        mock_session.execute.assert_called_once()
         mock_session.commit.assert_called_once()
 
+        # Verify the SQL text contains drop_chunks
+        execute_call = mock_session.execute.call_args
+        sql_text = str(execute_call[0][0])
+        assert "drop_chunks" in sql_text
+        assert "news_articles" in sql_text
+
     @pytest.mark.asyncio
-    async def test_uses_naive_datetime_for_comparison(self) -> None:
-        """Cutoff datetime is naive (no tzinfo) to match NewsArticle.published_at column."""
+    async def test_passes_interval_as_parameter(self) -> None:
+        """Interval is passed as a bind parameter, not interpolated."""
         mock_result = MagicMock()
-        mock_result.rowcount = 0
+        mock_result.fetchall.return_value = []
 
         mock_session = AsyncMock()
         mock_session.execute = AsyncMock(return_value=mock_result)
@@ -118,8 +126,30 @@ class TestPurgeOldNewsArticles:
 
             await _purge_old_news_articles_async()
 
-        # The delete statement should have been constructed — we just verify it was called
-        mock_session.execute.assert_called_once()
+        execute_call = mock_session.execute.call_args
+        params = execute_call[0][1]
+        assert params == {"interval": "90 days"}
+
+    @pytest.mark.asyncio
+    async def test_returns_zero_when_no_chunks_to_drop(self) -> None:
+        """Returns dropped_chunks=0 when no old chunks exist."""
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.commit = AsyncMock()
+
+        mock_factory = MagicMock()
+        mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_factory.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+            from backend.tasks.retention import _purge_old_news_articles_async
+
+            result = await _purge_old_news_articles_async()
+
+        assert result["dropped_chunks"] == 0
 
 
 class TestRetentionBeatSchedule:
@@ -140,3 +170,65 @@ class TestRetentionBeatSchedule:
         assert "news-retention-daily" in celery_app.conf.beat_schedule
         entry = celery_app.conf.beat_schedule["news-retention-daily"]
         assert entry["task"] == "backend.tasks.retention.purge_old_news_articles_task"
+
+
+class TestCompressionMigration:
+    """Tests for migration 028 compression policy configuration."""
+
+    def test_compression_config_has_three_tables(self) -> None:
+        """Migration covers exactly 3 hypertables."""
+        import importlib
+
+        mod = importlib.import_module("backend.migrations.versions.028_timescaledb_compression")
+        assert len(mod.COMPRESSION_CONFIG) == 3
+
+    def test_stock_prices_config(self) -> None:
+        """stock_prices uses ticker segmentby and 180d threshold."""
+        import importlib
+
+        mod = importlib.import_module("backend.migrations.versions.028_timescaledb_compression")
+        cfg = next(c for c in mod.COMPRESSION_CONFIG if c["table"] == "stock_prices")
+        assert cfg["segmentby"] == "ticker"
+        assert cfg["orderby"] == "time DESC"
+        assert cfg["policy_interval"] == "180 days"
+
+    def test_signal_snapshots_config(self) -> None:
+        """signal_snapshots uses ticker segmentby and 180d threshold."""
+        import importlib
+
+        mod = importlib.import_module("backend.migrations.versions.028_timescaledb_compression")
+        cfg = next(c for c in mod.COMPRESSION_CONFIG if c["table"] == "signal_snapshots")
+        assert cfg["segmentby"] == "ticker"
+        assert cfg["orderby"] == "computed_at DESC"
+        assert cfg["policy_interval"] == "180 days"
+
+    def test_news_articles_config(self) -> None:
+        """news_articles uses ticker segmentby and 60d threshold."""
+        import importlib
+
+        mod = importlib.import_module("backend.migrations.versions.028_timescaledb_compression")
+        cfg = next(c for c in mod.COMPRESSION_CONFIG if c["table"] == "news_articles")
+        assert cfg["segmentby"] == "ticker"
+        assert cfg["orderby"] == "published_at DESC"
+        assert cfg["policy_interval"] == "60 days"
+
+    def test_news_compression_before_retention(self) -> None:
+        """Compression threshold (60d) < retention cutoff (90d) for storage savings."""
+        import importlib
+
+        mod = importlib.import_module("backend.migrations.versions.028_timescaledb_compression")
+        from backend.tasks.retention import NEWS_RETENTION_DAYS
+
+        cfg = next(c for c in mod.COMPRESSION_CONFIG if c["table"] == "news_articles")
+        threshold_days = int(cfg["policy_interval"].split()[0])
+        assert threshold_days < NEWS_RETENTION_DAYS, (
+            f"Compression ({threshold_days}d) must be < retention ({NEWS_RETENTION_DAYS}d)"
+        )
+
+    def test_migration_revision_chain(self) -> None:
+        """Migration 028 correctly chains from 027."""
+        import importlib
+
+        mod = importlib.import_module("backend.migrations.versions.028_timescaledb_compression")
+        assert mod.down_revision == "f1a2b3c4d5e6"
+        assert mod.revision == "a7b8c9d0e1f2"
