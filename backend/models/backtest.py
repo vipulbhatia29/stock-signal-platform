@@ -3,7 +3,7 @@
 import uuid as _uuid
 from datetime import date
 
-from sqlalchemy import Date, Float, ForeignKey, Index, Integer, String, desc
+from sqlalchemy import Date, Float, ForeignKey, Index, Integer, String, UniqueConstraint, desc
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -43,6 +43,14 @@ class BacktestRun(TimestampMixin, Base):
             "ticker",
             "horizon_days",
             desc("created_at"),
+        ),
+        UniqueConstraint(
+            "ticker",
+            "model_version_id",
+            "config_label",
+            "test_start",
+            "horizon_days",
+            name="uq_backtest_runs_ticker_mv_config_date_horizon",
         ),
     )
 

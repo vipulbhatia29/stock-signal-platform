@@ -7,7 +7,8 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import settings
@@ -298,26 +299,44 @@ async def _run_backtest_async(ticker: str | None, horizon_days: int, *, run_id: 
                         continue
 
                     today = datetime.now(timezone.utc).date()
-                    db.add(
-                        BacktestRun(
-                            ticker=tkr,
-                            model_version_id=model_version.id,
-                            config_label="walk_forward",
-                            # Use the model's training range as proxy for the
-                            # walk-forward window bounds (no per-window state stored)
-                            train_start=model_version.training_data_start,
-                            train_end=model_version.training_data_end,
-                            test_start=today,
-                            test_end=today,
-                            horizon_days=horizon_days,
-                            num_windows=metrics.num_windows,
-                            mape=metrics.mape,
-                            mae=metrics.mae,
-                            rmse=metrics.rmse,
-                            direction_accuracy=metrics.direction_accuracy,
-                            ci_containment=metrics.ci_containment,
-                        )
+                    values = {
+                        "ticker": tkr,
+                        "model_version_id": model_version.id,
+                        "config_label": "walk_forward",
+                        "train_start": model_version.training_data_start,
+                        "train_end": model_version.training_data_end,
+                        "test_start": today,
+                        "test_end": today,
+                        "horizon_days": horizon_days,
+                        "num_windows": metrics.num_windows,
+                        "mape": metrics.mape,
+                        "mae": metrics.mae,
+                        "rmse": metrics.rmse,
+                        "direction_accuracy": metrics.direction_accuracy,
+                        "ci_containment": metrics.ci_containment,
+                    }
+                    stmt = pg_insert(BacktestRun).values(values)
+                    stmt = stmt.on_conflict_do_update(
+                        constraint="uq_backtest_runs_ticker_mv_config_date_horizon",
+                        set_={
+                            **{
+                                k: stmt.excluded[k]
+                                for k in (
+                                    "train_start",
+                                    "train_end",
+                                    "test_end",
+                                    "num_windows",
+                                    "mape",
+                                    "mae",
+                                    "rmse",
+                                    "direction_accuracy",
+                                    "ci_containment",
+                                )
+                            },
+                            "updated_at": func.now(),
+                        },
                     )
+                    await db.execute(stmt)
                     await db.commit()
                     successful_tickers.append(tkr)
                     completed += 1
@@ -343,16 +362,22 @@ async def _run_backtest_async(ticker: str | None, horizon_days: int, *, run_id: 
     if successful_tickers:
         await mark_stages_updated(successful_tickers, "backtest")
 
+    status = "degraded" if failed else "ok"
     return {
-        "status": "ok",
+        "status": status,
         "completed": completed,
         "failed": len(failed),
+        "failed_tickers": failed,
         "horizon_days": horizon_days,
         "ticker": ticker,
     }
 
 
-@celery_app.task(name="backend.tasks.forecasting.run_backtest_task")
+@celery_app.task(
+    name="backend.tasks.forecasting.run_backtest_task",
+    soft_time_limit=3300,
+    time_limit=3600,
+)
 def run_backtest_task(ticker: str | None = None, horizon_days: int = 90) -> dict:
     """Run walk-forward backtest for a ticker or all active tickers.
 
