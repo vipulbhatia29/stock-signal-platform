@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TickerSearch } from "@/components/ticker-search";
 import {
   Select,
   SelectContent,
@@ -64,18 +65,8 @@ export function LogTransactionDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="ticker" className="text-subtle">Ticker</Label>
-            <Input
-              id="ticker"
-              placeholder="AAPL"
-              value={form.ticker}
-              onChange={(e) =>
-                setForm({ ...form, ticker: e.target.value.toUpperCase() })
-              }
-              required
-              maxLength={10}
-              className="bg-card2 border-border focus:border-[var(--bhi)]"
-            />
+            <Label className="text-subtle">Ticker</Label>
+            <TickerSearch onSelect={(ticker) => setForm((prev) => ({ ...prev, ticker }))} />
           </div>
 
           <div className="space-y-2">

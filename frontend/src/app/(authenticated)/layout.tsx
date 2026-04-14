@@ -9,6 +9,7 @@ import { ChatProvider, useChat } from "@/contexts/chat-context";
 import { useAddToWatchlist, useWatchlist } from "@/hooks/use-stocks";
 import { ApiRequestError } from "@/lib/api";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
+import { IngestProgressToast } from "@/components/ingest-progress-toast";
 import { toast } from "sonner";
 
 function AuthenticatedShell({ children }: { children: React.ReactNode }) {
@@ -31,7 +32,16 @@ function AuthenticatedShell({ children }: { children: React.ReactNode }) {
       toast.loading(`Adding ${ticker} to watchlist…`, { id: `add-${ticker}` });
       try {
         await addToWatchlist.mutateAsync(ticker);
-        toast.success(`${ticker} added to watchlist`, { id: `add-${ticker}` });
+        toast.dismiss(`add-${ticker}`);
+        toast.custom(
+          (t) => (
+            <IngestProgressToast
+              ticker={ticker.toUpperCase()}
+              onComplete={() => toast.dismiss(t)}
+            />
+          ),
+          { duration: Infinity, id: `ingest-${ticker}` },
+        );
       } catch (err) {
         if (err instanceof ApiRequestError && err.status === 409) {
           toast.info(err.detail, { id: `add-${ticker}` });

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ScoreBadge } from "@/components/score-badge";
 import { ChangeIndicator } from "@/components/change-indicator";
+import { StalenessBadge } from "@/components/staleness-badge";
 import { formatCurrency } from "@/lib/format";
 
 interface StockHeaderProps {
@@ -19,7 +20,7 @@ interface StockHeaderProps {
   isInWatchlist: boolean;
   onToggleWatchlist: () => void;
   isRefreshing?: boolean;
-  isStale?: boolean;
+  computedAt?: string | null;
 }
 
 export function StockHeader({
@@ -33,7 +34,7 @@ export function StockHeader({
   isInWatchlist,
   onToggleWatchlist,
   isRefreshing,
-  isStale,
+  computedAt,
 }: StockHeaderProps) {
   const router = useRouter();
 
@@ -71,17 +72,11 @@ export function StockHeader({
                 {sector}
               </span>
             )}
-            {isRefreshing && (
-              <span className="inline-flex items-center gap-1 rounded-md bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-400" />
-                Refreshing data…
-              </span>
-            )}
-            {isStale && !isRefreshing && (
-              <span className="inline-flex items-center rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
-                Data may be outdated
-              </span>
-            )}
+            <StalenessBadge
+              lastUpdated={computedAt ?? null}
+              slaHours={4}
+              refreshing={isRefreshing}
+            />
           </div>
 
           {/* Price + Change */}
