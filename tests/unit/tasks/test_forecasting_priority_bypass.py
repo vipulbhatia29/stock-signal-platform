@@ -123,3 +123,41 @@ def test_biweekly_beat_entry_removed() -> None:
     from backend.tasks import celery_app
 
     assert "model-retrain-biweekly" not in celery_app.conf.beat_schedule
+
+
+# ---------------------------------------------------------------------------
+# Spec A gap: mark_stages_updated("forecast") in _forecast_refresh_async
+# ---------------------------------------------------------------------------
+
+
+def test_forecast_refresh_marks_forecast_stage() -> None:
+    """_forecast_refresh_async calls mark_stages_updated('forecast') for refreshed tickers."""
+    import inspect
+
+    from backend.tasks import forecasting
+
+    source = inspect.getsource(forecasting._forecast_refresh_async)
+    assert 'mark_stages_updated(refreshed_tickers, "forecast")' in source, (
+        "forecast refresh must call mark_stages_updated for 'forecast' stage"
+    )
+
+
+def test_forecast_refresh_tracks_refreshed_tickers() -> None:
+    """_forecast_refresh_async collects refreshed tickers for stage marking."""
+    import inspect
+
+    from backend.tasks import forecasting
+
+    source = inspect.getsource(forecasting._forecast_refresh_async)
+    assert "refreshed_tickers" in source, "forecast refresh must track refreshed tickers in a list"
+
+
+def test_registry_schedule_says_weekly() -> None:
+    """Pipeline registry config describes retrain schedule as 'weekly', not 'biweekly'."""
+    from backend.services.pipeline_registry_config import build_registry
+
+    registry = build_registry()
+    task = registry.get_task("backend.tasks.forecasting.model_retrain_all_task")
+    assert task is not None
+    assert "weekly" in task.schedule.lower()
+    assert "biweekly" not in task.schedule.lower()

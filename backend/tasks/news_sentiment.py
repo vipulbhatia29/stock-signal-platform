@@ -86,6 +86,12 @@ async def _ingest_news(
     macro_result = await service.ingest_macro_news(since)
     logger.info("Macro news ingested: %s", macro_result)
 
+    # Mark news stage freshness for all processed tickers
+    if ticker_list:
+        from backend.services.ticker_state import mark_stages_updated
+
+        await mark_stages_updated(ticker_list, "news")
+
     return {
         "status": "complete",
         "stock": stock_result,
@@ -217,6 +223,13 @@ async def _score_sentiment(lookback_days: int, *, run_id: uuid.UUID) -> dict:
             await invalidator.on_sentiment_scored(affected_tickers)
     except Exception:
         logger.warning("Cache invalidation after scoring failed", exc_info=True)
+
+    # Mark sentiment stage freshness for scored tickers
+    scored_tickers = [t for t in daily if t != "__MACRO__"]
+    if scored_tickers:
+        from backend.services.ticker_state import mark_stages_updated
+
+        await mark_stages_updated(scored_tickers, "sentiment")
 
     return {
         "status": "complete",

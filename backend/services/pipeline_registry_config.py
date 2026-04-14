@@ -422,7 +422,7 @@ def build_registry() -> PipelineRegistry:
             display_name="Retrain All Models",
             group="model_training",
             order=1,
-            schedule="2:00 AM ET biweekly (Sunday)",
+            schedule="2:00 AM ET weekly (Sunday)",
             estimated_duration="60-180 min",
             rationale="Full Prophet retrain; must complete before backtest and calibration",
         )

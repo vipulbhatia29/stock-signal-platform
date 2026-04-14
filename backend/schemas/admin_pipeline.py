@@ -104,3 +104,55 @@ class RunHistoryResponse(BaseModel):
 
     group: str
     runs: list[PipelineRunResponse]
+
+
+class TriggerTaskResponse(BaseModel):
+    """Response after triggering a single task."""
+
+    task_name: str
+    status: str
+    message: str
+
+
+class StageStatus(BaseModel):
+    """Stage readiness status for a single ticker."""
+
+    ticker: str
+    prices: str
+    signals: str
+    fundamentals: str
+    forecast: str
+    forecast_retrain: str
+    news: str
+    sentiment: str
+    convergence: str
+    backtest: str
+    recommendation: str
+    overall: str
+
+
+class HealthResponse(BaseModel):
+    """Ingestion health for all tickers in the universe."""
+
+    total: int
+    tickers: list[StageStatus]
+
+
+class AuditLogEntry(BaseModel):
+    """Single audit log entry."""
+
+    id: str
+    user_id: str
+    action: str
+    target: str | None = None
+    metadata: dict | None = None
+    created_at: str
+
+
+class AuditLogResponse(BaseModel):
+    """Paginated audit log listing."""
+
+    total: int
+    limit: int
+    offset: int
+    entries: list[AuditLogEntry]

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 from sqlalchemy import select
 
 from backend.database import async_session_factory
+from backend.services.rate_limiter import yfinance_limiter
 from backend.services.signals import (
     compute_quantstats_stock,
     compute_signals,
@@ -104,6 +105,7 @@ async def _refresh_ticker_slow(ticker: str) -> RefreshTickerResult:
 
             from backend.models.stock import Stock
 
+            await yfinance_limiter.acquire()
             info = await asyncio.to_thread(lambda: yf.Ticker(ticker).info or {})
             result = await db.execute(select(Stock).where(Stock.ticker == ticker))
             stock_obj = result.scalar_one_or_none()
@@ -127,6 +129,7 @@ async def _refresh_ticker_slow(ticker: str) -> RefreshTickerResult:
         try:
             from backend.tools.dividends import fetch_dividends, store_dividends
 
+            await yfinance_limiter.acquire()
             divs = await asyncio.to_thread(fetch_dividends, ticker)
             if divs:
                 await store_dividends(ticker, divs, db)

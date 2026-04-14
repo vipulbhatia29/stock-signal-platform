@@ -17,10 +17,13 @@ from backend.routers.admin_pipelines import (
     clear_all_caches,
     clear_cache_by_pattern,
     get_group_history,
+    get_ingestion_health,
     get_pipeline_group,
     get_run_status,
+    list_audit_log,
     list_pipeline_groups,
     trigger_group_run,
+    trigger_task_run,
 )
 from backend.schemas.admin_pipeline import CacheClearRequest, TriggerGroupRequest
 
@@ -599,3 +602,189 @@ class TestRunDictToResponse:
         assert response.task_names == []
         assert response.completed == 0
         assert response.errors == {}
+
+
+# ---------------------------------------------------------------------------
+# Tests: POST /tasks/{task_name}/run  (D2)
+# ---------------------------------------------------------------------------
+
+
+class TestTriggerTaskRun:
+    """Tests for POST /admin/pipelines/tasks/{task_name}/run."""
+
+    @pytest.mark.asyncio
+    async def test_dispatches_known_task(self, admin_user: User, mock_db: AsyncMock) -> None:
+        """Returns 202 and dispatches a known Celery task."""
+        mock_result = MagicMock()
+        mock_result.id = "celery-id-123"
+
+        with patch("backend.routers.admin_pipelines.celery_app") as mock_celery:
+            mock_task = MagicMock()
+            mock_task.delay.return_value = mock_result
+            mock_celery.tasks.get.return_value = mock_task
+
+            result = await trigger_task_run(
+                task_name="backend.tasks.seed_tasks.seed_admin_user_task",
+                user=admin_user,
+                db=mock_db,
+            )
+
+        assert result.status == "accepted"
+        assert "celery-id-123" in result.message
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_returns_404_for_unknown_task(self, admin_user: User, mock_db: AsyncMock) -> None:
+        """Returns 404 when the task name is not in the pipeline registry."""
+        with pytest.raises(HTTPException) as exc_info:
+            await trigger_task_run(
+                task_name="backend.tasks.nonexistent.fake_task",
+                user=admin_user,
+                db=mock_db,
+            )
+        assert exc_info.value.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_raises_403_for_non_admin(self, regular_user: User, mock_db: AsyncMock) -> None:
+        """Returns 403 when called by a non-admin user."""
+        with pytest.raises(HTTPException) as exc_info:
+            await trigger_task_run(
+                task_name="backend.tasks.seed_tasks.seed_admin_user_task",
+                user=regular_user,
+                db=mock_db,
+            )
+        assert exc_info.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Tests: GET /health  (D3)
+# ---------------------------------------------------------------------------
+
+
+class TestGetIngestionHealth:
+    """Tests for GET /admin/pipelines/health."""
+
+    @pytest.mark.asyncio
+    async def test_returns_health_for_all_tickers(self, admin_user: User) -> None:
+        """Returns a HealthResponse with ticker readiness rows."""
+        from dataclasses import dataclass
+
+        @dataclass(frozen=True)
+        class FakeRow:
+            ticker: str
+            prices: str = "green"
+            signals: str = "green"
+            fundamentals: str = "yellow"
+            forecast: str = "unknown"
+            forecast_retrain: str = "unknown"
+            news: str = "red"
+            sentiment: str = "red"
+            convergence: str = "unknown"
+            backtest: str = "unknown"
+            recommendation: str = "green"
+            overall: str = "red"
+
+        fake_rows = [FakeRow(ticker="AAPL"), FakeRow(ticker="MSFT", overall="green")]
+
+        with patch(
+            "backend.services.ticker_state.get_universe_health",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await get_ingestion_health(user=admin_user)
+
+        assert result.total == 2
+        assert result.tickers[0].ticker == "AAPL"
+        assert result.tickers[1].ticker == "MSFT"
+
+    @pytest.mark.asyncio
+    async def test_filters_by_status(self, admin_user: User) -> None:
+        """Filters tickers by overall status when query param is provided."""
+        from dataclasses import dataclass
+
+        @dataclass(frozen=True)
+        class FakeRow:
+            ticker: str
+            prices: str = "green"
+            signals: str = "green"
+            fundamentals: str = "green"
+            forecast: str = "green"
+            forecast_retrain: str = "green"
+            news: str = "green"
+            sentiment: str = "green"
+            convergence: str = "green"
+            backtest: str = "green"
+            recommendation: str = "green"
+            overall: str = "green"
+
+        fake_rows = [
+            FakeRow(ticker="AAPL", overall="red"),
+            FakeRow(ticker="MSFT", overall="green"),
+        ]
+
+        with patch(
+            "backend.services.ticker_state.get_universe_health",
+            new_callable=AsyncMock,
+            return_value=fake_rows,
+        ):
+            result = await get_ingestion_health(user=admin_user, status="red")
+
+        assert result.total == 1
+        assert result.tickers[0].ticker == "AAPL"
+
+    @pytest.mark.asyncio
+    async def test_raises_403_for_non_admin(self, regular_user: User) -> None:
+        """Returns 403 when called by a non-admin user."""
+        with pytest.raises(HTTPException) as exc_info:
+            await get_ingestion_health(user=regular_user)
+        assert exc_info.value.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Tests: GET /audit-log  (D6)
+# ---------------------------------------------------------------------------
+
+
+class TestListAuditLog:
+    """Tests for GET /admin/pipelines/audit-log."""
+
+    @pytest.mark.asyncio
+    async def test_returns_paginated_entries(self, admin_user: User) -> None:
+        """Returns paginated audit log entries."""
+        from backend.models.audit import AdminAuditLog
+
+        fake_entry = AdminAuditLog(
+            id=uuid.uuid4(),
+            user_id=admin_user.id,
+            action="trigger_group",
+            target="nightly",
+            metadata_={"failure_mode": "stop_on_failure"},
+        )
+        fake_entry.created_at = datetime.now(timezone.utc)
+
+        mock_db = AsyncMock()
+        # count query returns 1
+        mock_count_result = MagicMock()
+        mock_count_result.scalar_one.return_value = 1
+        # data query returns the entry
+        mock_data_result = MagicMock()
+        mock_data_result.scalars.return_value.all.return_value = [fake_entry]
+
+        mock_db.execute = AsyncMock(side_effect=[mock_count_result, mock_data_result])
+
+        result = await list_audit_log(user=admin_user, db=mock_db)
+
+        assert result.total == 1
+        assert result.limit == 50
+        assert result.offset == 0
+        assert len(result.entries) == 1
+        assert result.entries[0].action == "trigger_group"
+        assert result.entries[0].target == "nightly"
+
+    @pytest.mark.asyncio
+    async def test_raises_403_for_non_admin(self, regular_user: User, mock_db: AsyncMock) -> None:
+        """Returns 403 when called by a non-admin user."""
+        with pytest.raises(HTTPException) as exc_info:
+            await list_audit_log(user=regular_user, db=mock_db)
+        assert exc_info.value.status_code == 403
