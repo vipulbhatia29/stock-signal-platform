@@ -10,7 +10,7 @@ updated_by: session-34
 - Site: https://vipulbhatia29.atlassian.net
 - Cloud ID for API calls: `https://vipulbhatia29.atlassian.net`
 - Project: StockScreener (key: `KAN`, id: 10000)
-- MCP tools prefix: `mcp__plugin_atlassian_atlassian__*`
+- MCP tools prefix: `mcp__plugin_atlassian_atlassian__*` (verify in current session — prefix may differ by MCP server version)
 - Auth: OAuth 2.1 via Atlassian MCP plugin (browser-based, no API token needed for local dev)
 - API token existed (expired 2026-03-30) — regenerate if headless/CI use needed
 
@@ -39,17 +39,5 @@ Installed and connected to `stock-signal-platform` repo. Enables:
 - PR references visible in JIRA dev panel
 - Automation triggers for PR events
 
-## Completed Epics (as of Session 67)
-- KAN-1: Phase 4B — AI Chatbot Backend (Done)
-- KAN-22: CI/CD Pipeline + Branching Strategy (Done)
-- KAN-30: Phase 4C — Frontend Chat UI (Done)
-- KAN-61: Phase 4D — Agent Intelligence (Done)
-- KAN-88: Phase 4F — UI Migration (Done)
-- KAN-106: Phase 5 — Forecasting + Automation (Done)
-- KAN-119: Phase 5.6 — MCP Tool Server (Done)
-- KAN-139: Phase 6 — LLM Factory (Done)
-- KAN-147: Phase 7 — Backend Hardening (Done)
-- KAN-163: Phase 7.5 — Tech Debt (Done)
-- KAN-176: Phase 7.6 — Scale Readiness (Done)
-- KAN-189: Phase 8 — ReAct + Observability (Done)
-- KAN-211: Test Suite Hardening (In Progress)
+## Epic Status (Session 113)
+Epic list below was frozen at Session 67 and is **44+ sessions out of date**. Canonical source for current Epic/ticket status is now `MEMORY.md` + the JIRA board. Only the JIRA connection details + transition IDs above remain authoritative.

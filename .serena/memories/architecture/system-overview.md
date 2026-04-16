@@ -32,10 +32,12 @@ updated_by: session-107
 - `backend/services/token_blocklist.py` — Redis JTI blocklist for refresh token rotation
 - `backend/observability/collector.py` — Langfuse trace collection
 
-## Routers (19 files, all mounted at /api/v1/)
+## Routers (17 top-level modules + 2 subpackages, all mounted at /api/v1/)
 
-**Original (13):** admin, alerts, auth, chat, forecasts, health, indexes, market, portfolio, preferences, sectors, stocks, tasks
-**Phase 8.6+ additions (6):** backtesting, convergence, sentiment, admin_pipelines, observability (metrics), user (observability)
+**Top-level (17):** admin, admin_pipelines, alerts, backtesting, chat, convergence, forecasts, health, indexes, market, news, observability, portfolio, preferences, sectors, sentiment, tasks
+**Subpackages:**
+- `auth/` — core, admin, oauth, oidc, password, email_verification, _helpers
+- `stocks/` — data, search, watchlist, recommendations, _helpers
 
 ## Models (27+ files in backend/models/)
 
@@ -81,16 +83,13 @@ updated_by: session-107
 **Phase 8.6+ additions (7):** convergence, news_sentiment, audit, warm_data (extended), assessment_runner, scoring_engine, golden_dataset, seed_tasks
 **Pipeline Overhaul additions (2):** dq_scan, retention
 
-## Observability Package (backend/observability/, 8 files)
+## Observability Package (backend/observability/, 18 Python files)
 
-- `collector.py` — Langfuse trace API
-- `writer.py` — async trace buffering + batch flush
-- `langfuse.py` — Langfuse SDK setup
-- `context.py` — async context for trace metadata (user_id, run_id, etc.)
-- `token_budget.py` — per-model token limit enforcement
-- `queries.py` — Langfuse query helper + metric aggregations
-- `models.py` — TraceMetadata, TokenBudgetEvent pydantic schemas
-- `metrics.py` — Prometheus-style metric recording
+**Top-level (8):** `__init__.py`, `collector.py`, `writer.py`, `langfuse.py`, `context.py`, `token_budget.py`, `queries.py`, `models.py`
+- `metrics/` subpackage (5): `__init__.py`, `db_pool.py`, `health_checks.py`, `http_middleware.py`, `pipeline_stats.py` — Prometheus-style metric recording
+- `routers/` subpackage (5): `__init__.py`, `admin.py`, `health.py`, `user_observability.py`, `command_center.py`
+
+**Obs Epic 1a (KAN-457) extends this package** with `client.py`, `buffer.py`, `spool.py`, `schema/`, `targets/`, `service/`, `instrumentation/`, `bootstrap.py`, `routers/ingest.py`, `mcp/describe_schema.py`.
 
 ## Agent Architecture — ReAct Loop (Phase 8B, Session 63)
 
@@ -108,9 +107,9 @@ Data-driven cascade from `llm_model_config` DB table (migration 012). TokenBudge
 
 ## DB Migrations
 
-Alembic head: migration 027 (`dq_check_history`).
-Recent migrations: 025 (ticker_ingestion_state), 026 (celery_task_id on pipeline_runs), 027 (dq_check_history).
-No gaps in revision chain.
+Alembic head: migration 029 (`backtest_unique_constraint`).
+Recent migrations: 025 (ticker_ingestion_state), 026 (celery_task_id on pipeline_runs), 027 (dq_check_history), 028 (timescaledb_compression), 029 (backtest_unique_constraint).
+Obs Epic 1a will add 030 (observability schema) and 031 (external_api + rate_limiter hypertables). No gaps in revision chain.
 
 ## Core Architecture Patterns
 
