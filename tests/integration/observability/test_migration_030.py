@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 @pytest.mark.asyncio
 async def test_observability_schema_and_seed(db_session):
+    """Migration 030 creates observability schema, schema_versions table, and seeds v1."""
     schema = (
         await db_session.execute(
             text(

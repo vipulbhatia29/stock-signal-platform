@@ -13,6 +13,7 @@ from backend.observability.schema.v1 import (
 
 
 def test_event_type_covers_1a_scope():
+    """EventType enum includes all 7 event types used across 1a PR1-PR5."""
     assert {
         "LLM_CALL",
         "TOOL_EXECUTION",
@@ -25,6 +26,7 @@ def test_event_type_covers_1a_scope():
 
 
 def test_attribution_layer_enum():
+    """AttributionLayer enum has exactly 10 layers matching spec §4.2."""
     assert {layer.value for layer in AttributionLayer} == {
         "http",
         "auth",
@@ -40,6 +42,7 @@ def test_attribution_layer_enum():
 
 
 def test_severity_enum():
+    """Severity enum has info/warning/error/critical levels."""
     assert {s.value for s in Severity} == {"info", "warning", "error", "critical"}
 
 
@@ -61,15 +64,18 @@ def _valid_payload(**overrides):
 
 
 def test_round_trip():
+    """ObsEventBase survives JSON serialize/deserialize round-trip."""
     event = ObsEventBase(**_valid_payload())
     assert ObsEventBase.model_validate_json(event.model_dump_json()) == event
 
 
 def test_rejects_naive_datetime():
+    """ObsEventBase rejects naive datetime (spec §4.3: ts must be tz-aware)."""
     with pytest.raises(ValidationError):
         ObsEventBase(**_valid_payload(ts=datetime(2026, 4, 16, 12)))  # naive
 
 
 def test_rejects_invalid_env():
+    """ObsEventBase rejects env values outside dev/staging/prod."""
     with pytest.raises(ValidationError):
         ObsEventBase(**_valid_payload(env="production"))  # must be dev/staging/prod

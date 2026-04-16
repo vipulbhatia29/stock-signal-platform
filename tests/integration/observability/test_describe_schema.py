@@ -5,6 +5,7 @@ from backend.observability.mcp.describe_schema import describe_observability_sch
 
 @pytest.mark.asyncio
 async def test_describe_returns_current_schema_version(db_session):
+    """describe_observability_schema() returns v1 and includes event type list."""
     result = await describe_observability_schema()
     assert result["schema_version"] == "v1"
     assert "event_types" in result
