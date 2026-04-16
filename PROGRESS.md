@@ -240,3 +240,38 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - Deferred ticket created: KAN-456 (Langfuse task_tracer wiring, low priority)
 - 2 PRs (#234, #235)
 - Resume: JIRA automation bug fix, or Phase E UI Overhaul refinement
+
+---
+
+## Session 111 — Quick Wins Batch: Epic Closeout + Worktree Rule + SPY Seed (2026-04-16)
+
+**Branches:** `chore/KAN-430-worktree-rule` → develop (PR #237), `chore/KAN-406-spy-10y-seed` → develop (PR #238)
+
+### JIRA Hygiene
+- **KAN-398** closed as superseded by KAN-400 (Phase E UI Overhaul Epic explicitly absorbs it)
+- **KAN-419** Epic promoted to Done — all 8 specs (A–G, Z) shipped across PRs #206–#235. Post-transition audit clean (no KAN-429 cascade from manual Epic transition — verified 22s gap between KAN-398 and KAN-419 resolutions)
+
+### PR #237 — KAN-430 Worktree Reset-to-Develop Rule
+- New `.claude/rules/worktree-create.md` documenting the post-`EnterWorktree` discipline (`git fetch origin develop && git reset --hard origin/develop`)
+- Explicit hotfix exception to prevent over-application; rationale for rejecting PostToolUse hook (destructive `git reset --hard` risk)
+- One-line CLAUDE.md reference under `## Git Branching`
+- 50 lines, docs-only — CI correctly skipped test/lint jobs via change filter
+
+### PR #238 — KAN-406 SPY ETF 10y Seed
+- `scripts/seed_etfs.py`: `period="2y"` → `"10y"` to match `scripts/seed_prices.py` default (lines 125, 222)
+- Unblocks full 10y QuantStats benchmarking (alpha, beta, Sharpe vs SPY) — was capped at 2y despite the stock universe having 10y of data
+- Verified no code hardcodes 2y window: `backend/services/signals.py:121` + `portfolio/analytics.py` query SPY by date range
+- README Step 2 runbook comment updated for consistency
+- 15 lines, all 13 CI checks green (backend-test 10m25s)
+
+### Gap Analysis Before Coding (requested by PM)
+- KAN-430: evaluated wrapper/hook/rule options, picked rule-only (Option 3) — zero-risk, consistent with existing `.claude/rules/*` pattern
+- KAN-406: verified no consumer assumes 2y; confirmed `seed_etfs.py` is already in README Step 2 runbook
+- KAN-419: flagged KAN-429 automation risk on manual Epic transition — audit showed it didn't fire (manual transitions bypass the PR-merge automation)
+
+### Session 111 Totals
+- Tests: 2115 unit + 448 API (no new tests — pure config/docs)
+- 4 JIRA tickets resolved (KAN-398, KAN-419, KAN-430, KAN-406)
+- 2 PRs (#237, #238)
+- Post-merge audit: KAN-406 + KAN-430 closed exactly as expected, 57s apart, no KAN-429 cascade misfire
+- Resume: KAN-429 (JIRA automation bug, remaining sole HIGH), KAN-400 Epic refinement, or test hardening (KAN-213/215/216/217)

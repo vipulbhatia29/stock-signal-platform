@@ -174,7 +174,7 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 
 | Ticket | Spec | Priority | Summary | Status |
 |--------|------|----------|---------|--------|
-| KAN-419 | Epic | High | Pipeline Architecture Overhaul | **All 8 specs shipped** (pending develop→main promotion) |
+| KAN-419 | Epic | High | Pipeline Architecture Overhaul | **✅ Done (Session 111)** — Epic closed after all 8 specs shipped |
 | KAN-421 | A | High | Ingestion Foundation — state table, SLAs, PipelineRunner contract, observability helpers | ✅ Done (PR #206, Session 99) |
 | KAN-422 | B | High | Pipeline Completeness — convergence, backtest, Prophet sentiment fix, news concurrency | **✅ Done (PRs #207 + #208, Sessions 100-101)** |
 | &nbsp;&nbsp;↳ KAN-431 | B1 | High | Convergence task real implementation + backfill + nightly chain wiring | **✅ Done (PR #208, Session 101)** |
@@ -200,8 +200,8 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 **Superseded tickets** (commented in JIRA, will close when corresponding KAN- ticket lands):
 - KAN-405 (sentiment concurrent) → folded into KAN-422
 - KAN-395 (convergence stub — was wrongly closed) → folded into KAN-422
-- KAN-398 (AccuracyBadge wiring) → enabled by KAN-422 + KAN-426
-- KAN-406 (SPY 2y history) → folded into KAN-424
+- KAN-398 (AccuracyBadge wiring) → closed as superseded by KAN-400 (Phase E UI Overhaul Epic, Session 111)
+- KAN-406 (SPY 2y history) → ✅ Done as standalone fix (PR #238, Session 111) — was NOT actually absorbed into KAN-424 despite earlier assumption
 - KAN-212 (tool orchestration tests) → folded into KAN-423
 - KAN-213 (testcontainers refactor) → overhaul test strategy
 - KAN-214 (error path tests) → folded across KAN-422/423/420
@@ -343,7 +343,7 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 | Ticket | Priority | Summary | Status |
 |--------|----------|---------|--------|
 | KAN-405 | Medium | Sentiment scoring: concurrent batch dispatch + larger batch size | Superseded by KAN-434 (Spec B4) |
-| KAN-406 | Low | SPY ETF 2y history misaligned with 10y universe for QuantStats | Folded into KAN-424 (Spec E) |
+| KAN-406 | Low | SPY ETF 2y history misaligned with 10y universe for QuantStats | ✅ Done — PR #238 (Session 111) |
 
 ## Tech Debt
 
