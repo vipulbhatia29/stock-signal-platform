@@ -275,3 +275,55 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 2 PRs (#237, #238)
 - Post-merge audit: KAN-406 + KAN-430 closed exactly as expected, 57s apart, no KAN-429 cascade misfire
 - Resume: KAN-429 (JIRA automation bug, remaining sole HIGH), KAN-400 Epic refinement, or test hardening (KAN-213/215/216/217)
+
+---
+
+## Session 113 — Observability Epic JIRA scaffolding + 1a plans (2026-04-16)
+
+**Branch:** `docs/obs-1a-plans` → develop | PR TBD
+
+No code changes this session — pure planning + JIRA hygiene + memory fixes.
+
+### JIRA scaffolding (Epic KAN-457 "Platform Observability Infrastructure")
+- Filed parent Epic (KAN-457, High)
+- 3 child Stories: KAN-458 (1a Foundations, High), KAN-459 (1b Coverage, Med), KAN-460 (1c Agent Consumption + UI, Med)
+- "Blocks" links: KAN-458 → KAN-459 → KAN-460 (strict sequence)
+- 5 refinement subtasks under KAN-458 per `conventions/jira-sdlc-workflow`:
+  - KAN-461 Brainstorm 1a ✅ Done (shipped in prior sessions)
+  - KAN-462 Write spec 1a ✅ Done (shipped in PR #240)
+  - KAN-463 Review spec 1a ✅ Done (PM-approved via PR #240 merge)
+  - KAN-464 Write plan 1a 🟡 In Progress → Ready for Verification after this PR merges
+  - KAN-465 Review plan 1a ⬜ PM gate (next)
+
+### 1a plans (split per Hard Rule #12)
+6 PR-scoped plans written at `docs/superpowers/plans/2026-04-16-obs-1a-pr{1,2a,2b,3,4,5}-*.md`:
+- **PR1** — migration 030 + `ObsEventBase` + `EventType` enum + `describe_observability_schema()` skeleton (440 lines plan)
+- **PR2a** — SDK core: `ObservabilityClient` + `DirectTarget` + `MemoryTarget` + spool + buffer + FastAPI+Celery lifespan (1018 lines — exceeds 500-line cap; documented exception)
+- **PR2b** — `InternalHTTPTarget` + `POST /obs/v1/events` ingest endpoint + CSRF-exempt path fix (459 lines)
+- **PR3** — trace_id middleware + Celery propagation + structured JSON logging (628 lines — slightly over cap)
+- **PR4** — `ObservedHttpClient` + 10 providers + `rate_limiter_event` + retention (612 lines)
+- **PR5** — strangler-fig refactor with `OBS_LEGACY_DIRECT_WRITES` + `wrote_via_legacy` snapshot dedup (522 lines)
+
+**Spec's PR2 split into PR2a+PR2b** to keep each plan reviewable. Total: 6 PRs for 1a, not 5.
+
+### Adversarial 2-persona plan review (Backend Architect + Reliability Engineer)
+- **4 CRITICAL + 9 HIGH** findings identified on round 1
+- **CRITICALs fixed inline:**
+  1. `emit_sync` missing but required by PR4+PR5 → added to PR2a with loop-agnostic `queue.SimpleQueue` buffer
+  2. Celery event-loop mismatch (`@tracked_task` via `asyncio.run()` vs buffer's startup loop) → persistent background-thread loop pattern in PR2a
+  3. `/obs/v1/events` would 403 from CSRF middleware → added to `csrf_exempt_paths` in PR2b
+  4. Strangler-fig spool-replay-after-flag-flip = duplicate rows → `wrote_via_legacy: bool` snapshot field captured at emit time, not read at write time
+- **HIGHs fixed inline:** `_flush_loop` poison-event safety, `_maybe_get_obs_client()` via ContextVar, `stop()` race fix, Celery signal ContextVar leak via token-reset, `build_observed_http_client()` factory defined
+- **Round 2 delta review dispatched** for verification of the fixes; results informed final approval
+
+### Stale-memory audit (check-stale-memories run)
+- 6 memories fixed: `serena/tool-usage` (MCP prefix), `architecture/system-overview` (obs pkg 8→18 files, Alembic head 029, routers count), `architecture/auth-jwt-flow` (bcrypt pin framing), `serena/memory-map` (dead reference removed), `project/jira-integration-brainstorm` (Session-67 Epic list replaced with pointer)
+- 1 memory trimmed: `future_work/AgentArchitectureBrainstorming` (180 lines → 10-line pointer; 7/8 items resolved)
+- 3 session memories deleted: `session/kan-449-gap-analysis`, `session/kan-450-gap-analysis`, `session/kan-451-gap-analysis` (all shipped via PRs #229-231)
+
+### Session 113 Totals
+- Tests: 2115 unit + 448 API (no new tests — docs + JIRA only)
+- 4 JIRA items filed (KAN-457/458/459/460) + 5 subtasks (KAN-461–465); 3 refinement subtasks transitioned to Done (brainstorm + spec + spec-review for 1a)
+- 1 PR (docs-only, TBD number)
+- 10 memory fixes applied (6 stale + 3 deleted + 1 trimmed)
+- Resume (next session): KAN-465 PM plan-review gate → if approved, start 1a PR1 implementation on a fresh session
