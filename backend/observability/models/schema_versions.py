@@ -3,6 +3,7 @@
 describe_observability_schema() MCP tool reads the most recent row to report
 which Pydantic schema version (v1, v2, ...) agents should expect.
 """
+
 from __future__ import annotations
 
 from datetime import datetime

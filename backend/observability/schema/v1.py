@@ -8,11 +8,14 @@ Per spec §4.1-4.4:
 
 Additive evolution only — bumping to v2 = new `observability.schema_versions` row.
 """
+
 from __future__ import annotations
+
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, field_validator
 
 

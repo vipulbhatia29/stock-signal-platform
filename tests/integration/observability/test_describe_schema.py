@@ -1,4 +1,5 @@
 import pytest
+
 from backend.observability.mcp.describe_schema import describe_observability_schema
 
 

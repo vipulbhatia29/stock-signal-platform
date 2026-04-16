@@ -1,23 +1,41 @@
 from datetime import datetime, timezone
 from uuid import UUID
+
 import pytest
 from pydantic import ValidationError
+
 from backend.observability.schema.v1 import (
-    AttributionLayer, EventType, ObsEventBase, Severity,
+    AttributionLayer,
+    EventType,
+    ObsEventBase,
+    Severity,
 )
 
 
 def test_event_type_covers_1a_scope():
     assert {
-        "LLM_CALL", "TOOL_EXECUTION", "LOGIN_ATTEMPT", "DQ_FINDING",
-        "PIPELINE_LIFECYCLE", "EXTERNAL_API_CALL", "RATE_LIMITER_EVENT",
+        "LLM_CALL",
+        "TOOL_EXECUTION",
+        "LOGIN_ATTEMPT",
+        "DQ_FINDING",
+        "PIPELINE_LIFECYCLE",
+        "EXTERNAL_API_CALL",
+        "RATE_LIMITER_EVENT",
     }.issubset({e.name for e in EventType})
 
 
 def test_attribution_layer_enum():
-    assert {l.value for l in AttributionLayer} == {
-        "http", "auth", "db", "cache", "external_api", "llm",
-        "agent", "celery", "frontend", "anomaly_engine",
+    assert {layer.value for layer in AttributionLayer} == {
+        "http",
+        "auth",
+        "db",
+        "cache",
+        "external_api",
+        "llm",
+        "agent",
+        "celery",
+        "frontend",
+        "anomaly_engine",
     }
 
 
@@ -33,7 +51,10 @@ def _valid_payload(**overrides):
         parent_span_id=None,
         ts=datetime(2026, 4, 16, 12, tzinfo=timezone.utc),
         env="dev",
-        git_sha=None, user_id=None, session_id=None, query_id=None,
+        git_sha=None,
+        user_id=None,
+        session_id=None,
+        query_id=None,
     )
     base.update(overrides)
     return base
