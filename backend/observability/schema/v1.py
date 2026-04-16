@@ -52,7 +52,7 @@ class Severity(str, Enum):
 class ObsEventBase(BaseModel):
     """Envelope on every event. Subclasses add payload-specific fields."""
 
-    model_config = ConfigDict(extra="allow", frozen=False, str_strip_whitespace=True)
+    model_config = ConfigDict(extra="allow", str_strip_whitespace=True)
 
     event_type: EventType
     trace_id: UUID

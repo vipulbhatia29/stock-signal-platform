@@ -32,6 +32,7 @@ from backend.models.signal import SignalSnapshot
 from backend.models.stock import Stock, Watchlist
 from backend.models.ticker_ingestion_state import TickerIngestionState
 from backend.models.user import User, UserPreference, UserRole
+from backend.observability.models.schema_versions import SchemaVersion  # noqa: F401
 
 __all__ = [
     "AdminAuditLog",
@@ -63,6 +64,7 @@ __all__ = [
     "RebalancingSuggestion",
     "RecommendationOutcome",
     "RecommendationSnapshot",
+    "SchemaVersion",
     "SignalSnapshot",
     "Stock",
     "StockIndex",

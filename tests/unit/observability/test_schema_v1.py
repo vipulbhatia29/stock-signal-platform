@@ -47,6 +47,7 @@ def test_severity_enum():
 
 
 def _valid_payload(**overrides):
+    """Build a valid ObsEventBase payload with optional overrides."""
     base = dict(
         event_type=EventType.LLM_CALL,
         trace_id=UUID("01234567-89ab-7def-8123-456789abcdef"),

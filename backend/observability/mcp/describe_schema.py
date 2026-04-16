@@ -6,13 +6,19 @@ Keeping the skeleton here so agents calling it at session start don't break mid-
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import text
 
 from backend.database import async_session_factory
 from backend.observability.schema.v1 import EventType
 
 
-async def describe_observability_schema() -> dict:
+async def describe_observability_schema() -> dict[str, Any]:
+    """Return active schema version and event type list.
+
+    1c extends this into a full MCP tool with table stats and retention info.
+    """
     async with async_session_factory() as db:
         row = (
             await db.execute(
