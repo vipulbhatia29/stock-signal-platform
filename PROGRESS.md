@@ -197,4 +197,46 @@ Divestment rules engine (4 rules), portfolio-aware recommendations, rebalancing 
 - 6 JIRA tickets resolved (KAN-448, KAN-439, KAN-440, KAN-441, KAN-443, KAN-444)
 - 2 stale tickets closed (KAN-212, KAN-214)
 - 1 PR (#233)
-- Resume: KAN-426 (Spec G frontend polish), KAN-429 (JIRA automation bug)
+- Resume: Spec G frontend polish, JIRA automation bug
+
+---
+
+## Session 110 — Epic Gap Fixes + Spec G Frontend Polish (2026-04-13)
+
+**Branches:** `feat/gap-fixes` → develop (PR #234), `feat/frontend-polish` → develop (PR #235)
+
+### Gap Analysis of Epic Pipeline Architecture Overhaul
+- 2-phase review (audit + fact-gathering subagents) found 7 specs partial-shipped
+- Corrected 4 false positives (convergence seed, Prophet flag, tracked_task coverage, cache invalidation — all already shipped)
+- Real gaps: 5 missing `mark_stage_updated` stages, yfinance limiter bypass in slow path, 3 missing admin endpoints
+- Deferred task_tracer wiring (observability-only, no user impact)
+
+### PR #234 — Pipeline Overhaul Gap Fixes
+- **Spec A:** `mark_stage_updated` for `forecast`, `news`, `sentiment` stages (convergence + backtest were already shipped)
+- **Spec D:** 3 new admin endpoints — per-task trigger, universe health, audit log listing
+- **Spec F:** `yfinance_limiter.acquire()` before both `yf.Ticker()` calls in `_refresh_ticker_slow`
+- **Cosmetic:** `"biweekly"` → `"weekly"` in pipeline_registry_config
+- 15 new tests + 3 test hygiene fixes (existing tests silently attempted real DB/Redis connections after new `mark_stages_updated` calls)
+- Upstream/downstream review found no runtime regressions — `mark_stages_updated` is fire-and-forget, `yfinance_limiter` is fail-open
+
+### PR #235 — Spec G Frontend Polish
+- **G1 Backend:** `GET /stocks/{ticker}/ingest-state` endpoint — reads `ticker_ingestion_state`, returns 7-stage freshness with SLA-based classification (fresh/stale/pending/missing)
+- **G1 Frontend:** `useIngestProgress` hook (polls 2s, stops on ready) + `IngestProgressToast` component with per-stage status icons
+- **G1 Wire:** `IngestProgressToast` replaces plain toasts in layout (watchlist add) and stock-detail (Run Analysis)
+- **G3:** `TickerSearch` replaces free-text `Input` in `LogTransactionDialog` — typo prevention
+- **G4:** `StalenessBadge` component integrated into `signal-cards` (sla=4h), `stock-header` (replaces manual stale/refresh spans), `news-card` (sla=6h)
+- **Skipped with reasoning:** `score-bar.tsx` (no timestamp data), `forecast-card.tsx` (no `created_at` on response), `usePositions` polling (requires backend join)
+- Review fixes: added `id` to `toast.custom` (duplicate prevention), removed dead `isStale` prop, removed phantom wrapper div
+
+### Verified Already Shipped (no work)
+- `useSignals` polling on `is_refreshing` (lines 211-222 of `use-stocks.ts`)
+- 11 cache invalidation keys in `useIngestTicker.onSuccess`
+- `WelcomeBanner` mounted on dashboard
+
+### Session 110 Totals
+- Tests: 2096 → 2115 unit (+19 new), 448 frontend (+5 new), 0 failures
+- 4 JIRA tickets resolved (KAN-453, 454, 455, 426)
+- Epic status: **All 8 specs shipped** — pending develop → main promotion for final Epic Done transition
+- Deferred ticket created: KAN-456 (Langfuse task_tracer wiring, low priority)
+- 2 PRs (#234, #235)
+- Resume: JIRA automation bug fix, or Phase E UI Overhaul refinement
