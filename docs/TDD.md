@@ -755,6 +755,24 @@ POST /api/v1/stocks/{ticker}/ingest
             If ticker has data → delta fetch from last_fetched_at
             Always recomputes signals after fetch
   Errors:   404 (invalid ticker on yfinance), 429 (rate limit)
+
+GET /api/v1/stocks/{ticker}/ingest-state
+  Response: IngestStateResponse {
+              ticker,
+              stages: { prices, signals, fundamentals, forecast, news, sentiment, convergence },
+                where each stage is StageInfo { updated_at, status: "fresh"|"stale"|"pending"|"missing" },
+              overall_status: "ready"|"ingesting"|"stale"|"missing",
+              completion_pct: int (0-100)
+            }
+  Auth:     Required (non-admin — no PII, only timestamps)
+  Behavior: Reads ticker_ingestion_state row. Classifies each stage against StalenessSLAs:
+              age <= SLA           → fresh
+              SLA < age <= 2×SLA   → stale
+              age > 2×SLA          → pending
+              updated_at is NULL   → missing
+            overall_status is "ready" if all 7 stages fresh, "ingesting" if any pending/missing.
+            Used by the IngestProgressToast (frontend polls every 2s while ingesting).
+  Errors:   404 (ticker has no ticker_ingestion_state row)
 ```
 
 ### 3.9 Bulk Signals Endpoint
@@ -960,6 +978,29 @@ POST /api/v1/admin/pipelines/cache/clear
 POST /api/v1/admin/pipelines/cache/clear-all
   Response: CacheClearResponse { pattern: "*", keys_deleted, message }
   Auth:     Admin required
+
+POST /api/v1/admin/pipelines/tasks/{task_name}/run
+  Response: 202 TriggerTaskResponse { task_name, status, message }
+  Auth:     Admin required
+  Behavior: Dispatches a single Celery task by fully-qualified name
+            (e.g. "backend.tasks.forecasting.model_retrain_all_task").
+            Writes AdminAuditLog with action="trigger_task".
+  Error:    404 if task_name not in pipeline registry
+
+GET /api/v1/admin/pipelines/health
+  Query:    status ("green"|"yellow"|"red"|"unknown" — optional filter)
+  Response: HealthResponse { total, tickers: StageStatus[] }
+  Auth:     Admin required
+  Behavior: Returns per-ticker readiness across 11 stages (prices, signals,
+            fundamentals, forecast, forecast_retrain, news, sentiment,
+            convergence, backtest, recommendation, overall). Rows sorted
+            red → yellow → unknown → green.
+
+GET /api/v1/admin/pipelines/audit-log
+  Query:    action (string, optional filter), limit (1-200, default 50), offset (default 0)
+  Response: AuditLogResponse { total, limit, offset, entries: AuditLogEntry[] }
+  Auth:     Admin required
+  Behavior: Paginated listing of admin actions, newest first.
 ```
 
 **Whitelisted cache patterns:** `app:convergence:*`, `app:forecast:*`, `app:sentiment:*`, `app:bl-forecast:*`, `app:monte-carlo:*`, `app:cvar:*`, `app:sector-forecast:*`, `app:screener:*`, `app:sectors:*`, `app:signals:*`.

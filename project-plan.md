@@ -174,7 +174,7 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 
 | Ticket | Spec | Priority | Summary | Status |
 |--------|------|----------|---------|--------|
-| KAN-419 | Epic | High | Pipeline Architecture Overhaul | In Progress (3/8 specs shipped — A ✅, B ✅, D ✅) |
+| KAN-419 | Epic | High | Pipeline Architecture Overhaul | **All 8 specs shipped** (pending develop→main promotion) |
 | KAN-421 | A | High | Ingestion Foundation — state table, SLAs, PipelineRunner contract, observability helpers | ✅ Done (PR #206, Session 99) |
 | KAN-422 | B | High | Pipeline Completeness — convergence, backtest, Prophet sentiment fix, news concurrency | **✅ Done (PRs #207 + #208, Sessions 100-101)** |
 | &nbsp;&nbsp;↳ KAN-431 | B1 | High | Convergence task real implementation + backfill + nightly chain wiring | **✅ Done (PR #208, Session 101)** |
@@ -194,7 +194,7 @@ pandas-ta-openbb (KAN-249), QuantStats (KAN-247), PyPortfolioOpt (KAN-248). Migr
 | &nbsp;&nbsp;↳ KAN-446 | F1 | Medium | DQ Scanner — nightly 10-check scan + alert generation + migration 027 | **✅ Done (PR #222, Session 106)** |
 | &nbsp;&nbsp;↳ KAN-447 | F5 | Medium | Retention Tasks — purge forecasts (30d) + news (90d) | **✅ Done (PR #223, Session 106)** |
 | &nbsp;&nbsp;↳ KAN-448 | F6 | Low | TimescaleDB Compression — compression policies on 3 hypertables | **✅ Done (PR #233, Session 109)** |
-| KAN-426 | G | Medium | Frontend Polish — ingest progress, polling, stale badges, ticker search | Refined ✅ |
+| KAN-426 | G | Medium | Frontend Polish — ingest progress, polling, stale badges, ticker search | **✅ Done (PR #235, Session 110)** |
 | KAN-427 | Z | Medium | Quick Wins — Z1/Z2/Z4/Z5/Z6 (Z3 deferred to after F2/F3) | **✅ Done (PR #219, Session 106)** |
 
 **Superseded tickets** (commented in JIRA, will close when corresponding KAN- ticket lands):
