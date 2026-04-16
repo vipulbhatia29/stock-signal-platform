@@ -1,7 +1,11 @@
 """Seed ETF tickers (11 SPDR sector ETFs + SPY) into the stocks table.
 
-Marks each as is_etf=True, fetches 2 years of historical prices, and stores
+Marks each as is_etf=True, fetches 10 years of historical prices, and stores
 them in stock_prices. Idempotent — skips tickers that already exist.
+
+The 10-year window matches ``scripts/seed_prices.py`` so QuantStats
+benchmarking (alpha, beta, Sharpe vs SPY) has a full SPY history to
+compare stock returns against. See KAN-406.
 
 Usage:
     uv run python -m scripts.seed_etfs
@@ -53,7 +57,7 @@ ETF_UNIVERSE: list[dict[str, str]] = [
 
 
 async def seed_etf(etf: dict[str, str]) -> dict[str, str | int]:
-    """Seed a single ETF: create Stock row + fetch 2y prices.
+    """Seed a single ETF: create Stock row + fetch 10y prices.
 
     Args:
         etf: Dict with ticker, name, sector keys.
@@ -88,10 +92,11 @@ async def seed_etf(etf: dict[str, str]) -> dict[str, str | int]:
         else:
             logger.info("Stock %s already exists as ETF, skipping creation", ticker)
 
-        # Fetch 2 years of historical prices
+        # Fetch 10 years of historical prices (matches seed_prices.py for
+        # QuantStats benchmarking — see KAN-406).
         try:
             yf_ticker = yf.Ticker(ticker)
-            df = yf_ticker.history(period="2y")
+            df = yf_ticker.history(period="10y")
 
             if df.empty:
                 logger.warning("No price data returned for %s", ticker)
