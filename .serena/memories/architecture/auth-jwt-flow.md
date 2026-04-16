@@ -28,6 +28,6 @@
 - No JWT parsing on frontend
 
 ## Security
-- bcrypt pinned to 4.2.x (passlib compat)
+- bcrypt `>=4.2.1` (passlib was removed in Session 59 — no legacy-compat pin needed)
 - slowapi rate limiting on auth endpoints
 - OWASP: httpOnly cookies, no XSS access, refresh revocation, sanitized errors

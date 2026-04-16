@@ -1,22 +1,31 @@
-# Project State (updated Session 111, 2026-04-16)
+# Project State (updated Session 113, 2026-04-16)
 
 ## Current Phase
-**Pipeline Architecture Overhaul — Epic KAN-419 ✅ COMPLETE.** Epic closed in Session 111 after all 8 specs (A–G, Z) shipped across PRs #206–#235. Next phase TBD (KAN-400 UI Overhaul Epic or KAN-429 JIRA automation fix are the top candidates).
+**Platform Observability Infrastructure — Epic KAN-457 (In Progress, plan phase).** Session 113 filed the Epic + 3 Stories (1a/1b/1c) + 5 refinement subtasks under KAN-458; wrote 6 PR-scoped plans for 1a; applied 2-persona review fixes inline. Awaiting PM plan-review approval at KAN-465 before implementation begins in a fresh session.
 
-## Last Shipped (Session 111)
-- KAN-398 — closed as superseded by KAN-400 (no code)
-- KAN-419 — Epic promoted to Done (no code; manual JIRA transition)
-- KAN-430 — Worktree reset-to-develop rule (PR #237, `.claude/rules/worktree-create.md`)
-- KAN-406 — SPY ETF seed `period="2y"` → `"10y"` (PR #238)
+**Prior Epic:** Pipeline Architecture Overhaul (KAN-419) ✅ COMPLETE — closed Session 111.
+
+## Last Shipped (Session 113)
+- **KAN-457 Epic** — Platform Observability Infrastructure filed (JIRA only, no code)
+- **KAN-458 1a Foundations Story** — 6 PR-scoped plans written, 2-persona review applied, 4 CRITICAL + 6 HIGH fixed inline
+- **KAN-461, KAN-462, KAN-463** transitioned to Done (brainstorm + spec + spec-review already complete via PR #240)
+- **KAN-464** (Write plan 1a) — In Progress → Ready for Verification after docs PR merges
+- 6 stale Serena memories fixed + 3 session memories deleted + 1 trimmed
 
 ## Test Counts
-- Unit: 2115 passed (0 failures)
-- API: 448
-- Session 111 added no new tests (pure docs/config change)
+- Unit: 2115 passed (0 failures) — unchanged from Session 111
+- API: 448 — unchanged
+- Session 113 added no new tests (docs-only + JIRA)
 
-## Resume Point
-- **KAN-429** (High, Bug) — JIRA automation mass-closure bug. Only remaining HIGH. 9+ days open, 7+ misfire incidents. ~4h effort.
-- **KAN-400** (Epic, Medium) — Phase E UI Overhaul. Needs refinement phase (no child stories yet).
+## Resume Point (next session — fresh context)
+- **KAN-465** (PM plan-review gate) — if approved, create implementation subtasks under KAN-458 and start 1a PR1 in a new worktree
+- **1a PR1 scope** — migration 030 (`observability` schema + `schema_versions`) + `ObsEventBase` Pydantic envelope + `EventType` enum + `uuid-utils` dep + `describe_observability_schema()` skeleton (~250-line diff)
+- Plan: `docs/superpowers/plans/2026-04-16-obs-1a-pr1-schema-foundation.md`
+- Sonnet model; worktree branched from `develop` (reset-to-develop discipline per `.claude/rules/worktree-create.md`)
+
+## Parallel backlog (not blocked by Obs Epic)
+- KAN-429 (High, Bug) — JIRA automation mass-closure bug. 9+ days open. ~4h effort.
+- KAN-400 (Epic, Medium) — Phase E UI Overhaul. Refinement pending. **Now sequenced AFTER Obs Epic 1 + Seed Epic 2.**
 - KAN-456 (Med, deferred) — Langfuse task_tracer wiring
 - Test-hardening backlog: KAN-213 / KAN-215 / KAN-216 / KAN-217
 

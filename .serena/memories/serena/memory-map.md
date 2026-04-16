@@ -42,8 +42,7 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | conventions/auth-patterns | JWT, httpOnly cookies, frontend auth, bcrypt pinning, security rules |
 | conventions/jira-sdlc-workflow | **MANDATORY** — full JIRA SDLC process, board, refinement lifecycle, branching, CI/CD, automation rules, transition IDs |
 | architecture/cicd-pipeline | CI/CD workflows, branch protection, fixture split, test expectations, GitHub secrets |
-| architecture/implement-local-workflow | LM Studio bridge, complexity scoring, /implement-local skill, observability |
-| architecture/mcp-transport-strategy | stdio (Phase 5.6) → Streamable HTTP (Phase 10), transport evolution |
+| architecture/mcp-transport-strategy | stdio (Phase 5.6) → Streamable HTTP (Phase 6), transport evolution |
 | project/jira-integration-brainstorm | JIRA instance details, full ticket map (KAN-1 through KAN-29), transition IDs, automation rules |
 
 ## Scope Rule

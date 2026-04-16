@@ -6,7 +6,7 @@ category: serena
 # Serena Tool Usage Rules
 
 ## MCP Prefix
-Use `mcp__plugin_serena_serena__*` (not `mcp__serena__*`).
+Use `mcp__serena__*` (the active MCP server exposes tools under this prefix; older memories referencing `mcp__plugin_serena_serena__*` are out of date).
 Must call `activate_project("stock-signal-platform")` at session start before any memory reads/writes.
 
 ## Tool Priority
