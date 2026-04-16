@@ -309,7 +309,7 @@ Run in order — each step depends on the previous:
 # Step 1: Stock universe — S&P 500 constituents (~503 stocks)
 uv run python -m scripts.sync_sp500
 
-# Step 2: ETFs — 12 SPDR sector ETFs + SPY benchmark, 2 years of prices
+# Step 2: ETFs — 12 SPDR sector ETFs + SPY benchmark, 10 years of prices
 uv run python -m scripts.seed_etfs
 
 # Step 3: Prices + signals — 10 years of OHLCV, computes all technical indicators
