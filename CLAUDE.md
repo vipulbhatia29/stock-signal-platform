@@ -99,6 +99,7 @@ hotfix/KAN-* ← emergency fixes → PR to main + back-merge to develop
 
 - **ALWAYS branch from `develop`**, never from `main`:
   `git checkout develop && git pull origin develop && git checkout -b feat/KAN-[story#]-[kebab-name]`
+- **`EnterWorktree` defaults to `main`** — see `.claude/rules/worktree-create.md` for the reset-to-develop discipline
 - PR title: `[KAN-X] Summary`
 - Never commit directly to main or develop
 - Never skip hooks (`--no-verify`) — fix the underlying issue
