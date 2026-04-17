@@ -1,8 +1,14 @@
 """Celery application instance for background task processing."""
 
+import asyncio
+import logging
+import threading
+
 from celery import Celery
+from celery.signals import worker_ready, worker_shutdown
 
 from backend.config import settings
+from backend.observability.bootstrap import build_client_from_settings, obs_client_var
 
 celery_app = Celery(
     "stock_signal_platform",
@@ -111,3 +117,71 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=30, day_of_week=6),
     },
 }
+
+# ── Observability SDK — worker lifecycle signals (PR2a) ─────────────────────
+_worker_obs_client = None
+_worker_obs_loop: asyncio.AbstractEventLoop | None = None
+_worker_obs_thread: threading.Thread | None = None
+
+_obs_logger = logging.getLogger(__name__)
+
+
+def _run_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Run an event loop on a daemon thread until stopped."""
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+
+@worker_ready.connect
+def _init_worker_obs_client(**kwargs):  # type: ignore[no-untyped-def]
+    """Start a persistent event loop on a daemon thread for obs client background tasks.
+
+    @tracked_task invokes via asyncio.run() per call — fresh loop per task.
+    Pinning the obs client's flush loop to a dedicated, long-lived loop on a
+    daemon thread survives across tasks + avoids loop-mismatch on shared state.
+
+    Failure mode: if start() times out, fail-closed — tear down the loop/thread
+    and leave obs_client_var unset. Emissions silently drop for the worker's lifetime.
+    """
+    global _worker_obs_client, _worker_obs_loop, _worker_obs_thread  # noqa: PLW0603
+    _worker_obs_loop = asyncio.new_event_loop()
+    _worker_obs_thread = threading.Thread(
+        target=_run_loop, args=(_worker_obs_loop,), daemon=True, name="obs-loop"
+    )
+    _worker_obs_thread.start()
+    client = build_client_from_settings()
+    fut = asyncio.run_coroutine_threadsafe(client.start(), _worker_obs_loop)
+    try:
+        fut.result(timeout=5.0)
+    except Exception:  # noqa: BLE001 — TimeoutError, CancelledError, anything
+        _obs_logger.warning(
+            "obs.worker_ready.start_failed — observability disabled for this worker",
+            exc_info=True,
+        )
+        fut.cancel()
+        _worker_obs_loop.call_soon_threadsafe(_worker_obs_loop.stop)
+        _worker_obs_thread.join(timeout=2.0)
+        _worker_obs_client = None
+        _worker_obs_loop = None
+        _worker_obs_thread = None
+        return
+    _worker_obs_client = client
+    obs_client_var.set(_worker_obs_client)
+
+
+@worker_shutdown.connect
+def _shutdown_worker_obs_client(**kwargs):  # type: ignore[no-untyped-def]
+    """Drain and stop the worker-local observability client."""
+    global _worker_obs_client, _worker_obs_loop, _worker_obs_thread  # noqa: PLW0603
+    if _worker_obs_client is None or _worker_obs_loop is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(_worker_obs_client.stop(), _worker_obs_loop).result(
+            timeout=10.0
+        )
+    except Exception:  # noqa: BLE001
+        pass  # shutdown must not raise
+    _worker_obs_loop.call_soon_threadsafe(_worker_obs_loop.stop)
+    if _worker_obs_thread:
+        _worker_obs_thread.join(timeout=5.0)
+    obs_client_var.set(None)
