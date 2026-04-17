@@ -290,6 +290,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.tool_registry = registry  # alias for get_tool_schemas_for_group()
     app.state.llm_client = llm_client
 
+    # --- Observability SDK (PR2a) ---
+    from backend.observability.bootstrap import build_client_from_settings, obs_client_var
+
+    obs_client = build_client_from_settings()
+    await obs_client.start()
+    app.state.obs_client = obs_client
+    obs_client_var.set(obs_client)
+
     yield
 
     # --- Shutdown ---
@@ -305,6 +313,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Clear task_tracer singletons so hot-reload does not carry stale references.
     set_langfuse_service(None)
     set_observability_collector(None)
+    # Drain + stop observability SDK client (PR2a).
+    if hasattr(app.state, "obs_client"):
+        await app.state.obs_client.stop()
+        obs_client_var.set(None)
     logger.info("Application shutting down")
 
 

@@ -1,8 +1,19 @@
 """Celery application instance for background task processing."""
 
+import asyncio
+import logging
+import threading
+
 from celery import Celery
+from celery.signals import (
+    worker_process_init,
+    worker_process_shutdown,
+    worker_ready,
+    worker_shutdown,
+)
 
 from backend.config import settings
+from backend.observability.bootstrap import build_client_from_settings, obs_client_var
 
 celery_app = Celery(
     "stock_signal_platform",
@@ -26,11 +37,13 @@ celery_app = Celery(
     ],
 )
 
-celery_app.conf.task_serializer = "json"
-celery_app.conf.result_serializer = "json"
-celery_app.conf.accept_content = ["json"]
-celery_app.conf.timezone = "US/Eastern"
-celery_app.conf.enable_utc = True
+celery_app.conf.update(
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    timezone="US/Eastern",
+    enable_utc=True,
+)
 
 # ── Beat schedule ──────────────────────────────────────────────────────────────
 from celery.schedules import crontab  # noqa: E402
@@ -111,3 +124,112 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour=3, minute=30, day_of_week=6),
     },
 }
+
+# ── Observability SDK — worker lifecycle signals (PR2a) ─────────────────────
+_worker_obs_client = None
+_worker_obs_loop: asyncio.AbstractEventLoop | None = None
+_worker_obs_thread: threading.Thread | None = None
+
+_obs_logger = logging.getLogger(__name__)
+
+
+def _run_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """Run an event loop on a daemon thread until stopped."""
+    asyncio.set_event_loop(loop)
+    loop.run_forever()
+
+
+def _do_init_obs_client() -> None:
+    """Start a persistent event loop on a daemon thread for obs client background tasks.
+
+    Connected to BOTH ``worker_process_init`` (prefork children) AND ``worker_ready``
+    (solo/threads pool). Guard prevents double-init when both fire.
+
+    Why two signals? ``worker_process_init`` fires in each forked child process after
+    fork — ContextVars and daemon threads don't survive fork(), so the client MUST be
+    built in the process that runs tasks. ``worker_ready`` fires in the main process,
+    which IS the task process for solo pool (dev). Connecting to both covers all pools.
+
+    @tracked_task invokes via asyncio.run() per call — fresh loop per task.
+    Pinning the obs client's flush loop to a dedicated, long-lived loop on a
+    daemon thread survives across tasks + avoids loop-mismatch on shared state.
+
+    Failure mode: if start() times out, fail-closed — tear down the loop/thread
+    and leave obs_client_var unset. Emissions silently drop for the worker's lifetime.
+    """
+    global _worker_obs_client, _worker_obs_loop, _worker_obs_thread  # noqa: PLW0603
+    if _worker_obs_client is not None:
+        return  # already initialized (guard against double-fire)
+    _worker_obs_loop = asyncio.new_event_loop()
+    _worker_obs_thread = threading.Thread(
+        target=_run_loop, args=(_worker_obs_loop,), daemon=True, name="obs-loop"
+    )
+    _worker_obs_thread.start()
+    client = build_client_from_settings()
+    fut = asyncio.run_coroutine_threadsafe(client.start(), _worker_obs_loop)
+    try:
+        fut.result(timeout=5.0)
+    except Exception:  # noqa: BLE001 — TimeoutError, CancelledError, anything
+        _obs_logger.warning(
+            "obs.worker.start_failed — observability disabled for this worker",
+            exc_info=True,
+        )
+        fut.cancel()
+        _worker_obs_loop.call_soon_threadsafe(_worker_obs_loop.stop)
+        _worker_obs_thread.join(timeout=2.0)
+        _worker_obs_client = None
+        _worker_obs_loop = None
+        _worker_obs_thread = None
+        return
+    _worker_obs_client = client
+    obs_client_var.set(_worker_obs_client)
+
+
+def _do_shutdown_obs_client() -> None:
+    """Drain and stop the worker-local observability client.
+
+    Connected to BOTH ``worker_process_shutdown`` and ``worker_shutdown``.
+    Guard prevents double-shutdown.
+    """
+    global _worker_obs_client, _worker_obs_loop, _worker_obs_thread  # noqa: PLW0603
+    if _worker_obs_client is None or _worker_obs_loop is None:
+        return
+    try:
+        asyncio.run_coroutine_threadsafe(_worker_obs_client.stop(), _worker_obs_loop).result(
+            timeout=10.0
+        )
+    except Exception:  # noqa: BLE001
+        pass  # shutdown must not raise
+    _worker_obs_loop.call_soon_threadsafe(_worker_obs_loop.stop)
+    if _worker_obs_thread:
+        _worker_obs_thread.join(timeout=5.0)
+    _worker_obs_client = None
+    _worker_obs_loop = None
+    _worker_obs_thread = None
+    obs_client_var.set(None)
+
+
+# Connect init to both signals — guard inside _do_init prevents double-fire.
+@worker_process_init.connect
+def _init_obs_on_process_init(**kwargs):  # type: ignore[no-untyped-def]
+    """Prefork pool: fires in each forked child process."""
+    _do_init_obs_client()
+
+
+@worker_ready.connect
+def _init_obs_on_worker_ready(**kwargs):  # type: ignore[no-untyped-def]
+    """Solo/threads pool: fires in the main worker process."""
+    _do_init_obs_client()
+
+
+# Connect shutdown to both signals — guard inside _do_shutdown prevents double-fire.
+@worker_process_shutdown.connect
+def _shutdown_obs_on_process_shutdown(**kwargs):  # type: ignore[no-untyped-def]
+    """Prefork pool: fires in each child process before exit."""
+    _do_shutdown_obs_client()
+
+
+@worker_shutdown.connect
+def _shutdown_obs_on_worker_shutdown(**kwargs):  # type: ignore[no-untyped-def]
+    """Solo/threads pool: fires when the main worker process shuts down."""
+    _do_shutdown_obs_client()
