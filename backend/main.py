@@ -48,7 +48,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Initialize AI subsystem on startup, clean up on shutdown."""
     # --- Startup ---
-    # 0. Shared HTTP client pool — must be initialised before any provider uses it
+    # 0a. Structured logging — before any logger.info() calls
+    from backend.core.logging import configure_structlog
+
+    configure_structlog()
+
+    # 0b. Shared HTTP client pool — must be initialised before any provider uses it
     from backend.services.http_client import startup_http_client
 
     await startup_http_client()
