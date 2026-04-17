@@ -32,11 +32,13 @@ celery_app = Celery(
     ],
 )
 
-celery_app.conf.task_serializer = "json"
-celery_app.conf.result_serializer = "json"
-celery_app.conf.accept_content = ["json"]
-celery_app.conf.timezone = "US/Eastern"
-celery_app.conf.enable_utc = True
+celery_app.conf.update(
+    task_serializer="json",
+    result_serializer="json",
+    accept_content=["json"],
+    timezone="US/Eastern",
+    enable_utc=True,
+)
 
 # ── Beat schedule ──────────────────────────────────────────────────────────────
 from celery.schedules import crontab  # noqa: E402
