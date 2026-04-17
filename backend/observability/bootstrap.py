@@ -16,6 +16,7 @@ from pathlib import Path
 from backend.config import settings
 from backend.observability.client import ObservabilityClient
 from backend.observability.targets.direct import DirectTarget
+from backend.observability.targets.internal_http import InternalHTTPTarget
 from backend.observability.targets.memory import MemoryTarget
 
 # Module-level ContextVar — set by FastAPI lifespan + Celery worker_ready.
@@ -28,6 +29,14 @@ def build_client_from_settings() -> ObservabilityClient:
     """Construct an ObservabilityClient using current settings."""
     if settings.OBS_TARGET_TYPE == "memory":
         target = MemoryTarget()
+    elif settings.OBS_TARGET_TYPE == "internal_http":
+        if not settings.OBS_TARGET_URL or not settings.OBS_INGEST_SECRET:
+            raise RuntimeError(
+                "OBS_TARGET_TYPE=internal_http requires OBS_TARGET_URL + OBS_INGEST_SECRET"
+            )
+        target = InternalHTTPTarget(
+            base_url=settings.OBS_TARGET_URL, secret=settings.OBS_INGEST_SECRET
+        )
     else:  # "direct" (default)
         target = DirectTarget()
     return ObservabilityClient(

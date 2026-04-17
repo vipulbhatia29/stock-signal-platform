@@ -327,3 +327,69 @@ No code changes this session — pure planning + JIRA hygiene + memory fixes.
 - 1 PR (docs-only, TBD number)
 - 10 memory fixes applied (6 stale + 3 deleted + 1 trimmed)
 - Resume (next session): KAN-465 PM plan-review gate → if approved, start 1a PR1 implementation on a fresh session
+
+---
+
+## Session 114 — Obs 1a PR1: Schema Foundation (2026-04-16)
+
+**Branch:** `feat/KAN-458-obs-1a-pr1-schema` → develop | **PR #242 merged**
+
+### KAN-465 — PM plan-review gate → Done
+- All 6 PR-scoped plans approved without changes
+
+### KAN-466 — Obs 1a PR1: Schema Foundation (PR #242)
+- **Migration 030:** `observability` Postgres schema + `schema_versions` registry table (seeded `v1`)
+- **Schema v1:** `ObsEventBase` envelope + `EventType` (7 types), `AttributionLayer` (10 layers), `Severity` (4 levels) enums
+- **SchemaVersion model:** SQLAlchemy mapped to `observability.schema_versions`
+- **describe_observability_schema():** skeleton async function (1c extends to MCP tool)
+- **uuid-utils>=0.12.0** added for UUIDv7 (used starting PR3)
+- **models.py → models/ package:** orphaned re-export file converted to package (zero-consumer, PM-approved)
+
+### Session 114 Totals
+- Tests: 2121 unit (+6) + 2 integration (+2) + 448 API = 0 failures
+- Alembic: 029 → 030 (`c4d5e6f7a8b9`)
+- 3 JIRA tickets resolved (KAN-465, KAN-466 + KAN-458 reopened after KAN-429 misfire)
+- 1 PR (#242)
+
+---
+
+## Session 115 — Obs 1a PR2a: SDK Core + Default Targets + Lifespan Wiring (2026-04-17)
+
+**Branch:** `feat/obs-1a-pr2a-sdk-core` → develop | **PR #243 merged**
+
+### KAN-467 — Obs 1a PR2a: SDK Core (PR #243)
+- **ObservabilityClient** — async `emit()` + sync `emit_sync()`, buffered flush loop, spool integration
+- **EventBuffer** — loop-agnostic `queue.Queue(maxsize=N)` with thread-safe `_drops` counter
+- **ObservabilityTarget Protocol** + `MemoryTarget` (tests) + `DirectTarget` (monolith default)
+- **JSONL disk spool** — `SpoolWriter`/`SpoolReader`, per-worker PID file, size-capped, reclaim loop
+- **bootstrap.py** — `build_client_from_settings()`, `obs_client_var` ContextVar
+- **FastAPI lifespan** + **Celery signals** wiring
+- **7 `OBS_*` config settings** with kill switches
+
+### Session 115 Totals
+- Tests: 2121 → 2134 unit (+13), 0 failures
+- 1 JIRA ticket filed + resolved (KAN-467)
+- 1 PR (#243), 12 commits squash-merged
+
+---
+
+## Session 116 — Obs 1a PR2b: InternalHTTPTarget + Ingest Endpoint (2026-04-17)
+
+**Branch:** `feat/obs-1a-pr2b-http-target` → develop | **PR TBD**
+
+### KAN-468 — Obs 1a PR2b: InternalHTTPTarget + POST /obs/v1/events
+- **`InternalHTTPTarget`** — HTTP target that POSTs batches with `X-Obs-Secret` header auth. Handles 5xx/connection errors gracefully. `aclose()` lifecycle with `_owns_client` flag. `last_success_ts` populated for health reporting.
+- **`POST /obs/v1/events`** — ingest endpoint: `hmac.compare_digest` constant-time secret validation (fail-closed when secret unset), Pydantic `Literal["v1"]` schema version, `min_length=1` + max 500 batch size, CSRF-exempt. `IngestResponse` response model. `Retry-After: 5` on 503. `WWW-Authenticate` header on 401.
+- **Config:** `OBS_TARGET_TYPE` extended with `"internal_http"`, new `OBS_TARGET_URL` + `OBS_INGEST_SECRET` settings, `field_validator` rejecting empty-string secret.
+- **Bootstrap:** `build_client_from_settings()` handles `internal_http` with URL+secret validation.
+- **`main.py`:** router mounted without `/api/v1` prefix (spec §2.2b), CSRF exempt, `X-Obs-Secret` added to CORS `allow_headers`.
+
+### 4-persona code review (Security + Backend Architect + Test Engineer + API Designer)
+- **19 findings** (2 CRITICAL, 6 HIGH, 8 MEDIUM, 3 LOW) — all fixed in single commit
+- Key fixes: `hmac.compare_digest` (timing attack), `last_success_ts` (health reporting), `aclose()` (connection leak), static error messages (Hard Rule #10), `Literal["v1"]` (Pydantic validation), empty-batch rejection, 503 writer-failure test coverage
+
+### Session 116 Totals
+- Tests: 2134 → 2144 unit (+10) + 9 new API tests (454 total), 0 failures
+- 1 JIRA ticket: KAN-468 (filed + in progress)
+- 5 commits, PR TBD
+- Resume: Push + open PR, then file KAN-469 (PR3 — trace_id middleware)

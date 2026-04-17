@@ -297,21 +297,20 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 **Why this sequence:** Observability must exist before seed runs (Epic 2 below) so anomalies surface cleanly, and before UI polish (Phase E) so dashboard data is real. User decision captured in Session 112 — "observability on every aspect is the core-objective".
 
-**Session 113 status:**
-- Epic KAN-457 + 3 Stories (KAN-458, KAN-459, KAN-460) + 5 refinement subtasks filed
-- Master + 3 sub-epic specs shipped in PR #240 (commit 9f479b2)
-- 6 PR-scoped plans for 1a written (`docs/superpowers/plans/2026-04-16-obs-1a-pr{1,2a,2b,3,4,5}-*.md`); 2-persona adversarial review applied; 4 CRITICAL + 6 HIGH findings fixed inline
-- Awaiting PM plan-review approval at KAN-465
+**Status (Session 116):**
+- Plans approved (KAN-465 Done), 3/6 PRs shipped
+- PR1 ✅ (PR #242, S114), PR2a ✅ (PR #243, S115), PR2b ✅ (S116, PR TBD)
+- Next: PR3 (trace_id middleware)
 
 **1a PR breakdown (after Hard Rule #12 split):**
-| PR | Scope | Est. lines |
-|---|---|---|
-| PR1 | migration 030 + `ObsEventBase` + `EventType` enum + `describe_observability_schema()` skeleton | ~250 |
-| PR2a | SDK (`ObservabilityClient` + buffer + spool) + DirectTarget + MemoryTarget + FastAPI+Celery lifespan wiring | ~500 |
-| PR2b | InternalHTTPTarget + `POST /obs/v1/events` ingest endpoint | ~200 |
-| PR3 | trace_id middleware + Celery propagation + structured JSON logging | ~400 |
-| PR4 | `ObservedHttpClient` + 10 providers + `rate_limiter_event` + retention | ~500 |
-| PR5 | Strangler-fig refactor with `OBS_LEGACY_DIRECT_WRITES` + `wrote_via_legacy` dedup | ~450 |
+| PR | Scope | Est. lines | Status |
+|---|---|---|---|
+| PR1 | migration 030 + `ObsEventBase` + `EventType` enum + `describe_observability_schema()` skeleton | ~250 | ✅ PR #242 (S114) |
+| PR2a | SDK (`ObservabilityClient` + buffer + spool) + DirectTarget + MemoryTarget + FastAPI+Celery lifespan wiring | ~500 | ✅ PR #243 (S115) |
+| PR2b | InternalHTTPTarget + `POST /obs/v1/events` ingest endpoint | ~200 | ✅ S116, PR TBD |
+| PR3 | trace_id middleware + Celery propagation + structured JSON logging | ~400 | ⬜ |
+| PR4 | `ObservedHttpClient` + 10 providers + `rate_limiter_event` + retention | ~500 | ⬜ |
+| PR5 | Strangler-fig refactor with `OBS_LEGACY_DIRECT_WRITES` + `wrote_via_legacy` dedup | ~450 | ⬜ |
 
 ### Epic 2: Seed Universe (planned — blocked by Epic 1)
 

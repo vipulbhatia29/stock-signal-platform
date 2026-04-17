@@ -4,7 +4,7 @@ import logging
 from datetime import timedelta
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -184,13 +184,29 @@ class Settings(BaseSettings):
         description="Per-worker append-only JSONL spool directory",
     )
     OBS_SPOOL_MAX_SIZE_MB: int = Field(default=100, ge=1, description="Per-worker spool cap")
-    OBS_TARGET_TYPE: Literal["direct", "memory"] = Field(
+    OBS_TARGET_TYPE: Literal["direct", "memory", "internal_http"] = Field(
         default="direct",
-        description="Target adapter — DirectTarget (monolith default) "
-        "or MemoryTarget (tests). PR2b adds 'internal_http'.",
+        description="Target adapter — direct DB write (default), self-HTTP, or memory (tests)",
+    )
+    OBS_TARGET_URL: str | None = Field(
+        default=None,
+        description="Base URL for internal_http / future external_http target. "
+        "Required when OBS_TARGET_TYPE=internal_http.",
+    )
+    OBS_INGEST_SECRET: str | None = Field(
+        default=None,
+        description="Shared secret for POST /obs/v1/events X-Obs-Secret header. "
+        "Required when OBS_TARGET_TYPE=internal_http; set via env in prod.",
     )
     OBS_FLUSH_INTERVAL_MS: int = Field(default=500, ge=50)
     OBS_BUFFER_SIZE: int = Field(default=10_000, ge=100)
+
+    @field_validator("OBS_INGEST_SECRET")
+    @classmethod
+    def _secret_must_not_be_empty(cls, v: str | None) -> str | None:
+        if v is not None and len(v) == 0:
+            raise ValueError("OBS_INGEST_SECRET must not be empty string")
+        return v
 
     @property
     def staleness_slas(self) -> StalenessSLAs:
