@@ -11,6 +11,11 @@ from datetime import datetime, timezone
 if "JWT_SECRET_KEY" not in os.environ:
     os.environ["JWT_SECRET_KEY"] = "test-secret-do-not-use-in-production-32chars!"
 
+# --- Observability SDK test defaults (PR2a) ---
+os.environ.setdefault("OBS_TARGET_TYPE", "memory")
+os.environ.setdefault("OBS_SPOOL_ENABLED", "false")
+os.environ.setdefault("OBS_ENABLED", "true")
+
 import factory
 import pytest
 import pytest_asyncio

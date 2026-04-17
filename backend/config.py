@@ -3,6 +3,8 @@
 import logging
 from datetime import timedelta
 
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -168,6 +170,19 @@ class Settings(BaseSettings):
     # Bounds are enforced at Settings construction time: values outside
     # [0.0, 1.0] will raise at boot rather than silently mis-sampling.
     LANGFUSE_SENTIMENT_IO_SAMPLING_RATE: float = Field(default=0.25, ge=0.0, le=1.0)
+
+    # --- Observability SDK (Obs 1a PR2a) ---
+    OBS_ENABLED: bool = Field(True, description="Global kill switch — False makes all emit calls no-ops")
+    OBS_SPOOL_ENABLED: bool = Field(True, description="If True, overflow events go to OBS_SPOOL_DIR; else drop")
+    OBS_SPOOL_DIR: str = Field("/var/tmp/obs-spool", description="Per-worker append-only JSONL spool directory")
+    OBS_SPOOL_MAX_SIZE_MB: int = Field(100, ge=1, description="Per-worker spool cap")
+    OBS_TARGET_TYPE: Literal["direct", "memory"] = Field(
+        "direct",
+        description="Target adapter — DirectTarget (monolith default) or MemoryTarget (tests). "
+        "PR2b adds 'internal_http'.",
+    )
+    OBS_FLUSH_INTERVAL_MS: int = Field(500, ge=50)
+    OBS_BUFFER_SIZE: int = Field(10_000, ge=100)
 
     @property
     def staleness_slas(self) -> StalenessSLAs:
