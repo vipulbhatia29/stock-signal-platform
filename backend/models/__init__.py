@@ -1,4 +1,10 @@
-"""Database models package — import all models so Alembic can discover them."""
+"""Database models package — import all models so Alembic can discover them.
+
+NOTE: SchemaVersion (backend.observability.models) is intentionally NOT imported here.
+Its __table_args__ references the 'observability' schema, which is created by migration
+030 raw DDL — not by SQLAlchemy metadata.create_all(). Importing it here causes test
+fixture teardown failures. PR2a addresses this when more obs models are added.
+"""
 
 from backend.models.alert import InAppAlert
 from backend.models.assessment import AssessmentResult, AssessmentRun
@@ -32,7 +38,6 @@ from backend.models.signal import SignalSnapshot
 from backend.models.stock import Stock, Watchlist
 from backend.models.ticker_ingestion_state import TickerIngestionState
 from backend.models.user import User, UserPreference, UserRole
-from backend.observability.models.schema_versions import SchemaVersion  # noqa: F401
 
 __all__ = [
     "AdminAuditLog",
@@ -64,7 +69,6 @@ __all__ = [
     "RebalancingSuggestion",
     "RecommendationOutcome",
     "RecommendationSnapshot",
-    "SchemaVersion",
     "SignalSnapshot",
     "Stock",
     "StockIndex",
