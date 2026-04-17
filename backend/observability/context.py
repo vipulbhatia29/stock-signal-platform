@@ -25,3 +25,23 @@ current_agent_type: ContextVar[str | None] = ContextVar("current_agent_type", de
 current_agent_instance_id: ContextVar[str | None] = ContextVar(
     "current_agent_instance_id", default=None
 )
+
+# --- Trace propagation ContextVars (PR3) ---
+trace_id_var: ContextVar[uuid.UUID | None] = ContextVar("trace_id", default=None)
+span_id_var: ContextVar[uuid.UUID | None] = ContextVar("span_id", default=None)
+parent_span_id_var: ContextVar[uuid.UUID | None] = ContextVar("parent_span_id", default=None)
+
+
+def current_trace_id() -> uuid.UUID | None:
+    """Return the ambient trace_id or None."""
+    return trace_id_var.get()
+
+
+def current_span_id() -> uuid.UUID | None:
+    """Return the ambient span_id or None."""
+    return span_id_var.get()
+
+
+def current_parent_span_id() -> uuid.UUID | None:
+    """Return the ambient parent_span_id or None."""
+    return parent_span_id_var.get()
