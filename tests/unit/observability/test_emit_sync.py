@@ -1,6 +1,5 @@
 """Tests for ObservabilityClient.emit_sync — sync emission from worker threads."""
 
-import tempfile
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -57,12 +56,11 @@ async def test_emit_sync_from_thread(tmp_path):
         await client.stop()
 
 
-def test_emit_sync_never_raises():
+def test_emit_sync_never_raises(tmp_path: Path):
     """Rate-limiter + yfinance call this from sync hot paths — MUST NOT raise."""
-    tmp = Path(tempfile.mkdtemp())
     client = ObservabilityClient(
         target=MemoryTarget(fail_next=99999),
-        spool_dir=tmp,
+        spool_dir=tmp_path,
         spool_enabled=False,
         flush_interval_ms=50,
         buffer_size=1,

@@ -9,6 +9,7 @@ no loop binding, unlike asyncio.Queue.
 from __future__ import annotations
 
 import queue
+import threading
 from dataclasses import dataclass
 
 from backend.observability.schema.v1 import ObsEventBase
@@ -32,6 +33,7 @@ class EventBuffer:
     def __init__(self, max_size: int) -> None:
         self._queue: queue.Queue[ObsEventBase] = queue.Queue(maxsize=max_size)
         self._drops = 0
+        self._drops_lock = threading.Lock()
 
     def try_put(self, event: ObsEventBase) -> bool:
         """Non-blocking enqueue. Returns False + increments drop counter on overflow."""
@@ -39,7 +41,8 @@ class EventBuffer:
             self._queue.put_nowait(event)
             return True
         except queue.Full:
-            self._drops += 1
+            with self._drops_lock:
+                self._drops += 1
             return False
 
     def get_batch(self, max_batch: int, timeout_s: float) -> list[ObsEventBase]:
@@ -61,4 +64,6 @@ class EventBuffer:
 
     def stats(self) -> BufferStats:
         """Return current queue depth and cumulative drop count."""
-        return BufferStats(depth=self._queue.qsize(), drops=self._drops)
+        with self._drops_lock:
+            drops = self._drops
+        return BufferStats(depth=self._queue.qsize(), drops=drops)
