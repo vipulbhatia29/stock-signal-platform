@@ -1233,6 +1233,27 @@ GET /api/v1/observability/my-queries/{query_id}
   Auth:     Required (ownership check)
 ```
 
+### 3.26 Observability Ingest Endpoint
+
+**Router:** `backend/observability/routers/ingest.py`
+
+> Service-internal endpoint for `InternalHTTPTarget` (and future `ExternalHTTPTarget` at microservice extraction). Uses shared-secret header auth (`X-Obs-Secret`), NOT cookie/JWT auth — CSRF-exempt.
+
+```
+POST /obs/v1/events
+  Headers:  X-Obs-Secret: <shared secret>
+  Body:     { "events": [ObsEventBase...], "schema_version": "v1" }
+  Response: 202 { "accepted": <count> }
+  Errors:   401 (missing/wrong/unset secret — fail-closed)
+            413 (batch > 500 events)
+            422 (unsupported schema_version or empty events list)
+            503 (event_writer failure, Retry-After: 5)
+  Auth:     X-Obs-Secret (constant-time hmac.compare_digest)
+  CSRF:     Exempt (not cookie-based)
+```
+
+**Note:** Mounted at `/obs/v1/events` (no `/api/v1` prefix) — intentionally separated from application routes per spec §2.2b. At microservice extraction, only `OBS_TARGET_URL` changes.
+
 ---
 
 ## 4. Service Layer Design
@@ -2240,7 +2261,7 @@ GitHub Actions:
 
 The observability stack spans 4 layers: logging, tracing, metrics, and assessment.
 
-**Package:** `backend/observability/` — bounded package (8 files, ~1500 lines).
+**Package:** `backend/observability/` — bounded package (~20 files). Includes SDK (`client.py`, `bootstrap.py`), targets (`direct.py`, `memory.py`, `internal_http.py`), schema (`v1.py`), spool, buffer, service layer, and routers (admin, health, command center, ingest, user observability).
 
 #### 10.3.1 Logging
 
