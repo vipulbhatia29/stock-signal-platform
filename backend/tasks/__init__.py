@@ -233,3 +233,7 @@ def _shutdown_obs_on_process_shutdown(**kwargs):  # type: ignore[no-untyped-def]
 def _shutdown_obs_on_worker_shutdown(**kwargs):  # type: ignore[no-untyped-def]
     """Solo/threads pool: fires when the main worker process shuts down."""
     _do_shutdown_obs_client()
+
+
+# ── Trace propagation — signal handlers register on import (PR3) ──────────
+from backend.tasks import celery_trace_propagation  # noqa: F401
