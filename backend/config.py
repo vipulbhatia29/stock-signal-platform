@@ -189,12 +189,12 @@ class Settings(BaseSettings):
         description="Target adapter — direct DB write (default), self-HTTP, or memory (tests)",
     )
     OBS_TARGET_URL: str | None = Field(
-        None,
+        default=None,
         description="Base URL for internal_http / future external_http target. "
         "Required when OBS_TARGET_TYPE=internal_http.",
     )
     OBS_INGEST_SECRET: str | None = Field(
-        None,
+        default=None,
         description="Shared secret for POST /obs/v1/events X-Obs-Secret header. "
         "Required when OBS_TARGET_TYPE=internal_http; set via env in prod.",
     )

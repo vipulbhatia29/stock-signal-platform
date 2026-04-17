@@ -9,7 +9,7 @@ import httpx
 from backend.observability.schema.v1 import ObsEventBase
 from backend.observability.targets.base import BatchResult, TargetHealth
 
-OBS_SECRET_HEADER = "X-Obs-Secret"
+OBS_AUTH_HEADER = "X-Obs-Secret"
 
 
 class InternalHTTPTarget:
@@ -43,7 +43,7 @@ class InternalHTTPTarget:
         }
         try:
             resp = await self._client.post(
-                self._url, json=payload, headers={OBS_SECRET_HEADER: self._secret}
+                self._url, json=payload, headers={OBS_AUTH_HEADER: self._secret}
             )
         except httpx.HTTPError as exc:
             self.last_error = type(exc).__name__

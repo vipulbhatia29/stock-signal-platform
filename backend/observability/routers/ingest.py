@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from backend.config import settings
 from backend.observability.schema.v1 import ObsEventBase
 from backend.observability.service.event_writer import write_batch
-from backend.observability.targets.internal_http import OBS_SECRET_HEADER
+from backend.observability.targets.internal_http import OBS_AUTH_HEADER
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ router = APIRouter(tags=["observability-ingest"])
 OBS_INGEST_PATH = "/obs/v1/events"
 MAX_EVENTS_PER_BATCH = 500
 
-_AUTH_HEADERS = {"WWW-Authenticate": OBS_SECRET_HEADER}
+_AUTH_HEADERS = {"WWW-Authenticate": OBS_AUTH_HEADER}
 
 
 class IngestBatch(BaseModel):
@@ -44,7 +44,7 @@ class IngestResponse(BaseModel):
 )
 async def ingest_events(
     batch: IngestBatch,
-    x_obs_secret: str | None = Header(default=None, alias=OBS_SECRET_HEADER),
+    x_obs_secret: str | None = Header(default=None, alias=OBS_AUTH_HEADER),
 ) -> IngestResponse:
     """Accept a batch of observability events.
 

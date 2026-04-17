@@ -9,7 +9,7 @@ import pytest
 
 from backend.observability.schema.v1 import EventType, ObsEventBase
 from backend.observability.targets.base import BatchResult
-from backend.observability.targets.internal_http import OBS_SECRET_HEADER, InternalHTTPTarget
+from backend.observability.targets.internal_http import OBS_AUTH_HEADER, InternalHTTPTarget
 from backend.observability.targets.memory import MemoryTarget
 
 
@@ -81,7 +81,7 @@ async def test_internal_http_target_sends_batch():
     assert result.sent == 1
     assert result.failed == 0
     assert target.last_error is None
-    assert transport.last_request.headers.get(OBS_SECRET_HEADER) == "s3cret"
+    assert transport.last_request.headers.get(OBS_AUTH_HEADER) == "s3cret"
     assert transport.last_request.url.path == "/obs/v1/events"
     # Verify request body contains events + schema_version
     body = json.loads(transport.last_request.content)
