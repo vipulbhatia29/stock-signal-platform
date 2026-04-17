@@ -47,3 +47,18 @@ async def test_memory_target_fail_next():
     target = MemoryTarget(fail_next=1)
     assert (await target.send_batch([_event()])).failed == 1
     assert (await target.send_batch([_event()])).sent == 1
+
+
+@pytest.mark.asyncio
+async def test_direct_target_delegates_to_writer():
+    """DirectTarget delegates to a custom writer function and reports sent count."""
+    from backend.observability.targets.direct import DirectTarget
+
+    called: list[list[ObsEventBase]] = []
+
+    async def fake_writer(events: list[ObsEventBase]) -> None:
+        called.append(list(events))
+
+    result = await DirectTarget(event_writer=fake_writer).send_batch([_event(), _event()])
+    assert result.sent == 2 and result.failed == 0
+    assert len(called) == 1 and len(called[0]) == 2
