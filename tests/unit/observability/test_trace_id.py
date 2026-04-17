@@ -40,6 +40,32 @@ async def test_span_sets_parent_link():
 
 
 @pytest.mark.asyncio
+async def test_span_restores_on_exception():
+    """ContextVars restore correctly even if body raises inside span()."""
+    trace_id_var.set(UUID("01234567-89ab-7def-8123-456789abcdef"))
+    try:
+        async with span("outer") as outer:
+            try:
+                async with span("failing"):
+                    raise ValueError("boom")
+            except ValueError:
+                pass
+            assert current_span_id() == outer.span_id
+    finally:
+        trace_id_var.set(None)
+        span_id_var.set(None)
+        parent_span_id_var.set(None)
+
+
+@pytest.mark.asyncio
+async def test_cors_expose_headers_includes_trace_id(client):
+    """Frontend must be able to read X-Trace-Id via CORS expose-headers."""
+    resp = await client.get("/api/v1/health", headers={"Origin": "http://localhost:3000"})
+    expose = resp.headers.get("access-control-expose-headers", "")
+    assert "x-trace-id" in expose.lower()
+
+
+@pytest.mark.asyncio
 async def test_trace_id_middleware_generates_new(client):
     """No X-Trace-Id on request → middleware generates a UUIDv7."""
     resp = await client.get("/api/v1/health")

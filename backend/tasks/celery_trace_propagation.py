@@ -4,6 +4,7 @@
 - task_prerun: read headers → set ContextVars; store reset Tokens per task_id
 - task_postrun: reset ContextVars via Tokens so a prerun exception can't leak
 """
+
 from __future__ import annotations
 
 import logging
@@ -26,6 +27,9 @@ _HEADER_SPAN_ID = "obs_parent_span_id"
 
 # Per-task reset tokens — keyed by Celery task_id so overlapping tasks in the same
 # worker thread (eventlet/gevent pools) don't step on each other's Tokens.
+# Note: entries are removed in task_postrun. If postrun never fires (SIGKILL, OOM),
+# entries leak — acceptable since worker restarts clear the dict. If this becomes an
+# issue, add bounded eviction in a follow-up PR.
 _TOKENS: dict[str, tuple[Token, Token, Token]] = {}
 
 
