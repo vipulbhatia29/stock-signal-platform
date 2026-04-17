@@ -1,4 +1,10 @@
-"""Database models package — import all models so Alembic can discover them."""
+"""Database models package — import all models so Alembic can discover them.
+
+NOTE: SchemaVersion (backend.observability.models) is intentionally NOT imported here.
+Its __table_args__ references the 'observability' schema, which is created by migration
+030 raw DDL — not by SQLAlchemy metadata.create_all(). Importing it here causes test
+fixture teardown failures. PR2a addresses this when more obs models are added.
+"""
 
 from backend.models.alert import InAppAlert
 from backend.models.assessment import AssessmentResult, AssessmentRun
