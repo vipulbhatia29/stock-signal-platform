@@ -3,10 +3,12 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import httpx
 import pytest
 
 from backend.observability.schema.v1 import EventType, ObsEventBase
 from backend.observability.targets.base import BatchResult
+from backend.observability.targets.internal_http import InternalHTTPTarget
 from backend.observability.targets.memory import MemoryTarget
 
 
@@ -47,6 +49,72 @@ async def test_memory_target_fail_next():
     target = MemoryTarget(fail_next=1)
     assert (await target.send_batch([_event()])).failed == 1
     assert (await target.send_batch([_event()])).sent == 1
+
+
+# --- InternalHTTPTarget tests ---
+
+
+class _StubTransport(httpx.MockTransport):
+    """Captures the last request for assertion."""
+
+    def __init__(self, status: int = 202):
+        self._status = status
+        super().__init__(self._handle)
+
+    def _handle(self, request: httpx.Request) -> httpx.Response:
+        self.last_request = request  # type: ignore[attr-defined]
+        return httpx.Response(self._status, json={"accepted": 1})
+
+
+@pytest.mark.asyncio
+async def test_internal_http_target_sends_batch():
+    """InternalHTTPTarget POSTs batch with X-Obs-Secret to /obs/v1/events."""
+    transport = _StubTransport(status=202)
+    client = httpx.AsyncClient(transport=transport)
+    target = InternalHTTPTarget(
+        base_url="http://localhost:8181",
+        secret="s3cret",
+        client=client,
+    )
+    result = await target.send_batch([_event()])
+    assert result.sent == 1
+    assert target.last_error is None
+    assert transport.last_request.headers.get("X-Obs-Secret") == "s3cret"
+    assert transport.last_request.url.path == "/obs/v1/events"
+
+
+@pytest.mark.asyncio
+async def test_internal_http_target_handles_5xx():
+    """InternalHTTPTarget classifies 5xx as failure with status_NNN error."""
+    transport = _StubTransport(status=503)
+    target = InternalHTTPTarget(
+        base_url="http://localhost:8181",
+        secret="s3cret",
+        client=httpx.AsyncClient(transport=transport),
+    )
+    result = await target.send_batch([_event(), _event()])
+    assert result.failed == 2
+    assert result.error == "status_503"
+
+
+@pytest.mark.asyncio
+async def test_internal_http_target_handles_connection_error():
+    """InternalHTTPTarget classifies connection errors as failures."""
+
+    async def _raise(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("refused")
+
+    target = InternalHTTPTarget(
+        base_url="http://localhost:8181",
+        secret="s3cret",
+        client=httpx.AsyncClient(transport=httpx.MockTransport(_raise)),
+    )
+    result = await target.send_batch([_event()])
+    assert result.failed == 1
+    assert result.error == "ConnectError"
+
+
+# --- DirectTarget tests ---
 
 
 @pytest.mark.asyncio
