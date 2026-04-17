@@ -27,9 +27,7 @@ def _e() -> ObsEventBase:
     )
 
 
-async def _make_client(
-    tmp_path, *, enabled=True, spool=False, target=None
-) -> ObservabilityClient:
+async def _make_client(tmp_path, *, enabled=True, spool=False, target=None) -> ObservabilityClient:
     """Helper to build and start a test client."""
     client = ObservabilityClient(
         target=target or MemoryTarget(),
