@@ -4,6 +4,7 @@ Each nested span inherits the ambient trace_id and sets its own UUIDv7 span_id;
 parent_span_id = the span_id that was current on entry. On exit, ContextVars are
 restored so siblings see the parent span_id, not the just-closed one.
 """
+
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
@@ -38,7 +39,6 @@ async def span(name: str) -> AsyncIterator[Span]:
     Restores ContextVars on exit so sibling spans see the correct parent.
     """
     prev_span = span_id_var.get()
-    prev_parent = parent_span_id_var.get()
     new_span = UUID(bytes=uuid7().bytes)
     span_tok = span_id_var.set(new_span)
     parent_tok = parent_span_id_var.set(prev_span)  # previous becomes parent

@@ -242,4 +242,4 @@ def _shutdown_obs_on_worker_shutdown(**kwargs):  # type: ignore[no-untyped-def]
 
 
 # ── Trace propagation — signal handlers register on import (PR3) ──────────
-from backend.tasks import celery_trace_propagation  # noqa: F401
+from backend.tasks import celery_trace_propagation  # noqa: E402, F401

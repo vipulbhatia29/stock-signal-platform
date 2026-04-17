@@ -1,8 +1,14 @@
 from uuid import UUID
+
 import pytest
+
 from backend.observability.context import (
-    current_trace_id, current_span_id, current_parent_span_id,
-    trace_id_var, span_id_var, parent_span_id_var,
+    current_parent_span_id,
+    current_span_id,
+    current_trace_id,
+    parent_span_id_var,
+    span_id_var,
+    trace_id_var,
 )
 from backend.observability.span import span
 

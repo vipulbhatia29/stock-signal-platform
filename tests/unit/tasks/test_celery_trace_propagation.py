@@ -4,13 +4,10 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 from uuid import UUID
 
-import pytest
-
 from backend.observability.context import (
     current_parent_span_id,
     current_span_id,
     current_trace_id,
-    parent_span_id_var,
     span_id_var,
     trace_id_var,
 )
