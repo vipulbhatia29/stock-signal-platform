@@ -360,6 +360,7 @@ app.add_middleware(
         "/api/v1/health/detail",
         "/docs",
         "/openapi.json",
+        "/obs/v1/events",  # X-Obs-Secret auth, not cookie-based
     },
 )
 app.add_middleware(
@@ -399,3 +400,7 @@ from backend.observability.routers.command_center import (  # noqa: E402
 )
 
 app.include_router(command_center_router, prefix="/api/v1")
+
+from backend.observability.routers.ingest import router as obs_ingest_router  # noqa: E402
+
+app.include_router(obs_ingest_router)  # no /api/v1 prefix — spec §2.2b
