@@ -360,7 +360,7 @@ app.add_middleware(
         "/api/v1/health/detail",
         "/docs",
         "/openapi.json",
-        "/obs/v1/events",  # X-Obs-Secret auth, not cookie-based
+        "/obs/v1/events",  # OBS_INGEST_PATH — X-Obs-Secret auth, not cookie-based
     },
 )
 app.add_middleware(
@@ -368,7 +368,7 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token"],
+    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Obs-Secret"],
 )
 app.add_middleware(ErrorHandlerMiddleware)
 
@@ -401,6 +401,8 @@ from backend.observability.routers.command_center import (  # noqa: E402
 
 app.include_router(command_center_router, prefix="/api/v1")
 
-from backend.observability.routers.ingest import router as obs_ingest_router  # noqa: E402
+from backend.observability.routers.ingest import (  # noqa: E402
+    router as obs_ingest_router,
+)
 
 app.include_router(obs_ingest_router)  # no /api/v1 prefix — spec §2.2b

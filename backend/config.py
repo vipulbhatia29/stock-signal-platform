@@ -4,7 +4,7 @@ import logging
 from datetime import timedelta
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -200,6 +200,13 @@ class Settings(BaseSettings):
     )
     OBS_FLUSH_INTERVAL_MS: int = Field(default=500, ge=50)
     OBS_BUFFER_SIZE: int = Field(default=10_000, ge=100)
+
+    @field_validator("OBS_INGEST_SECRET")
+    @classmethod
+    def _secret_must_not_be_empty(cls, v: str | None) -> str | None:
+        if v is not None and len(v) == 0:
+            raise ValueError("OBS_INGEST_SECRET must not be empty string")
+        return v
 
     @property
     def staleness_slas(self) -> StalenessSLAs:

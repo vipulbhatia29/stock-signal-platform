@@ -2,54 +2,72 @@
 
 from __future__ import annotations
 
+import hmac
 import logging
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Header, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.config import settings
 from backend.observability.schema.v1 import ObsEventBase
 from backend.observability.service.event_writer import write_batch
+from backend.observability.targets.internal_http import OBS_SECRET_HEADER
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["observability-ingest"])
 
+OBS_INGEST_PATH = "/obs/v1/events"
 MAX_EVENTS_PER_BATCH = 500
+
+_AUTH_HEADERS = {"WWW-Authenticate": OBS_SECRET_HEADER}
 
 
 class IngestBatch(BaseModel):
     """Batch of events submitted to the ingest endpoint."""
 
-    events: list[ObsEventBase]
-    schema_version: str
+    events: Annotated[list[ObsEventBase], Field(min_length=1)]
+    schema_version: Literal["v1"]
 
 
-@router.post("/obs/v1/events", status_code=status.HTTP_202_ACCEPTED)
+class IngestResponse(BaseModel):
+    """Response from the ingest endpoint."""
+
+    accepted: int
+
+
+@router.post(
+    OBS_INGEST_PATH,
+    status_code=status.HTTP_202_ACCEPTED,
+    response_model=IngestResponse,
+)
 async def ingest_events(
     batch: IngestBatch,
-    x_obs_secret: str | None = Header(default=None, alias="X-Obs-Secret"),
-) -> dict[str, int]:
+    x_obs_secret: str | None = Header(default=None, alias=OBS_SECRET_HEADER),
+) -> IngestResponse:
     """Accept a batch of observability events.
 
-    Validates shared-secret auth, batch size, and schema version before
-    delegating to the event writer.
+    Validates shared-secret auth and batch size before delegating to
+    the event writer.
     """
     # Fail-closed: no secret configured means no one can POST.
-    if not settings.OBS_INGEST_SECRET or x_obs_secret != settings.OBS_INGEST_SECRET:
+    if not settings.OBS_INGEST_SECRET or not x_obs_secret:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="invalid or missing X-Obs-Secret",
+            detail="unauthorized",
+            headers=_AUTH_HEADERS,
+        )
+    if not hmac.compare_digest(x_obs_secret, settings.OBS_INGEST_SECRET):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="unauthorized",
+            headers=_AUTH_HEADERS,
         )
     if len(batch.events) > MAX_EVENTS_PER_BATCH:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"batch size {len(batch.events)} exceeds max {MAX_EVENTS_PER_BATCH}",
-        )
-    if batch.schema_version != "v1":
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="unsupported schema_version",
+            detail="batch too large",
         )
     try:
         await write_batch(batch.events)
@@ -58,5 +76,6 @@ async def ingest_events(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="event_writer_failure",
+            headers={"Retry-After": "5"},
         )
-    return {"accepted": len(batch.events)}
+    return IngestResponse(accepted=len(batch.events))

@@ -46,6 +46,7 @@ async def test_ingest_rejects_missing_secret(client, monkeypatch):
         json={"events": [_payload()], "schema_version": "v1"},
     )
     assert resp.status_code == 401
+    assert resp.json()["detail"] == "unauthorized"
 
 
 @pytest.mark.asyncio
@@ -58,6 +59,7 @@ async def test_ingest_rejects_wrong_secret(client, monkeypatch):
         headers={"X-Obs-Secret": "wrong"},
     )
     assert resp.status_code == 401
+    assert resp.json()["detail"] == "unauthorized"
 
 
 @pytest.mark.asyncio
@@ -70,15 +72,41 @@ async def test_ingest_rejects_oversized_batch(client, monkeypatch):
         headers={"X-Obs-Secret": "testsecret"},
     )
     assert resp.status_code == 413
+    assert resp.json()["detail"] == "batch too large"
+
+
+@pytest.mark.asyncio
+async def test_ingest_accepts_max_batch_size(client, monkeypatch):
+    """Batch of exactly MAX_EVENTS_PER_BATCH (500) is accepted."""
+    monkeypatch.setattr("backend.config.settings.OBS_INGEST_SECRET", "testsecret")
+    resp = await client.post(
+        "/obs/v1/events",
+        json={"events": [_payload()] * 500, "schema_version": "v1"},
+        headers={"X-Obs-Secret": "testsecret"},
+    )
+    assert resp.status_code == 202
+    assert resp.json() == {"accepted": 500}
 
 
 @pytest.mark.asyncio
 async def test_ingest_rejects_unsupported_schema_version(client, monkeypatch):
-    """Unsupported schema_version returns 422."""
+    """Unsupported schema_version returns 422 via Pydantic validation."""
     monkeypatch.setattr("backend.config.settings.OBS_INGEST_SECRET", "testsecret")
     resp = await client.post(
         "/obs/v1/events",
         json={"events": [_payload()], "schema_version": "v99"},
+        headers={"X-Obs-Secret": "testsecret"},
+    )
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_ingest_rejects_empty_batch(client, monkeypatch):
+    """Empty events list returns 422 via Pydantic min_length validation."""
+    monkeypatch.setattr("backend.config.settings.OBS_INGEST_SECRET", "testsecret")
+    resp = await client.post(
+        "/obs/v1/events",
+        json={"events": [], "schema_version": "v1"},
         headers={"X-Obs-Secret": "testsecret"},
     )
     assert resp.status_code == 422
@@ -94,3 +122,22 @@ async def test_ingest_rejects_when_secret_unset(client, monkeypatch):
         headers={"X-Obs-Secret": "anything"},
     )
     assert resp.status_code == 401
+    assert resp.json()["detail"] == "unauthorized"
+
+
+@pytest.mark.asyncio
+async def test_ingest_returns_503_when_writer_raises(client, monkeypatch):
+    """write_batch failure surfaces as 503 for client retry."""
+    monkeypatch.setattr("backend.config.settings.OBS_INGEST_SECRET", "testsecret")
+
+    async def _boom(events):
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr("backend.observability.routers.ingest.write_batch", _boom)
+    resp = await client.post(
+        "/obs/v1/events",
+        json={"events": [_payload()], "schema_version": "v1"},
+        headers={"X-Obs-Secret": "testsecret"},
+    )
+    assert resp.status_code == 503
+    assert resp.json()["detail"] == "event_writer_failure"
