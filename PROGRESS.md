@@ -375,9 +375,9 @@ No code changes this session — pure planning + JIRA hygiene + memory fixes.
 
 ## Session 116 — Obs 1a PR2b: InternalHTTPTarget + Ingest Endpoint (2026-04-17)
 
-**Branch:** `feat/obs-1a-pr2b-http-target` → develop | **PR TBD**
+**Branch:** `feat/obs-1a-pr2b-http-target` → develop | **PR #244 merged**
 
-### KAN-468 — Obs 1a PR2b: InternalHTTPTarget + POST /obs/v1/events
+### Obs 1a PR2b: InternalHTTPTarget + POST /obs/v1/events
 - **`InternalHTTPTarget`** — HTTP target that POSTs batches with `X-Obs-Secret` header auth. Handles 5xx/connection errors gracefully. `aclose()` lifecycle with `_owns_client` flag. `last_success_ts` populated for health reporting.
 - **`POST /obs/v1/events`** — ingest endpoint: `hmac.compare_digest` constant-time secret validation (fail-closed when secret unset), Pydantic `Literal["v1"]` schema version, `min_length=1` + max 500 batch size, CSRF-exempt. `IngestResponse` response model. `Retry-After: 5` on 503. `WWW-Authenticate` header on 401.
 - **Config:** `OBS_TARGET_TYPE` extended with `"internal_http"`, new `OBS_TARGET_URL` + `OBS_INGEST_SECRET` settings, `field_validator` rejecting empty-string secret.
@@ -390,6 +390,26 @@ No code changes this session — pure planning + JIRA hygiene + memory fixes.
 
 ### Session 116 Totals
 - Tests: 2134 → 2144 unit (+10) + 9 new API tests (454 total), 0 failures
-- 1 JIRA ticket: KAN-468 (filed + in progress)
-- 5 commits, PR TBD
-- Resume: Push + open PR, then file KAN-469 (PR3 — trace_id middleware)
+- 1 PR (#244), squash-merged
+- Resume: File PR3 subtask, create worktree, implement trace_id middleware
+
+---
+
+## Session 117 — Obs 1a PR3: trace_id Middleware + Structured Logging (2026-04-17)
+
+**Branch:** `feat/obs-1a-pr3-trace-id-logging` → develop | **PR #245**
+
+### KAN-468 — Obs 1a PR3: trace_id middleware + structured logging
+- **ContextVars extension:** `trace_id_var`, `span_id_var`, `parent_span_id_var` appended to `backend/observability/context.py` with getter functions
+- **`span()` contextmanager** (`backend/observability/span.py`): builds causality trees via `parent_span_id` linking. UUIDv7 span IDs. ContextVars restored on exit (including exception paths)
+- **`TraceIdMiddleware`** (`backend/middleware/trace_id.py`): generates UUIDv7 trace_id or adopts valid incoming `X-Trace-Id`. Outermost middleware (wraps ErrorHandlerMiddleware). Token-based ContextVar cleanup
+- **CORS:** `X-Trace-Id` added to `allow_headers` + `expose_headers` — frontend can read/send trace IDs
+- **Celery propagation** (`backend/tasks/celery_trace_propagation.py`): 3 signal handlers (`before_task_publish`, `task_prerun`, `task_postrun`). Token-reset pattern prevents ContextVar leaks. Beat-triggered tasks get new root trace_id
+- **Structured logging** (`backend/core/logging.py`): `configure_structlog()` with JSON rendering + trace_id/span_id injection from ContextVars. Wired into FastAPI lifespan + Celery worker_ready/process_init
+- **3-persona review** (Backend Architect + Test Engineer + Reliability): 0 CRITICAL, 0 HIGH, 3 MEDIUM — all addressed (CORS test added, span exception test added, _TOKENS bounds documented)
+
+### Session 117 Totals
+- Tests: 2144 → 2164 unit (+20), 0 failures
+- 1 JIRA ticket filed + In Progress (KAN-468)
+- 1 PR (#245), 6 commits
+- Resume: Merge PR #245, transition KAN-468 → Done, file PR4 subtask (ObservedHttpClient + external API logging)

@@ -213,12 +213,18 @@ def _do_shutdown_obs_client() -> None:
 @worker_process_init.connect
 def _init_obs_on_process_init(**kwargs):  # type: ignore[no-untyped-def]
     """Prefork pool: fires in each forked child process."""
+    from backend.core.logging import configure_structlog
+
+    configure_structlog()
     _do_init_obs_client()
 
 
 @worker_ready.connect
 def _init_obs_on_worker_ready(**kwargs):  # type: ignore[no-untyped-def]
     """Solo/threads pool: fires in the main worker process."""
+    from backend.core.logging import configure_structlog
+
+    configure_structlog()
     _do_init_obs_client()
 
 
@@ -233,3 +239,7 @@ def _shutdown_obs_on_process_shutdown(**kwargs):  # type: ignore[no-untyped-def]
 def _shutdown_obs_on_worker_shutdown(**kwargs):  # type: ignore[no-untyped-def]
     """Solo/threads pool: fires when the main worker process shuts down."""
     _do_shutdown_obs_client()
+
+
+# ── Trace propagation — signal handlers register on import (PR3) ──────────
+from backend.tasks import celery_trace_propagation  # noqa: E402, F401

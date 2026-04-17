@@ -48,7 +48,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Initialize AI subsystem on startup, clean up on shutdown."""
     # --- Startup ---
-    # 0. Shared HTTP client pool — must be initialised before any provider uses it
+    # 0a. Structured logging — before any logger.info() calls
+    from backend.core.logging import configure_structlog
+
+    configure_structlog()
+
+    # 0b. Shared HTTP client pool — must be initialised before any provider uses it
     from backend.services.http_client import startup_http_client
 
     await startup_http_client()
@@ -340,10 +345,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 from backend.middleware.csrf import CSRFMiddleware  # noqa: E402
 from backend.middleware.error_handler import ErrorHandlerMiddleware  # noqa: E402
+from backend.middleware.trace_id import TraceIdMiddleware  # noqa: E402
 from backend.observability.metrics.http_middleware import HttpMetricsMiddleware  # noqa: E402
 
 # Middleware — added in reverse order of execution (last = outermost)
-# Stack (outermost → innermost): ErrorHandler → CORS → CSRF → HttpMetrics → app
+# Stack (outermost → innermost): TraceId → ErrorHandler → CORS → CSRF → HttpMetrics → app
 app.add_middleware(HttpMetricsMiddleware)
 app.add_middleware(
     CSRFMiddleware,
@@ -368,9 +374,11 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Obs-Secret"],
+    allow_headers=["Content-Type", "Authorization", "X-CSRF-Token", "X-Obs-Secret", "X-Trace-Id"],
+    expose_headers=["X-Trace-Id"],
 )
 app.add_middleware(ErrorHandlerMiddleware)
+app.add_middleware(TraceIdMiddleware)
 
 
 # --- Routers ---
