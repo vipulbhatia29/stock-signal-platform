@@ -7,20 +7,22 @@ span_id.
 Call ``configure_structlog()`` once at FastAPI startup and once at Celery
 worker_ready. Test fixtures can pass a custom ``output`` buffer.
 """
+
 from __future__ import annotations
 
 import logging
 import sys
-from typing import IO, Any
+from typing import TextIO
 
 import structlog
+from structlog.types import EventDict, WrappedLogger
 
 from backend.observability.context import current_span_id, current_trace_id
 
 
 def _inject_trace_context(
-    logger: Any, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+    logger: WrappedLogger, method_name: str, event_dict: EventDict
+) -> EventDict:
     """Add trace_id and span_id from ContextVars if present.
 
     Args:
@@ -40,7 +42,7 @@ def _inject_trace_context(
     return event_dict
 
 
-def configure_structlog(output: IO[str] | None = None) -> None:
+def configure_structlog(output: TextIO | None = None) -> None:
     """Configure structlog with JSON rendering and trace context injection.
 
     Installs a processor chain that emits one JSON object per log line with

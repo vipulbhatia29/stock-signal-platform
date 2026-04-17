@@ -6,6 +6,7 @@
 - Injects X-Trace-Id into response headers
 - MUST be registered OUTSIDE ErrorHandlerMiddleware so errors carry trace_id
 """
+
 from __future__ import annotations
 
 from uuid import UUID

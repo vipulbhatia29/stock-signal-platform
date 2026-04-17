@@ -4,6 +4,7 @@ Provides a lightweight `client` fixture using httpx AsyncClient with
 ASGITransport — no real database required.  The health endpoint used in
 middleware tests does not hit the DB, so no session override is needed.
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator

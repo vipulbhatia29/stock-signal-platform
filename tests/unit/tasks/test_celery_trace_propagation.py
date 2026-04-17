@@ -1,4 +1,5 @@
 """Tests for Celery trace_id propagation signal handlers."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
