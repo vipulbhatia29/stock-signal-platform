@@ -95,3 +95,32 @@ async def test_emit_never_raises(tmp_path):
         await client.flush()
     finally:
         await client.stop()
+
+
+def test_buffer_concurrent_producers_respect_max_size():
+    """10 threads × 100 events with max_size=500 → qsize ≤ 500 + drops == 500.
+
+    Validates that queue.Queue(maxsize=N) provides a hard bound under concurrent
+    producers, which is the core reason Queue was chosen over SimpleQueue.
+    """
+    import threading
+
+    from backend.observability.buffer import EventBuffer
+
+    buf = EventBuffer(max_size=500)
+    barrier = threading.Barrier(10)
+
+    def push():
+        barrier.wait()
+        for _ in range(100):
+            buf.try_put(_e())
+
+    threads = [threading.Thread(target=push) for _ in range(10)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    stats = buf.stats()
+    assert stats.depth <= 500
+    assert stats.depth + stats.drops == 1000
