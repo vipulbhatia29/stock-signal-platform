@@ -142,6 +142,19 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.retention.purge_old_api_error_logs_task",
         "schedule": crontab(hour=5, minute=30),
     },
+    # ── Obs 1b: Auth layer retention ──
+    "purge-auth-event-logs-daily": {
+        "task": "backend.tasks.retention.purge_old_auth_event_logs_task",
+        "schedule": crontab(hour=5, minute=45),
+    },
+    "purge-oauth-event-logs-daily": {
+        "task": "backend.tasks.retention.purge_old_oauth_event_logs_task",
+        "schedule": crontab(hour=6, minute=0),
+    },
+    "purge-email-send-logs-daily": {
+        "task": "backend.tasks.retention.purge_old_email_send_logs_task",
+        "schedule": crontab(hour=6, minute=15),
+    },
     # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {
         "task": "backend.tasks.forecasting.run_backtest_task",

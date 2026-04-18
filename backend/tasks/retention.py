@@ -32,6 +32,9 @@ PIPELINE_RUNS_RETENTION_DAYS = 90
 DQ_CHECK_HISTORY_RETENTION_DAYS = 90
 REQUEST_LOG_RETENTION_DAYS = 30
 API_ERROR_LOG_RETENTION_DAYS = 90
+AUTH_EVENT_LOG_RETENTION_DAYS = 90
+OAUTH_EVENT_LOG_RETENTION_DAYS = 90
+EMAIL_SEND_LOG_RETENTION_DAYS = 90
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_forecasts_task")
@@ -221,6 +224,58 @@ def purge_old_api_error_logs_task(run_id: uuid.UUID | None = None) -> dict:
     return asyncio.run(
         _purge_obs_table("observability.api_error_log", API_ERROR_LOG_RETENTION_DAYS)
     )
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_auth_event_logs_task")
+@tracked_task("auth_event_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_auth_event_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge auth_event_log older than 90 days using row-level DELETE (regular table)."""
+    return asyncio.run(_purge_obs_regular_table("auth_event_log", AUTH_EVENT_LOG_RETENTION_DAYS))
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_oauth_event_logs_task")
+@tracked_task("oauth_event_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_oauth_event_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge oauth_event_log older than 90 days using row-level DELETE (regular table)."""
+    return asyncio.run(_purge_obs_regular_table("oauth_event_log", OAUTH_EVENT_LOG_RETENTION_DAYS))
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_email_send_logs_task")
+@tracked_task("email_send_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_email_send_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge email_send_log older than 90 days using row-level DELETE (regular table)."""
+    return asyncio.run(_purge_obs_regular_table("email_send_log", EMAIL_SEND_LOG_RETENTION_DAYS))
+
+
+async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
+    """Row-level DELETE helper for regular (non-hypertable) observability tables.
+
+    Auth-layer tables (auth_event_log, oauth_event_log, email_send_log) are low-volume
+    regular tables. drop_chunks() does not apply — use row-level DELETE instead.
+
+    Args:
+        table: Unqualified table name within the observability schema.
+        retention_days: Rows older than this many days are deleted.
+
+    Returns:
+        Dict with status, deleted_rows count, and retention_days.
+    """
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text(  # noqa: S608 — table name is a constant, not user input
+                f"DELETE FROM observability.{table} WHERE ts < now() - INTERVAL :interval"
+            ),
+            {"interval": f"{retention_days} days"},
+        )
+        deleted = result.rowcount or 0  # type: ignore[union-attr]
+        await db.commit()
+    logger.info(
+        "observability.%s retention: deleted %d rows older than %d days",
+        table,
+        deleted,
+        retention_days,
+    )
+    return {"status": "ok", "deleted_rows": deleted, "retention_days": retention_days}
 
 
 async def _purge_obs_table(table: str, retention_days: int) -> dict:
