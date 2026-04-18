@@ -140,7 +140,7 @@ def decode_token(token: str, expected_type: str = "access") -> TokenPayload:
                 failure_reason="expired" if "expired" in str(e).lower() else "malformed",
             )
         except Exception:  # noqa: BLE001 — emission must never block auth
-            pass
+            logger.debug("obs.jwt_failure.emit.failed", exc_info=True)
         raise credentials_exception
 
 

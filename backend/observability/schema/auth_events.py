@@ -35,20 +35,6 @@ class AuthOutcome(str, Enum):
     FAILURE = "failure"
 
 
-class AuthFailureReason(str, Enum):
-    """Structured failure reason for auth events."""
-
-    EXPIRED = "expired"
-    MALFORMED = "malformed"
-    REVOKED = "revoked"
-    WRONG_TYPE = "wrong_type"
-    NOT_FOUND = "not_found"
-    RATE_LIMITED = "rate_limited"
-    INVALID_TOKEN = "invalid_token"
-    USER_INACTIVE = "user_inactive"
-    BLOCKLISTED = "blocklisted"
-
-
 class OAuthAction(str, Enum):
     """OAuth flow step discriminator."""
 

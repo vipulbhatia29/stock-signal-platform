@@ -260,6 +260,10 @@ async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
     Returns:
         Dict with status, deleted_rows count, and retention_days.
     """
+    _ALLOWED_TABLES = {"auth_event_log", "oauth_event_log", "email_send_log"}
+    if table not in _ALLOWED_TABLES:
+        raise ValueError(f"Table {table!r} not in allowlist for regular-table retention")
+
     async with async_session_factory() as db:
         result = await db.execute(
             text(  # noqa: S608 — table name is a constant, not user input
