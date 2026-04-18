@@ -155,9 +155,7 @@ def test_fifo_avg_cost_tracks_weighted_average(
     ]
     result = _run_fifo(txns)
     # Compute expected using the same Decimal inputs that _run_fifo receives
-    expected_avg = float(
-        (d_shares1 * d_price1 + d_shares2 * d_price2) / (d_shares1 + d_shares2)
-    )
+    expected_avg = float((d_shares1 * d_price1 + d_shares2 * d_price2) / (d_shares1 + d_shares2))
     actual_avg = float(result["avg_cost_basis"])
     assert abs(actual_avg - expected_avg) < 1e-6, (
         f"avg_cost_basis={actual_avg} != expected={expected_avg}"
