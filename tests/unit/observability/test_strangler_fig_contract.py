@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.observability.schema.legacy_events import LLMCallEvent
+from backend.observability.schema.legacy_events import LLMCallEvent, ToolExecutionEvent
 
 
 @pytest.fixture
@@ -258,3 +258,112 @@ class TestRecordCascadeStranglerFig:
         assert event.completion_tokens is None
         assert event.error == "context_length"
         assert event.status == "error"
+
+
+class TestRecordToolExecutionStranglerFig:
+    @pytest.mark.asyncio
+    async def test_dual_write_when_flag_true(
+        self, collector: MagicMock, mock_obs_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Both legacy DB write AND SDK emit happen when flag is True."""
+        monkeypatch.setattr(
+            "backend.observability.collector.settings.OBS_LEGACY_DIRECT_WRITES", True
+        )
+        monkeypatch.setattr(
+            "backend.observability.collector._maybe_get_obs_client", lambda: mock_obs_client
+        )
+
+        await collector.record_tool_execution(
+            tool_name="get_stock_price",
+            latency_ms=50,
+            status="success",
+        )
+        # Let the fire-and-forget task run
+        await asyncio.sleep(0)
+
+        # Legacy path ran (_safe_db_write was called)
+        collector._safe_db_write.assert_awaited_once()
+        # SDK emit happened
+        mock_obs_client.emit.assert_awaited_once()
+        event = mock_obs_client.emit.call_args[0][0]
+        assert isinstance(event, ToolExecutionEvent)
+        assert event.tool_name == "get_stock_price"
+        assert event.wrote_via_legacy is True
+
+    @pytest.mark.asyncio
+    async def test_sdk_only_when_flag_false(
+        self, collector: MagicMock, mock_obs_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Only SDK emit happens when flag is False."""
+        monkeypatch.setattr(
+            "backend.observability.collector.settings.OBS_LEGACY_DIRECT_WRITES", False
+        )
+        monkeypatch.setattr(
+            "backend.observability.collector._maybe_get_obs_client", lambda: mock_obs_client
+        )
+
+        await collector.record_tool_execution(
+            tool_name="get_stock_price",
+            latency_ms=50,
+            status="success",
+        )
+        await asyncio.sleep(0)
+
+        # Legacy path skipped — _safe_db_write never called
+        collector._safe_db_write.assert_not_awaited()
+        # SDK emit happened with wrote_via_legacy=False
+        mock_obs_client.emit.assert_awaited_once()
+        event = mock_obs_client.emit.call_args[0][0]
+        assert event.wrote_via_legacy is False
+
+    @pytest.mark.asyncio
+    async def test_no_emit_when_no_obs_client(
+        self, collector: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When obs client not available, only legacy runs (no crash)."""
+        monkeypatch.setattr(
+            "backend.observability.collector.settings.OBS_LEGACY_DIRECT_WRITES", True
+        )
+        monkeypatch.setattr("backend.observability.collector._maybe_get_obs_client", lambda: None)
+
+        # Must not raise
+        await collector.record_tool_execution(
+            tool_name="get_stock_price",
+            latency_ms=50,
+            status="success",
+        )
+        await asyncio.sleep(0)
+
+        # Legacy still ran
+        collector._safe_db_write.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_tool_execution_event_fields(
+        self, collector: MagicMock, mock_obs_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """SDK event carries all tool execution fields correctly."""
+        monkeypatch.setattr(
+            "backend.observability.collector.settings.OBS_LEGACY_DIRECT_WRITES", False
+        )
+        monkeypatch.setattr(
+            "backend.observability.collector._maybe_get_obs_client", lambda: mock_obs_client
+        )
+
+        await collector.record_tool_execution(
+            tool_name="get_portfolio_holdings",
+            latency_ms=120,
+            status="error",
+            result_size_bytes=None,
+            error="timeout",
+            cache_hit=False,
+            loop_step=2,
+        )
+
+        event = mock_obs_client.emit.call_args[0][0]
+        assert event.tool_name == "get_portfolio_holdings"
+        assert event.latency_ms == 120
+        assert event.status == "error"
+        assert event.result_size_bytes is None
+        assert event.error == "timeout"
+        assert event.cache_hit is False
+        assert event.loop_step == 2

@@ -26,7 +26,7 @@ from backend.config import settings
 from backend.models.logs import LLMCallLog
 from backend.observability.bootstrap import _maybe_get_obs_client
 from backend.observability.context import current_span_id, current_trace_id
-from backend.observability.schema.legacy_events import LLMCallEvent
+from backend.observability.schema.legacy_events import LLMCallEvent, ToolExecutionEvent
 
 logger = logging.getLogger(__name__)
 
@@ -190,8 +190,9 @@ class ObservabilityCollector:
         loop_step: int | None = None,
         result: Any = None,
     ) -> None:
-        """Record a tool execution event (fire-and-forget DB write only)."""
-        if self._db_writer:
+        """Record a tool execution event."""
+        wrote_via_legacy = settings.OBS_LEGACY_DIRECT_WRITES  # snapshot NOW
+        if wrote_via_legacy and self._db_writer:
             asyncio.create_task(
                 self._safe_db_write(
                     "tool_execution",
@@ -208,6 +209,30 @@ class ObservabilityCollector:
                     },
                 )
             )
+
+        # SDK emission — always (no-op when OBS_ENABLED=false)
+        obs_client = _maybe_get_obs_client()
+        if obs_client is not None:
+            event = ToolExecutionEvent(
+                trace_id=current_trace_id() or UUID(bytes=uuid7().bytes),
+                span_id=UUID(bytes=uuid7().bytes),
+                parent_span_id=current_span_id(),
+                ts=datetime.now(timezone.utc),
+                env=getattr(settings, "APP_ENV", "dev"),
+                git_sha=None,
+                user_id=None,
+                session_id=None,
+                query_id=None,
+                wrote_via_legacy=wrote_via_legacy,
+                tool_name=tool_name,
+                latency_ms=latency_ms,
+                status=status,
+                result_size_bytes=result_size_bytes,
+                error=error,
+                cache_hit=cache_hit,
+                loop_step=loop_step,
+            )
+            await obs_client.emit(event)
 
     def toggle_model(self, model: str, *, enabled: bool) -> None:
         """Enable or disable a model at runtime (admin action, in-memory)."""
