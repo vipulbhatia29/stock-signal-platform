@@ -208,14 +208,14 @@ async def _purge_old_dq_check_history_async() -> dict:
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_request_logs_task")
-@tracked_task("request_log_retention", trigger="scheduled")
+@tracked_task("request_log_retention", trigger="scheduled")  # type: ignore[arg-type]
 def purge_old_request_logs_task(run_id: uuid.UUID | None = None) -> dict:
     """Purge request_log older than 30 days using drop_chunks (hypertable)."""
     return asyncio.run(_purge_obs_table("observability.request_log", REQUEST_LOG_RETENTION_DAYS))
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_api_error_logs_task")
-@tracked_task("api_error_log_retention", trigger="scheduled")
+@tracked_task("api_error_log_retention", trigger="scheduled")  # type: ignore[arg-type]
 def purge_old_api_error_logs_task(run_id: uuid.UUID | None = None) -> dict:
     """Purge api_error_log older than 90 days using drop_chunks (hypertable)."""
     return asyncio.run(

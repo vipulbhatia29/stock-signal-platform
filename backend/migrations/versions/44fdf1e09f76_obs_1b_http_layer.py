@@ -1,6 +1,6 @@
 """obs_1b_http_layer
 
-Revision ID: e1f2a3b4c5d6
+Revision ID: 44fdf1e09f76
 Revises: d5e6f7a8b9c0
 Create Date: 2026-04-18
 """
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import INET, JSONB, UUID
 
-revision = "e1f2a3b4c5d6"
+revision = "44fdf1e09f76"
 down_revision = "d5e6f7a8b9c0"
 branch_labels = None
 depends_on = None
