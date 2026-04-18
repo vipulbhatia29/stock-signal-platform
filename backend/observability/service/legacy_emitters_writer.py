@@ -44,6 +44,8 @@ async def persist_llm_calls(events: list[LLMCallEvent]) -> None:
             for event in to_write:
                 session.add(
                     LLMCallLog(
+                        session_id=event.session_id,
+                        query_id=event.query_id,
                         provider=event.provider,
                         model=event.model,
                         tier=event.tier,
@@ -55,6 +57,8 @@ async def persist_llm_calls(events: list[LLMCallEvent]) -> None:
                         status=event.status,
                         langfuse_trace_id=event.langfuse_trace_id,
                         error=event.error,
+                        agent_type=event.agent_type,
+                        agent_instance_id=event.agent_instance_id,
                     )
                 )
             await session.commit()
@@ -76,19 +80,27 @@ async def persist_tool_executions(events: list[ToolExecutionEvent]) -> None:
         return
 
     from backend.models.logs import ToolExecutionLog
+    from backend.utils.sanitize import sanitize_summary
 
     try:
         async with async_session_factory() as session:
             for event in to_write:
                 session.add(
                     ToolExecutionLog(
+                        session_id=event.session_id,
+                        query_id=event.query_id,
                         tool_name=event.tool_name,
                         latency_ms=event.latency_ms,
                         status=event.status,
                         result_size_bytes=event.result_size_bytes,
+                        params=event.params,
                         error=event.error,
                         cache_hit=event.cache_hit,
                         loop_step=event.loop_step,
+                        agent_type=event.agent_type,
+                        agent_instance_id=event.agent_instance_id,
+                        input_summary=sanitize_summary(event.params or {}),
+                        output_summary=sanitize_summary(event.result or ""),
                     )
                 )
             await session.commit()

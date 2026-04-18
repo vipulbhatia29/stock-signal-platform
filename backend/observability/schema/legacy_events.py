@@ -55,6 +55,8 @@ class LLMCallEvent(ObsEventBase, _LegacyStranglerFigMixin):
     status: str = "completed"
     langfuse_trace_id: UUID | str | None = None
     error: str | None = None  # safe message only — cascade events; NO str(exc)
+    agent_type: str | None = None
+    agent_instance_id: str | None = None
 
 
 class ToolExecutionEvent(ObsEventBase, _LegacyStranglerFigMixin):
@@ -78,6 +80,10 @@ class ToolExecutionEvent(ObsEventBase, _LegacyStranglerFigMixin):
     error: str | None = None  # safe message only — NO str(exc)
     cache_hit: bool = False
     loop_step: int | None = None
+    params: dict | None = None
+    result: str | None = None  # serialised result for output_summary
+    agent_type: str | None = None
+    agent_instance_id: str | None = None
 
 
 class LoginAttemptEvent(ObsEventBase, _LegacyStranglerFigMixin):

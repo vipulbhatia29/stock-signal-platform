@@ -25,7 +25,14 @@ from uuid_utils import uuid7
 from backend.config import settings
 from backend.models.logs import LLMCallLog
 from backend.observability.bootstrap import _maybe_get_obs_client
-from backend.observability.context import current_span_id, current_trace_id
+from backend.observability.context import (
+    current_agent_instance_id,
+    current_agent_type,
+    current_query_id,
+    current_session_id,
+    current_span_id,
+    current_trace_id,
+)
 from backend.observability.schema.legacy_events import LLMCallEvent, ToolExecutionEvent
 
 logger = logging.getLogger(__name__)
@@ -101,8 +108,8 @@ class ObservabilityCollector:
                 env=getattr(settings, "APP_ENV", "dev"),
                 git_sha=None,
                 user_id=None,
-                session_id=None,
-                query_id=None,
+                session_id=current_session_id.get(),
+                query_id=current_query_id.get(),
                 wrote_via_legacy=wrote_via_legacy,
                 model=model,
                 provider=provider,
@@ -114,6 +121,8 @@ class ObservabilityCollector:
                 loop_step=loop_step,
                 status=status,
                 langfuse_trace_id=langfuse_trace_id,
+                agent_type=current_agent_type.get(None),
+                agent_instance_id=current_agent_instance_id.get(None),
             )
             await obs_client.emit(event)
 
@@ -164,8 +173,8 @@ class ObservabilityCollector:
                 env=getattr(settings, "APP_ENV", "dev"),
                 git_sha=None,
                 user_id=None,
-                session_id=None,
-                query_id=None,
+                session_id=current_session_id.get(),
+                query_id=current_query_id.get(),
                 wrote_via_legacy=wrote_via_legacy,
                 model=from_model,
                 provider=provider,
@@ -175,6 +184,8 @@ class ObservabilityCollector:
                 completion_tokens=None,
                 error=reason,
                 status="error",
+                agent_type=current_agent_type.get(None),
+                agent_instance_id=current_agent_instance_id.get(None),
             )
             await obs_client.emit(event)
 
@@ -213,6 +224,8 @@ class ObservabilityCollector:
         # SDK emission — always (no-op when OBS_ENABLED=false)
         obs_client = _maybe_get_obs_client()
         if obs_client is not None:
+            # Serialise result for output_summary (same as legacy sanitize_summary input)
+            result_str = str(result) if result is not None else None
             event = ToolExecutionEvent(
                 trace_id=current_trace_id() or UUID(bytes=uuid7().bytes),
                 span_id=UUID(bytes=uuid7().bytes),
@@ -221,8 +234,8 @@ class ObservabilityCollector:
                 env=getattr(settings, "APP_ENV", "dev"),
                 git_sha=None,
                 user_id=None,
-                session_id=None,
-                query_id=None,
+                session_id=current_session_id.get(),
+                query_id=current_query_id.get(),
                 wrote_via_legacy=wrote_via_legacy,
                 tool_name=tool_name,
                 latency_ms=latency_ms,
@@ -231,6 +244,10 @@ class ObservabilityCollector:
                 error=error,
                 cache_hit=cache_hit,
                 loop_step=loop_step,
+                params=params,
+                result=result_str,
+                agent_type=current_agent_type.get(None),
+                agent_instance_id=current_agent_instance_id.get(None),
             )
             await obs_client.emit(event)
 
