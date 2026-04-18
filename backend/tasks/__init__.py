@@ -117,6 +117,22 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.retention.purge_old_news_articles_task",
         "schedule": crontab(hour=3, minute=45),
     },
+    "llm-call-log-retention-daily": {
+        "task": "backend.tasks.retention.purge_old_llm_call_log_task",
+        "schedule": crontab(hour=4, minute=15),
+    },
+    "tool-execution-log-retention-daily": {
+        "task": "backend.tasks.retention.purge_old_tool_execution_log_task",
+        "schedule": crontab(hour=4, minute=30),
+    },
+    "pipeline-runs-retention-daily": {
+        "task": "backend.tasks.retention.purge_old_pipeline_runs_task",
+        "schedule": crontab(hour=4, minute=45),
+    },
+    "dq-check-history-retention-daily": {
+        "task": "backend.tasks.retention.purge_old_dq_check_history_task",
+        "schedule": crontab(hour=5, minute=0),
+    },
     # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {
         "task": "backend.tasks.forecasting.run_backtest_task",
