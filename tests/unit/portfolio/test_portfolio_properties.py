@@ -145,24 +145,21 @@ def test_fifo_avg_cost_tracks_weighted_average(
     price1: float, shares1: float, price2: float, shares2: float
 ) -> None:
     """FIFO avg_cost_basis = weighted average of remaining lot prices."""
+    d_shares1 = Decimal(str(round(shares1, 4)))
+    d_price1 = Decimal(str(round(price1, 4)))
+    d_shares2 = Decimal(str(round(shares2, 4)))
+    d_price2 = Decimal(str(round(price2, 4)))
     txns = [
-        {
-            "type": "BUY",
-            "shares": Decimal(str(round(shares1, 4))),
-            "price": Decimal(str(round(price1, 4))),
-            "at": _now(0),
-        },
-        {
-            "type": "BUY",
-            "shares": Decimal(str(round(shares2, 4))),
-            "price": Decimal(str(round(price2, 4))),
-            "at": _now(1),
-        },
+        {"type": "BUY", "shares": d_shares1, "price": d_price1, "at": _now(0)},
+        {"type": "BUY", "shares": d_shares2, "price": d_price2, "at": _now(1)},
     ]
     result = _run_fifo(txns)
-    expected_avg = (shares1 * price1 + shares2 * price2) / (shares1 + shares2)
+    # Compute expected using the same Decimal inputs that _run_fifo receives
+    expected_avg = float(
+        (d_shares1 * d_price1 + d_shares2 * d_price2) / (d_shares1 + d_shares2)
+    )
     actual_avg = float(result["avg_cost_basis"])
-    assert abs(actual_avg - expected_avg) < 0.01, (
+    assert abs(actual_avg - expected_avg) < 1e-6, (
         f"avg_cost_basis={actual_avg} != expected={expected_avg}"
     )
 
