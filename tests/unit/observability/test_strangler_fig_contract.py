@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
+from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 import pytest
 
 from backend.observability.schema.legacy_events import (
+    DqFindingEvent,
     LLMCallEvent,
     LoginAttemptEvent,
+    PipelineLifecycleEvent,
     ToolExecutionEvent,
 )
 
@@ -722,3 +726,528 @@ class TestDqScanStranglerFig:
         assert result["findings"] == 2
         assert result["critical"] == 0
         assert mock_obs_client.emit.await_count == 2
+
+
+# ---------------------------------------------------------------------------
+# TestLegacyEmittersWriter — dedup invariant tests for each persist_* function
+# ---------------------------------------------------------------------------
+
+
+def _make_llm_call_event(**overrides) -> LLMCallEvent:
+    """Build a minimal valid LLMCallEvent for writer tests.
+
+    Args:
+        **overrides: Field overrides applied on top of sensible defaults.
+
+    Returns:
+        A ready-to-use LLMCallEvent instance.
+    """
+    defaults = dict(
+        trace_id=uuid4(),
+        span_id=uuid4(),
+        parent_span_id=None,
+        ts=datetime.now(timezone.utc),
+        env="dev",
+        git_sha=None,
+        user_id=None,
+        session_id=None,
+        query_id=None,
+        wrote_via_legacy=False,
+        model="gpt-4o",
+        provider="openai",
+        tier="primary",
+        latency_ms=100,
+        prompt_tokens=50,
+        completion_tokens=10,
+    )
+    defaults.update(overrides)
+    return LLMCallEvent(**defaults)
+
+
+def _make_tool_execution_event(**overrides) -> ToolExecutionEvent:
+    """Build a minimal valid ToolExecutionEvent for writer tests.
+
+    Args:
+        **overrides: Field overrides applied on top of sensible defaults.
+
+    Returns:
+        A ready-to-use ToolExecutionEvent instance.
+    """
+    defaults = dict(
+        trace_id=uuid4(),
+        span_id=uuid4(),
+        parent_span_id=None,
+        ts=datetime.now(timezone.utc),
+        env="dev",
+        git_sha=None,
+        user_id=None,
+        session_id=None,
+        query_id=None,
+        wrote_via_legacy=False,
+        tool_name="get_stock_price",
+        latency_ms=50,
+        status="success",
+    )
+    defaults.update(overrides)
+    return ToolExecutionEvent(**defaults)
+
+
+def _make_login_attempt_event(**overrides) -> LoginAttemptEvent:
+    """Build a minimal valid LoginAttemptEvent for writer tests.
+
+    Args:
+        **overrides: Field overrides applied on top of sensible defaults.
+
+    Returns:
+        A ready-to-use LoginAttemptEvent instance.
+    """
+    defaults = dict(
+        trace_id=uuid4(),
+        span_id=uuid4(),
+        parent_span_id=None,
+        ts=datetime.now(timezone.utc),
+        env="dev",
+        git_sha=None,
+        user_id=None,
+        session_id=None,
+        query_id=None,
+        wrote_via_legacy=False,
+        email="user@example.com",
+        success=True,
+        ip_address="127.0.0.1",
+        user_agent="test-agent",
+    )
+    defaults.update(overrides)
+    return LoginAttemptEvent(**defaults)
+
+
+def _make_dq_finding_event(**overrides) -> DqFindingEvent:
+    """Build a minimal valid DqFindingEvent for writer tests.
+
+    Args:
+        **overrides: Field overrides applied on top of sensible defaults.
+
+    Returns:
+        A ready-to-use DqFindingEvent instance.
+    """
+    defaults = dict(
+        trace_id=uuid4(),
+        span_id=uuid4(),
+        parent_span_id=None,
+        ts=datetime.now(timezone.utc),
+        env="dev",
+        git_sha=None,
+        user_id=None,
+        session_id=None,
+        query_id=None,
+        wrote_via_legacy=False,
+        check_name="null_price_check",
+        severity="warning",
+        ticker="AAPL",
+        message="Negative price detected",
+    )
+    defaults.update(overrides)
+    return DqFindingEvent(**defaults)
+
+
+def _make_pipeline_lifecycle_event(**overrides) -> PipelineLifecycleEvent:
+    """Build a minimal valid PipelineLifecycleEvent for writer tests.
+
+    Args:
+        **overrides: Field overrides applied on top of sensible defaults.
+
+    Returns:
+        A ready-to-use PipelineLifecycleEvent instance.
+    """
+    defaults = dict(
+        trace_id=uuid4(),
+        span_id=uuid4(),
+        parent_span_id=None,
+        ts=datetime.now(timezone.utc),
+        env="dev",
+        git_sha=None,
+        user_id=None,
+        session_id=None,
+        query_id=None,
+        wrote_via_legacy=False,
+        pipeline_name="nightly_signal",
+        transition="started",
+        run_id=uuid4(),
+        trigger="celery_beat",
+    )
+    defaults.update(overrides)
+    return PipelineLifecycleEvent(**defaults)
+
+
+def _make_session_cm():
+    """Build an (async_session_factory mock, mock_session) pair.
+
+    Returns:
+        Tuple of (context_manager_mock, mock_session) where mock_session
+        records calls to add() and commit().
+    """
+    mock_session = AsyncMock()
+    mock_session.add = MagicMock()
+    mock_session.commit = AsyncMock()
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+    return mock_cm, mock_session
+
+
+class TestLegacyEmittersWriter:
+    """Tests for legacy_emitters_writer dedup invariant (wrote_via_legacy flag)."""
+
+    @pytest.mark.asyncio
+    async def test_persist_llm_calls_skips_when_wrote_via_legacy(self) -> None:
+        """When wrote_via_legacy=True, writer skips DB (row already exists from legacy path)."""
+        from backend.observability.service.legacy_emitters_writer import persist_llm_calls
+
+        event = _make_llm_call_event(wrote_via_legacy=True)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory"
+        ) as mock_sf:
+            await persist_llm_calls([event])
+            mock_sf.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_llm_calls_writes_when_sdk_only(self) -> None:
+        """When wrote_via_legacy=False, writer inserts the LLMCallLog row."""
+        from backend.observability.service.legacy_emitters_writer import persist_llm_calls
+
+        event = _make_llm_call_event(wrote_via_legacy=False)
+        mock_cm, mock_session = _make_session_cm()
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory",
+            return_value=mock_cm,
+        ):
+            await persist_llm_calls([event])
+            mock_session.add.assert_called_once()
+            mock_session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_persist_llm_calls_row_fields(self) -> None:
+        """LLMCallLog row receives correct field values from the event."""
+        from backend.models.logs import LLMCallLog
+        from backend.observability.service.legacy_emitters_writer import persist_llm_calls
+
+        event = _make_llm_call_event(
+            wrote_via_legacy=False,
+            model="claude-3-haiku",
+            provider="anthropic",
+            tier="fast",
+            latency_ms=42,
+            prompt_tokens=100,
+            completion_tokens=20,
+            status="completed",
+            error=None,
+        )
+        added_rows: list = []
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock(side_effect=lambda r: added_rows.append(r))
+        mock_session.commit = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory",
+            return_value=mock_cm,
+        ):
+            await persist_llm_calls([event])
+
+        assert len(added_rows) == 1
+        row = added_rows[0]
+        assert isinstance(row, LLMCallLog)
+        assert row.model == "claude-3-haiku"
+        assert row.provider == "anthropic"
+        assert row.tier == "fast"
+        assert row.latency_ms == 42
+        assert row.prompt_tokens == 100
+        assert row.completion_tokens == 20
+
+    @pytest.mark.asyncio
+    async def test_persist_tool_executions_skips_when_wrote_via_legacy(self) -> None:
+        """When wrote_via_legacy=True, writer skips DB (row already exists from legacy path)."""
+        from backend.observability.service.legacy_emitters_writer import persist_tool_executions
+
+        event = _make_tool_execution_event(wrote_via_legacy=True)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory"
+        ) as mock_sf:
+            await persist_tool_executions([event])
+            mock_sf.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_tool_executions_writes_when_sdk_only(self) -> None:
+        """When wrote_via_legacy=False, writer inserts the ToolExecutionLog row."""
+        from backend.observability.service.legacy_emitters_writer import persist_tool_executions
+
+        event = _make_tool_execution_event(wrote_via_legacy=False)
+        mock_cm, mock_session = _make_session_cm()
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory",
+            return_value=mock_cm,
+        ):
+            await persist_tool_executions([event])
+            mock_session.add.assert_called_once()
+            mock_session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_persist_login_attempts_skips_when_wrote_via_legacy(self) -> None:
+        """When wrote_via_legacy=True, writer skips DB (row already exists from legacy path)."""
+        from backend.observability.service.legacy_emitters_writer import persist_login_attempts
+
+        event = _make_login_attempt_event(wrote_via_legacy=True)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory"
+        ) as mock_sf:
+            await persist_login_attempts([event])
+            mock_sf.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_login_attempts_writes_when_sdk_only(self) -> None:
+        """When wrote_via_legacy=False, writer inserts the LoginAttempt row."""
+        from backend.observability.service.legacy_emitters_writer import persist_login_attempts
+
+        event = _make_login_attempt_event(wrote_via_legacy=False)
+        mock_cm, mock_session = _make_session_cm()
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory",
+            return_value=mock_cm,
+        ):
+            await persist_login_attempts([event])
+            mock_session.add.assert_called_once()
+            mock_session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_persist_login_attempts_timestamp_maps_from_ts(self) -> None:
+        """LoginAttempt.timestamp is populated from event.ts (not event.timestamp)."""
+        from backend.models.login_attempt import LoginAttempt
+        from backend.observability.service.legacy_emitters_writer import persist_login_attempts
+
+        ts = datetime.now(timezone.utc)
+        event = _make_login_attempt_event(wrote_via_legacy=False, ts=ts)
+        added_rows: list = []
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock(side_effect=lambda r: added_rows.append(r))
+        mock_session.commit = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory",
+            return_value=mock_cm,
+        ):
+            await persist_login_attempts([event])
+
+        assert len(added_rows) == 1
+        row = added_rows[0]
+        assert isinstance(row, LoginAttempt)
+        assert row.timestamp == ts
+
+    @pytest.mark.asyncio
+    async def test_persist_dq_findings_skips_when_wrote_via_legacy(self) -> None:
+        """When wrote_via_legacy=True, writer skips DB (row already exists from legacy path)."""
+        from backend.observability.service.legacy_emitters_writer import persist_dq_findings
+
+        event = _make_dq_finding_event(wrote_via_legacy=True)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory"
+        ) as mock_sf:
+            await persist_dq_findings([event])
+            mock_sf.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_dq_findings_writes_when_sdk_only(self) -> None:
+        """When wrote_via_legacy=False, writer inserts the DqCheckHistory row."""
+        from backend.observability.service.legacy_emitters_writer import persist_dq_findings
+
+        event = _make_dq_finding_event(wrote_via_legacy=False)
+        mock_cm, mock_session = _make_session_cm()
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory",
+            return_value=mock_cm,
+        ):
+            await persist_dq_findings([event])
+            mock_session.add.assert_called_once()
+            mock_session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_persist_dq_findings_metadata_field(self) -> None:
+        """DqCheckHistory.metadata_ is populated from event.metadata."""
+        from backend.models.dq_check_history import DqCheckHistory
+        from backend.observability.service.legacy_emitters_writer import persist_dq_findings
+
+        meta = {"rows_affected": 5}
+        event = _make_dq_finding_event(wrote_via_legacy=False, metadata=meta)
+        added_rows: list = []
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock(side_effect=lambda r: added_rows.append(r))
+        mock_session.commit = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory",
+            return_value=mock_cm,
+        ):
+            await persist_dq_findings([event])
+
+        assert len(added_rows) == 1
+        row = added_rows[0]
+        assert isinstance(row, DqCheckHistory)
+        assert row.metadata_ == meta
+
+    @pytest.mark.asyncio
+    async def test_persist_pipeline_lifecycle_no_db_write(self) -> None:
+        """Pipeline lifecycle events are informational only — no DB write occurs."""
+        from backend.observability.service.legacy_emitters_writer import (
+            persist_pipeline_lifecycle,
+        )
+
+        event = _make_pipeline_lifecycle_event(wrote_via_legacy=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory"
+        ) as mock_sf:
+            await persist_pipeline_lifecycle([event])
+            mock_sf.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_persist_pipeline_lifecycle_logs_debug(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Pipeline lifecycle events are logged at DEBUG level."""
+        import logging
+
+        from backend.observability.service.legacy_emitters_writer import (
+            persist_pipeline_lifecycle,
+        )
+
+        event = _make_pipeline_lifecycle_event(
+            wrote_via_legacy=False,
+            pipeline_name="nightly_signal",
+            transition="success",
+        )
+
+        with caplog.at_level(
+            logging.DEBUG,
+            logger="backend.observability.service.legacy_emitters_writer",
+        ):
+            await persist_pipeline_lifecycle([event])
+
+        assert any("obs.pipeline_lifecycle" in r.message for r in caplog.records)
+
+    @pytest.mark.asyncio
+    async def test_persist_llm_calls_swallows_db_error(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """DB errors in persist_llm_calls are swallowed and logged, not re-raised."""
+        import logging
+
+        from backend.observability.service.legacy_emitters_writer import persist_llm_calls
+
+        event = _make_llm_call_event(wrote_via_legacy=False)
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock(side_effect=RuntimeError("DB exploded"))
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.async_session_factory",
+            return_value=mock_cm,
+        ):
+            with caplog.at_level(
+                logging.WARNING,
+                logger="backend.observability.service.legacy_emitters_writer",
+            ):
+                await persist_llm_calls([event])  # must not raise
+
+        assert any("obs.writer.llm_call.failed" in r.message for r in caplog.records)
+
+
+class TestEventWriterLegacyRouting:
+    """Tests for write_batch routing of PR5 legacy emitter event types."""
+
+    @pytest.mark.asyncio
+    async def test_routes_llm_call_events(self) -> None:
+        """LLM_CALL events are routed to persist_llm_calls."""
+        from backend.observability.service.event_writer import write_batch
+
+        event = _make_llm_call_event(wrote_via_legacy=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.persist_llm_calls",
+            new_callable=AsyncMock,
+        ) as mock_persist:
+            await write_batch([event])
+            mock_persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_routes_tool_execution_events(self) -> None:
+        """TOOL_EXECUTION events are routed to persist_tool_executions."""
+        from backend.observability.service.event_writer import write_batch
+
+        event = _make_tool_execution_event(wrote_via_legacy=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.persist_tool_executions",
+            new_callable=AsyncMock,
+        ) as mock_persist:
+            await write_batch([event])
+            mock_persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_routes_login_attempt_events(self) -> None:
+        """LOGIN_ATTEMPT events are routed to persist_login_attempts."""
+        from backend.observability.service.event_writer import write_batch
+
+        event = _make_login_attempt_event(wrote_via_legacy=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.persist_login_attempts",
+            new_callable=AsyncMock,
+        ) as mock_persist:
+            await write_batch([event])
+            mock_persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_routes_dq_finding_events(self) -> None:
+        """DQ_FINDING events are routed to persist_dq_findings."""
+        from backend.observability.service.event_writer import write_batch
+
+        event = _make_dq_finding_event(wrote_via_legacy=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.persist_dq_findings",
+            new_callable=AsyncMock,
+        ) as mock_persist:
+            await write_batch([event])
+            mock_persist.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_routes_pipeline_lifecycle_events(self) -> None:
+        """PIPELINE_LIFECYCLE events are routed to persist_pipeline_lifecycle."""
+        from backend.observability.service.event_writer import write_batch
+
+        event = _make_pipeline_lifecycle_event(wrote_via_legacy=False)
+
+        with patch(
+            "backend.observability.service.legacy_emitters_writer.persist_pipeline_lifecycle",
+            new_callable=AsyncMock,
+        ) as mock_persist:
+            await write_batch([event])
+            mock_persist.assert_awaited_once()
