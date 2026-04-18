@@ -167,7 +167,7 @@ async def change_password(
             raise HTTPException(status_code=400, detail=_NO_PW_MSG)
         db_user = user
 
-    if not verify_password(body.current_password, db_user.hashed_password):
+    if not verify_password(body.current_password, db_user.hashed_password):  # type: ignore[arg-type]
         raise HTTPException(status_code=400, detail="Current password is incorrect")
 
     db_user.hashed_password = hash_password(body.new_password)
@@ -269,7 +269,7 @@ async def delete_account(
     if has_pw:
         if not body.password:
             raise HTTPException(status_code=400, detail="Password required")
-        if not verify_password(body.password, db_user.hashed_password):
+        if not verify_password(body.password, db_user.hashed_password):  # type: ignore[arg-type]
             raise HTTPException(status_code=401, detail="Incorrect password")
 
     # Send deletion email BEFORE anonymizing
