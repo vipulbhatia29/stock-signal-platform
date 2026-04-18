@@ -1233,27 +1233,6 @@ GET /api/v1/observability/my-queries/{query_id}
   Auth:     Required (ownership check)
 ```
 
-### 3.26 Observability Ingest Endpoint
-
-**Router:** `backend/observability/routers/ingest.py`
-
-> Service-internal endpoint for `InternalHTTPTarget` (and future `ExternalHTTPTarget` at microservice extraction). Uses shared-secret header auth (`X-Obs-Secret`), NOT cookie/JWT auth — CSRF-exempt.
-
-```
-POST /obs/v1/events
-  Headers:  X-Obs-Secret: <shared secret>
-  Body:     { "events": [ObsEventBase...], "schema_version": "v1" }
-  Response: 202 { "accepted": <count> }
-  Errors:   401 (missing/wrong/unset secret — fail-closed)
-            413 (batch > 500 events)
-            422 (unsupported schema_version or empty events list)
-            503 (event_writer failure, Retry-After: 5)
-  Auth:     X-Obs-Secret (constant-time hmac.compare_digest)
-  CSRF:     Exempt (not cookie-based)
-```
-
-**Note:** Mounted at `/obs/v1/events` (no `/api/v1` prefix) — intentionally separated from application routes per spec §2.2b. At microservice extraction, only `OBS_TARGET_URL` changes.
-
 ---
 
 ## 4. Service Layer Design
@@ -1273,7 +1252,7 @@ POST /obs/v1/events
 | `RationaleGenerator` | `backend/services/rationale.py` | Natural-language rationale generation for convergence signals. Explains signal alignment, divergence alerts, and forecast context in user-friendly text. |
 | `NewsIngestionService` | `backend/services/news/ingestion.py` | Multi-provider stock + macro news ingestion. Parallel fetching via `asyncio.gather`. Batch dedup (no N+1). Stores to `news_articles` table. |
 | `SentimentScorer` | `backend/services/news/sentiment_scorer.py` | LLM-based article sentiment scoring (GPT-4o-mini). Batch scoring, event_type allowlist, exponential decay daily aggregation. Produces 3 regressor channels (stock, sector, macro). |
-| `TokenBucketLimiter` | `backend/services/rate_limiter.py` | Redis-backed token bucket for outbound API rate limiting. Atomic Lua script, NOSCRIPT recovery, permissive fallback. Named instances: yfinance (30 RPM), finnhub (60 RPM), edgar (10 RPS), google_news (20 RPM), fed (30 RPM). |
+| `TokenBucketLimiter` | `backend/services/rate_limiter.py` | Redis-backed token bucket for outbound API rate limiting. Atomic Lua script, NOSCRIPT recovery, permissive fallback. Named instances: yfinance (30 RPM), finnhub (60 RPM), edgar (10 RPS), google_news (20 RPM), fed (30 RPM). Emits `rate_limiter_event` at 5 fallback branches (PR4). |
 | `PipelineRegistry` | `backend/services/pipeline_registry.py` | Task registry with dependency resolution. TaskDefinition dataclass, topological sort execution plans, 8 task groups. See section 6.4. |
 | `GroupRunManager` | `backend/services/pipeline_registry.py` | Redis-based pipeline run lifecycle. Atomic SET NX for concurrent protection, per-task status tracking, run history (capped at 50). |
 | `TickerStateService` | `backend/services/ticker_state.py` | Manages `TickerIngestionState` records. Key functions: `mark_stage_updated(ticker, stage, db)`, `mark_stages_updated(tickers, stage)`, `get_ticker_readiness(ticker, db)`, `get_universe_health(db)`. Used by pipeline tasks to track data freshness per SLA thresholds. |
@@ -2261,7 +2240,7 @@ GitHub Actions:
 
 The observability stack spans 4 layers: logging, tracing, metrics, and assessment.
 
-**Package:** `backend/observability/` — bounded package (~20 files). Includes SDK (`client.py`, `bootstrap.py`), targets (`direct.py`, `memory.py`, `internal_http.py`), schema (`v1.py`), spool, buffer, service layer, and routers (admin, health, command center, ingest, user observability).
+**Package:** `backend/observability/` — bounded package (30+ files across 7 subpackages).
 
 #### 10.3.1 Logging
 
@@ -2313,9 +2292,89 @@ class ObservabilityCollector:
     # Tool execution tracking (per-tool call counts, durations)
 ```
 
-- `backend/observability/writer.py` — fire-and-forget event writer to `llm_call_log` table
+- `backend/observability/writer.py` — legacy fire-and-forget event writer to `llm_call_log` table
 - `backend/observability/token_budget.py` — Redis sorted-set tracking per model, with budget alerts
 - `backend/observability/queries.py` — DB queries for stats, tier health, traces (695 lines)
+
+#### 10.3.6 Observability SDK (Epic KAN-457, Sub-epic 1a)
+
+New-generation event emission through `ObservabilityClient` SDK. Replaces direct DB writes with buffered, target-abstracted emission.
+
+**Core components:**
+```python
+# backend/observability/client.py — buffered async/sync emission
+class ObservabilityClient:
+    async emit(event: ObsEventBase)   # async non-blocking (FastAPI handlers)
+    emit_sync(event: ObsEventBase)    # sync non-blocking (yfinance, rate_limiter)
+    async flush(timeout_s)            # drain buffer (tests, shutdown)
+    async start() / stop()            # lifecycle (FastAPI lifespan, Celery signals)
+
+# backend/observability/bootstrap.py — ambient client lookup
+obs_client_var: ContextVar[ObservabilityClient | None]
+_maybe_get_obs_client() -> ObservabilityClient | None
+build_client_from_settings() -> ObservabilityClient
+```
+
+**Targets (pluggable backends):**
+| Target | Module | Use case |
+|---|---|---|
+| `DirectTarget` | `targets/direct.py` | Monolith default — delegates to `event_writer.write_batch` |
+| `InternalHTTPTarget` | `targets/internal_http.py` | POST to `/obs/v1/events` (extraction-ready) |
+| `MemoryTarget` | `targets/memory.py` | Tests — collects events in-memory |
+
+**Event schema (Pydantic v2):**
+```python
+# backend/observability/schema/v1.py
+class ObsEventBase(BaseModel):
+    event_type: EventType     # 7 types: llm_call, tool_execution, login_attempt,
+                              #   dq_finding, pipeline_lifecycle, external_api_call,
+                              #   rate_limiter_event
+    trace_id: UUID            # propagated via ContextVar (TraceIdMiddleware)
+    span_id: UUID             # unique per emission
+    parent_span_id: UUID | None
+    ts: datetime              # tz-aware UTC
+    env: Literal["dev", "staging", "prod"]
+```
+
+**ObservedHttpClient (PR4):**
+```python
+# backend/observability/instrumentation/external_api.py
+class ObservedHttpClient(httpx.AsyncClient):
+    # Subclass — drop-in for SDK http_client= params (OpenAI, Anthropic, Groq)
+    # Overrides send() to emit EXTERNAL_API_CALL event with:
+    #   provider, endpoint, method, status_code, error_reason, latency_ms,
+    #   request/response bytes, rate_limit headers
+    # Emission NEVER masks HTTP errors (wrapped in try/except)
+```
+
+**10 provider integrations:**
+| Provider | Method | File |
+|---|---|---|
+| Finnhub, EDGAR, FRED, Google News | `get_observed_http_client(provider)` | `services/news/*.py` |
+| OpenAI, Anthropic, Groq | `http_client=get_observed_http_client(provider)` on SDK | `agents/providers/*.py` |
+| Google OAuth | `get_observed_http_client(GOOGLE_OAUTH)` | `services/google_oauth.py` |
+| Resend | Manual emission (SDK has no http_client hook) | `services/email.py` |
+| yfinance | `YfinanceObservedSession(requests.Session)` subclass | `instrumentation/yfinance_session.py` |
+
+**Rate-limiter emission (PR4):**
+- 5 fallback branches in `TokenBucketLimiter.acquire()` emit `rate_limiter_event`
+- Events: `action=fallback_permissive` (redis_down, script_load_failed, redis_error) or `action=timeout`
+
+**DB tables (observability schema, migration 031):**
+| Table | Type | Retention | Compression |
+|---|---|---|---|
+| `external_api_call_log` | Hypertable (1d chunks) | 30 days | 7 days, segmentby=provider |
+| `rate_limiter_event` | Hypertable (1d chunks) | 30 days | — |
+
+**Retention tasks (4 new in PR4 for existing tables):**
+| Task | Table | Window | Method |
+|---|---|---|---|
+| `purge_old_llm_call_log_task` | `llm_call_log` | 30d | `drop_chunks` (hypertable) |
+| `purge_old_tool_execution_log_task` | `tool_execution_log` | 30d | `drop_chunks` (hypertable) |
+| `purge_old_pipeline_runs_task` | `pipeline_runs` | 90d | DELETE (regular table) |
+| `purge_old_dq_check_history_task` | `dq_check_history` | 90d | DELETE (regular table) |
+
+**Kill switches:** `OBS_ENABLED=false` (all paths no-op), `OBS_SPOOL_ENABLED=false` (overflow drops instead of spooling)
 
 #### 10.3.5 Health Checks
 
