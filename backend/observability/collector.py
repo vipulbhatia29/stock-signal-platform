@@ -14,12 +14,19 @@ import logging
 import time
 import uuid
 from collections import deque
+from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid_utils import uuid7
 
+from backend.config import settings
 from backend.models.logs import LLMCallLog
+from backend.observability.bootstrap import _maybe_get_obs_client
+from backend.observability.context import current_span_id, current_trace_id
+from backend.observability.schema.legacy_events import LLMCallEvent
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +70,8 @@ class ObservabilityCollector:
         langfuse_trace_id: uuid.UUID | str | None = None,
     ) -> None:
         """Record a successful LLM request."""
-        if self._db_writer:
+        wrote_via_legacy = settings.OBS_LEGACY_DIRECT_WRITES  # snapshot NOW
+        if wrote_via_legacy and self._db_writer:
             asyncio.create_task(
                 self._safe_db_write(
                     "llm_call",
@@ -81,6 +89,33 @@ class ObservabilityCollector:
                     },
                 )
             )
+
+        # SDK emission — always (no-op when OBS_ENABLED=false)
+        obs_client = _maybe_get_obs_client()
+        if obs_client is not None:
+            event = LLMCallEvent(
+                trace_id=current_trace_id() or UUID(bytes=uuid7().bytes),
+                span_id=UUID(bytes=uuid7().bytes),
+                parent_span_id=current_span_id(),
+                ts=datetime.now(timezone.utc),
+                env=getattr(settings, "APP_ENV", "dev"),
+                git_sha=None,
+                user_id=None,
+                session_id=None,
+                query_id=None,
+                wrote_via_legacy=wrote_via_legacy,
+                model=model,
+                provider=provider,
+                tier=tier,
+                latency_ms=latency_ms,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                cost_usd=cost_usd,
+                loop_step=loop_step,
+                status=status,
+                langfuse_trace_id=langfuse_trace_id,
+            )
+            await obs_client.emit(event)
 
     async def record_cascade(
         self,
@@ -100,7 +135,8 @@ class ObservabilityCollector:
             }
         )
 
-        if self._db_writer:
+        wrote_via_legacy = settings.OBS_LEGACY_DIRECT_WRITES  # snapshot NOW
+        if wrote_via_legacy and self._db_writer:
             asyncio.create_task(
                 self._safe_db_write(
                     "llm_call",
@@ -116,6 +152,31 @@ class ObservabilityCollector:
                     },
                 )
             )
+
+        # SDK emission — always (no-op when OBS_ENABLED=false)
+        obs_client = _maybe_get_obs_client()
+        if obs_client is not None:
+            event = LLMCallEvent(
+                trace_id=current_trace_id() or UUID(bytes=uuid7().bytes),
+                span_id=UUID(bytes=uuid7().bytes),
+                parent_span_id=current_span_id(),
+                ts=datetime.now(timezone.utc),
+                env=getattr(settings, "APP_ENV", "dev"),
+                git_sha=None,
+                user_id=None,
+                session_id=None,
+                query_id=None,
+                wrote_via_legacy=wrote_via_legacy,
+                model=from_model,
+                provider=provider,
+                tier=tier,
+                latency_ms=None,
+                prompt_tokens=None,
+                completion_tokens=None,
+                error=reason,
+                status="error",
+            )
+            await obs_client.emit(event)
 
     async def record_tool_execution(
         self,
