@@ -7,7 +7,11 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from backend.observability.schema.legacy_events import LLMCallEvent, ToolExecutionEvent
+from backend.observability.schema.legacy_events import (
+    LLMCallEvent,
+    LoginAttemptEvent,
+    ToolExecutionEvent,
+)
 
 
 @pytest.fixture
@@ -367,3 +371,140 @@ class TestRecordToolExecutionStranglerFig:
         assert event.error == "timeout"
         assert event.cache_hit is False
         assert event.loop_step == 2
+
+
+class TestWriteLoginAttemptStranglerFig:
+    @pytest.mark.asyncio
+    async def test_dual_write_when_flag_true(
+        self, mock_obs_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Both legacy DB write AND SDK emit happen when OBS_LEGACY_DIRECT_WRITES=True."""
+        monkeypatch.setattr("backend.routers.auth._helpers.settings.OBS_LEGACY_DIRECT_WRITES", True)
+        monkeypatch.setattr(
+            "backend.routers.auth._helpers._maybe_get_obs_client", lambda: mock_obs_client
+        )
+
+        # Patch async_session_factory at its canonical location so the lazy import picks it up
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock()
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr("backend.database.async_session_factory", lambda: mock_ctx)
+
+        from backend.routers.auth._helpers import _write_login_attempt
+
+        await _write_login_attempt(
+            email="test@example.com",
+            success=True,
+            user_id=None,
+            ip_address="127.0.0.1",
+            user_agent="test-agent",
+        )
+
+        # Legacy path ran: session.commit was called
+        mock_session.commit.assert_awaited_once()
+        # SDK emit happened
+        mock_obs_client.emit.assert_awaited_once()
+        event = mock_obs_client.emit.call_args[0][0]
+        assert isinstance(event, LoginAttemptEvent)
+        assert event.wrote_via_legacy is True
+
+    @pytest.mark.asyncio
+    async def test_sdk_only_when_flag_false(
+        self, mock_obs_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Only SDK emit happens when OBS_LEGACY_DIRECT_WRITES=False; no DB call."""
+        monkeypatch.setattr(
+            "backend.routers.auth._helpers.settings.OBS_LEGACY_DIRECT_WRITES", False
+        )
+        monkeypatch.setattr(
+            "backend.routers.auth._helpers._maybe_get_obs_client", lambda: mock_obs_client
+        )
+
+        from backend.routers.auth._helpers import _write_login_attempt
+
+        await _write_login_attempt(
+            email="test@example.com",
+            success=True,
+            user_id=None,
+            ip_address="127.0.0.1",
+            user_agent="test-agent",
+        )
+
+        # SDK emit happened
+        mock_obs_client.emit.assert_awaited_once()
+        event = mock_obs_client.emit.call_args[0][0]
+        assert isinstance(event, LoginAttemptEvent)
+        assert event.email == "test@example.com"
+        assert event.success is True
+        assert event.wrote_via_legacy is False
+
+    @pytest.mark.asyncio
+    async def test_no_emit_when_no_obs_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When obs client not available, legacy runs if flag=True and no crash occurs."""
+        monkeypatch.setattr("backend.routers.auth._helpers.settings.OBS_LEGACY_DIRECT_WRITES", True)
+        monkeypatch.setattr("backend.routers.auth._helpers._maybe_get_obs_client", lambda: None)
+
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock()
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr("backend.database.async_session_factory", lambda: mock_ctx)
+
+        from backend.routers.auth._helpers import _write_login_attempt
+
+        # Must not raise
+        await _write_login_attempt(
+            email="test@example.com",
+            success=False,
+            user_id=None,
+            ip_address="127.0.0.1",
+            user_agent="test-agent",
+            failure_reason="bad_password",
+        )
+
+        # Legacy path ran
+        mock_session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_login_attempt_event_fields(
+        self, mock_obs_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """SDK event carries all login-attempt fields correctly."""
+        monkeypatch.setattr(
+            "backend.routers.auth._helpers.settings.OBS_LEGACY_DIRECT_WRITES", False
+        )
+        monkeypatch.setattr(
+            "backend.routers.auth._helpers._maybe_get_obs_client", lambda: mock_obs_client
+        )
+
+        import uuid
+
+        user_id = uuid.uuid4()
+
+        from backend.routers.auth._helpers import _write_login_attempt
+
+        await _write_login_attempt(
+            email="user@example.com",
+            success=False,
+            user_id=user_id,
+            ip_address="10.0.0.1",
+            user_agent="Mozilla/5.0",
+            failure_reason="invalid_password",
+            method="password",
+        )
+
+        event = mock_obs_client.emit.call_args[0][0]
+        assert isinstance(event, LoginAttemptEvent)
+        assert event.email == "user@example.com"
+        assert event.success is False
+        assert event.ip_address == "10.0.0.1"
+        assert event.user_agent == "Mozilla/5.0"
+        assert event.failure_reason == "invalid_password"
+        assert event.method == "password"
+        assert event.user_id == user_id
+        assert event.wrote_via_legacy is False
