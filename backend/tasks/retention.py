@@ -30,6 +30,8 @@ LLM_CALL_LOG_RETENTION_DAYS = 30
 TOOL_EXECUTION_LOG_RETENTION_DAYS = 30
 PIPELINE_RUNS_RETENTION_DAYS = 90
 DQ_CHECK_HISTORY_RETENTION_DAYS = 90
+REQUEST_LOG_RETENTION_DAYS = 30
+API_ERROR_LOG_RETENTION_DAYS = 90
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_forecasts_task")
@@ -203,3 +205,43 @@ async def _purge_old_dq_check_history_async() -> dict:
         cutoff.date(),
     )
     return {"status": "ok", "deleted": deleted, "cutoff": cutoff.isoformat()}
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_request_logs_task")
+@tracked_task("request_log_retention", trigger="scheduled")
+def purge_old_request_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge request_log older than 30 days using drop_chunks (hypertable)."""
+    return asyncio.run(_purge_obs_table("observability.request_log", REQUEST_LOG_RETENTION_DAYS))
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_api_error_logs_task")
+@tracked_task("api_error_log_retention", trigger="scheduled")
+def purge_old_api_error_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge api_error_log older than 90 days using drop_chunks (hypertable)."""
+    return asyncio.run(
+        _purge_obs_table("observability.api_error_log", API_ERROR_LOG_RETENTION_DAYS)
+    )
+
+
+async def _purge_obs_table(table: str, retention_days: int) -> dict:
+    """Generic drop_chunks helper for observability hypertables.
+
+    Args:
+        table: Fully-qualified table name (e.g. "observability.request_log").
+        retention_days: Number of days to retain data; older chunks are dropped.
+
+    Returns:
+        Dict with status, dropped_chunks count, and retention_days.
+    """
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text(f"SELECT drop_chunks('{table}', older_than => INTERVAL :interval)"),  # noqa: S608
+            {"interval": f"{retention_days} days"},
+        )
+        rows = result.fetchall()
+        dropped = len(rows)
+        await db.commit()
+    logger.info(
+        "%s retention: dropped %s chunks older than %d days", table, dropped, retention_days
+    )
+    return {"status": "ok", "dropped_chunks": dropped, "retention_days": retention_days}
