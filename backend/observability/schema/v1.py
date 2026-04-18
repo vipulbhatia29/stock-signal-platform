@@ -30,6 +30,10 @@ class EventType(str, Enum):
     # 1b: HTTP layer
     REQUEST_LOG = "request_log"
     API_ERROR_LOG = "api_error_log"
+    # 1b: Auth layer
+    AUTH_EVENT = "auth_event"
+    OAUTH_EVENT = "oauth_event"
+    EMAIL_SEND = "email_send"
 
 
 class AttributionLayer(str, Enum):
