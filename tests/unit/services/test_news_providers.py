@@ -196,7 +196,7 @@ class TestFinnhubProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.finnhub_provider.get_http_client",
+            "backend.services.news.finnhub_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
@@ -212,7 +212,7 @@ class TestFinnhubProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.finnhub_provider.get_http_client",
+            "backend.services.news.finnhub_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
@@ -228,7 +228,7 @@ class TestFinnhubProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.finnhub_provider.get_http_client",
+            "backend.services.news.finnhub_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
@@ -244,7 +244,7 @@ class TestFinnhubProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.finnhub_provider.get_http_client",
+            "backend.services.news.finnhub_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
@@ -269,7 +269,7 @@ class TestFinnhubProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.finnhub_provider.get_http_client",
+            "backend.services.news.finnhub_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
@@ -286,7 +286,7 @@ class TestFinnhubProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.finnhub_provider.get_http_client",
+            "backend.services.news.finnhub_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
@@ -302,7 +302,7 @@ class TestFinnhubProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.finnhub_provider.get_http_client",
+            "backend.services.news.finnhub_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
@@ -319,7 +319,7 @@ class TestFinnhubProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.finnhub_provider.get_http_client",
+            "backend.services.news.finnhub_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FinnhubProvider(api_key="test-key")
@@ -354,7 +354,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.get_http_client",
+            "backend.services.news.edgar_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -370,7 +370,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.get_http_client",
+            "backend.services.news.edgar_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -387,7 +387,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.get_http_client",
+            "backend.services.news.edgar_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -410,7 +410,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.get_http_client",
+            "backend.services.news.edgar_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -426,7 +426,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.get_http_client",
+            "backend.services.news.edgar_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -442,7 +442,7 @@ class TestEdgarProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.edgar_provider.get_http_client",
+            "backend.services.news.edgar_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = EdgarProvider(user_agent="TestAgent/1.0 test@example.com")
@@ -468,7 +468,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.get_http_client",
+            "backend.services.news.fed_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -484,7 +484,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.get_http_client",
+            "backend.services.news.fed_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -504,7 +504,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.get_http_client",
+            "backend.services.news.fed_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -521,7 +521,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.get_http_client",
+            "backend.services.news.fed_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -538,7 +538,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.get_http_client",
+            "backend.services.news.fed_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -554,7 +554,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.get_http_client",
+            "backend.services.news.fed_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -577,7 +577,7 @@ class TestFedRssProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.fed_provider.get_http_client",
+            "backend.services.news.fed_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = FedRssProvider()
@@ -603,7 +603,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.get_http_client",
+            "backend.services.news.google_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()
@@ -619,7 +619,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.get_http_client",
+            "backend.services.news.google_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()
@@ -635,7 +635,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.get_http_client",
+            "backend.services.news.google_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()
@@ -650,7 +650,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.get_http_client",
+            "backend.services.news.google_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()
@@ -666,7 +666,7 @@ class TestGoogleNewsProvider:
         client = _mock_client(resp)
 
         with patch(
-            "backend.services.news.google_provider.get_http_client",
+            "backend.services.news.google_provider.get_observed_http_client",
             return_value=client,
         ):
             provider = GoogleNewsProvider()

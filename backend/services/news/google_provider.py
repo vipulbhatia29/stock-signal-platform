@@ -9,7 +9,8 @@ from datetime import date, timezone
 import httpx
 from defusedxml.ElementTree import fromstring as safe_fromstring
 
-from backend.services.http_client import get_http_client
+from backend.observability.instrumentation.providers import ExternalProvider
+from backend.services.http_client import get_observed_http_client
 from backend.services.news.base import NewsProvider, RawArticle
 from backend.services.rate_limiter import google_news_limiter
 
@@ -41,7 +42,7 @@ class GoogleNewsProvider(NewsProvider):
 
         await google_news_limiter.acquire()
         try:
-            client = get_http_client()
+            client = get_observed_http_client(ExternalProvider.GOOGLE_NEWS)
             resp = await client.get(GOOGLE_NEWS_RSS, params=params, timeout=30)
             resp.raise_for_status()
             xml_text = resp.text

@@ -151,7 +151,13 @@ class GroqProvider(LLMProvider):
         """Call a single Groq model."""
         from groq import AsyncGroq
 
-        client = AsyncGroq(api_key=self._api_key)
+        from backend.observability.instrumentation.providers import ExternalProvider
+        from backend.services.http_client import get_observed_http_client
+
+        client = AsyncGroq(
+            api_key=self._api_key,
+            http_client=get_observed_http_client(ExternalProvider.GROQ),
+        )
         response = await client.chat.completions.create(
             model=model_name,
             messages=messages,

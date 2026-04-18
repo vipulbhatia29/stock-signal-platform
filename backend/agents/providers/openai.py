@@ -49,11 +49,17 @@ class OpenAIProvider(LLMProvider):
         """Send chat completion via OpenAI SDK."""
         from openai import AsyncOpenAI
 
+        from backend.observability.instrumentation.providers import ExternalProvider
+        from backend.services.http_client import get_observed_http_client
+
         kwargs: dict[str, Any] = {"api_key": self._api_key}
         if self._base_url:
             kwargs["base_url"] = self._base_url
 
-        client = AsyncOpenAI(**kwargs)
+        client = AsyncOpenAI(
+            **kwargs,
+            http_client=get_observed_http_client(ExternalProvider.OPENAI),
+        )
         start = time.monotonic()
         response = await client.chat.completions.create(
             model=self._model,

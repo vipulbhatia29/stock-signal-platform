@@ -8,7 +8,8 @@ from datetime import date, datetime, timezone
 import httpx
 
 from backend.config import settings
-from backend.services.http_client import get_http_client
+from backend.observability.instrumentation.providers import ExternalProvider
+from backend.services.http_client import get_observed_http_client
 from backend.services.news.base import NewsProvider, RawArticle
 from backend.services.rate_limiter import finnhub_limiter
 
@@ -43,7 +44,7 @@ class FinnhubProvider(NewsProvider):
 
         await finnhub_limiter.acquire()
         try:
-            client = get_http_client()
+            client = get_observed_http_client(ExternalProvider.FINNHUB)
             resp = await client.get(url, params=params, timeout=30)
             resp.raise_for_status()
             data = resp.json()
@@ -81,7 +82,7 @@ class FinnhubProvider(NewsProvider):
 
         await finnhub_limiter.acquire()
         try:
-            client = get_http_client()
+            client = get_observed_http_client(ExternalProvider.FINNHUB)
             resp = await client.get(url, params=params, timeout=30)
             resp.raise_for_status()
             data = resp.json()

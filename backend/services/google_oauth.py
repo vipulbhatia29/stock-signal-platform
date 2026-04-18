@@ -15,7 +15,8 @@ import jwt
 from jwt import PyJWKClient
 
 from backend.config import settings
-from backend.services.http_client import get_http_client
+from backend.observability.instrumentation.providers import ExternalProvider
+from backend.services.http_client import get_observed_http_client
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +116,7 @@ async def exchange_code(code: str, state: str) -> tuple[GoogleUserInfo, str]:
     next_url = state_data.get("next_url", "/dashboard")
 
     # Exchange code for tokens
-    client = get_http_client()
+    client = get_observed_http_client(ExternalProvider.GOOGLE_OAUTH)
     token_response = await client.post(
         GOOGLE_TOKEN_URL,
         data={

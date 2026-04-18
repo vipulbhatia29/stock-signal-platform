@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.price import StockPrice
 from backend.models.stock import Stock
+from backend.observability.instrumentation.yfinance_session import get_yfinance_session
 from backend.services.rate_limiter import yfinance_limiter
 
 logger = logging.getLogger(__name__)
@@ -165,7 +166,7 @@ def _get_ticker_info(ticker: str) -> dict:
     This runs inside asyncio.to_thread().
     """
     try:
-        return yf.Ticker(ticker).info
+        return yf.Ticker(ticker, session=get_yfinance_session()).info
     except Exception:
         logger.exception("Failed to fetch info for %s", ticker)
         return {}
@@ -251,6 +252,7 @@ def _download_ticker(ticker: str, period: str) -> pd.DataFrame:
             period=period,
             auto_adjust=False,
             progress=False,
+            session=get_yfinance_session(),
         )
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
@@ -276,6 +278,7 @@ def _download_ticker_range(ticker: str, start: str) -> pd.DataFrame:
             start=start,
             auto_adjust=False,
             progress=False,
+            session=get_yfinance_session(),
         )
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.get_level_values(0)
@@ -540,7 +543,7 @@ def fetch_fundamentals(ticker: str) -> FundamentalResult:
     ticker = ticker.upper().strip()
 
     try:
-        t = yf.Ticker(ticker)
+        t = yf.Ticker(ticker, session=get_yfinance_session())
         info = t.info or {}
     except Exception:
         logger.warning("yfinance failed for %s fundamentals", ticker)
@@ -621,7 +624,7 @@ def fetch_analyst_data(ticker: str) -> dict:
     """
     ticker = ticker.upper().strip()
     try:
-        t = yf.Ticker(ticker)
+        t = yf.Ticker(ticker, session=get_yfinance_session())
         info = t.info or {}
     except Exception:
         logger.warning("yfinance failed for %s analyst data", ticker)
@@ -712,7 +715,7 @@ def fetch_earnings_history(ticker: str) -> list[dict]:
     """
     ticker = ticker.upper().strip()
     try:
-        t = yf.Ticker(ticker)
+        t = yf.Ticker(ticker, session=get_yfinance_session())
         hist = t.earnings_history
         if hist is None or hist.empty:
             return []

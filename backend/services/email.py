@@ -7,10 +7,81 @@ from __future__ import annotations
 
 import logging
 import secrets
+import time
 
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
+
+_RESEND_ENDPOINT = "/emails"
+_RESEND_METHOD = "POST"
+
+
+def _emit_resend_event(
+    latency_ms: int,
+    error_reason: str | None,
+) -> None:
+    """Emit an EXTERNAL_API_CALL event for a Resend API call.
+
+    Emission failures are silently swallowed — they must NEVER prevent emails from
+    being sent or surfacing the real error to the caller.
+
+    Args:
+        latency_ms: Call duration in milliseconds.
+        error_reason: ErrorReason.value string on failure, or None on success.
+    """
+    try:
+        from datetime import datetime, timezone
+        from uuid import UUID
+
+        from uuid_utils import uuid7
+
+        from backend.observability.bootstrap import _maybe_get_obs_client
+        from backend.observability.context import current_span_id, current_trace_id
+        from backend.observability.instrumentation.providers import ExternalProvider
+        from backend.observability.schema.external_api_events import ExternalApiCallEvent
+        from backend.observability.schema.v1 import EventType
+
+        obs_client = _maybe_get_obs_client()
+        if obs_client is None:
+            return
+
+        ambient_trace = current_trace_id()
+        trace_id: UUID = ambient_trace if ambient_trace is not None else UUID(bytes=uuid7().bytes)
+        span_id: UUID = UUID(bytes=uuid7().bytes)
+        parent_span_id: UUID | None = current_span_id()
+
+        env_mapping = {
+            "development": "dev",
+            "dev": "dev",
+            "staging": "staging",
+            "production": "prod",
+            "prod": "prod",
+        }
+        env_str = env_mapping.get(settings.ENVIRONMENT.lower(), "dev")
+        git_sha: str | None = getattr(settings, "GIT_SHA", None)
+
+        event = ExternalApiCallEvent(
+            event_type=EventType.EXTERNAL_API_CALL,
+            trace_id=trace_id,
+            span_id=span_id,
+            parent_span_id=parent_span_id,
+            ts=datetime.now(timezone.utc),
+            env=env_str,  # type: ignore[arg-type]
+            git_sha=git_sha,
+            user_id=None,
+            session_id=None,
+            query_id=None,
+            provider=ExternalProvider.RESEND.value,
+            endpoint=_RESEND_ENDPOINT,
+            method=_RESEND_METHOD,
+            status_code=None,
+            error_reason=error_reason,
+            latency_ms=latency_ms,
+        )
+        obs_client.emit_sync(event)
+    except Exception:  # noqa: BLE001 — emission MUST NOT mask email errors
+        logger.warning("obs.resend.emit_failed", exc_info=True)
 
 
 def generate_token() -> str:
@@ -121,6 +192,8 @@ async def _send(to: str, subject: str, html: str) -> None:
     import resend  # noqa: PLC0415 — lazy import to avoid errors if package missing
 
     resend.api_key = settings.RESEND_API_KEY
+    _start = time.monotonic()
+    _error_reason: str | None = None
     try:
         resend.Emails.send(
             {
@@ -132,4 +205,12 @@ async def _send(to: str, subject: str, html: str) -> None:
         )
         logger.info("Email sent to %s: %s", to, subject)
     except Exception:
+        from backend.observability.instrumentation.providers import ErrorReason
+
+        _error_reason = ErrorReason.SERVER_ERROR_5XX.value
         logger.exception("Failed to send email to %s", to)
+    finally:
+        _emit_resend_event(
+            latency_ms=int((time.monotonic() - _start) * 1000),
+            error_reason=_error_reason,
+        )

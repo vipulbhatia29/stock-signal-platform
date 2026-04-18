@@ -1,9 +1,11 @@
-"""Nightly retention enforcement — purge old forecasts and news articles.
+"""Nightly retention enforcement — purge old data across observability-adjacent tables.
 
-news_articles uses TimescaleDB drop_chunks() instead of row-level DELETE
-because the table has a compression policy (migration 028). Compressed
-chunks cannot be deleted row-by-row; drop_chunks() handles both compressed
-and uncompressed chunks transparently.
+news_articles, llm_call_log, and tool_execution_log use TimescaleDB drop_chunks()
+instead of row-level DELETE because they are hypertables. Compressed chunks cannot
+be deleted row-by-row; drop_chunks() handles both compressed and uncompressed chunks
+transparently.
+
+pipeline_runs and dq_check_history are regular tables and use raw SQL DELETE.
 """
 
 from __future__ import annotations
@@ -24,6 +26,10 @@ logger = logging.getLogger(__name__)
 
 FORECAST_RETENTION_DAYS = 30
 NEWS_RETENTION_DAYS = 90
+LLM_CALL_LOG_RETENTION_DAYS = 30
+TOOL_EXECUTION_LOG_RETENTION_DAYS = 30
+PIPELINE_RUNS_RETENTION_DAYS = 90
+DQ_CHECK_HISTORY_RETENTION_DAYS = 90
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_forecasts_task")
@@ -73,3 +79,127 @@ async def _purge_old_news_articles_async() -> dict:
         NEWS_RETENTION_DAYS,
     )
     return {"status": "ok", "dropped_chunks": dropped, "retention_days": NEWS_RETENTION_DAYS}
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_llm_call_log_task")
+@tracked_task("llm_call_log_retention", trigger="scheduled")
+def purge_old_llm_call_log_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge LLM call log chunks older than 30 days."""
+    return asyncio.run(_purge_old_llm_call_log_async())
+
+
+async def _purge_old_llm_call_log_async() -> dict:
+    """Drop TimescaleDB chunks older than 30 days from llm_call_log.
+
+    Uses drop_chunks() because llm_call_log is a hypertable (created in migration 008).
+    drop_chunks() handles both compressed and uncompressed chunks transparently.
+    """
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text("SELECT drop_chunks('llm_call_log', older_than => INTERVAL :interval)"),
+            {"interval": f"{LLM_CALL_LOG_RETENTION_DAYS} days"},
+        )
+        rows = result.fetchall()
+        dropped = len(rows)
+        await db.commit()
+    logger.info(
+        "LLM call log retention: dropped %d chunks older than %d days",
+        dropped,
+        LLM_CALL_LOG_RETENTION_DAYS,
+    )
+    return {
+        "status": "ok",
+        "dropped_chunks": dropped,
+        "retention_days": LLM_CALL_LOG_RETENTION_DAYS,
+    }
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_tool_execution_log_task")
+@tracked_task("tool_execution_log_retention", trigger="scheduled")
+def purge_old_tool_execution_log_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge tool execution log chunks older than 30 days."""
+    return asyncio.run(_purge_old_tool_execution_log_async())
+
+
+async def _purge_old_tool_execution_log_async() -> dict:
+    """Drop TimescaleDB chunks older than 30 days from tool_execution_log.
+
+    Uses drop_chunks() because tool_execution_log is a hypertable (created in migration 008).
+    drop_chunks() handles both compressed and uncompressed chunks transparently.
+    """
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text("SELECT drop_chunks('tool_execution_log', older_than => INTERVAL :interval)"),
+            {"interval": f"{TOOL_EXECUTION_LOG_RETENTION_DAYS} days"},
+        )
+        rows = result.fetchall()
+        dropped = len(rows)
+        await db.commit()
+    logger.info(
+        "Tool execution log retention: dropped %d chunks older than %d days",
+        dropped,
+        TOOL_EXECUTION_LOG_RETENTION_DAYS,
+    )
+    return {
+        "status": "ok",
+        "dropped_chunks": dropped,
+        "retention_days": TOOL_EXECUTION_LOG_RETENTION_DAYS,
+    }
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_pipeline_runs_task")
+@tracked_task("pipeline_runs_retention", trigger="scheduled")
+def purge_old_pipeline_runs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge pipeline runs older than 90 days."""
+    return asyncio.run(_purge_old_pipeline_runs_async())
+
+
+async def _purge_old_pipeline_runs_async() -> dict:
+    """Delete pipeline_runs rows with started_at older than 90 days.
+
+    Uses raw SQL DELETE (not ORM) because pipeline_runs is a regular table
+    and this avoids importing the PipelineRun model into the retention module.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=PIPELINE_RUNS_RETENTION_DAYS)
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text("DELETE FROM pipeline_runs WHERE started_at < :cutoff"),
+            {"cutoff": cutoff},
+        )
+        await db.commit()
+        deleted = result.rowcount or 0
+    logger.info(
+        "Pipeline runs retention: deleted %d rows older than %s",
+        deleted,
+        cutoff.date(),
+    )
+    return {"status": "ok", "deleted": deleted, "cutoff": cutoff.isoformat()}
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_dq_check_history_task")
+@tracked_task("dq_check_history_retention", trigger="scheduled")
+def purge_old_dq_check_history_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge DQ check history older than 90 days."""
+    return asyncio.run(_purge_old_dq_check_history_async())
+
+
+async def _purge_old_dq_check_history_async() -> dict:
+    """Delete dq_check_history rows with detected_at older than 90 days.
+
+    Uses raw SQL DELETE (not ORM) because dq_check_history is a regular table
+    and this avoids importing the DqCheckHistory model into the retention module.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=DQ_CHECK_HISTORY_RETENTION_DAYS)
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text("DELETE FROM dq_check_history WHERE detected_at < :cutoff"),
+            {"cutoff": cutoff},
+        )
+        await db.commit()
+        deleted = result.rowcount or 0
+    logger.info(
+        "DQ check history retention: deleted %d rows older than %s",
+        deleted,
+        cutoff.date(),
+    )
+    return {"status": "ok", "deleted": deleted, "cutoff": cutoff.isoformat()}

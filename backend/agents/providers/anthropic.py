@@ -93,7 +93,13 @@ class AnthropicProvider(LLMProvider):
         """Send chat completion via Anthropic SDK."""
         import anthropic
 
-        client = anthropic.AsyncAnthropic(api_key=self._api_key)
+        from backend.observability.instrumentation.providers import ExternalProvider
+        from backend.services.http_client import get_observed_http_client
+
+        client = anthropic.AsyncAnthropic(
+            api_key=self._api_key,
+            http_client=get_observed_http_client(ExternalProvider.ANTHROPIC),
+        )
 
         # Extract system message if present; normalize OpenAI-format tool messages
         system_msg = ""
