@@ -9,8 +9,10 @@ created by Alembic DDL and does not participate in the main metadata registry.
 """
 
 from backend.models.logs import LLMCallLog, ToolExecutionLog  # noqa: F401
+from backend.observability.models.api_error_log import ApiErrorLog
 from backend.observability.models.external_api_call import ExternalApiCallLog
 from backend.observability.models.rate_limiter_event import RateLimiterEvent
+from backend.observability.models.request_log import RequestLog
 from backend.observability.models.schema_versions import SchemaVersion
 
 __all__ = [
@@ -19,4 +21,6 @@ __all__ = [
     "SchemaVersion",
     "ExternalApiCallLog",
     "RateLimiterEvent",
+    "RequestLog",
+    "ApiErrorLog",
 ]

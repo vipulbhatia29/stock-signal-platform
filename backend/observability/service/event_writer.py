@@ -33,6 +33,8 @@ async def write_batch(events: list[ObsEventBase]) -> None:
     login_attempt_events: list = []
     dq_finding_events: list = []
     pipeline_lifecycle_events: list = []
+    request_log_events: list = []
+    api_error_log_events: list = []
 
     for event in events:
         try:
@@ -50,6 +52,10 @@ async def write_batch(events: list[ObsEventBase]) -> None:
                 dq_finding_events.append(event)
             elif event.event_type == EventType.PIPELINE_LIFECYCLE:
                 pipeline_lifecycle_events.append(event)
+            elif event.event_type == EventType.REQUEST_LOG:
+                request_log_events.append(event)
+            elif event.event_type == EventType.API_ERROR_LOG:
+                api_error_log_events.append(event)
             else:
                 logger.debug("obs.event.unhandled", extra={"event_type": event.event_type.value})
         except Exception:  # noqa: BLE001 — per-event error isolation
@@ -121,3 +127,19 @@ async def write_batch(events: list[ObsEventBase]) -> None:
             await persist_pipeline_lifecycle(pipeline_lifecycle_events)
         except Exception:  # noqa: BLE001 — writer errors must not propagate
             logger.warning("obs.writer.pipeline_lifecycle_batch.failed", exc_info=True)
+
+    if request_log_events:
+        try:
+            from backend.observability.service.request_log_writer import persist_request_logs
+
+            await persist_request_logs(request_log_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.request_log_batch.failed", exc_info=True)
+
+    if api_error_log_events:
+        try:
+            from backend.observability.service.api_error_writer import persist_api_error_logs
+
+            await persist_api_error_logs(api_error_log_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.api_error_log_batch.failed", exc_info=True)

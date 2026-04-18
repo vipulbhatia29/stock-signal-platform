@@ -207,6 +207,12 @@ class Settings(BaseSettings):
             "SDK emissions. Flip to False after 2 weeks of green production. See spec §2.7."
         ),
     )
+    OBS_REDACT_PII: bool = Field(
+        default=True,
+        description=(
+            "Enable PII redaction on obs event fields. Disable in dev for debugging (spec §2.7b)."
+        ),
+    )
 
     @field_validator("OBS_INGEST_SECRET")
     @classmethod

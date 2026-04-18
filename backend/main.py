@@ -346,10 +346,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 from backend.middleware.csrf import CSRFMiddleware  # noqa: E402
 from backend.middleware.error_handler import ErrorHandlerMiddleware  # noqa: E402
 from backend.middleware.trace_id import TraceIdMiddleware  # noqa: E402
+from backend.observability.instrumentation.http import ObsHttpMiddleware  # noqa: E402
 from backend.observability.metrics.http_middleware import HttpMetricsMiddleware  # noqa: E402
 
 # Middleware — added in reverse order of execution (last = outermost)
-# Stack (outermost → innermost): TraceId → ErrorHandler → CORS → CSRF → HttpMetrics → app
+# Stack (outermost → innermost): TraceId → ObsHttp → ErrorHandler → CORS → CSRF → HttpMetrics → app
 app.add_middleware(HttpMetricsMiddleware)
 app.add_middleware(
     CSRFMiddleware,
@@ -378,6 +379,9 @@ app.add_middleware(
     expose_headers=["X-Trace-Id"],
 )
 app.add_middleware(ErrorHandlerMiddleware)
+# ObsHttpMiddleware: sits BETWEEN ErrorHandler (inner) and TraceId (outer)
+# Execution order: TraceId (outermost) → ObsHttp → ErrorHandler → routes
+app.add_middleware(ObsHttpMiddleware)
 app.add_middleware(TraceIdMiddleware)
 
 
