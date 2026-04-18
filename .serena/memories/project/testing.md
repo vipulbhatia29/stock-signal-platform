@@ -9,13 +9,13 @@ category: project
 
 ```bash
 # Backend — fast, no external deps
-uv run pytest tests/unit/ -v                          # Unit tests (~1848, <15s)
+uv run pytest tests/unit/ -v                          # Unit tests (~2233, <60s)
 uv run pytest tests/unit/ -n auto                     # Unit tests parallel (xdist)
 uv run pytest tests/unit/test_{module}.py -v          # Single module
 
 # Backend — requires Docker (testcontainers auto-manages Postgres+Redis)
 uv run pytest tests/integration/ -v                   # Integration tests (sequential — shared DB)
-uv run pytest tests/api/ -v                           # API endpoint tests (~190, sequential)
+uv run pytest tests/api/ -v                           # API endpoint tests (~454, sequential)
 
 # Full suite with coverage
 uv run pytest --cov=backend --cov-fail-under=60 --no-cov-on-fail  # Coverage gate (floor 60%, no-cov-on-fail in CI)

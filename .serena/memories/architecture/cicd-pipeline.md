@@ -1,7 +1,7 @@
 ---
 scope: project
 category: architecture
-updated_by: session-91
+updated_by: session-118
 ---
 
 # CI/CD Pipeline Architecture
@@ -121,12 +121,13 @@ Every new test directory MUST have its own `conftest.py` with `db_url` override.
 - **T4 (Nightly):** Long-running suites. CI: `ci-nightly.yml`, max_examples=200
 - **T5 (Smoke):** Pre-deployment sanity checks (stub)
 
-## Test Counts & Coverage (Session 91)
-- Backend unit tests: 1768
-- Frontend tests: 378 (jest)
-- E2E tests: 42 (Playwright)
-- Nightly performance tests: 27
-- **Total:** ~2215 tests
+## Test Counts & Coverage (Session 118)
+- Backend unit tests: 2233
+- Backend API tests: 454
+- Frontend tests: ~423 (jest)
+- E2E tests: ~48 (Playwright)
+- Nightly performance tests: ~27
+- **Total:** ~3185 tests
 - **Coverage:** ~69% (floor 60%, --no-cov-on-fail in CI to avoid mask failures)
 - **Hypothesis properties:** max_examples=20 in ci-pr, max_examples=200 in ci-nightly
 

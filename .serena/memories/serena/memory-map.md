@@ -37,6 +37,7 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | domain/convergence-and-forecast | Phase 8.6+: signal convergence (5 classifiers), divergence detection, BL+MC+CVaR portfolio forecast, news sentiment pipeline, backtesting, CacheInvalidator |
 | debugging/backend-gotchas | asyncpg, UserRole enum, circular imports, Alembic, yfinance |
 | debugging/frontend-gotchas | ESLint hooks, Recharts colors, API prefix, next/image |
+| debugging/observability-gotchas | ObservabilityCollector pitfalls, ContextVar gotchas, status defaults |
 | serena/tool-usage | MCP prefix, tool priority, symbolic reading, editing |
 | serena/memory-map | This file — taxonomy anchor |
 | conventions/auth-patterns | JWT, httpOnly cookies, frontend auth, bcrypt pinning, security rules |
