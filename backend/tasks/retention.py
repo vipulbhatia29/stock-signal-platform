@@ -91,7 +91,7 @@ def purge_old_llm_call_log_task(run_id: uuid.UUID | None = None) -> dict:
 async def _purge_old_llm_call_log_async() -> dict:
     """Drop TimescaleDB chunks older than 30 days from llm_call_log.
 
-    Uses drop_chunks() because llm_call_log is a hypertable (created in migration 031).
+    Uses drop_chunks() because llm_call_log is a hypertable (created in migration 008).
     drop_chunks() handles both compressed and uncompressed chunks transparently.
     """
     async with async_session_factory() as db:
@@ -124,7 +124,7 @@ def purge_old_tool_execution_log_task(run_id: uuid.UUID | None = None) -> dict:
 async def _purge_old_tool_execution_log_async() -> dict:
     """Drop TimescaleDB chunks older than 30 days from tool_execution_log.
 
-    Uses drop_chunks() because tool_execution_log is a hypertable (created in migration 031).
+    Uses drop_chunks() because tool_execution_log is a hypertable (created in migration 008).
     drop_chunks() handles both compressed and uncompressed chunks transparently.
     """
     async with async_session_factory() as db:

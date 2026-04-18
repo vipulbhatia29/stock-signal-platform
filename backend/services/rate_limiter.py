@@ -75,7 +75,7 @@ def _emit_rate_limiter_event(
         )
         obs_client.emit_sync(event)
     except Exception:  # noqa: BLE001 — emission MUST NOT affect the rate limiter
-        pass
+        logger.warning("obs.rate_limiter.emit_failed", exc_info=True)
 
 
 _LUA_TOKEN_BUCKET = """  # nosemgrep: no-secrets-in-code
