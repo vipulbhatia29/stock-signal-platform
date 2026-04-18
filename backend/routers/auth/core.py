@@ -21,6 +21,8 @@ from backend.dependencies import (
     verify_password,
 )
 from backend.models.user import User, UserPreference
+from backend.observability.instrumentation.auth import emit_auth_event
+from backend.observability.schema.auth_events import AuthEventType, AuthOutcome
 from backend.rate_limit import limiter
 from backend.routers.auth._helpers import (
     PASSWORD_PATTERN,
@@ -241,6 +243,12 @@ async def refresh_token(
 
     # Check if the refresh token has been revoked
     if token_payload.jti and await is_blocklisted(token_payload.jti):
+        emit_auth_event(
+            auth_event_type=AuthEventType.JWT_VERIFY_FAILURE,
+            outcome=AuthOutcome.FAILURE,
+            failure_reason="blocklisted",
+            user_id=token_payload.user_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked",
@@ -251,6 +259,12 @@ async def refresh_token(
     user = result.scalar_one_or_none()
 
     if user is None or not user.is_active:
+        emit_auth_event(
+            auth_event_type=AuthEventType.TOKEN_REFRESH,
+            outcome=AuthOutcome.FAILURE,
+            failure_reason="user_inactive",
+            user_id=token_payload.user_id,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or inactive",
@@ -265,6 +279,12 @@ async def refresh_token(
         await add_to_blocklist(token_payload.jti, expires_in_seconds=remaining_ttl)
 
     _set_auth_cookies(response, access_token, new_refresh_token)
+
+    emit_auth_event(
+        auth_event_type=AuthEventType.TOKEN_REFRESH,
+        outcome=AuthOutcome.SUCCESS,
+        user_id=user.id,
+    )
 
     return TokenResponse(
         access_token=access_token,
@@ -282,9 +302,11 @@ async def logout(request: Request, response: Response) -> None:
     """
     # Try to blocklist the refresh token if present
     refresh_token_value = request.cookies.get(COOKIE_REFRESH_TOKEN)
+    _logout_user_id = None
     if refresh_token_value:
         try:
             token_payload = decode_token(refresh_token_value, expected_type="refresh")
+            _logout_user_id = token_payload.user_id
             if token_payload.jti:
                 remaining_ttl = _get_token_remaining_ttl(refresh_token_value)
                 await add_to_blocklist(token_payload.jti, expires_in_seconds=remaining_ttl)
@@ -292,6 +314,11 @@ async def logout(request: Request, response: Response) -> None:
             # Token already expired or invalid — nothing to blocklist
             pass
 
+    emit_auth_event(
+        auth_event_type=AuthEventType.LOGOUT,
+        outcome=AuthOutcome.SUCCESS,
+        user_id=_logout_user_id,
+    )
     _clear_auth_cookies(response)
 
 

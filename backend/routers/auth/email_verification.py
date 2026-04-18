@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import get_async_session
 from backend.dependencies import get_current_user
 from backend.models.user import User
+from backend.observability.instrumentation.auth import emit_auth_event
+from backend.observability.schema.auth_events import AuthEventType, AuthOutcome
 from backend.rate_limit import limiter
 from backend.routers.auth._helpers import _send_verification_bg
 from backend.schemas.auth import MessageResponse, VerifyEmailRequest
@@ -68,6 +70,11 @@ async def verify_email(
     key = f"email_verify:{body.token}"
     user_id_str = await redis.get(key)
     if not user_id_str:
+        emit_auth_event(
+            auth_event_type=AuthEventType.EMAIL_VERIFY_ATTEMPT,
+            outcome=AuthOutcome.FAILURE,
+            failure_reason="invalid_token",
+        )
         raise HTTPException(status_code=400, detail="Invalid or expired verification token")
 
     # Decode user_id (might be bytes from Redis)
@@ -86,6 +93,12 @@ async def verify_email(
     user.email_verified = True
     user.email_verified_at = datetime.now(timezone.utc)
     await db.commit()
+
+    emit_auth_event(
+        auth_event_type=AuthEventType.EMAIL_VERIFY_ATTEMPT,
+        outcome=AuthOutcome.SUCCESS,
+        user_id=user.id,
+    )
 
     return MessageResponse(message="Email verified")
 

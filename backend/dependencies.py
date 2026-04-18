@@ -129,7 +129,18 @@ def decode_token(token: str, expected_type: str = "access") -> TokenPayload:
             jti=payload.get("jti"),
             iat=iat,
         )
-    except (PyJWTError, ValueError):
+    except (PyJWTError, ValueError) as e:
+        try:
+            from backend.observability.instrumentation.auth import emit_auth_event
+            from backend.observability.schema.auth_events import AuthEventType, AuthOutcome
+
+            emit_auth_event(
+                auth_event_type=AuthEventType.JWT_VERIFY_FAILURE,
+                outcome=AuthOutcome.FAILURE,
+                failure_reason="expired" if "expired" in str(e).lower() else "malformed",
+            )
+        except Exception:  # noqa: BLE001 — emission must never block auth
+            logger.debug("obs.jwt_failure.emit.failed", exc_info=True)
         raise credentials_exception
 
 

@@ -136,6 +136,8 @@ async def persist_login_attempts(events: list[LoginAttemptEvent]) -> None:
                         success=event.success,
                         failure_reason=event.failure_reason,
                         method=event.method,
+                        trace_id=event.trace_id,
+                        span_id=event.span_id,
                     )
                 )
             await session.commit()

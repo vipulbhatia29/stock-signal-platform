@@ -6,6 +6,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models.base import Base, UUIDPrimaryKeyMixin
@@ -30,6 +31,9 @@ class LoginAttempt(UUIDPrimaryKeyMixin, Base):
     failure_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
     method: Mapped[str] = mapped_column(String(20), nullable=False, default="password")
     provider_sub: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Obs 1b: trace correlation columns (nullable, additive — migration 033)
+    trace_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    span_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     def __repr__(self) -> str:
         """Return debug representation."""
