@@ -45,14 +45,14 @@ class ApiErrorLog(Base):
         {"schema": "observability"},
     )
 
-    id: Mapped[uuid.UUID] = mapped_column(
+    id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
         primary_key=True,
         server_default=func.gen_random_uuid(),
     )
     ts: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
+        primary_key=True,
         server_default=func.now(),
     )
     trace_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)

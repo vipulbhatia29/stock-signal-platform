@@ -20,7 +20,7 @@ def upgrade() -> None:
     # --- request_log ---
     op.create_table(
         "request_log",
-        sa.Column("id", UUID, primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("id", UUID, nullable=False, server_default=sa.text("gen_random_uuid()")),
         sa.Column(
             "ts",
             sa.DateTime(timezone=True),
@@ -90,7 +90,7 @@ def upgrade() -> None:
     # --- api_error_log ---
     op.create_table(
         "api_error_log",
-        sa.Column("id", UUID, primary_key=True, server_default=sa.text("gen_random_uuid()")),
+        sa.Column("id", UUID, nullable=False, server_default=sa.text("gen_random_uuid()")),
         sa.Column(
             "ts",
             sa.DateTime(timezone=True),

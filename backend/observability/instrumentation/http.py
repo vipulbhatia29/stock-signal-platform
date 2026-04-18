@@ -106,7 +106,7 @@ class ObsHttpMiddleware(BaseHTTPMiddleware):
             if exc_captured or (response and response.status_code >= 400):
                 self._emit_error_log(request, response, exc_captured, raw_path)
 
-        return response
+        return response  # type: ignore[return-value]
 
     def _emit_request_log(
         self,
