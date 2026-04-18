@@ -50,7 +50,7 @@ async def persist_auth_events(events: list[AuthEventLogEvent]) -> None:
                     user_agent=event.user_agent,
                     method=event.method,
                     path=event.path,
-                    metadata=event.metadata,
+                    extra_data=event.metadata,
                     env=event.env,
                     git_sha=event.git_sha,
                 )
@@ -80,7 +80,7 @@ async def persist_oauth_events(events: list[OAuthEventLogEvent]) -> None:
                     status=event.status,
                     error_reason=event.error_reason,
                     attempt_number=event.attempt_number,
-                    metadata=event.metadata,
+                    extra_data=event.metadata,
                     env=event.env,
                     git_sha=event.git_sha,
                 )

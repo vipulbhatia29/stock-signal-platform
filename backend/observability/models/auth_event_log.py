@@ -36,7 +36,7 @@ class AuthEventLog(Base):
         user_agent: User-Agent header, if available.
         method: HTTP method of the triggering request, if available.
         path: Normalized request path, if available.
-        metadata: Additional structured context (JSONB).
+        extra_data: Additional structured context (JSONB).
         env: Deployment environment ("dev", "staging", "prod").
         git_sha: Git commit SHA of the running binary.
     """
@@ -64,6 +64,6 @@ class AuthEventLog(Base):
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
     method: Mapped[str | None] = mapped_column(Text, nullable=True)
     path: Mapped[str | None] = mapped_column(Text, nullable=True)
-    metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    extra_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     env: Mapped[str] = mapped_column(Text, nullable=False)
     git_sha: Mapped[str | None] = mapped_column(Text, nullable=True)

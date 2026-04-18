@@ -32,7 +32,7 @@ class OAuthEventLog(Base):
         status: "success" or "failure".
         error_reason: Structured error description on failure.
         attempt_number: Retry count (0 = first attempt).
-        metadata: Additional structured context (JSONB).
+        extra_data: Additional structured context (JSONB).
         env: Deployment environment ("dev", "staging", "prod").
         git_sha: Git commit SHA of the running binary.
     """
@@ -57,6 +57,6 @@ class OAuthEventLog(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False)
     error_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     attempt_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    metadata: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    extra_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     env: Mapped[str] = mapped_column(Text, nullable=False)
     git_sha: Mapped[str | None] = mapped_column(Text, nullable=True)
