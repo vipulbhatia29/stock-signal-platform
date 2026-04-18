@@ -46,7 +46,7 @@ class RateLimiterEvent(Base):
     )
     ts: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        nullable=False,
+        primary_key=True,
         server_default=func.now(),
     )
     trace_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)

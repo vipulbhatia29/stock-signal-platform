@@ -30,7 +30,7 @@ def upgrade() -> None:
         sa.Column(
             "id",
             sa.UUID(),
-            primary_key=True,
+            nullable=False,
             server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column(
@@ -60,6 +60,7 @@ def upgrade() -> None:
         sa.Column("stack_hash", sa.CHAR(64), nullable=True),
         sa.Column("env", sa.Text(), nullable=False),
         sa.Column("git_sha", sa.Text(), nullable=True),
+        sa.PrimaryKeyConstraint("id", "ts"),
         schema="observability",
     )
 
@@ -134,7 +135,7 @@ def upgrade() -> None:
         sa.Column(
             "id",
             sa.UUID(),
-            primary_key=True,
+            nullable=False,
             server_default=sa.text("gen_random_uuid()"),
         ),
         sa.Column(
@@ -152,6 +153,7 @@ def upgrade() -> None:
         sa.Column("reason_if_fallback", sa.Text(), nullable=True),
         sa.Column("env", sa.Text(), nullable=False),
         sa.Column("git_sha", sa.Text(), nullable=True),
+        sa.PrimaryKeyConstraint("id", "ts"),
         schema="observability",
     )
 

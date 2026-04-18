@@ -38,9 +38,7 @@ async def write_batch(events: list[ObsEventBase]) -> None:
                 rate_limiter_events.append(event)
             else:
                 # PR5 will add writers for LLM_CALL, TOOL_EXECUTION, etc.
-                logger.debug(
-                    "obs.event.unhandled", extra={"event_type": event.event_type.value}
-                )
+                logger.debug("obs.event.unhandled", extra={"event_type": event.event_type.value})
         except Exception:  # noqa: BLE001 — per-event error isolation
             logger.warning("obs.event.classify_failed", exc_info=True)
 
