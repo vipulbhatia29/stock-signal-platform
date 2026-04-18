@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="backend.tasks.dq_scan.dq_scan_task")
-@tracked_task("dq_scan", trigger="scheduled")
+@tracked_task("dq_scan", trigger="scheduled")  # type: ignore[arg-type]  # sync fn — pre-existing KAN-446
 def dq_scan_task(run_id: uuid.UUID | None = None) -> dict:
     """Run all data quality checks and persist findings.
 
