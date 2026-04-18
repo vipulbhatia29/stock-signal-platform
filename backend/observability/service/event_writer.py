@@ -26,13 +26,13 @@ async def write_batch(events: list[ObsEventBase]) -> None:
             buffer by the flush loop in ObservabilityClient.
     """
     # Group events by type for batch persistence.
-    external_api_events: list[ObsEventBase] = []
-    rate_limiter_events: list[ObsEventBase] = []
-    llm_call_events: list[ObsEventBase] = []
-    tool_execution_events: list[ObsEventBase] = []
-    login_attempt_events: list[ObsEventBase] = []
-    dq_finding_events: list[ObsEventBase] = []
-    pipeline_lifecycle_events: list[ObsEventBase] = []
+    external_api_events: list = []
+    rate_limiter_events: list = []
+    llm_call_events: list = []
+    tool_execution_events: list = []
+    login_attempt_events: list = []
+    dq_finding_events: list = []
+    pipeline_lifecycle_events: list = []
 
     for event in events:
         try:

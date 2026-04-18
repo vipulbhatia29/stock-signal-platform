@@ -175,7 +175,6 @@ async def test_write_batch_routes_rate_limiter_event(monkeypatch: pytest.MonkeyP
 async def test_write_batch_logs_unhandled_event_type(caplog: pytest.LogCaptureFixture) -> None:
     """Unhandled event types are logged at DEBUG level and do not raise."""
     import logging
-    from unittest.mock import MagicMock
 
     from backend.observability.service import event_writer
 
@@ -192,11 +191,19 @@ async def test_write_batch_logs_unhandled_event_type(caplog: pytest.LogCaptureFi
         session_id=None,
         query_id=None,
     )
-    # Override event_type to a value that won't match any branch
-    fake_type = MagicMock()
-    fake_type.value = "unknown_future_event"
-    event = MagicMock()
-    event.event_type = fake_type
+    # Override event_type with an object whose __eq__ returns False for all EventType
+    # comparisons, ensuring the event falls through to the "unhandled" else-branch.
+
+    class _FakeEventType:
+        value = "unknown_future_event"
+
+        def __eq__(self, other: object) -> bool:
+            return False
+
+        def __hash__(self) -> int:
+            return hash("unknown")
+
+    object.__setattr__(event, "event_type", _FakeEventType())
 
     with caplog.at_level(logging.DEBUG, logger="backend.observability.service.event_writer"):
         await event_writer.write_batch([event])  # must not raise

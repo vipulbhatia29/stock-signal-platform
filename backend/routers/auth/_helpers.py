@@ -140,7 +140,14 @@ async def _write_login_attempt(
     failure_reason: str | None = None,
     method: str = "password",
 ) -> None:
-    """Write login attempt to DB with its own session, and emit via SDK."""
+    """Write login attempt to DB with its own session, and emit via SDK.
+
+    Known limitation: if wrote_via_legacy=True and the legacy DB write fails,
+    the SDK event still carries wrote_via_legacy=True so the SDK writer will
+    skip the insert (dedup invariant). This means the row is lost — same as
+    the pre-PR5 behavior (legacy failure was already silently swallowed).
+    Acceptable for best-effort login audit; not a regression.
+    """
     wrote_via_legacy = settings.OBS_LEGACY_DIRECT_WRITES  # snapshot NOW
 
     if wrote_via_legacy:
