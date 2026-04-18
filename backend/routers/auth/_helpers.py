@@ -154,6 +154,7 @@ async def _write_login_attempt(
         try:
             from backend.database import async_session_factory
             from backend.models.login_attempt import LoginAttempt
+            from backend.observability.context import span_id_var, trace_id_var
 
             async with async_session_factory() as db:
                 attempt = LoginAttempt(
@@ -165,6 +166,8 @@ async def _write_login_attempt(
                     success=success,
                     failure_reason=failure_reason,
                     method=method,
+                    trace_id=trace_id_var.get(None),
+                    span_id=span_id_var.get(None),
                 )
                 db.add(attempt)
                 await db.commit()
