@@ -210,8 +210,7 @@ class Settings(BaseSettings):
     OBS_REDACT_PII: bool = Field(
         default=True,
         description=(
-            "Enable PII redaction on obs event fields. "
-            "Disable in dev for debugging (spec §2.7b)."
+            "Enable PII redaction on obs event fields. Disable in dev for debugging (spec §2.7b)."
         ),
     )
 
