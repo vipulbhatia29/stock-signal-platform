@@ -19,11 +19,11 @@ class AuthEventType(str, Enum):
     """Discriminator for auth event subtypes."""
 
     JWT_VERIFY_FAILURE = "jwt_verify_failure"
-    TOKEN_REFRESH = "token_refresh"  # nosemgrep: no-secrets-in-code
+    TOKEN_REFRESH = "token_refresh"  # nosemgrep
     LOGOUT = "logout"
     EMAIL_VERIFY_ATTEMPT = "email_verify_attempt"
-    PASSWORD_RESET_REQUEST = "password_reset_request"  # nosemgrep: no-secrets-in-code
-    PASSWORD_RESET_COMPLETE = "password_reset_complete"  # nosemgrep: no-secrets-in-code
+    PASSWORD_RESET_REQUEST = "password_reset_request"  # nosemgrep
+    PASSWORD_RESET_COMPLETE = "password_reset_complete"  # nosemgrep
     SESSION_TERMINATED = "session_terminated"
     REVOCATION_APPLIED = "revocation_applied"
 
@@ -40,7 +40,7 @@ class OAuthAction(str, Enum):
 
     AUTH_START = "auth_start"
     CODE_EXCHANGE = "code_exchange"
-    TOKEN_REFRESH = "token_refresh"  # nosemgrep: no-secrets-in-code
+    TOKEN_REFRESH = "token_refresh"  # nosemgrep
     REVOKE = "revoke"
     LINK_EXISTING = "link_existing"
     CONFLICT_DETECTED = "conflict_detected"
@@ -51,7 +51,7 @@ class EmailType(str, Enum):
     """Email category discriminator."""
 
     VERIFICATION = "verification"
-    PASSWORD_RESET = "password_reset"  # nosemgrep: no-secrets-in-code
+    PASSWORD_RESET = "password_reset"  # nosemgrep
     DELETION_CONFIRMATION = "deletion_confirmation"
     WELCOME = "welcome"
     DIGEST = "digest"
