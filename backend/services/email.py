@@ -10,6 +10,8 @@ import secrets
 import time
 
 from backend.config import settings
+from backend.observability.instrumentation.auth import emit_email_send
+from backend.observability.schema.auth_events import EmailType
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +115,7 @@ async def send_verification_email(to: str, token: str) -> None:
     <p>This link expires in 24 hours.</p>
     <p>— Stock Signal Platform</p>
     """
-    await _send(to, subject, html)
+    await _send(to, subject, html, email_type=EmailType.VERIFICATION)
 
 
 async def send_password_reset_email(to: str, token: str) -> None:
@@ -136,7 +138,7 @@ async def send_password_reset_email(to: str, token: str) -> None:
     <p>This link expires in 1 hour. If you didn't request this, ignore this email.</p>
     <p>— Stock Signal Platform</p>
     """
-    await _send(to, subject, html)
+    await _send(to, subject, html, email_type=EmailType.PASSWORD_RESET)
 
 
 async def send_password_reset_google_only(to: str) -> None:
@@ -153,7 +155,7 @@ async def send_password_reset_google_only(to: str) -> None:
     <p>If you'd like to set a password, sign in with Google first, then go to Account Settings.</p>
     <p>— Stock Signal Platform</p>
     """
-    await _send(to, subject, html)
+    await _send(to, subject, html, email_type=EmailType.PASSWORD_RESET)
 
 
 async def send_deletion_confirmation(to: str) -> None:
@@ -169,10 +171,10 @@ async def send_deletion_confirmation(to: str) -> None:
     <p>If you change your mind, contact support within 30 days to recover your account.</p>
     <p>— Stock Signal Platform</p>
     """
-    await _send(to, subject, html)
+    await _send(to, subject, html, email_type=EmailType.DELETION_CONFIRMATION)
 
 
-async def _send(to: str, subject: str, html: str) -> None:
+async def _send(to: str, subject: str, html: str, email_type: EmailType | None = None) -> None:
     """Send email via Resend API. In dev mode, log to console instead.
 
     Args:
@@ -194,8 +196,9 @@ async def _send(to: str, subject: str, html: str) -> None:
     resend.api_key = settings.RESEND_API_KEY
     _start = time.monotonic()
     _error_reason: str | None = None
+    _resend_msg_id: str | None = None
     try:
-        resend.Emails.send(
+        result = resend.Emails.send(
             {
                 "from": settings.EMAIL_FROM_ADDRESS,
                 "to": [to],
@@ -203,6 +206,7 @@ async def _send(to: str, subject: str, html: str) -> None:
                 "html": html,
             }
         )
+        _resend_msg_id = getattr(result, "id", None)
         logger.info("Email sent to %s: %s", to, subject)
     except Exception:
         from backend.observability.instrumentation.providers import ErrorReason
@@ -210,7 +214,13 @@ async def _send(to: str, subject: str, html: str) -> None:
         _error_reason = ErrorReason.SERVER_ERROR_5XX.value
         logger.exception("Failed to send email to %s", to)
     finally:
-        _emit_resend_event(
-            latency_ms=int((time.monotonic() - _start) * 1000),
-            error_reason=_error_reason,
-        )
+        _latency_ms = int((time.monotonic() - _start) * 1000)
+        _emit_resend_event(latency_ms=_latency_ms, error_reason=_error_reason)
+        if email_type is not None:
+            emit_email_send(
+                email=to,
+                email_type=email_type,
+                status="failed" if _error_reason else "sent",
+                error_reason=_error_reason,
+                resend_message_id=_resend_msg_id,
+            )

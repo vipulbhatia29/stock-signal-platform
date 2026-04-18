@@ -18,6 +18,8 @@ from backend.dependencies import (
 )
 from backend.models.oauth_account import OAuthAccount
 from backend.models.user import User
+from backend.observability.instrumentation.auth import emit_auth_event
+from backend.observability.schema.auth_events import AuthEventType, AuthOutcome
 from backend.rate_limit import limiter
 from backend.routers.auth._helpers import (
     _NO_PW_MSG,
@@ -82,6 +84,10 @@ async def forgot_password(
                 )
             asyncio.create_task(_send_reset_email_bg(user.email, token))
 
+    emit_auth_event(
+        auth_event_type=AuthEventType.PASSWORD_RESET_REQUEST,
+        outcome=AuthOutcome.SUCCESS,
+    )
     # Always return same response (no email enumeration)
     return MessageResponse(message=_RESET_SENT_MSG)
 
@@ -122,6 +128,17 @@ async def reset_password(
     await redis.delete(key)
     await set_user_revocation(user.id)
 
+    emit_auth_event(
+        auth_event_type=AuthEventType.PASSWORD_RESET_COMPLETE,
+        outcome=AuthOutcome.SUCCESS,
+        user_id=user.id,
+    )
+    emit_auth_event(
+        auth_event_type=AuthEventType.REVOCATION_APPLIED,
+        outcome=AuthOutcome.SUCCESS,
+        user_id=user.id,
+    )
+
     return MessageResponse(message="Password reset. Please log in.")
 
 
@@ -158,6 +175,12 @@ async def change_password(
 
     # Revoke all other sessions
     await set_user_revocation(user.id)
+
+    emit_auth_event(
+        auth_event_type=AuthEventType.REVOCATION_APPLIED,
+        outcome=AuthOutcome.SUCCESS,
+        user_id=user.id,
+    )
 
     return MessageResponse(message="Password changed")
 
@@ -268,5 +291,11 @@ async def delete_account(
 
     # Revoke all tokens
     await set_user_revocation(db_user.id)
+
+    emit_auth_event(
+        auth_event_type=AuthEventType.SESSION_TERMINATED,
+        outcome=AuthOutcome.SUCCESS,
+        user_id=db_user.id,
+    )
 
     return MessageResponse(message="Account scheduled for deletion")

@@ -18,6 +18,8 @@ from backend.dependencies import (
 )
 from backend.models.oauth_account import OAuthAccount
 from backend.models.user import User, UserPreference
+from backend.observability.instrumentation.auth import emit_oauth_event
+from backend.observability.schema.auth_events import OAuthAction
 from backend.rate_limit import limiter
 from backend.routers.auth._helpers import (
     _record_login_attempt_bg,
@@ -52,6 +54,9 @@ async def google_authorize(
     # Validate redirect target (prevent open redirect)
     safe_next = next if next.startswith("/") and not next.startswith("//") else "/dashboard"
     auth_url, _ = await build_auth_url(next_url=safe_next)
+
+    emit_oauth_event(provider="google", action=OAuthAction.AUTH_START, status="success")
+
     return RedirectResponse(url=auth_url, status_code=302)  # nosemgrep: no-open-redirect
 
 
@@ -89,12 +94,24 @@ async def google_callback(
         google_user, next_url = await exchange_code(code, state)
     except ValueError:
         logger.exception("Google OAuth exchange failed")
+        emit_oauth_event(
+            provider="google",
+            action=OAuthAction.CODE_EXCHANGE,
+            status="failure",
+            error_reason="invalid_session",
+        )
         raise HTTPException(
             status_code=400,
             detail="Invalid or expired session. Please try again.",
         )
     except Exception:
         logger.exception("Google OAuth API error")
+        emit_oauth_event(
+            provider="google",
+            action=OAuthAction.CODE_EXCHANGE,
+            status="failure",
+            error_reason="provider_error",
+        )
         raise HTTPException(
             status_code=502,
             detail="Google Sign-In temporarily unavailable. Use email/password.",
@@ -211,6 +228,13 @@ async def google_callback(
         method="google_oauth",
     )
 
+    emit_oauth_event(
+        provider="google",
+        action=OAuthAction.CODE_EXCHANGE,
+        status="success",
+        user_id=user.id,
+    )
+
     return redirect
 
 
@@ -237,5 +261,12 @@ async def google_unlink(
 
     await db.delete(oauth)
     await db.commit()
+
+    emit_oauth_event(
+        provider="google",
+        action=OAuthAction.UNLINK,
+        status="success",
+        user_id=user.id,
+    )
 
     return MessageResponse(message="Google account unlinked")
