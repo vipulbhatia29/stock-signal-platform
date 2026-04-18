@@ -200,6 +200,13 @@ class Settings(BaseSettings):
     )
     OBS_FLUSH_INTERVAL_MS: int = Field(default=500, ge=50)
     OBS_BUFFER_SIZE: int = Field(default=10_000, ge=100)
+    OBS_LEGACY_DIRECT_WRITES: bool = Field(
+        default=True,
+        description=(
+            "Strangler-fig flag — when True, legacy direct-DB writes run alongside "
+            "SDK emissions. Flip to False after 2 weeks of green production. See spec §2.7."
+        ),
+    )
 
     @field_validator("OBS_INGEST_SECRET")
     @classmethod
