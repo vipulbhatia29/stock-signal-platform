@@ -35,6 +35,9 @@ async def write_batch(events: list[ObsEventBase]) -> None:
     pipeline_lifecycle_events: list = []
     request_log_events: list = []
     api_error_log_events: list = []
+    auth_event_events: list = []
+    oauth_event_events: list = []
+    email_send_events: list = []
 
     for event in events:
         try:
@@ -56,6 +59,12 @@ async def write_batch(events: list[ObsEventBase]) -> None:
                 request_log_events.append(event)
             elif event.event_type == EventType.API_ERROR_LOG:
                 api_error_log_events.append(event)
+            elif event.event_type == EventType.AUTH_EVENT:
+                auth_event_events.append(event)
+            elif event.event_type == EventType.OAUTH_EVENT:
+                oauth_event_events.append(event)
+            elif event.event_type == EventType.EMAIL_SEND:
+                email_send_events.append(event)
             else:
                 logger.debug("obs.event.unhandled", extra={"event_type": event.event_type.value})
         except Exception:  # noqa: BLE001 — per-event error isolation
@@ -143,3 +152,27 @@ async def write_batch(events: list[ObsEventBase]) -> None:
             await persist_api_error_logs(api_error_log_events)
         except Exception:  # noqa: BLE001 — writer errors must not propagate
             logger.warning("obs.writer.api_error_log_batch.failed", exc_info=True)
+
+    if auth_event_events:
+        try:
+            from backend.observability.service.auth_event_writer import persist_auth_events
+
+            await persist_auth_events(auth_event_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.auth_event_batch.failed", exc_info=True)
+
+    if oauth_event_events:
+        try:
+            from backend.observability.service.auth_event_writer import persist_oauth_events
+
+            await persist_oauth_events(oauth_event_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.oauth_event_batch.failed", exc_info=True)
+
+    if email_send_events:
+        try:
+            from backend.observability.service.auth_event_writer import persist_email_sends
+
+            await persist_email_sends(email_send_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.email_send_batch.failed", exc_info=True)
