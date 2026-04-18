@@ -5,12 +5,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import uuid
+from datetime import datetime, timezone
+from uuid import UUID
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid_utils import uuid7
 
+from backend.config import settings
 from backend.database import async_session_factory
 from backend.models.dq_check_history import DqCheckHistory
+from backend.observability.bootstrap import _maybe_get_obs_client
+from backend.observability.context import current_span_id, current_trace_id
+from backend.observability.schema.legacy_events import DqFindingEvent
 from backend.tasks import celery_app
 from backend.tasks.pipeline import tracked_task
 
@@ -34,6 +41,7 @@ async def _dq_scan_async() -> dict:
     Returns:
         Dict with status, findings count, and critical count.
     """
+    wrote_via_legacy = settings.OBS_LEGACY_DIRECT_WRITES  # snapshot NOW
     findings: list[dict] = []
     async with async_session_factory() as db:
         findings += await _check_negative_prices(db)
@@ -47,20 +55,47 @@ async def _dq_scan_async() -> dict:
         findings += await _check_negative_volume(db)
         findings += await _check_bollinger_violations(db)
 
-        # Persist findings
+        # Legacy persist — gated by flag
+        if wrote_via_legacy:
+            for f in findings:
+                db.add(
+                    DqCheckHistory(
+                        check_name=f["check"],
+                        severity=f["severity"],
+                        ticker=f.get("ticker"),
+                        message=f["message"],
+                        metadata_=f.get("metadata"),
+                    )
+                )
+            await db.commit()
+
+    # SDK emission — always, per finding
+    obs_client = _maybe_get_obs_client()
+    if obs_client is not None:
         for f in findings:
-            db.add(
-                DqCheckHistory(
+            try:
+                event = DqFindingEvent(
+                    trace_id=current_trace_id() or UUID(bytes=uuid7().bytes),
+                    span_id=UUID(bytes=uuid7().bytes),
+                    parent_span_id=current_span_id(),
+                    ts=datetime.now(timezone.utc),
+                    env=getattr(settings, "APP_ENV", "dev"),
+                    git_sha=None,
+                    user_id=None,
+                    session_id=None,
+                    query_id=None,
+                    wrote_via_legacy=wrote_via_legacy,
                     check_name=f["check"],
                     severity=f["severity"],
                     ticker=f.get("ticker"),
                     message=f["message"],
-                    metadata_=f.get("metadata"),
+                    metadata=f.get("metadata"),
                 )
-            )
-        await db.commit()
+                await obs_client.emit(event)
+            except Exception:
+                logger.debug("Failed to emit DQ finding via SDK", exc_info=True)
 
-    # Create alerts for critical findings
+    # Create alerts for critical findings (UNCHANGED — always runs)
     critical = [f for f in findings if f["severity"] == "critical"]
     if critical:
         from backend.tasks.alerts import _create_alert

@@ -107,7 +107,8 @@ class DqFindingEvent(ObsEventBase, _LegacyStranglerFigMixin):
 
     Args:
         check_name: Identifier for the DQ check (e.g. ``"null_price_check"``).
-        severity: Finding severity — one of ``info``, ``warning``, ``error``, ``critical``.
+        severity: Finding severity — one of ``info``, ``warning``, ``error``, ``critical``,
+            ``high``, ``medium``.
         ticker: Ticker symbol if the finding is ticker-scoped. ``None`` for global checks.
         message: Human-readable finding description.
         metadata: Optional structured metadata dict (e.g. affected row count).
@@ -115,7 +116,7 @@ class DqFindingEvent(ObsEventBase, _LegacyStranglerFigMixin):
 
     event_type: Literal[EventType.DQ_FINDING] = EventType.DQ_FINDING
     check_name: str
-    severity: Literal["info", "warning", "error", "critical"]
+    severity: Literal["info", "warning", "error", "critical", "high", "medium"]
     ticker: str | None = None
     message: str
     metadata: dict | None = None

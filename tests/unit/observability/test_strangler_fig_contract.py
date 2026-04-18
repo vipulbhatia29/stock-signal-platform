@@ -508,3 +508,217 @@ class TestWriteLoginAttemptStranglerFig:
         assert event.method == "password"
         assert event.user_id == user_id
         assert event.wrote_via_legacy is False
+
+
+class TestDqScanStranglerFig:
+    @pytest.mark.asyncio
+    async def test_sdk_emit_per_finding(
+        self, mock_obs_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Each DQ finding produces exactly one DqFindingEvent emitted via SDK."""
+        monkeypatch.setattr("backend.tasks.dq_scan.settings.OBS_LEGACY_DIRECT_WRITES", False)
+        monkeypatch.setattr("backend.tasks.dq_scan._maybe_get_obs_client", lambda: mock_obs_client)
+
+        # Mock all 10 check functions to return empty lists by default
+        for check_name in [
+            "_check_negative_prices",
+            "_check_rsi_out_of_range",
+            "_check_composite_score_out_of_range",
+            "_check_null_sectors",
+            "_check_forecast_extreme_ratios",
+            "_check_orphan_positions",
+            "_check_duplicate_signals",
+            "_check_stale_universe_coverage",
+            "_check_negative_volume",
+            "_check_bollinger_violations",
+        ]:
+            monkeypatch.setattr(f"backend.tasks.dq_scan.{check_name}", AsyncMock(return_value=[]))
+
+        # One check returns a single finding
+        monkeypatch.setattr(
+            "backend.tasks.dq_scan._check_negative_prices",
+            AsyncMock(
+                return_value=[
+                    {
+                        "check": "negative_prices",
+                        "severity": "warning",
+                        "ticker": "AAPL",
+                        "message": "Negative price",
+                    }
+                ]
+            ),
+        )
+
+        # Mock DB session (no real DB needed)
+        mock_session = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr("backend.tasks.dq_scan.async_session_factory", lambda: mock_cm)
+
+        from backend.observability.schema.legacy_events import DqFindingEvent
+        from backend.tasks.dq_scan import _dq_scan_async
+
+        result = await _dq_scan_async()
+
+        assert result["findings"] == 1
+        mock_obs_client.emit.assert_awaited_once()
+        event = mock_obs_client.emit.call_args[0][0]
+        assert isinstance(event, DqFindingEvent)
+        assert event.check_name == "negative_prices"
+        assert event.ticker == "AAPL"
+        assert event.wrote_via_legacy is False
+
+    @pytest.mark.asyncio
+    async def test_legacy_persist_when_flag_true(
+        self, mock_obs_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Flag=True: db.add called for each finding AND SDK emit happens."""
+        monkeypatch.setattr("backend.tasks.dq_scan.settings.OBS_LEGACY_DIRECT_WRITES", True)
+        monkeypatch.setattr("backend.tasks.dq_scan._maybe_get_obs_client", lambda: mock_obs_client)
+
+        # Mock all checks to return empty, except one with a finding
+        for check_name in [
+            "_check_negative_prices",
+            "_check_rsi_out_of_range",
+            "_check_composite_score_out_of_range",
+            "_check_null_sectors",
+            "_check_forecast_extreme_ratios",
+            "_check_orphan_positions",
+            "_check_duplicate_signals",
+            "_check_stale_universe_coverage",
+            "_check_negative_volume",
+            "_check_bollinger_violations",
+        ]:
+            monkeypatch.setattr(f"backend.tasks.dq_scan.{check_name}", AsyncMock(return_value=[]))
+
+        monkeypatch.setattr(
+            "backend.tasks.dq_scan._check_rsi_out_of_range",
+            AsyncMock(
+                return_value=[
+                    {
+                        "check": "rsi_out_of_range",
+                        "severity": "high",
+                        "ticker": "TSLA",
+                        "message": "RSI 105.0 for TSLA",
+                    }
+                ]
+            ),
+        )
+
+        # Mock DB session to capture db.add calls
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr("backend.tasks.dq_scan.async_session_factory", lambda: mock_cm)
+
+        from backend.observability.schema.legacy_events import DqFindingEvent
+        from backend.tasks.dq_scan import _dq_scan_async
+
+        result = await _dq_scan_async()
+
+        assert result["findings"] == 1
+        # Legacy path: db.add was called once for the finding
+        mock_session.add.assert_called_once()
+        mock_session.commit.assert_awaited_once()
+        # SDK emit also happened
+        mock_obs_client.emit.assert_awaited_once()
+        event = mock_obs_client.emit.call_args[0][0]
+        assert isinstance(event, DqFindingEvent)
+        assert event.check_name == "rsi_out_of_range"
+        assert event.ticker == "TSLA"
+        assert event.wrote_via_legacy is True
+
+    @pytest.mark.asyncio
+    async def test_no_sdk_emit_when_no_obs_client(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When obs client unavailable, legacy persist still runs and no crash occurs."""
+        monkeypatch.setattr("backend.tasks.dq_scan.settings.OBS_LEGACY_DIRECT_WRITES", True)
+        monkeypatch.setattr("backend.tasks.dq_scan._maybe_get_obs_client", lambda: None)
+
+        for check_name in [
+            "_check_negative_prices",
+            "_check_rsi_out_of_range",
+            "_check_composite_score_out_of_range",
+            "_check_null_sectors",
+            "_check_forecast_extreme_ratios",
+            "_check_orphan_positions",
+            "_check_duplicate_signals",
+            "_check_stale_universe_coverage",
+            "_check_negative_volume",
+            "_check_bollinger_violations",
+        ]:
+            monkeypatch.setattr(f"backend.tasks.dq_scan.{check_name}", AsyncMock(return_value=[]))
+
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr("backend.tasks.dq_scan.async_session_factory", lambda: mock_cm)
+
+        from backend.tasks.dq_scan import _dq_scan_async
+
+        # Must not raise
+        result = await _dq_scan_async()
+        assert result["status"] == "ok"
+        assert result["findings"] == 0
+
+    @pytest.mark.asyncio
+    async def test_multiple_findings_emit_multiple_events(
+        self, mock_obs_client: MagicMock, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Multiple findings each get their own DqFindingEvent (non-critical, no alerts branch)."""
+        monkeypatch.setattr("backend.tasks.dq_scan.settings.OBS_LEGACY_DIRECT_WRITES", False)
+        monkeypatch.setattr("backend.tasks.dq_scan._maybe_get_obs_client", lambda: mock_obs_client)
+
+        two_findings = [
+            {
+                "check": "rsi_out_of_range",
+                "severity": "high",
+                "ticker": "AAPL",
+                "message": "RSI 105 for AAPL",
+            },
+            {
+                "check": "rsi_out_of_range",
+                "severity": "high",
+                "ticker": "MSFT",
+                "message": "RSI 105 for MSFT",
+            },
+        ]
+
+        for check_name in [
+            "_check_negative_prices",
+            "_check_rsi_out_of_range",
+            "_check_composite_score_out_of_range",
+            "_check_null_sectors",
+            "_check_forecast_extreme_ratios",
+            "_check_orphan_positions",
+            "_check_duplicate_signals",
+            "_check_stale_universe_coverage",
+            "_check_negative_volume",
+            "_check_bollinger_violations",
+        ]:
+            monkeypatch.setattr(f"backend.tasks.dq_scan.{check_name}", AsyncMock(return_value=[]))
+
+        monkeypatch.setattr(
+            "backend.tasks.dq_scan._check_rsi_out_of_range",
+            AsyncMock(return_value=two_findings),
+        )
+
+        mock_session = AsyncMock()
+        mock_cm = AsyncMock()
+        mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_cm.__aexit__ = AsyncMock(return_value=False)
+        monkeypatch.setattr("backend.tasks.dq_scan.async_session_factory", lambda: mock_cm)
+
+        from backend.tasks.dq_scan import _dq_scan_async
+
+        result = await _dq_scan_async()
+
+        assert result["findings"] == 2
+        assert result["critical"] == 0
+        assert mock_obs_client.emit.await_count == 2
