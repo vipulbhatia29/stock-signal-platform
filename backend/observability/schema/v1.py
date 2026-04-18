@@ -27,6 +27,9 @@ class EventType(str, Enum):
     PIPELINE_LIFECYCLE = "pipeline_lifecycle"
     EXTERNAL_API_CALL = "external_api_call"
     RATE_LIMITER_EVENT = "rate_limiter_event"
+    # 1b: HTTP layer
+    REQUEST_LOG = "request_log"
+    API_ERROR_LOG = "api_error_log"
 
 
 class AttributionLayer(str, Enum):
