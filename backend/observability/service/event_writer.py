@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 async def write_batch(events: list[ObsEventBase]) -> None:
     """Write a batch of events to their respective stores.
 
-    Routes each event by event_type to its dedicated writer. Writers are imported
-    lazily inside each branch to avoid circular imports and keep startup fast.
+    Groups events by event_type and delegates each group to its dedicated
+    batch writer for efficient DB persistence (single session per group).
+    Writers are imported lazily to avoid circular imports.
     Unrecognised event types are logged at DEBUG level — PR5 will add the
     remaining writers (LLM_CALL, TOOL_EXECUTION, etc.).
 
@@ -25,19 +26,40 @@ async def write_batch(events: list[ObsEventBase]) -> None:
         events: Batch of events to persist. Typically drained from the in-memory
             buffer by the flush loop in ObservabilityClient.
     """
+    # Group events by type for batch persistence.
+    external_api_events: list[ObsEventBase] = []
+    rate_limiter_events: list[ObsEventBase] = []
+
     for event in events:
-        if event.event_type == EventType.EXTERNAL_API_CALL:
+        try:
+            if event.event_type == EventType.EXTERNAL_API_CALL:
+                external_api_events.append(event)
+            elif event.event_type == EventType.RATE_LIMITER_EVENT:
+                rate_limiter_events.append(event)
+            else:
+                # PR5 will add writers for LLM_CALL, TOOL_EXECUTION, etc.
+                logger.debug(
+                    "obs.event.unhandled", extra={"event_type": event.event_type.value}
+                )
+        except Exception:  # noqa: BLE001 — per-event error isolation
+            logger.warning("obs.event.classify_failed", exc_info=True)
+
+    if external_api_events:
+        try:
             from backend.observability.service.external_api_writer import (
-                persist_external_api_call,
+                persist_external_api_calls,
             )
 
-            await persist_external_api_call(event)
-        elif event.event_type == EventType.RATE_LIMITER_EVENT:
+            await persist_external_api_calls(external_api_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.external_api_batch.failed", exc_info=True)
+
+    if rate_limiter_events:
+        try:
             from backend.observability.service.rate_limiter_writer import (
-                persist_rate_limiter_event,
+                persist_rate_limiter_events,
             )
 
-            await persist_rate_limiter_event(event)
-        else:
-            # PR5 will add writers for LLM_CALL, TOOL_EXECUTION, etc.
-            logger.debug("obs.event.unhandled", extra={"event_type": event.event_type.value})
+            await persist_rate_limiter_events(rate_limiter_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.rate_limiter_batch.failed", exc_info=True)

@@ -111,6 +111,7 @@ def _make_session_mock() -> tuple[MagicMock, list[Any]]:
 
     mock_db = MagicMock()
     mock_db.add = MagicMock(side_effect=lambda row: added_rows.append(row))
+    mock_db.add_all = MagicMock(side_effect=lambda rows: added_rows.extend(rows))
     mock_db.commit = AsyncMock()
 
     @asynccontextmanager
@@ -128,60 +129,46 @@ def _make_session_mock() -> tuple[MagicMock, list[Any]]:
 
 @pytest.mark.asyncio
 async def test_write_batch_routes_external_api_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    """EXTERNAL_API_CALL events are forwarded to persist_external_api_call."""
-    persisted: list[ObsEventBase] = []
+    """EXTERNAL_API_CALL events are forwarded to persist_external_api_calls (batch)."""
+    persisted: list[list[ObsEventBase]] = []
 
-    async def _fake_persist(event: ObsEventBase) -> None:
-        persisted.append(event)
-
-    monkeypatch.setattr(
-        "backend.observability.service.external_api_writer.persist_external_api_call",
-        _fake_persist,
-    )
+    async def _fake_persist(events: list[ObsEventBase]) -> None:
+        persisted.append(events)
 
     from backend.observability.service import event_writer
 
-    # Force re-import of the lazy import path by patching in the module namespace
-    with patch(
-        "backend.observability.service.event_writer." + "write_batch.__module__",
-        create=True,
-    ):
-        pass  # patching not required — we patch the writer module directly
-
     event = _make_ext_api_event()
 
-    # Patch the lazy import inside write_batch
     with patch(
-        "backend.observability.service.external_api_writer.persist_external_api_call",
+        "backend.observability.service.external_api_writer.persist_external_api_calls",
         side_effect=_fake_persist,
     ):
         await event_writer.write_batch([event])
 
-    # The event was handed off (our side_effect captured it)
     assert len(persisted) == 1
-    assert persisted[0] is event
+    assert persisted[0][0] is event
 
 
 @pytest.mark.asyncio
 async def test_write_batch_routes_rate_limiter_event(monkeypatch: pytest.MonkeyPatch) -> None:
-    """RATE_LIMITER_EVENT events are forwarded to persist_rate_limiter_event."""
-    persisted: list[ObsEventBase] = []
+    """RATE_LIMITER_EVENT events are forwarded to persist_rate_limiter_events (batch)."""
+    persisted: list[list[ObsEventBase]] = []
 
-    async def _fake_persist(event: ObsEventBase) -> None:
-        persisted.append(event)
+    async def _fake_persist(events: list[ObsEventBase]) -> None:
+        persisted.append(events)
 
     from backend.observability.service import event_writer
 
     event = _make_rate_limiter_event()
 
     with patch(
-        "backend.observability.service.rate_limiter_writer.persist_rate_limiter_event",
+        "backend.observability.service.rate_limiter_writer.persist_rate_limiter_events",
         side_effect=_fake_persist,
     ):
         await event_writer.write_batch([event])
 
     assert len(persisted) == 1
-    assert persisted[0] is event
+    assert persisted[0][0] is event
 
 
 @pytest.mark.asyncio

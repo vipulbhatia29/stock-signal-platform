@@ -10,13 +10,13 @@ automatic EXTERNAL_API_CALL event emission for a specific provider.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import httpx
 
-from backend.observability.instrumentation.external_api import (
-    ObservedHttpClient,
-    build_observed_http_client,
-)
-from backend.observability.instrumentation.providers import ExternalProvider
+if TYPE_CHECKING:
+    from backend.observability.instrumentation.external_api import ObservedHttpClient
+    from backend.observability.instrumentation.providers import ExternalProvider
 
 _client: httpx.AsyncClient | None = None
 
@@ -84,6 +84,8 @@ def get_observed_http_client(provider: ExternalProvider, **kwargs: object) -> Ob
         client = get_observed_http_client(ExternalProvider.OPENAI)
         openai_sdk = openai.AsyncOpenAI(http_client=client, api_key=settings.OPENAI_API_KEY)
     """
+    from backend.observability.instrumentation.external_api import build_observed_http_client
+
     kwargs.setdefault("timeout", _DEFAULT_TIMEOUT)
     kwargs.setdefault("limits", _DEFAULT_LIMITS)
     return build_observed_http_client(provider, **kwargs)
