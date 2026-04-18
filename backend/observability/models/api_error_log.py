@@ -7,7 +7,6 @@ by Celery drop_chunks task (90 days).
 
 from __future__ import annotations
 
-import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, Index, Integer, String, Text, func
