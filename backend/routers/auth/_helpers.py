@@ -6,9 +6,11 @@ import re
 import secrets
 import uuid
 from datetime import datetime, timezone
+from uuid import UUID
 
 import jwt
 from fastapi import Response
+from uuid_utils import uuid7
 
 from backend.config import settings
 from backend.dependencies import (
@@ -18,6 +20,9 @@ from backend.dependencies import (
     COOKIE_REFRESH_TOKEN,
     COOKIE_SAMESITE,
 )
+from backend.observability.bootstrap import _maybe_get_obs_client
+from backend.observability.context import current_span_id, current_trace_id
+from backend.observability.schema.legacy_events import LoginAttemptEvent
 from backend.services.email import (
     send_deletion_confirmation,
     send_password_reset_email,
@@ -135,26 +140,62 @@ async def _write_login_attempt(
     failure_reason: str | None = None,
     method: str = "password",
 ) -> None:
-    """Write login attempt to DB with its own session."""
-    try:
-        from backend.database import async_session_factory
-        from backend.models.login_attempt import LoginAttempt
+    """Write login attempt to DB with its own session, and emit via SDK.
 
-        async with async_session_factory() as db:
-            attempt = LoginAttempt(
-                timestamp=datetime.now(timezone.utc),
+    Known limitation: if wrote_via_legacy=True and the legacy DB write fails,
+    the SDK event still carries wrote_via_legacy=True so the SDK writer will
+    skip the insert (dedup invariant). This means the row is lost — same as
+    the pre-PR5 behavior (legacy failure was already silently swallowed).
+    Acceptable for best-effort login audit; not a regression.
+    """
+    wrote_via_legacy = settings.OBS_LEGACY_DIRECT_WRITES  # snapshot NOW
+
+    if wrote_via_legacy:
+        try:
+            from backend.database import async_session_factory
+            from backend.models.login_attempt import LoginAttempt
+
+            async with async_session_factory() as db:
+                attempt = LoginAttempt(
+                    timestamp=datetime.now(timezone.utc),
+                    user_id=user_id,
+                    email=email,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    success=success,
+                    failure_reason=failure_reason,
+                    method=method,
+                )
+                db.add(attempt)
+                await db.commit()
+        except Exception:
+            logger.debug("Failed to record login attempt", exc_info=True)
+
+    # SDK emission — always (no-op when OBS_ENABLED=false)
+    obs_client = _maybe_get_obs_client()
+    if obs_client is not None:
+        try:
+            event = LoginAttemptEvent(
+                trace_id=current_trace_id() or UUID(bytes=uuid7().bytes),
+                span_id=UUID(bytes=uuid7().bytes),
+                parent_span_id=current_span_id(),
+                ts=datetime.now(timezone.utc),
+                env=getattr(settings, "APP_ENV", "dev"),
+                git_sha=None,
                 user_id=user_id,
+                session_id=None,
+                query_id=None,
+                wrote_via_legacy=wrote_via_legacy,
                 email=email,
+                success=success,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                success=success,
                 failure_reason=failure_reason,
                 method=method,
             )
-            db.add(attempt)
-            await db.commit()
-    except Exception:
-        logger.debug("Failed to record login attempt", exc_info=True)
+            await obs_client.emit(event)
+        except Exception:
+            logger.debug("Failed to emit login attempt via SDK", exc_info=True)
 
 
 async def _send_verification_bg(email: str, token: str) -> None:

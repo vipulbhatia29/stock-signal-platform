@@ -178,10 +178,9 @@ async def test_write_batch_logs_unhandled_event_type(caplog: pytest.LogCaptureFi
 
     from backend.observability.service import event_writer
 
-    # Build a bare ObsEventBase with an event_type that has no writer yet.
-    # Use LLM_CALL — not yet handled in PR4.
+    # Build a bare ObsEventBase with a fake event_type value not in any writer branch.
     event = ObsEventBase(
-        event_type=EventType.LLM_CALL,
+        event_type=EventType.EXTERNAL_API_CALL,  # will be handled, so use a fake value via mock
         trace_id=_make_trace_id(),
         span_id=_make_span_id(),
         parent_span_id=None,
@@ -192,6 +191,19 @@ async def test_write_batch_logs_unhandled_event_type(caplog: pytest.LogCaptureFi
         session_id=None,
         query_id=None,
     )
+    # Override event_type with an object whose __eq__ returns False for all EventType
+    # comparisons, ensuring the event falls through to the "unhandled" else-branch.
+
+    class _FakeEventType:
+        value = "unknown_future_event"
+
+        def __eq__(self, other: object) -> bool:
+            return False
+
+        def __hash__(self) -> int:
+            return hash("unknown")
+
+    object.__setattr__(event, "event_type", _FakeEventType())
 
     with caplog.at_level(logging.DEBUG, logger="backend.observability.service.event_writer"):
         await event_writer.write_batch([event])  # must not raise

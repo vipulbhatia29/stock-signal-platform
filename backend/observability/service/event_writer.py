@@ -1,7 +1,7 @@
 """Routes events by event_type to the right repository.
 
 PR2a ships a no-op DEBUG logger — validates SDK end-to-end. PR4 adds external_api_call_log +
-rate_limiter_event writers; PR5 adds writers for refactored legacy emitters.
+rate_limiter_event writers. PR5 adds writers for refactored legacy emitters.
 """
 
 from __future__ import annotations
@@ -19,16 +19,20 @@ async def write_batch(events: list[ObsEventBase]) -> None:
     Groups events by event_type and delegates each group to its dedicated
     batch writer for efficient DB persistence (single session per group).
     Writers are imported lazily to avoid circular imports.
-    Unrecognised event types are logged at DEBUG level — PR5 will add the
-    remaining writers (LLM_CALL, TOOL_EXECUTION, etc.).
+    Unrecognised event types are logged at DEBUG level.
 
     Args:
         events: Batch of events to persist. Typically drained from the in-memory
             buffer by the flush loop in ObservabilityClient.
     """
     # Group events by type for batch persistence.
-    external_api_events: list[ObsEventBase] = []
-    rate_limiter_events: list[ObsEventBase] = []
+    external_api_events: list = []
+    rate_limiter_events: list = []
+    llm_call_events: list = []
+    tool_execution_events: list = []
+    login_attempt_events: list = []
+    dq_finding_events: list = []
+    pipeline_lifecycle_events: list = []
 
     for event in events:
         try:
@@ -36,8 +40,17 @@ async def write_batch(events: list[ObsEventBase]) -> None:
                 external_api_events.append(event)
             elif event.event_type == EventType.RATE_LIMITER_EVENT:
                 rate_limiter_events.append(event)
+            elif event.event_type == EventType.LLM_CALL:
+                llm_call_events.append(event)
+            elif event.event_type == EventType.TOOL_EXECUTION:
+                tool_execution_events.append(event)
+            elif event.event_type == EventType.LOGIN_ATTEMPT:
+                login_attempt_events.append(event)
+            elif event.event_type == EventType.DQ_FINDING:
+                dq_finding_events.append(event)
+            elif event.event_type == EventType.PIPELINE_LIFECYCLE:
+                pipeline_lifecycle_events.append(event)
             else:
-                # PR5 will add writers for LLM_CALL, TOOL_EXECUTION, etc.
                 logger.debug("obs.event.unhandled", extra={"event_type": event.event_type.value})
         except Exception:  # noqa: BLE001 — per-event error isolation
             logger.warning("obs.event.classify_failed", exc_info=True)
@@ -61,3 +74,50 @@ async def write_batch(events: list[ObsEventBase]) -> None:
             await persist_rate_limiter_events(rate_limiter_events)
         except Exception:  # noqa: BLE001 — writer errors must not propagate
             logger.warning("obs.writer.rate_limiter_batch.failed", exc_info=True)
+
+    # Legacy emitter writers (PR5)
+    if llm_call_events:
+        try:
+            from backend.observability.service.legacy_emitters_writer import persist_llm_calls
+
+            await persist_llm_calls(llm_call_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.llm_call_batch.failed", exc_info=True)
+
+    if tool_execution_events:
+        try:
+            from backend.observability.service.legacy_emitters_writer import (
+                persist_tool_executions,
+            )
+
+            await persist_tool_executions(tool_execution_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.tool_execution_batch.failed", exc_info=True)
+
+    if login_attempt_events:
+        try:
+            from backend.observability.service.legacy_emitters_writer import (
+                persist_login_attempts,
+            )
+
+            await persist_login_attempts(login_attempt_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.login_attempt_batch.failed", exc_info=True)
+
+    if dq_finding_events:
+        try:
+            from backend.observability.service.legacy_emitters_writer import persist_dq_findings
+
+            await persist_dq_findings(dq_finding_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.dq_finding_batch.failed", exc_info=True)
+
+    if pipeline_lifecycle_events:
+        try:
+            from backend.observability.service.legacy_emitters_writer import (
+                persist_pipeline_lifecycle,
+            )
+
+            await persist_pipeline_lifecycle(pipeline_lifecycle_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.pipeline_lifecycle_batch.failed", exc_info=True)

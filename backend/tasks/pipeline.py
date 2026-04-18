@@ -10,12 +10,18 @@ from collections.abc import Awaitable, Callable
 from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from typing import Any, Literal, ParamSpec, TypeVar
+from uuid import UUID
 
 import pandas as pd
 from sqlalchemy import select, update
+from uuid_utils import uuid7
 
+from backend.config import settings
 from backend.database import async_session_factory
 from backend.models.pipeline import PipelineRun, PipelineWatermark
+from backend.observability.bootstrap import _maybe_get_obs_client
+from backend.observability.context import current_span_id, current_trace_id
+from backend.observability.schema.legacy_events import PipelineLifecycleEvent
 
 logger = logging.getLogger(__name__)
 
@@ -402,6 +408,69 @@ async def with_retry(
 
 
 # ---------------------------------------------------------------------------
+# Observability helper — emits PIPELINE_LIFECYCLE events (sync, fire-and-forget)
+# ---------------------------------------------------------------------------
+
+
+def _emit_lifecycle(
+    *,
+    pipeline_name: str,
+    transition: str,
+    run_id: uuid.UUID,
+    trigger: str,
+    celery_task_id: str | None = None,
+    duration_s: float | None = None,
+    tickers_total: int | None = None,
+    tickers_succeeded: int | None = None,
+    tickers_failed: int | None = None,
+) -> None:
+    """Emit a PIPELINE_LIFECYCLE event via SDK (sync, fire-and-forget).
+
+    Uses emit_sync — safe from Celery's asyncio.run() context.
+    Never raises — emission failures are logged and swallowed.
+
+    Args:
+        pipeline_name: Name recorded in pipeline_runs.pipeline_name.
+        transition: State transition — one of started, success, failed, no_op, partial.
+        run_id: UUID of the pipeline run.
+        trigger: What triggered the run (e.g. "celery_beat", "api", "manual").
+        celery_task_id: Celery task ID for cross-system correlation. None for non-Celery triggers.
+        duration_s: Wall-clock duration in seconds. None for started events.
+        tickers_total: Total tickers processed. None when not applicable.
+        tickers_succeeded: Tickers that succeeded. None when not applicable.
+        tickers_failed: Tickers that failed. None when not applicable.
+    """
+    obs_client = _maybe_get_obs_client()
+    if obs_client is None:
+        return
+    try:
+        event = PipelineLifecycleEvent(
+            trace_id=current_trace_id() or UUID(bytes=uuid7().bytes),
+            span_id=UUID(bytes=uuid7().bytes),
+            parent_span_id=current_span_id(),
+            ts=datetime.now(timezone.utc),
+            env=getattr(settings, "APP_ENV", "dev"),
+            git_sha=None,
+            user_id=None,
+            session_id=None,
+            query_id=None,
+            wrote_via_legacy=settings.OBS_LEGACY_DIRECT_WRITES,
+            pipeline_name=pipeline_name,
+            transition=transition,  # type: ignore[arg-type]
+            run_id=run_id,
+            trigger=trigger,
+            celery_task_id=celery_task_id,
+            duration_s=duration_s,
+            tickers_total=tickers_total,
+            tickers_succeeded=tickers_succeeded,
+            tickers_failed=tickers_failed,
+        )
+        obs_client.emit_sync(event)
+    except Exception:  # noqa: BLE001 — emission bug must never mask real task failure
+        logger.warning("obs.pipeline_lifecycle.emit_raised", exc_info=True)
+
+
+# ---------------------------------------------------------------------------
 # @tracked_task decorator — wraps an async function in the PipelineRunner lifecycle
 # ---------------------------------------------------------------------------
 
@@ -488,6 +557,17 @@ def tracked_task(
                 tickers_total=tickers_total,
                 celery_task_id=celery_task_id,
             )
+            started_at = datetime.now(timezone.utc)
+
+            # Emit "started" lifecycle event
+            _emit_lifecycle(
+                pipeline_name=pipeline_name,
+                transition="started",
+                run_id=run_id,
+                trigger=trigger,
+                celery_task_id=celery_task_id,
+            )
+
             try:
                 result = await fn(*args, run_id=run_id, **kwargs)
             except Exception:
@@ -511,9 +591,29 @@ def tracked_task(
                         await session.commit()
                 except Exception:
                     logger.warning("Failed to mark run %s as failed", run_id, exc_info=True)
+
+                # Emit "failed" lifecycle event
+                _emit_lifecycle(
+                    pipeline_name=pipeline_name,
+                    transition="failed",
+                    run_id=run_id,
+                    trigger=trigger,
+                    celery_task_id=celery_task_id,
+                    duration_s=(datetime.now(timezone.utc) - started_at).total_seconds(),
+                )
                 raise
             else:
-                await runner.complete_run(run_id)
+                final_status = await runner.complete_run(run_id)
+                # Emit terminal lifecycle event
+                _emit_lifecycle(
+                    pipeline_name=pipeline_name,
+                    transition=final_status,  # "success", "failed", "no_op", "partial"
+                    run_id=run_id,
+                    trigger=trigger,
+                    celery_task_id=celery_task_id,
+                    duration_s=(datetime.now(timezone.utc) - started_at).total_seconds(),
+                    tickers_total=tickers_total,
+                )
                 return result  # type: ignore[return-value]
 
         return wrapper
