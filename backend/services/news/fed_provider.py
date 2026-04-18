@@ -10,7 +10,8 @@ import httpx
 from defusedxml.ElementTree import fromstring as safe_fromstring
 
 from backend.config import settings
-from backend.services.http_client import get_http_client
+from backend.observability.instrumentation.providers import ExternalProvider
+from backend.services.http_client import get_observed_http_client
 from backend.services.news.base import NewsProvider, RawArticle
 from backend.services.rate_limiter import fed_limiter
 
@@ -53,7 +54,7 @@ class FedRssProvider(NewsProvider):
         """Parse Federal Reserve RSS feed."""
         await fed_limiter.acquire()
         try:
-            client = get_http_client()
+            client = get_observed_http_client(ExternalProvider.FRED)
             resp = await client.get(FED_RSS_URL, timeout=30)
             resp.raise_for_status()
             xml_text = resp.text
@@ -75,7 +76,7 @@ class FedRssProvider(NewsProvider):
 
         await fed_limiter.acquire()
         try:
-            client = get_http_client()
+            client = get_observed_http_client(ExternalProvider.FRED)
             resp = await client.get(url, params=params, timeout=30)
             resp.raise_for_status()
             data = resp.json()

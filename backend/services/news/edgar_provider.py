@@ -8,7 +8,8 @@ from datetime import date, datetime, timezone
 import httpx
 
 from backend.config import settings
-from backend.services.http_client import get_http_client
+from backend.observability.instrumentation.providers import ExternalProvider
+from backend.services.http_client import get_observed_http_client
 from backend.services.news.base import NewsProvider, RawArticle
 from backend.services.rate_limiter import edgar_limiter
 
@@ -56,7 +57,7 @@ class EdgarProvider(NewsProvider):
 
         await edgar_limiter.acquire()
         try:
-            client = get_http_client()
+            client = get_observed_http_client(ExternalProvider.EDGAR)
             resp = await client.get(url, params=params, headers=headers, timeout=30)
             resp.raise_for_status()
             data = resp.json()
