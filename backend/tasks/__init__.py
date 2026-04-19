@@ -212,6 +212,11 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.retention.purge_old_deploy_events_task",
         "schedule": crontab(hour=9, minute=15),
     },
+    # ── Obs 1c: Finding log retention ──
+    "purge-findings-daily": {
+        "task": "backend.tasks.retention.purge_old_findings_task",
+        "schedule": crontab(hour=9, minute=30),
+    },
     # ── Obs 1b: Agent layer — provider health snapshot ──
     "snapshot-provider-health": {
         "task": "backend.tasks.observability.snapshot_provider_health",
