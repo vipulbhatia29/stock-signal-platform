@@ -39,6 +39,7 @@ async def persist_findings(findings: list[Finding]) -> tuple[int, int]:
 
     async with async_session_factory() as session:
         for finding in findings:
+            # nosemgrep: no-timing-unsafe-compare (SQLAlchemy column ==, not str compare)
             existing = await session.execute(
                 select(FindingLog.id).where(
                     FindingLog.dedup_key == finding.dedup_key,

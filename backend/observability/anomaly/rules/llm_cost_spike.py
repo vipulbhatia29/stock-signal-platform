@@ -65,7 +65,7 @@ class LlmCostSpikeRule(AnomalyRule):
 
         async with async_session_factory() as session:
             today_result = await session.execute(today_stmt)
-            today_cost: Decimal = today_result.scalar_one()
+            today_cost: Decimal = today_result.scalar_one() or Decimal("0")
 
             daily_result = await session.execute(daily_stmt)
             daily_rows = daily_result.all()
