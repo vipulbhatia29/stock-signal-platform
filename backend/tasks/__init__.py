@@ -412,14 +412,17 @@ def run_anomaly_scan_task() -> dict:
     """
     import asyncio
 
-    try:
+    async def _run_scan() -> dict:
         from backend.observability.anomaly.engine import run_anomaly_scan
         from backend.observability.anomaly.persist import persist_findings
         from backend.observability.anomaly.rules import ALL_RULES
 
-        findings = asyncio.run(run_anomaly_scan(rules=ALL_RULES))
-        inserted, skipped = asyncio.run(persist_findings(findings))
+        findings = await run_anomaly_scan(rules=ALL_RULES)
+        inserted, skipped = await persist_findings(findings)
         return {"status": "ok", "findings": len(findings), "inserted": inserted, "skipped": skipped}
+
+    try:
+        return asyncio.run(_run_scan())
     except Exception:  # noqa: BLE001 — anomaly scan must not crash worker
         _obs_logger.warning("obs.anomaly_scan.failed", exc_info=True)
         return {"status": "error"}

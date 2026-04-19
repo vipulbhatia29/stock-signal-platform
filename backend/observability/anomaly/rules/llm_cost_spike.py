@@ -9,7 +9,8 @@ import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
-from sqlalchemy import func, select
+from sqlalchemy import cast, func, select
+from sqlalchemy.dialects.postgresql import DATE
 
 from backend.database import async_session_factory
 from backend.models.logs import LLMCallLog
@@ -50,10 +51,6 @@ class LlmCostSpikeRule(AnomalyRule):
         )
 
         # Per-day totals for the last 7 days (to compute median client-side)
-        # Using cast to date for grouping
-        from sqlalchemy import cast
-        from sqlalchemy.dialects.postgresql import DATE
-
         daily_stmt = (
             select(
                 cast(LLMCallLog.created_at, DATE).label("day"),

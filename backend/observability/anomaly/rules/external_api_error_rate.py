@@ -79,7 +79,7 @@ class ExternalApiErrorRateRule(AnomalyRule):
                     Finding(
                         kind="external_api_error_rate_elevated",
                         attribution_layer="external_api",
-                        severity="warning",
+                        severity="warning" if error_rate < 0.5 else "error",
                         title=f"External API error rate elevated for provider '{provider}'",
                         evidence={
                             "provider": provider,

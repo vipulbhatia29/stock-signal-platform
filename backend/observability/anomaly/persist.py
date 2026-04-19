@@ -69,7 +69,13 @@ async def persist_findings(findings: list[Finding]) -> tuple[int, int]:
             inserted += 1
 
         if inserted > 0:
-            await session.commit()
+            from backend.observability.instrumentation.db import _in_obs_write  # noqa: PLC0415
+
+            token = _in_obs_write.set(True)
+            try:
+                await session.commit()
+            finally:
+                _in_obs_write.reset(token)
 
     logger.info("anomaly.persist", extra={"inserted": inserted, "skipped": skipped})
     return inserted, skipped
