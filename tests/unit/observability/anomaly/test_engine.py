@@ -110,3 +110,11 @@ class TestRunAnomalyScan:
     async def test_empty_rules_returns_empty(self) -> None:
         findings = await run_anomaly_scan(rules=[], semaphore_limit=2, rule_timeout_s=5)
         assert findings == []
+
+
+class TestAnomalyScanTask:
+    def test_task_is_registered(self) -> None:
+        """Celery task for anomaly scan is registered under its expected name."""
+        from backend.tasks import celery_app
+
+        assert "backend.tasks.observability.run_anomaly_scan" in celery_app.tasks

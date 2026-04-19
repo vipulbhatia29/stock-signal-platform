@@ -217,6 +217,11 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.observability.snapshot_provider_health",
         "schedule": 60,  # every 60 seconds
     },
+    # ── Obs 1c: Anomaly engine (every 5 min) ──
+    "anomaly-scan": {
+        "task": "backend.tasks.observability.run_anomaly_scan",
+        "schedule": 5 * 60,  # 5 minutes in seconds
+    },
     # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {
         "task": "backend.tasks.forecasting.run_backtest_task",
@@ -390,6 +395,29 @@ def snapshot_provider_health_task() -> dict:
     # registry is available. Schema + table are ready for population.
     _obs_logger.debug("obs.provider_health.snapshot — no-op (deferred to 1c)")
     return {"status": "deferred"}
+
+
+# ── Obs 1c: Anomaly engine scan (every 5 min) ────────────────────────────
+@celery_app.task(name="backend.tasks.observability.run_anomaly_scan")
+def run_anomaly_scan_task() -> dict:
+    """Run all anomaly rules and persist findings.
+
+    Uses asyncio.run() to bridge sync Celery → async engine.
+    NOT a @tracked_task to avoid recursion with obs writes.
+    """
+    import asyncio
+
+    try:
+        from backend.observability.anomaly.engine import run_anomaly_scan
+        from backend.observability.anomaly.persist import persist_findings
+        from backend.observability.anomaly.rules import ALL_RULES
+
+        findings = asyncio.run(run_anomaly_scan(rules=ALL_RULES))
+        inserted, skipped = asyncio.run(persist_findings(findings))
+        return {"status": "ok", "findings": len(findings), "inserted": inserted, "skipped": skipped}
+    except Exception:  # noqa: BLE001 — anomaly scan must not crash worker
+        _obs_logger.warning("obs.anomaly_scan.failed", exc_info=True)
+        return {"status": "error"}
 
 
 # ── Trace propagation — signal handlers register on import (PR3) ──────────
