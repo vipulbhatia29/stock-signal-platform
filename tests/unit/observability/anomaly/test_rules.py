@@ -17,10 +17,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_session_mock(rows: Any, *, scalar_one: Any = None, scalars: Any = None) -> tuple:
     """Return a (mock_session, mock_factory_cm) pair for patching async_session_factory.
@@ -70,6 +70,7 @@ def _patch_factory(module_path: str, mock_session: AsyncMock):
 # ---------------------------------------------------------------------------
 # Rule 1: External API Error Rate
 # ---------------------------------------------------------------------------
+
 
 class TestExternalApiErrorRateRule:
     """Tests for ExternalApiErrorRateRule."""
@@ -167,6 +168,7 @@ class TestExternalApiErrorRateRule:
 # ---------------------------------------------------------------------------
 # Rule 2: LLM Cost Spike
 # ---------------------------------------------------------------------------
+
 
 class TestLlmCostSpikeRule:
     """Tests for LlmCostSpikeRule."""
@@ -291,6 +293,7 @@ class TestLlmCostSpikeRule:
 # Rule 3: Slow Query Regression
 # ---------------------------------------------------------------------------
 
+
 class TestSlowQueryRegressionRule:
     """Tests for SlowQueryRegressionRule."""
 
@@ -316,9 +319,7 @@ class TestSlowQueryRegressionRule:
         mock_result_baseline.all = MagicMock(return_value=baseline_rows)
 
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_result_recent, mock_result_baseline]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_result_recent, mock_result_baseline])
 
         with _patch_factory(
             "backend.observability.anomaly.rules.slow_query_regression.async_session_factory",
@@ -353,9 +354,7 @@ class TestSlowQueryRegressionRule:
         mock_result_baseline.all = MagicMock(return_value=baseline_rows)
 
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_result_recent, mock_result_baseline]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_result_recent, mock_result_baseline])
 
         with _patch_factory(
             "backend.observability.anomaly.rules.slow_query_regression.async_session_factory",
@@ -385,9 +384,7 @@ class TestSlowQueryRegressionRule:
         mock_result_baseline.all = MagicMock(return_value=baseline_rows)
 
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_result_recent, mock_result_baseline]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_result_recent, mock_result_baseline])
 
         with _patch_factory(
             "backend.observability.anomaly.rules.slow_query_regression.async_session_factory",
@@ -416,9 +413,7 @@ class TestSlowQueryRegressionRule:
         mock_result_baseline.all = MagicMock(return_value=[])
 
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock(
-            side_effect=[mock_result_recent, mock_result_baseline]
-        )
+        mock_session.execute = AsyncMock(side_effect=[mock_result_recent, mock_result_baseline])
 
         with _patch_factory(
             "backend.observability.anomaly.rules.slow_query_regression.async_session_factory",
@@ -433,6 +428,7 @@ class TestSlowQueryRegressionRule:
 # ---------------------------------------------------------------------------
 # Rule 4: DB Pool Exhaustion
 # ---------------------------------------------------------------------------
+
 
 class TestDbPoolExhaustionRule:
     """Tests for DbPoolExhaustionRule."""
@@ -493,6 +489,7 @@ class TestDbPoolExhaustionRule:
 # ---------------------------------------------------------------------------
 # Rule 5: Rate Limiter Fallback
 # ---------------------------------------------------------------------------
+
 
 class TestRateLimiterFallbackRule:
     """Tests for RateLimiterFallbackRule."""
@@ -633,6 +630,7 @@ class TestRateLimiterFallbackRule:
 # Rule 6: Watermark Staleness
 # ---------------------------------------------------------------------------
 
+
 class TestWatermarkStalenessRule:
     """Tests for WatermarkStalenessRule."""
 
@@ -758,6 +756,7 @@ class TestWatermarkStalenessRule:
 # ---------------------------------------------------------------------------
 # Registry sanity check
 # ---------------------------------------------------------------------------
+
 
 class TestRuleRegistry:
     """Verifies the ALL_RULES registry is populated correctly."""
