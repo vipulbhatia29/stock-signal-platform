@@ -559,11 +559,25 @@ Planning session — 7 PR-scoped plans written + reviewed. See archive for detai
 - **Review fixes:** 3 IMPORTANT — (1) window error type → `WINDOW_ERROR` not `unhandled_rejection`, (2) X-GitHub-Event header validation added, (3) CI commit message uses real `head_commit.message`
 - 27 new tests, 24 files (12 new, 12 modified)
 
+### KAN-482 — PR7: Semgrep observability rules (PR #257)
+- **8 Semgrep rules** in `.semgrep/observability-rules.yml` (advisory mode):
+  1. `obs-ban-direct-httpx-client` — ban bare httpx.AsyncClient (ERROR)
+  2. `obs-ban-direct-requests` — ban bare requests.get/post (ERROR)
+  3. `obs-ban-utcnow` — ban datetime.utcnow() (ERROR)
+  4. `obs-ban-direct-obs-insert` — ban direct INSERT into observability tables (ERROR)
+  5. `obs-require-tracked-task` — require @tracked_task on Celery tasks (WARNING)
+  6. `obs-ban-httpexception-in-services` — ban HTTPException in services/agents (WARNING)
+  7. `obs-ban-str-exception-detail` — ban str(e) in HTTPException detail (ERROR)
+  8. `obs-warn-silent-except` — warn on silent except:pass (WARNING)
+- **Zero ERROR findings** on current codebase. WARNING findings are advisory tech debt flags.
+- **Test files:** `tests/semgrep/test_observability_rules.py` + `test_observability_rules_ok.py`
+- CI already configured (`ci-pr.yml` semgrep job with `continue-on-error: true`)
+
 ### Session 123 Totals
 - Tests: 2433 → 2460 unit (+27), 0 regressions
 - Alembic: 036 → 037 (`b7f8c9d0e1a2`)
-- 1 JIRA ticket: KAN-481 → In Progress
-- 1 PR (#256)
-- Obs 1b: 6/7 PRs shipped (PR1-PR6). Remaining: PR7 (Semgrep, KAN-482)
+- 2 JIRA tickets: KAN-481, KAN-482
+- 2 PRs (#256, #257)
+- **Obs 1b: 7/7 PRs shipped (PR1-PR7). KAN-459 COMPLETE.**
 - TDD + FSD + project-plan updated
-- Resume: PR7 (Semgrep rules, KAN-482) → then Obs 1b (KAN-459) COMPLETE
+- Resume: Transition KAN-459 → Done. Next: Obs 1c (KAN-460) or backlog
