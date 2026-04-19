@@ -18,6 +18,7 @@ from backend.observability.models.celery_worker_heartbeat import CeleryWorkerHea
 from backend.observability.models.db_pool_event import DbPoolEvent as DbPoolEventModel
 from backend.observability.models.deploy_events import DeployEvent
 from backend.observability.models.email_send_log import EmailSendLog
+from backend.observability.models.finding_log import FindingLog  # noqa: F401
 from backend.observability.models.external_api_call import ExternalApiCallLog
 from backend.observability.models.frontend_error_log import FrontendErrorLog
 from backend.observability.models.oauth_event_log import OAuthEventLog
@@ -51,4 +52,5 @@ __all__ = [
     "ProviderHealthSnapshot",
     "DeployEvent",
     "FrontendErrorLog",
+    "FindingLog",
 ]
