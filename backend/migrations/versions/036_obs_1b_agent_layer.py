@@ -60,6 +60,12 @@ def upgrade() -> None:
         ["query_id"],
         schema="observability",
     )
+    op.create_index(
+        "ix_agent_intent_log_intent_ts",
+        "agent_intent_log",
+        [sa.text("intent"), sa.text("ts DESC")],
+        schema="observability",
+    )
 
     # ------------------------------------------------------------------
     # agent_reasoning_log (regular table, 30d retention)
@@ -98,6 +104,13 @@ def upgrade() -> None:
         ["query_id", "loop_step"],
         schema="observability",
     )
+    op.create_index(
+        "ix_agent_reasoning_log_termination",
+        "agent_reasoning_log",
+        ["termination_reason"],
+        schema="observability",
+        postgresql_where=sa.text("termination_reason IS NOT NULL"),
+    )
 
     # ------------------------------------------------------------------
     # provider_health_snapshot (hypertable, 1-hour chunks, 30d retention)
@@ -119,6 +132,10 @@ def upgrade() -> None:
         sa.Column("exhausted_until", sa.DateTime(timezone=True), nullable=True),
         sa.Column("consecutive_failures", sa.Integer, nullable=False),
         sa.Column("last_failure_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("last_success_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("requests_last_5m", sa.Integer, nullable=True),
+        sa.Column("errors_last_5m", sa.Integer, nullable=True),
+        sa.Column("avg_latency_ms_last_5m", sa.Integer, nullable=True),
         sa.Column("env", sa.Text, nullable=False),
         sa.Column("git_sha", sa.Text, nullable=True),
         sa.PrimaryKeyConstraint("id", "ts"),

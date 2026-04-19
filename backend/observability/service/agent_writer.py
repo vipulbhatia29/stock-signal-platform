@@ -120,6 +120,10 @@ async def persist_provider_health_snapshots(
                     exhausted_until=event.exhausted_until,
                     consecutive_failures=event.consecutive_failures,
                     last_failure_at=event.last_failure_at,
+                    last_success_at=event.last_success_at,
+                    requests_last_5m=event.requests_last_5m,
+                    errors_last_5m=event.errors_last_5m,
+                    avg_latency_ms_last_5m=event.avg_latency_ms_last_5m,
                     env=event.env,
                     git_sha=event.git_sha,
                 )

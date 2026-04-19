@@ -95,3 +95,7 @@ class ProviderHealthSnapshotEvent(ObsEventBase):
     exhausted_until: datetime | None = None
     consecutive_failures: int
     last_failure_at: datetime | None = None
+    last_success_at: datetime | None = None
+    requests_last_5m: int | None = None
+    errors_last_5m: int | None = None
+    avg_latency_ms_last_5m: int | None = None

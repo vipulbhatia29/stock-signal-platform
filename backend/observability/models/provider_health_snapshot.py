@@ -43,6 +43,10 @@ class ProviderHealthSnapshot(Base):
     exhausted_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False)
     last_failure_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    requests_last_5m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    errors_last_5m: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_latency_ms_last_5m: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     env: Mapped[str] = mapped_column(Text, nullable=False)
     git_sha: Mapped[str | None] = mapped_column(Text, nullable=True)
