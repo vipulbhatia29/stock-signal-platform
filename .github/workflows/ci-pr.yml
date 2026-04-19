@@ -39,6 +39,8 @@ jobs:
               - 'docker-compose*.yml'
               - 'backend/config.py'
               - 'scripts/**'
+              - '.semgrep/**'
+              - 'tests/semgrep/**'
             migrations:
               - 'backend/migrations/**'
               - 'alembic.ini'
