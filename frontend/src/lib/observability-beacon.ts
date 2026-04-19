@@ -20,7 +20,7 @@ const BATCH_INTERVAL_MS = 5000;
 const MAX_BATCH_SIZE = 10;
 const MAX_BUFFER_SIZE = 100;
 
-let errorBuffer: FrontendErrorItem[] = [];
+const errorBuffer: FrontendErrorItem[] = [];
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function reportError(item: FrontendErrorItem): void {
