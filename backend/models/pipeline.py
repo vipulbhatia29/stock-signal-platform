@@ -3,7 +3,7 @@
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, Float, Integer, String
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models.base import Base, UUIDPrimaryKeyMixin
@@ -42,6 +42,7 @@ class PipelineRun(UUIDPrimaryKeyMixin, Base):
     total_duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     trigger: Mapped[str] = mapped_column(String(20), nullable=False, default="scheduled")
+    trace_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     celery_task_id: Mapped[str | None] = mapped_column(
         String(64),
         nullable=True,

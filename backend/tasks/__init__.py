@@ -172,6 +172,24 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.retention.purge_old_schema_migration_logs_task",
         "schedule": crontab(hour=7, minute=20),
     },
+    # ── Obs 1b: Celery layer retention ──
+    "purge-celery-heartbeats-daily": {
+        "task": "backend.tasks.retention.purge_old_celery_heartbeats_task",
+        "schedule": crontab(hour=7, minute=30),
+    },
+    "purge-beat-schedule-runs-daily": {
+        "task": "backend.tasks.retention.purge_old_beat_schedule_runs_task",
+        "schedule": crontab(hour=7, minute=45),
+    },
+    "purge-celery-queue-depths-daily": {
+        "task": "backend.tasks.retention.purge_old_celery_queue_depths_task",
+        "schedule": crontab(hour=8, minute=0),
+    },
+    # ── Obs 1b: Celery layer — queue depth polling ──
+    "poll-queue-depths": {
+        "task": "backend.tasks.observability.poll_queue_depths",
+        "schedule": 60,  # every 60 seconds
+    },
     # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {
         "task": "backend.tasks.forecasting.run_backtest_task",
@@ -282,6 +300,16 @@ def _init_obs_on_worker_ready(**kwargs):  # type: ignore[no-untyped-def]
     configure_structlog()
     _do_init_obs_client()
 
+    # Start heartbeat background thread (PR4)
+    try:
+        from backend.observability.instrumentation.celery import start_heartbeat
+
+        sender = kwargs.get("sender")
+        worker_name = getattr(sender, "hostname", "unknown") if sender else "unknown"
+        start_heartbeat(worker_name)
+    except Exception:  # noqa: BLE001 — heartbeat must not block worker startup
+        _obs_logger.debug("obs.celery_heartbeat.start_failed", exc_info=True)
+
 
 # Connect shutdown to both signals — guard inside _do_shutdown prevents double-fire.
 @worker_process_shutdown.connect
@@ -293,7 +321,33 @@ def _shutdown_obs_on_process_shutdown(**kwargs):  # type: ignore[no-untyped-def]
 @worker_shutdown.connect
 def _shutdown_obs_on_worker_shutdown(**kwargs):  # type: ignore[no-untyped-def]
     """Solo/threads pool: fires when the main worker process shuts down."""
+    # Stop heartbeat before obs client (PR4)
+    try:
+        from backend.observability.instrumentation.celery import stop_heartbeat
+
+        sender = kwargs.get("sender")
+        worker_name = getattr(sender, "hostname", "unknown") if sender else "unknown"
+        stop_heartbeat(worker_name)
+    except Exception:  # noqa: BLE001
+        pass
     _do_shutdown_obs_client()
+
+
+# ── Queue depth polling task (PR4) — NOT @tracked_task (avoids recursion) ──
+@celery_app.task(name="backend.tasks.observability.poll_queue_depths")
+def poll_queue_depths_task() -> dict:
+    """Poll Redis queue depths and emit CELERY_QUEUE_DEPTH events.
+
+    Uses Redis LLEN (O(1)). Runs every 60s via beat schedule.
+    NOT a @tracked_task to avoid infinite recursion.
+    """
+    try:
+        from backend.observability.instrumentation.celery import emit_queue_depth
+
+        emit_queue_depth()
+    except Exception:  # noqa: BLE001 — queue depth must not crash worker
+        _obs_logger.debug("obs.queue_depth.poll_failed", exc_info=True)
+    return {"status": "ok"}
 
 
 # ── Trace propagation — signal handlers register on import (PR3) ──────────
