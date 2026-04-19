@@ -57,7 +57,7 @@ class CeleryWorkerHeartbeat(Base):
     hostname: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     tasks_in_flight: Mapped[int] = mapped_column(Integer, nullable=False)
-    queue_names: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    queue_names: Mapped[list] = mapped_column(JSONB, nullable=False)
     uptime_seconds: Mapped[int] = mapped_column(Integer, nullable=False)
 
     env: Mapped[str] = mapped_column(Text, nullable=False)

@@ -161,26 +161,28 @@ def emit_queue_depth() -> None:
             return
 
         r = redis_lib.from_url(settings.REDIS_URL)
-        for queue_name in ["celery"]:
-            try:
-                depth = r.llen(queue_name)
-            except Exception:  # noqa: BLE001
-                depth = -1  # indicates poll failure
+        try:
+            for queue_name in ["celery"]:
+                try:
+                    depth = r.llen(queue_name)
+                except Exception:  # noqa: BLE001
+                    depth = -1  # indicates poll failure
 
-            event = CeleryQueueDepthEvent(
-                trace_id=uuid.uuid4(),
-                span_id=uuid.uuid4(),
-                parent_span_id=None,
-                ts=datetime.now(timezone.utc),
-                env=getattr(settings, "APP_ENV", "dev"),
-                git_sha=getattr(settings, "GIT_SHA", None),
-                user_id=None,
-                session_id=None,
-                query_id=None,
-                queue_name=queue_name,
-                depth=depth,  # type: ignore[arg-type]  # sync redis returns int
-            )
-            client.emit_sync(event)
-        r.close()
+                event = CeleryQueueDepthEvent(
+                    trace_id=uuid.uuid4(),
+                    span_id=uuid.uuid4(),
+                    parent_span_id=None,
+                    ts=datetime.now(timezone.utc),
+                    env=getattr(settings, "APP_ENV", "dev"),
+                    git_sha=getattr(settings, "GIT_SHA", None),
+                    user_id=None,
+                    session_id=None,
+                    query_id=None,
+                    queue_name=queue_name,
+                    depth=depth,  # type: ignore[arg-type]  # sync redis returns int
+                )
+                client.emit_sync(event)
+        finally:
+            r.close()
     except Exception:  # noqa: BLE001 — queue depth polling must not crash
         logger.debug("obs.celery_queue_depth.emit_failed", exc_info=True)

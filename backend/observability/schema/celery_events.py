@@ -44,6 +44,7 @@ class CeleryHeartbeatEvent(ObsEventBase):
         uptime_seconds: Worker uptime in seconds since ready signal.
     """
 
+    # memory_mb: deferred to 1c — requires psutil dependency
     event_type: Literal["celery_heartbeat"] = "celery_heartbeat"  # type: ignore[assignment]
     worker_name: str
     hostname: str
@@ -84,6 +85,7 @@ class CeleryQueueDepthEvent(ObsEventBase):
         depth: Number of pending tasks in the queue.
     """
 
+    # oldest_task_age_seconds: deferred — requires inspecting task headers, not just LLEN
     event_type: Literal["celery_queue_depth"] = "celery_queue_depth"  # type: ignore[assignment]
     queue_name: str
     depth: int
