@@ -14,7 +14,6 @@ import httpx
 import requests
 from fastapi import HTTPException
 
-
 # ---------------------------------------------------------------------------
 # Rule 1: obs-ban-direct-httpx-client
 # ---------------------------------------------------------------------------
