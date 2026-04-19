@@ -163,9 +163,9 @@ def _emit_pool_event(
             session_id=current_session_id.get(),
             query_id=None,
             pool_event_type=DbPoolEventType(pool_event_type),
-            pool_size=pool.size(),
-            checked_out=pool.checkedout(),
-            overflow=pool.overflow(),
+            pool_size=pool.size(),  # type: ignore[attr-defined]  # QueuePool method
+            checked_out=pool.checkedout(),  # type: ignore[attr-defined]  # QueuePool method
+            overflow=pool.overflow(),  # type: ignore[attr-defined]  # QueuePool method
             duration_ms=duration_ms,
         )
         client.emit_sync(event_obj)
