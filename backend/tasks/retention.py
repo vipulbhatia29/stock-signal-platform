@@ -35,6 +35,10 @@ API_ERROR_LOG_RETENTION_DAYS = 90
 AUTH_EVENT_LOG_RETENTION_DAYS = 90
 OAUTH_EVENT_LOG_RETENTION_DAYS = 90
 EMAIL_SEND_LOG_RETENTION_DAYS = 90
+SLOW_QUERY_LOG_RETENTION_DAYS = 30
+CACHE_OPERATION_LOG_RETENTION_DAYS = 7
+DB_POOL_EVENT_RETENTION_DAYS = 90
+SCHEMA_MIGRATION_LOG_RETENTION_DAYS = 365
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_forecasts_task")
@@ -247,6 +251,40 @@ def purge_old_email_send_logs_task(run_id: uuid.UUID | None = None) -> dict:
     return asyncio.run(_purge_obs_regular_table("email_send_log", EMAIL_SEND_LOG_RETENTION_DAYS))
 
 
+@celery_app.task(name="backend.tasks.retention.purge_old_slow_query_logs_task")
+@tracked_task("slow_query_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_slow_query_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge slow_query_log older than 30 days using drop_chunks (hypertable)."""
+    return asyncio.run(
+        _purge_obs_table("observability.slow_query_log", SLOW_QUERY_LOG_RETENTION_DAYS)
+    )
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_cache_operation_logs_task")
+@tracked_task("cache_operation_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_cache_operation_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge cache_operation_log older than 7 days using drop_chunks (hypertable)."""
+    return asyncio.run(
+        _purge_obs_table("observability.cache_operation_log", CACHE_OPERATION_LOG_RETENTION_DAYS)
+    )
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_db_pool_events_task")
+@tracked_task("db_pool_event_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_db_pool_events_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge db_pool_event older than 90 days using row-level DELETE (regular table)."""
+    return asyncio.run(_purge_obs_regular_table("db_pool_event", DB_POOL_EVENT_RETENTION_DAYS))
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_schema_migration_logs_task")
+@tracked_task("schema_migration_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_schema_migration_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge schema_migration_log older than 365 days using row-level DELETE (regular table)."""
+    return asyncio.run(
+        _purge_obs_regular_table("schema_migration_log", SCHEMA_MIGRATION_LOG_RETENTION_DAYS)
+    )
+
+
 async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
     """Row-level DELETE helper for regular (non-hypertable) observability tables.
 
@@ -260,7 +298,13 @@ async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
     Returns:
         Dict with status, deleted_rows count, and retention_days.
     """
-    _ALLOWED_TABLES = {"auth_event_log", "oauth_event_log", "email_send_log"}
+    _ALLOWED_TABLES = {
+        "auth_event_log",
+        "oauth_event_log",
+        "email_send_log",
+        "db_pool_event",
+        "schema_migration_log",
+    }
     if table not in _ALLOWED_TABLES:
         raise ValueError(f"Table {table!r} not in allowlist for regular-table retention")
 

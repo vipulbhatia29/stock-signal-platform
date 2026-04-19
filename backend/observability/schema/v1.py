@@ -34,6 +34,11 @@ class EventType(str, Enum):
     AUTH_EVENT = "auth_event"
     OAUTH_EVENT = "oauth_event"
     EMAIL_SEND = "email_send"
+    # 1b: DB + Cache layer
+    SLOW_QUERY = "slow_query"
+    DB_POOL_EVENT = "db_pool_event"
+    SCHEMA_MIGRATION = "schema_migration"
+    CACHE_OPERATION = "cache_operation"
 
 
 class AttributionLayer(str, Enum):
