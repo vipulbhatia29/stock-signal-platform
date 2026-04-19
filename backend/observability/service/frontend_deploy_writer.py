@@ -33,6 +33,9 @@ async def persist_frontend_errors(events: list[FrontendErrorEvent]) -> None:
                     FrontendErrorLog(
                         ts=event.ts,
                         trace_id=str(event.trace_id) if event.trace_id else None,
+                        parent_span_id=(
+                            str(event.parent_span_id) if event.parent_span_id else None
+                        ),
                         user_id=str(event.user_id) if event.user_id else None,
                         error_type=event.error_type.value,
                         error_message=event.error_message,

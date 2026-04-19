@@ -74,6 +74,7 @@ async def persist_agent_reasoning(events: list[AgentReasoningEvent]) -> None:
                     ts=event.ts,
                     trace_id=str(event.trace_id),
                     span_id=str(event.span_id),
+                    parent_span_id=(str(event.parent_span_id) if event.parent_span_id else None),
                     user_id=str(event.user_id) if event.user_id else None,
                     session_id=str(event.session_id) if event.session_id else None,
                     query_id=str(event.query_id) if event.query_id else None,

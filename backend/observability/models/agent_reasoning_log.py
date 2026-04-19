@@ -21,6 +21,8 @@ class AgentReasoningLog(Base):
     __tablename__ = "agent_reasoning_log"
     __table_args__ = (
         Index("ix_agent_reasoning_log_query_id_step", "query_id", "loop_step"),
+        Index("ix_agent_reasoning_log_trace_id", "trace_id"),
+        Index("ix_agent_reasoning_log_ts", "ts"),
         {"schema": "observability"},
     )
 
@@ -34,6 +36,7 @@ class AgentReasoningLog(Base):
     )
     trace_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
     span_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    parent_span_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     session_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     query_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)

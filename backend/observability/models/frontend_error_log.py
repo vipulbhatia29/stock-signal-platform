@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Text, func
+from sqlalchemy import DateTime, Index, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -36,7 +36,11 @@ class FrontendErrorLog(Base):
     """
 
     __tablename__ = "frontend_error_log"
-    __table_args__ = {"schema": "observability"}
+    __table_args__ = (
+        Index("ix_frontend_error_log_trace_id", "trace_id"),
+        Index("ix_frontend_error_log_ts", "ts"),
+        {"schema": "observability"},
+    )
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
@@ -49,6 +53,7 @@ class FrontendErrorLog(Base):
         server_default=func.now(),
     )
     trace_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+    parent_span_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     error_type: Mapped[str] = mapped_column(Text, nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)

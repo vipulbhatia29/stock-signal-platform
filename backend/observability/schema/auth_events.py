@@ -69,7 +69,7 @@ class AuthEventLogEvent(ObsEventBase):
         user_agent: User-Agent header (optional).
         method: HTTP method of the triggering request (optional).
         path: Normalized path of the triggering request (optional).
-        metadata: Additional structured context (optional JSONB).
+        extra_data: Additional structured context (optional JSONB).
     """
 
     event_type: EventType = Field(default=EventType.AUTH_EVENT, frozen=True)
@@ -81,7 +81,7 @@ class AuthEventLogEvent(ObsEventBase):
     user_agent: str | None = None
     method: str | None = None
     path: str | None = None
-    metadata: dict | None = None
+    extra_data: dict | None = None
 
 
 class OAuthEventLogEvent(ObsEventBase):
@@ -94,7 +94,7 @@ class OAuthEventLogEvent(ObsEventBase):
         status: "success" or "failure".
         error_reason: Structured reason on failure (optional).
         attempt_number: Retry count (optional).
-        metadata: Additional structured context (optional JSONB).
+        extra_data: Additional structured context (optional JSONB).
     """
 
     event_type: EventType = Field(default=EventType.OAUTH_EVENT, frozen=True)
@@ -104,7 +104,7 @@ class OAuthEventLogEvent(ObsEventBase):
     status: str  # success | failure
     error_reason: str | None = None
     attempt_number: int | None = None
-    metadata: dict | None = None
+    extra_data: dict | None = None
 
 
 class EmailSendEvent(ObsEventBase):

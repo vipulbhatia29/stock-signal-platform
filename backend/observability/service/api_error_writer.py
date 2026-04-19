@@ -40,6 +40,8 @@ async def persist_api_error_logs(events: list[ApiErrorLogEvent]) -> None:
                     stack_hash=event.stack_hash,
                     stack_trace=event.stack_trace[:5120] if event.stack_trace else None,
                     exception_class=event.exception_class,
+                    request_log_id=event.request_log_id,
+                    parent_span_id=(str(event.parent_span_id) if event.parent_span_id else None),
                     env=event.env,
                     git_sha=event.git_sha,
                 )
