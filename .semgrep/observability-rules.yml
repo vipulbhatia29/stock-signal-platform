@@ -1,0 +1,131 @@
+rules:
+  # --- Rule 1: Ban direct httpx.AsyncClient outside approved locations ---
+  - id: obs-ban-direct-httpx-client
+    patterns:
+      - pattern: httpx.AsyncClient(...)
+    paths:
+      exclude:
+        - "**/backend/services/http_client.py"
+        - "**/backend/observability/targets/internal_http.py"
+        - "**/tests/"
+    message: >-
+      Direct httpx.AsyncClient() is banned. Use get_observed_http_client()
+      from backend/services/http_client.py or build_observed_http_client()
+      to ensure all HTTP calls are instrumented.
+    languages: [python]
+    severity: ERROR
+
+  # --- Rule 2: Ban requests.get/post outside yfinance wrapper ---
+  - id: obs-ban-direct-requests
+    patterns:
+      - pattern-either:
+          - pattern: requests.get(...)
+          - pattern: requests.post(...)
+          - pattern: requests.put(...)
+          - pattern: requests.delete(...)
+          - pattern: requests.patch(...)
+    paths:
+      exclude:
+        - "**/backend/observability/instrumentation/external_api.py"
+        - "**/tests/"
+    message: >-
+      Direct requests.get/post/etc is banned. Use ObservedHttpClient
+      or the yfinance observed session wrapper.
+    languages: [python]
+    severity: ERROR
+
+  # --- Rule 3: Ban datetime.utcnow() ---
+  - id: obs-ban-utcnow
+    pattern: datetime.utcnow()
+    message: >-
+      datetime.utcnow() returns a naive datetime. Use
+      datetime.now(timezone.utc) instead for timezone-aware UTC.
+    languages: [python]
+    severity: ERROR
+
+  # --- Rule 4: Ban direct INSERT into observability tables ---
+  - id: obs-ban-direct-obs-insert
+    pattern-regex: INSERT\s+INTO\s+observability\.
+    paths:
+      exclude:
+        - "**/backend/observability/service/"
+        - "**/backend/migrations/"
+        - "**/tests/"
+    message: >-
+      Direct INSERT into observability tables is banned. All writes must
+      go through ObservabilityClient.emit() -> event_writer -> dedicated writer.
+    languages: [python]
+    severity: ERROR
+
+  # --- Rule 5: Require @tracked_task on Celery tasks ---
+  - id: obs-require-tracked-task
+    patterns:
+      - pattern: |
+          @celery_app.task(...)
+          def $FUNC(...):
+              ...
+      - pattern-not: |
+          @celery_app.task(...)
+          @tracked_task(...)
+          def $FUNC(...):
+              ...
+    paths:
+      exclude:
+        - "**/backend/tasks/observability.py"
+        - "**/backend/tasks/__init__.py"
+        - "**/backend/tasks/seed_tasks.py"
+        - "**/backend/tasks/audit.py"
+        - "**/tests/"
+    message: >-
+      All Celery tasks must use @tracked_task decorator for pipeline lifecycle
+      tracking. Bare @celery_app.task() without @tracked_task is banned.
+      Exceptions: observability periodic tasks, seed tasks, audit tasks.
+    languages: [python]
+    severity: WARNING
+
+  # --- Rule 6: Ban HTTPException outside router layer ---
+  - id: obs-ban-httpexception-in-services
+    pattern: raise HTTPException(...)
+    paths:
+      include:
+        - "**/backend/services/"
+        - "**/backend/agents/"
+      exclude:
+        - "**/tests/"
+    message: >-
+      Services and agents must raise DomainError subclasses, not HTTPException.
+      HTTPException should only be raised in router layer (backend/routers/).
+    languages: [python]
+    severity: WARNING
+
+  # --- Rule 7: Ban str(e) in HTTPException detail ---
+  - id: obs-ban-str-exception-detail
+    patterns:
+      - pattern-either:
+          - pattern: raise HTTPException(..., detail=str($E), ...)
+          - pattern: ToolResult(error=str($E))
+    paths:
+      exclude:
+        - "**/tests/"
+    message: >-
+      Never pass str(e) to HTTPException(detail=...) or ToolResult(error=...).
+      Log the real error, return a safe generic message (Hard Rule #10).
+    languages: [python]
+    severity: ERROR
+
+  # --- Rule 8: Warn on catch-all except without logging ---
+  - id: obs-warn-silent-except
+    patterns:
+      - pattern: |
+          try:
+              ...
+          except $EXCEPTION:
+              pass
+    paths:
+      exclude:
+        - "**/tests/"
+    message: >-
+      Silent except:pass swallows errors. At minimum, log at WARNING level.
+      If intentional (e.g., fire-and-forget obs emission), add a # nosemgrep comment.
+    languages: [python]
+    severity: WARNING
