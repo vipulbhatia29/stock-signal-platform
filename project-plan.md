@@ -319,7 +319,7 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 | PR3 | slow_query + pool + migration + cache_operation | ✅ PR #253 (S122) |
 | PR4 | Celery heartbeat + beat drift + queue depth + retry | ✅ PR #254 (S122) |
 | PR5 | intent_log + reasoning_log + provider_health_snapshot | ✅ PR #255 (S122) |
-| PR6 | Frontend beacon + frontend_error_log + deploy_events | ⬜ KAN-481 |
+| PR6 | Frontend beacon + frontend_error_log + deploy_events | ✅ PR #256 (S123) |
 | PR7 | Semgrep observability rules (advisory) | ⬜ KAN-482 |
 
 ### Epic 2: Seed Universe (planned — blocked by Epic 1)

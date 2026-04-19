@@ -536,3 +536,34 @@ Planning session — 7 PR-scoped plans written + reviewed. See archive for detai
 - Obs 1b: 5/7 PRs shipped (PR1-PR5). Remaining: PR6 (Frontend/Deploy), PR7 (Semgrep)
 - TDD + FSD updated with 1b coverage
 - Resume: PR6 (Frontend beacon, KAN-481) + PR7 (Semgrep rules, KAN-482)
+
+---
+
+## Session 123 — Obs 1b PR6: Frontend + Deploy Layer (2026-04-19)
+
+**Branch:** `feat/obs-1b-pr6-frontend-deploy` → develop | **PR #256**
+
+### KAN-481 — PR6: Frontend beacon + deploy events
+- **Migration 037:** `frontend_error_log` + `deploy_events` (both regular tables) with indexes
+- **Pydantic schemas:** `FrontendErrorEvent` (6 error types incl. `WINDOW_ERROR`), `DeployEventData` (3 statuses)
+- **Frontend error beacon endpoint:** `POST /api/v1/observability/frontend-error` — optional auth (JWT cookie extraction), rate-limited 10/min, batch max 10, SDK emission, CSRF-exempt
+- **Deploy event webhook:** `POST /api/v1/observability/deploy-event` — Bearer token auth via `OBS_DEPLOY_WEBHOOK_SECRET` + `secrets.compare_digest`, `X-GitHub-Event` header validation with warning logs, direct DB write (not SDK)
+- **Frontend observability:**
+  - `observability-beacon.ts` — 5s batch interval, sendBeacon() + fetch fallback, 100-item buffer cap
+  - `error-boundary.tsx` — React ErrorBoundary with reportError + fallback UI
+  - `window-error-listeners.tsx` — global error + unhandledrejection listeners
+  - `providers.tsx` — QueryCache onError + mutations onError wired to beacon
+  - `api.ts` — X-Trace-Id capture from response headers
+- **CI:** GitHub Actions deploy event webhook step in `ci-merge.yml` (continue-on-error)
+- **Retention:** 30d frontend_error_log, 365d deploy_events (beat schedule 9:00 AM, 9:15 AM)
+- **Review fixes:** 3 IMPORTANT — (1) window error type → `WINDOW_ERROR` not `unhandled_rejection`, (2) X-GitHub-Event header validation added, (3) CI commit message uses real `head_commit.message`
+- 27 new tests, 24 files (12 new, 12 modified)
+
+### Session 123 Totals
+- Tests: 2433 → 2460 unit (+27), 0 regressions
+- Alembic: 036 → 037 (`b7f8c9d0e1a2`)
+- 1 JIRA ticket: KAN-481 → In Progress
+- 1 PR (#256)
+- Obs 1b: 6/7 PRs shipped (PR1-PR6). Remaining: PR7 (Semgrep, KAN-482)
+- TDD + FSD + project-plan updated
+- Resume: PR7 (Semgrep rules, KAN-482) → then Obs 1b (KAN-459) COMPLETE

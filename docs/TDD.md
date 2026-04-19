@@ -2326,7 +2326,7 @@ build_client_from_settings() -> ObservabilityClient
 ```python
 # backend/observability/schema/v1.py
 class ObsEventBase(BaseModel):
-    event_type: EventType     # 19 types across 6 layers:
+    event_type: EventType     # 21 types across 7 layers:
                               #   1a: llm_call, tool_execution, login_attempt,
                               #       dq_finding, pipeline_lifecycle, external_api_call,
                               #       rate_limiter_event
@@ -2338,6 +2338,7 @@ class ObsEventBase(BaseModel):
                               #       celery_queue_depth
                               #   1b Agent: agent_intent, agent_reasoning,
                               #       provider_health_snapshot
+                              #   1b Frontend/Deploy: frontend_error, deploy_event
     trace_id: UUID            # propagated via ContextVar (TraceIdMiddleware)
     span_id: UUID             # unique per emission
     parent_span_id: UUID | None
@@ -2389,6 +2390,8 @@ class ObservedHttpClient(httpx.AsyncClient):
 | `agent_intent_log` | Regular | 30d | — | 036 |
 | `agent_reasoning_log` | Regular | 30d | — | 036 |
 | `provider_health_snapshot` | Hypertable (1h) | 30d | segmentby=provider | 036 |
+| `frontend_error_log` | Regular | 30d | — | 037 |
+| `deploy_events` | Regular | 365d | — | 037 |
 
 **Instrumentation layers (1b Coverage):**
 | Layer | Module | Emission |
@@ -2399,6 +2402,8 @@ class ObservedHttpClient(httpx.AsyncClient):
 | Cache | `instrumentation/cache.py` | Redis ops (1% sampled, 100% errors), key redaction |
 | Celery | `instrumentation/celery.py` | Heartbeat thread (30s), queue depth polling (60s) |
 | Agent | `instrumentation/agent.py` | Intent classification, ReAct per-iteration reasoning |
+| Frontend | `routers/frontend_errors.py` | JS error beacon (batched, sendBeacon + fetch fallback) |
+| Deploy | `routers/deploy_events.py` | CI/CD deploy events (webhook-authed, direct DB write) |
 
 **Feedback loop guard:** `_in_obs_write` ContextVar in `instrumentation/db.py` — set by all obs writers before `session.commit()`, checked by `after_execute` hook to skip re-emission.
 

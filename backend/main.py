@@ -368,6 +368,8 @@ app.add_middleware(
         "/docs",
         "/openapi.json",
         "/obs/v1/events",  # OBS_INGEST_PATH — X-Obs-Secret auth, not cookie-based
+        "/api/v1/observability/frontend-error",  # beacon requests don't carry CSRF cookies
+        "/api/v1/observability/deploy-event",  # webhook auth via Bearer token, not cookies
     },
 )
 app.add_middleware(
@@ -413,8 +415,16 @@ from backend.observability.routers.command_center import (  # noqa: E402
 
 app.include_router(command_center_router, prefix="/api/v1")
 
+from backend.observability.routers.deploy_events import (  # noqa: E402
+    router as deploy_events_router,
+)
+from backend.observability.routers.frontend_errors import (  # noqa: E402
+    router as frontend_errors_router,
+)
 from backend.observability.routers.ingest import (  # noqa: E402
     router as obs_ingest_router,
 )
 
+app.include_router(frontend_errors_router, prefix="/api/v1")
+app.include_router(deploy_events_router, prefix="/api/v1")
 app.include_router(obs_ingest_router)  # no /api/v1 prefix — spec §2.2b

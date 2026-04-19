@@ -1,10 +1,13 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthContext, useAuthProvider } from "@/lib/auth";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { WindowErrorListeners } from "@/components/window-error-listeners";
+import { reportError } from "@/lib/observability-beacon";
 import { useState, type ReactNode } from "react";
 
 function AuthProvider({ children }: { children: ReactNode }) {
@@ -22,7 +25,25 @@ export function Providers({ children }: { children: ReactNode }) {
             retry: 1,
             refetchOnWindowFocus: false,
           },
+          mutations: {
+            onError: (error) => {
+              reportError({
+                error_type: "mutation_error",
+                error_message: error instanceof Error ? error.message : String(error),
+                page_route: typeof window !== "undefined" ? window.location.pathname : undefined,
+              });
+            },
+          },
         },
+        queryCache: new QueryCache({
+          onError: (error) => {
+            reportError({
+              error_type: "query_error",
+              error_message: error instanceof Error ? error.message : String(error),
+              page_route: typeof window !== "undefined" ? window.location.pathname : undefined,
+            });
+          },
+        }),
       })
   );
 
@@ -35,10 +56,13 @@ export function Providers({ children }: { children: ReactNode }) {
         disableTransitionOnChange
       >
         <TooltipProvider>
-          <AuthProvider>
-            {children}
-            <Toaster />
-          </AuthProvider>
+          <ErrorBoundary>
+            <AuthProvider>
+              <WindowErrorListeners />
+              {children}
+              <Toaster />
+            </AuthProvider>
+          </ErrorBoundary>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

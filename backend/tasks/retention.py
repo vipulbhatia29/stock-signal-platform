@@ -45,6 +45,8 @@ CELERY_QUEUE_DEPTH_RETENTION_DAYS = 7
 AGENT_INTENT_LOG_RETENTION_DAYS = 30
 AGENT_REASONING_LOG_RETENTION_DAYS = 30
 PROVIDER_HEALTH_SNAPSHOT_RETENTION_DAYS = 30
+FRONTEND_ERROR_LOG_RETENTION_DAYS = 30
+DEPLOY_EVENTS_RETENTION_DAYS = 365
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_forecasts_task")
@@ -348,6 +350,22 @@ def purge_old_provider_health_snapshots_task(run_id: uuid.UUID | None = None) ->
     )
 
 
+@celery_app.task(name="backend.tasks.retention.purge_old_frontend_error_logs_task")
+@tracked_task("frontend_error_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_frontend_error_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge frontend_error_log older than 30 days using row-level DELETE (regular table)."""
+    return asyncio.run(
+        _purge_obs_regular_table("frontend_error_log", FRONTEND_ERROR_LOG_RETENTION_DAYS)
+    )
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_deploy_events_task")
+@tracked_task("deploy_events_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_deploy_events_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge deploy_events older than 365 days using row-level DELETE (regular table)."""
+    return asyncio.run(_purge_obs_regular_table("deploy_events", DEPLOY_EVENTS_RETENTION_DAYS))
+
+
 async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
     """Row-level DELETE helper for regular (non-hypertable) observability tables.
 
@@ -370,6 +388,8 @@ async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
         "beat_schedule_run",
         "agent_intent_log",
         "agent_reasoning_log",
+        "frontend_error_log",
+        "deploy_events",
     }
     if table not in _ALLOWED_TABLES:
         raise ValueError(f"Table {table!r} not in allowlist for regular-table retention")
