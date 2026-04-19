@@ -38,6 +38,10 @@ async def write_batch(events: list[ObsEventBase]) -> None:
     auth_event_events: list = []
     oauth_event_events: list = []
     email_send_events: list = []
+    slow_query_events: list = []
+    db_pool_events: list = []
+    schema_migration_events: list = []
+    cache_operation_events: list = []
 
     for event in events:
         try:
@@ -65,6 +69,14 @@ async def write_batch(events: list[ObsEventBase]) -> None:
                 oauth_event_events.append(event)
             elif event.event_type == EventType.EMAIL_SEND:
                 email_send_events.append(event)
+            elif event.event_type == EventType.SLOW_QUERY:
+                slow_query_events.append(event)
+            elif event.event_type == EventType.DB_POOL_EVENT:
+                db_pool_events.append(event)
+            elif event.event_type == EventType.SCHEMA_MIGRATION:
+                schema_migration_events.append(event)
+            elif event.event_type == EventType.CACHE_OPERATION:
+                cache_operation_events.append(event)
             else:
                 logger.debug("obs.event.unhandled", extra={"event_type": event.event_type.value})
         except Exception:  # noqa: BLE001 — per-event error isolation
@@ -176,3 +188,36 @@ async def write_batch(events: list[ObsEventBase]) -> None:
             await persist_email_sends(email_send_events)
         except Exception:  # noqa: BLE001 — writer errors must not propagate
             logger.warning("obs.writer.email_send_batch.failed", exc_info=True)
+
+    # DB + Cache layer writers (PR3)
+    if slow_query_events:
+        try:
+            from backend.observability.service.db_cache_writer import persist_slow_queries
+
+            await persist_slow_queries(slow_query_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.slow_query_batch.failed", exc_info=True)
+
+    if db_pool_events:
+        try:
+            from backend.observability.service.db_cache_writer import persist_db_pool_events
+
+            await persist_db_pool_events(db_pool_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.db_pool_event_batch.failed", exc_info=True)
+
+    if schema_migration_events:
+        try:
+            from backend.observability.service.db_cache_writer import persist_schema_migrations
+
+            await persist_schema_migrations(schema_migration_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.schema_migration_batch.failed", exc_info=True)
+
+    if cache_operation_events:
+        try:
+            from backend.observability.service.db_cache_writer import persist_cache_operations
+
+            await persist_cache_operations(cache_operation_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.cache_operation_batch.failed", exc_info=True)

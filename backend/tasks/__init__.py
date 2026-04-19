@@ -155,6 +155,23 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.retention.purge_old_email_send_logs_task",
         "schedule": crontab(hour=6, minute=15),
     },
+    # ── Obs 1b: DB + Cache layer retention ──
+    "purge-slow-query-logs-daily": {
+        "task": "backend.tasks.retention.purge_old_slow_query_logs_task",
+        "schedule": crontab(hour=6, minute=30),
+    },
+    "purge-cache-operation-logs-daily": {
+        "task": "backend.tasks.retention.purge_old_cache_operation_logs_task",
+        "schedule": crontab(hour=6, minute=45),
+    },
+    "purge-db-pool-events-daily": {
+        "task": "backend.tasks.retention.purge_old_db_pool_events_task",
+        "schedule": crontab(hour=7, minute=5),
+    },
+    "purge-schema-migration-logs-daily": {
+        "task": "backend.tasks.retention.purge_old_schema_migration_logs_task",
+        "schedule": crontab(hour=7, minute=20),
+    },
     # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {
         "task": "backend.tasks.forecasting.run_backtest_task",

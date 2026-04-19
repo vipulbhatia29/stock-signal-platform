@@ -18,6 +18,24 @@ engine = create_async_engine(
     pool_recycle=settings.DB_POOL_RECYCLE,
 )
 
+# Attach observability hooks to the sync engine underlying the async wrapper.
+# Import is deferred to avoid circular imports at module level.
+try:
+    from backend.observability.instrumentation.db import (
+        attach_pool_hooks,
+        attach_slow_query_hooks,
+    )
+
+    attach_slow_query_hooks(engine.sync_engine)
+    attach_pool_hooks(engine.sync_engine)
+except Exception:  # noqa: BLE001 — obs hooks must not break startup
+    import logging as _logging
+
+    _logging.getLogger(__name__).warning(
+        "obs.db.hook_attach_failed — slow query/pool monitoring disabled",
+        exc_info=True,
+    )
+
 async_session_factory = async_sessionmaker(
     engine,
     class_=AsyncSession,

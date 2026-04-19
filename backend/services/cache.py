@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 from enum import Enum
 
 import redis.asyncio as aioredis
@@ -51,24 +52,71 @@ class CacheService:
 
     async def get(self, key: str) -> str | None:
         """Get a value from cache. Returns None on miss."""
+        start = time.monotonic()
         try:
-            return await self._redis.get(key)
+            result = await self._redis.get(key)
+            latency_ms = int((time.monotonic() - start) * 1000)
+            try:
+                from backend.observability.instrumentation.cache import observe_cache_get
+
+                observe_cache_get(key, result, latency_ms)
+            except Exception:  # noqa: BLE001
+                pass
+            return result
         except Exception:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            try:
+                from backend.observability.instrumentation.cache import observe_cache_error
+
+                observe_cache_error("get", key, latency_ms)
+            except Exception:  # noqa: BLE001
+                pass
             logger.warning("Cache get failed for key=%s", key, exc_info=True)
             return None
 
     async def set(self, key: str, value: str, tier: CacheTier) -> None:
         """Set a value with TTL from the specified tier."""
+        start = time.monotonic()
+        ttl = tier.ttl
         try:
-            await self._redis.set(key, value, ex=tier.ttl)
+            await self._redis.set(key, value, ex=ttl)
+            latency_ms = int((time.monotonic() - start) * 1000)
+            try:
+                from backend.observability.instrumentation.cache import observe_cache_set
+
+                observe_cache_set(key, value, ttl, latency_ms)
+            except Exception:  # noqa: BLE001
+                pass
         except Exception:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            try:
+                from backend.observability.instrumentation.cache import observe_cache_error
+
+                observe_cache_error("set", key, latency_ms)
+            except Exception:  # noqa: BLE001
+                pass
             logger.warning("Cache set failed for key=%s", key, exc_info=True)
 
     async def delete(self, key: str) -> None:
         """Delete a single cache key."""
+        start = time.monotonic()
         try:
             await self._redis.delete(key)
+            latency_ms = int((time.monotonic() - start) * 1000)
+            try:
+                from backend.observability.instrumentation.cache import observe_cache_delete
+
+                observe_cache_delete(key, latency_ms)
+            except Exception:  # noqa: BLE001
+                pass
         except Exception:
+            latency_ms = int((time.monotonic() - start) * 1000)
+            try:
+                from backend.observability.instrumentation.cache import observe_cache_error
+
+                observe_cache_error("delete", key, latency_ms)
+            except Exception:  # noqa: BLE001
+                pass
             logger.warning("Cache delete failed for key=%s", key, exc_info=True)
 
     async def delete_pattern(self, pattern: str) -> int:
