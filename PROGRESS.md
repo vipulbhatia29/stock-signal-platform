@@ -469,3 +469,101 @@ No code changes this session — pure planning + JIRA hygiene + memory fixes.
 - 1 PR (#247), 10 commits squash-merged
 - 13 files changed, 2569 insertions, 33 deletions
 - Resume: Start sub-epic 1b (KAN-459 Coverage), or pick from backlog (KAN-429, KAN-400)
+
+---
+
+## Session 120 — Obs 1b Refinement (2026-04-18)
+Planning session — 7 PR-scoped plans written + reviewed. See archive for details.
+
+---
+
+## Session 121 — Obs 1b PR1+PR2 Implementation (2026-04-18)
+
+### JIRA Phase C — Implementation subtasks filed
+- KAN-474 (Write plan) + KAN-475 (Review plan) → Done
+- KAN-476–482: 7 implementation subtasks filed
+
+### KAN-476 — PR1: HTTP layer (PR #250 merged)
+- Migration 032, RequestLog + ApiErrorLog hypertables, PII redaction utility, ObsHttpMiddleware, batch writers, retention tasks
+- CI fixes: revision ID collision, composite PK for TimescaleDB, pyright suppressions
+- 29 new tests, 20 files, 1357 lines
+
+### KAN-477 — PR2: Auth layer (PR #251 open)
+- Migration 033, auth_event_log + oauth_event_log + email_send_log + login_attempts trace_id
+- Auth/OAuth/email emissions wired into all auth endpoints, JWT recursion guard
+- Fixed SQLAlchemy reserved `metadata` → `extra_data`
+- 22 new tests
+
+### Session 121 Totals
+- Tests: 2312 → 2361 unit (+49), 0 regressions
+- Alembic: 031 → 032 (merged) → 033 (PR2 branch)
+- 2 PRs: #250 merged, #251 open
+
+---
+
+## Session 122 — Obs 1b PR3+PR4+PR5 Implementation (2026-04-18/19)
+
+### KAN-478 — PR3: DB+Cache layer (PR #253 merged)
+- Migration 034: slow_query_log + cache_operation_log (hypertables), db_pool_event + schema_migration_log (regular tables)
+- SQLAlchemy before/after_execute hooks for slow query detection (>500ms) with `_in_obs_write` ContextVar feedback loop guard
+- Cache instrumentation: 1% sampled, 100% on error, key redaction
+- Query normalization (literals → $N/$S/$U placeholders)
+- Alembic env.py migration event emission
+- 4 retention tasks + beat schedule
+- Review fix: C1 — `_in_obs_write` guard set in all writers before commit
+- 45 new tests, 20 files, 1949 lines
+
+### KAN-479 — PR4: Celery layer (PR #254 merged)
+- Migration 035: celery_worker_heartbeat + celery_queue_depth (hypertables), beat_schedule_run (regular), pipeline_runs.trace_id
+- Heartbeat daemon thread (30s), queue depth polling (60s via Redis LLEN)
+- @tracked_task wired: retry_count from request.retries, trace_id from ContextVar
+- Beat drift schema ready, emission deferred to 1c
+- Review fixes: deferral docs, Redis try/finally, Mapped[dict]→Mapped[list]
+- 12 new tests, 15 files, 1101 lines
+
+### KAN-480 — PR5: Agent layer (PR #255 merged)
+- Migration 036: agent_intent_log + agent_reasoning_log (regular), provider_health_snapshot (hypertable)
+- Intent emission at chat.py call site (privacy-safe SHA256 hash)
+- ReAct loop: per-iteration plan events + 4 termination paths (zero_tool_calls, wall_clock_timeout, exception, max_iterations)
+- Provider health snapshot: schema + table ready, task is no-op stub (LLMClient request-scoped)
+- Review fixes: 4 missing ProviderHealth fields + 2 missing indexes + 5 pre-existing pyright suppressions
+- 14 new tests, 15 files, 1174 lines
+
+### Session 122 Totals
+- Tests: 2362 → 2433 unit (+71), 0 regressions
+- Alembic: 033 → 034 → 035 → 036
+- 3 PRs merged: #253, #254, #255
+- Obs 1b: 5/7 PRs shipped (PR1-PR5). Remaining: PR6 (Frontend/Deploy), PR7 (Semgrep)
+- TDD + FSD updated with 1b coverage
+- Resume: PR6 (Frontend beacon, KAN-481) + PR7 (Semgrep rules, KAN-482)
+
+---
+
+## Session 123 — Obs 1b PR6: Frontend + Deploy Layer (2026-04-19)
+
+**Branch:** `feat/obs-1b-pr6-frontend-deploy` → develop | **PR #256**
+
+### KAN-481 — PR6: Frontend beacon + deploy events
+- **Migration 037:** `frontend_error_log` + `deploy_events` (both regular tables) with indexes
+- **Pydantic schemas:** `FrontendErrorEvent` (6 error types incl. `WINDOW_ERROR`), `DeployEventData` (3 statuses)
+- **Frontend error beacon endpoint:** `POST /api/v1/observability/frontend-error` — optional auth (JWT cookie extraction), rate-limited 10/min, batch max 10, SDK emission, CSRF-exempt
+- **Deploy event webhook:** `POST /api/v1/observability/deploy-event` — Bearer token auth via `OBS_DEPLOY_WEBHOOK_SECRET` + `secrets.compare_digest`, `X-GitHub-Event` header validation with warning logs, direct DB write (not SDK)
+- **Frontend observability:**
+  - `observability-beacon.ts` — 5s batch interval, sendBeacon() + fetch fallback, 100-item buffer cap
+  - `error-boundary.tsx` — React ErrorBoundary with reportError + fallback UI
+  - `window-error-listeners.tsx` — global error + unhandledrejection listeners
+  - `providers.tsx` — QueryCache onError + mutations onError wired to beacon
+  - `api.ts` — X-Trace-Id capture from response headers
+- **CI:** GitHub Actions deploy event webhook step in `ci-merge.yml` (continue-on-error)
+- **Retention:** 30d frontend_error_log, 365d deploy_events (beat schedule 9:00 AM, 9:15 AM)
+- **Review fixes:** 3 IMPORTANT — (1) window error type → `WINDOW_ERROR` not `unhandled_rejection`, (2) X-GitHub-Event header validation added, (3) CI commit message uses real `head_commit.message`
+- 27 new tests, 24 files (12 new, 12 modified)
+
+### Session 123 Totals
+- Tests: 2433 → 2460 unit (+27), 0 regressions
+- Alembic: 036 → 037 (`b7f8c9d0e1a2`)
+- 1 JIRA ticket: KAN-481 → In Progress
+- 1 PR (#256)
+- Obs 1b: 6/7 PRs shipped (PR1-PR6). Remaining: PR7 (Semgrep, KAN-482)
+- TDD + FSD + project-plan updated
+- Resume: PR7 (Semgrep rules, KAN-482) → then Obs 1b (KAN-459) COMPLETE

@@ -16,8 +16,10 @@ from backend.observability.models.cache_operation_log import CacheOperationLog
 from backend.observability.models.celery_queue_depth import CeleryQueueDepth
 from backend.observability.models.celery_worker_heartbeat import CeleryWorkerHeartbeat
 from backend.observability.models.db_pool_event import DbPoolEvent as DbPoolEventModel
+from backend.observability.models.deploy_events import DeployEvent
 from backend.observability.models.email_send_log import EmailSendLog
 from backend.observability.models.external_api_call import ExternalApiCallLog
+from backend.observability.models.frontend_error_log import FrontendErrorLog
 from backend.observability.models.oauth_event_log import OAuthEventLog
 from backend.observability.models.provider_health_snapshot import ProviderHealthSnapshot
 from backend.observability.models.rate_limiter_event import RateLimiterEvent
@@ -47,4 +49,6 @@ __all__ = [
     "AgentIntentLog",
     "AgentReasoningLog",
     "ProviderHealthSnapshot",
+    "DeployEvent",
+    "FrontendErrorLog",
 ]

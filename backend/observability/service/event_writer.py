@@ -48,6 +48,7 @@ async def write_batch(events: list[ObsEventBase]) -> None:
     agent_intent_events: list = []
     agent_reasoning_events: list = []
     provider_health_events: list = []
+    frontend_error_events: list = []
 
     for event in events:
         try:
@@ -95,6 +96,10 @@ async def write_batch(events: list[ObsEventBase]) -> None:
                 agent_reasoning_events.append(event)
             elif event.event_type == EventType.PROVIDER_HEALTH_SNAPSHOT:
                 provider_health_events.append(event)
+            elif event.event_type == EventType.FRONTEND_ERROR:
+                frontend_error_events.append(event)
+            elif event.event_type == EventType.DEPLOY_EVENT:
+                pass  # Deploy events bypass SDK — written directly by endpoint
             else:
                 logger.debug("obs.event.unhandled", extra={"event_type": event.event_type.value})
         except Exception:  # noqa: BLE001 — per-event error isolation
@@ -291,3 +296,14 @@ async def write_batch(events: list[ObsEventBase]) -> None:
             await persist_provider_health_snapshots(provider_health_events)
         except Exception:  # noqa: BLE001 — writer errors must not propagate
             logger.warning("obs.writer.provider_health_batch.failed", exc_info=True)
+
+    # Frontend + Deploy layer writers (PR6)
+    if frontend_error_events:
+        try:
+            from backend.observability.service.frontend_deploy_writer import (
+                persist_frontend_errors,
+            )
+
+            await persist_frontend_errors(frontend_error_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.frontend_error_batch.failed", exc_info=True)

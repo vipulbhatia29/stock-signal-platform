@@ -47,6 +47,9 @@ class EventType(str, Enum):
     AGENT_INTENT = "agent_intent"
     AGENT_REASONING = "agent_reasoning"
     PROVIDER_HEALTH_SNAPSHOT = "provider_health_snapshot"
+    # 1b: Frontend + Deploy layer
+    FRONTEND_ERROR = "frontend_error"
+    DEPLOY_EVENT = "deploy_event"
 
 
 class AttributionLayer(str, Enum):

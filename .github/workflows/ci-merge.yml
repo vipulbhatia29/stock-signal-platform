@@ -195,3 +195,20 @@ jobs:
         run: |
           echo "## Bundle Size" >> $GITHUB_STEP_SUMMARY
           grep -A 20 "Route" /tmp/next-build.log | head -25 >> $GITHUB_STEP_SUMMARY || true
+      - name: Record deploy event
+        if: success() && github.event_name == 'push'
+        continue-on-error: true
+        run: |
+          curl -sS -X POST "${{ secrets.BACKEND_URL }}/api/v1/observability/deploy-event" \
+            -H "Authorization: Bearer ${{ secrets.OBS_DEPLOY_WEBHOOK_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: deployment" \
+            -d '{
+              "git_sha": "${{ github.sha }}",
+              "branch": "${{ github.ref_name }}",
+              "pr_number": ${{ github.event.pull_request.number || 'null' }},
+              "author": "${{ github.actor }}",
+              "commit_message": "${{ github.event.head_commit.message || 'CI deploy' }}",
+              "env": "staging",
+              "status": "success"
+            }'

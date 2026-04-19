@@ -207,6 +207,13 @@ class Settings(BaseSettings):
             "SDK emissions. Flip to False after 2 weeks of green production. See spec §2.7."
         ),
     )
+    OBS_DEPLOY_WEBHOOK_SECRET: str | None = Field(
+        default=None,
+        description=(
+            "Shared secret for POST /api/v1/observability/deploy-event. "
+            "GitHub Actions sends this as Bearer token. Required in prod."
+        ),
+    )
     OBS_REDACT_PII: bool = Field(
         default=True,
         description=(

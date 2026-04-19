@@ -65,6 +65,12 @@ async function request<T>(
 
   let res = await fetch(url, config);
 
+  // Capture X-Trace-Id from response for observability beacon
+  const traceId = res.headers.get("X-Trace-Id");
+  if (traceId) {
+    (window as unknown as Record<string, unknown>).__lastTraceId = traceId;
+  }
+
   // Auto-refresh on 401 and retry once
   if (res.status === 401) {
     const refreshed = await refreshToken();
