@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, Text, func
+from sqlalchemy import DateTime, Float, Index, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,7 +34,12 @@ class BeatScheduleRun(Base):
     """
 
     __tablename__ = "beat_schedule_run"
-    __table_args__ = {"schema": "observability"}
+    __table_args__ = (
+        Index("ix_beat_schedule_run_trace_id", "trace_id"),
+        Index("ix_beat_schedule_run_ts", "ts"),
+        Index("ix_beat_schedule_run_drift", "drift_seconds", "ts"),
+        {"schema": "observability"},
+    )
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),

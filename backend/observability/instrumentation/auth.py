@@ -60,7 +60,7 @@ def emit_auth_event(
     user_agent: str | None = None,
     method: str | None = None,
     path: str | None = None,
-    metadata: dict | None = None,
+    extra_data: dict | None = None,
 ) -> None:
     """Emit an auth lifecycle event. Fire-and-forget. Guarded against recursion.
 
@@ -76,7 +76,7 @@ def emit_auth_event(
         user_agent: User-Agent header.
         method: HTTP method of the triggering request.
         path: Normalized request path.
-        metadata: Additional structured context.
+        extra_data: Additional structured context.
     """
     if not settings.OBS_ENABLED or _emitting_auth_event.get():
         return
@@ -102,7 +102,7 @@ def emit_auth_event(
             user_agent=user_agent,
             method=method,
             path=path,
-            metadata=metadata,
+            extra_data=extra_data,
         )
         client.emit_sync(event)
     except Exception:
@@ -118,7 +118,7 @@ def emit_oauth_event(
     status: str,
     user_id: uuid.UUID | None = None,
     error_reason: str | None = None,
-    metadata: dict | None = None,
+    extra_data: dict | None = None,
 ) -> None:
     """Emit an OAuth provider flow event. Fire-and-forget.
 
@@ -128,7 +128,7 @@ def emit_oauth_event(
         status: "success" or "failure".
         user_id: User who triggered the event, if known.
         error_reason: Structured error description on failure.
-        metadata: Additional structured context.
+        extra_data: Additional structured context.
     """
     if not settings.OBS_ENABLED:
         return
@@ -150,7 +150,7 @@ def emit_oauth_event(
             action=action,
             status=status,
             error_reason=error_reason,
-            metadata=metadata,
+            extra_data=extra_data,
         )
         client.emit_sync(event)
     except Exception:

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, Index, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,7 +38,10 @@ class EmailSendLog(Base):
     """
 
     __tablename__ = "email_send_log"
-    __table_args__ = {"schema": "observability"}
+    __table_args__ = (
+        Index("ix_email_send_log_ts", "ts"),
+        {"schema": "observability"},
+    )
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),

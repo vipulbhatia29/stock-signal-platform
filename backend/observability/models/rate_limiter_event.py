@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Text, func
+from sqlalchemy import DateTime, Index, Integer, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,7 +37,10 @@ class RateLimiterEvent(Base):
     """
 
     __tablename__ = "rate_limiter_event"
-    __table_args__ = {"schema": "observability"}
+    __table_args__ = (
+        Index("ix_rate_limiter_event_trace_id", "trace_id"),
+        {"schema": "observability"},
+    )
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),

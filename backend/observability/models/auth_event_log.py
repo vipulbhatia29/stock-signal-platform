@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Text, func
+from sqlalchemy import DateTime, Index, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,7 +42,11 @@ class AuthEventLog(Base):
     """
 
     __tablename__ = "auth_event_log"
-    __table_args__ = {"schema": "observability"}
+    __table_args__ = (
+        Index("ix_auth_event_log_trace_id", "trace_id"),
+        Index("ix_auth_event_log_ts", "ts"),
+        {"schema": "observability"},
+    )
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),

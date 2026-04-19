@@ -39,6 +39,7 @@ class SlowQueryLog(Base):
     __tablename__ = "slow_query_log"
     __table_args__ = (
         Index("ix_slow_query_log_query_hash", "query_hash"),
+        Index("ix_slow_query_log_trace_id", "trace_id"),
         {"schema": "observability"},
     )
 
@@ -54,6 +55,7 @@ class SlowQueryLog(Base):
     )
     trace_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
     span_id: Mapped[str] = mapped_column(UUID(as_uuid=False), nullable=False)
+    parent_span_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     session_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
 

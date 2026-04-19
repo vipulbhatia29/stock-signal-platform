@@ -33,6 +33,7 @@ class CeleryQueueDepth(Base):
     __tablename__ = "celery_queue_depth"
     __table_args__ = (
         Index("ix_celery_queue_depth_queue_name", "queue_name"),
+        Index("ix_celery_queue_depth_trace_id", "trace_id"),
         {"schema": "observability"},
     )
 

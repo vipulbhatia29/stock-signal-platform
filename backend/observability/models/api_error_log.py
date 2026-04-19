@@ -41,6 +41,7 @@ class ApiErrorLog(Base):
     __table_args__ = (
         Index("ix_api_error_log_trace_id", "trace_id"),
         Index("ix_api_error_log_stack_hash", "stack_hash"),
+        Index("ix_api_error_log_status_code_ts", "status_code", "ts"),
         {"schema": "observability"},
     )
 
@@ -66,6 +67,8 @@ class ApiErrorLog(Base):
     stack_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     stack_trace: Mapped[str | None] = mapped_column(Text, nullable=True)
     exception_class: Mapped[str | None] = mapped_column(Text, nullable=True)
+    request_log_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+    parent_span_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
 
     env: Mapped[str] = mapped_column(Text, nullable=False)
     git_sha: Mapped[str | None] = mapped_column(Text, nullable=True)

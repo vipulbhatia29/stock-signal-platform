@@ -21,6 +21,7 @@ class ProviderHealthSnapshot(Base):
     __tablename__ = "provider_health_snapshot"
     __table_args__ = (
         Index("ix_provider_health_snapshot_provider", "provider"),
+        Index("ix_provider_health_snapshot_trace_id", "trace_id"),
         {"schema": "observability"},
     )
 

@@ -21,6 +21,8 @@ class AgentIntentLog(Base):
     __tablename__ = "agent_intent_log"
     __table_args__ = (
         Index("ix_agent_intent_log_query_id", "query_id"),
+        Index("ix_agent_intent_log_trace_id", "trace_id"),
+        Index("ix_agent_intent_log_ts", "ts"),
         {"schema": "observability"},
     )
 

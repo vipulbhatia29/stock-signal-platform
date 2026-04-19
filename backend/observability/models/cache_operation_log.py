@@ -40,6 +40,7 @@ class CacheOperationLog(Base):
     __tablename__ = "cache_operation_log"
     __table_args__ = (
         Index("ix_cache_operation_log_operation", "operation"),
+        Index("ix_cache_operation_log_trace_id", "trace_id"),
         {"schema": "observability"},
     )
 

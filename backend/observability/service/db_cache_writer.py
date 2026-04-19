@@ -45,6 +45,7 @@ async def persist_slow_queries(events: list[SlowQueryEvent]) -> None:
                     ts=event.ts,
                     trace_id=str(event.trace_id),
                     span_id=str(event.span_id),
+                    parent_span_id=(str(event.parent_span_id) if event.parent_span_id else None),
                     user_id=str(event.user_id) if event.user_id else None,
                     session_id=str(event.session_id) if event.session_id else None,
                     query_text=event.query_text,

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, Text, func
+from sqlalchemy import DateTime, Index, Integer, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -38,7 +38,11 @@ class OAuthEventLog(Base):
     """
 
     __tablename__ = "oauth_event_log"
-    __table_args__ = {"schema": "observability"}
+    __table_args__ = (
+        Index("ix_oauth_event_log_trace_id", "trace_id"),
+        Index("ix_oauth_event_log_ts", "ts"),
+        {"schema": "observability"},
+    )
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
@@ -51,6 +55,7 @@ class OAuthEventLog(Base):
         server_default=func.now(),
     )
     trace_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+    span_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     user_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
     provider: Mapped[str] = mapped_column(Text, nullable=False)
     action: Mapped[str] = mapped_column(Text, nullable=False)

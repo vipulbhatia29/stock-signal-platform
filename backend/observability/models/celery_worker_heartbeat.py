@@ -37,6 +37,7 @@ class CeleryWorkerHeartbeat(Base):
     __tablename__ = "celery_worker_heartbeat"
     __table_args__ = (
         Index("ix_celery_worker_heartbeat_worker_name", "worker_name"),
+        Index("ix_celery_worker_heartbeat_trace_id", "trace_id"),
         {"schema": "observability"},
     )
 
