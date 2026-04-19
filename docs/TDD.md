@@ -2326,9 +2326,18 @@ build_client_from_settings() -> ObservabilityClient
 ```python
 # backend/observability/schema/v1.py
 class ObsEventBase(BaseModel):
-    event_type: EventType     # 7 types: llm_call, tool_execution, login_attempt,
-                              #   dq_finding, pipeline_lifecycle, external_api_call,
-                              #   rate_limiter_event
+    event_type: EventType     # 19 types across 6 layers:
+                              #   1a: llm_call, tool_execution, login_attempt,
+                              #       dq_finding, pipeline_lifecycle, external_api_call,
+                              #       rate_limiter_event
+                              #   1b HTTP: request_log, api_error_log
+                              #   1b Auth: auth_event, oauth_event, email_send
+                              #   1b DB/Cache: slow_query, db_pool_event,
+                              #       schema_migration, cache_operation
+                              #   1b Celery: celery_heartbeat, beat_schedule_run,
+                              #       celery_queue_depth
+                              #   1b Agent: agent_intent, agent_reasoning,
+                              #       provider_health_snapshot
     trace_id: UUID            # propagated via ContextVar (TraceIdMiddleware)
     span_id: UUID             # unique per emission
     parent_span_id: UUID | None
@@ -2360,13 +2369,40 @@ class ObservedHttpClient(httpx.AsyncClient):
 - 5 fallback branches in `TokenBucketLimiter.acquire()` emit `rate_limiter_event`
 - Events: `action=fallback_permissive` (redis_down, script_load_failed, redis_error) or `action=timeout`
 
-**DB tables (observability schema, migration 031):**
-| Table | Type | Retention | Compression |
-|---|---|---|---|
-| `external_api_call_log` | Hypertable (1d chunks) | 30 days | 7 days, segmentby=provider |
-| `rate_limiter_event` | Hypertable (1d chunks) | 30 days | — |
+**DB tables (observability schema, migrations 031-036):**
+| Table | Type | Retention | Compression | Migration |
+|---|---|---|---|---|
+| `external_api_call_log` | Hypertable (1d) | 30d | segmentby=provider | 031 |
+| `rate_limiter_event` | Hypertable (1d) | 30d | — | 031 |
+| `request_log` | Hypertable (1d) | 30d | — | 032 |
+| `api_error_log` | Hypertable (1d) | 90d | — | 032 |
+| `auth_event_log` | Regular | 90d | — | 033 |
+| `oauth_event_log` | Regular | 90d | — | 033 |
+| `email_send_log` | Regular | 90d | — | 033 |
+| `slow_query_log` | Hypertable (1d) | 30d | segmentby=query_hash | 034 |
+| `cache_operation_log` | Hypertable (6h) | 7d | segmentby=operation | 034 |
+| `db_pool_event` | Regular | 90d | — | 034 |
+| `schema_migration_log` | Regular | 365d | — | 034 |
+| `celery_worker_heartbeat` | Hypertable (1h) | 7d | segmentby=worker_name | 035 |
+| `celery_queue_depth` | Hypertable (1h) | 7d | segmentby=queue_name | 035 |
+| `beat_schedule_run` | Regular | 90d | — | 035 |
+| `agent_intent_log` | Regular | 30d | — | 036 |
+| `agent_reasoning_log` | Regular | 30d | — | 036 |
+| `provider_health_snapshot` | Hypertable (1h) | 30d | segmentby=provider | 036 |
 
-**Retention tasks (4 new in PR4 for existing tables):**
+**Instrumentation layers (1b Coverage):**
+| Layer | Module | Emission |
+|---|---|---|
+| HTTP | `instrumentation/http.py` | ObsHttpMiddleware → request_log + api_error_log |
+| Auth | `instrumentation/auth.py` | Auth/OAuth/email endpoint emissions |
+| DB | `instrumentation/db.py` | SQLAlchemy before/after_execute hooks (>500ms), pool monitoring |
+| Cache | `instrumentation/cache.py` | Redis ops (1% sampled, 100% errors), key redaction |
+| Celery | `instrumentation/celery.py` | Heartbeat thread (30s), queue depth polling (60s) |
+| Agent | `instrumentation/agent.py` | Intent classification, ReAct per-iteration reasoning |
+
+**Feedback loop guard:** `_in_obs_write` ContextVar in `instrumentation/db.py` — set by all obs writers before `session.commit()`, checked by `after_execute` hook to skip re-emission.
+
+**Retention tasks (all via Celery Beat):**
 | Task | Table | Window | Method |
 |---|---|---|---|
 | `purge_old_llm_call_log_task` | `llm_call_log` | 30d | `drop_chunks` (hypertable) |

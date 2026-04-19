@@ -297,29 +297,30 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 **Why this sequence:** Observability must exist before seed runs (Epic 2 below) so anomalies surface cleanly, and before UI polish (Phase E) so dashboard data is real. User decision captured in Session 112 — "observability on every aspect is the core-objective".
 
-**Session 118 status:**
-- Epic KAN-457 + 3 Stories (KAN-458, KAN-459, KAN-460) + 5 refinement subtasks filed
-- Master + 3 sub-epic specs shipped in PR #240 (commit 9f479b2)
-- 6 PR-scoped plans for 1a written; 2-persona adversarial review applied; 4 CRITICAL + 6 HIGH findings fixed inline
-- PM plan-review approved (KAN-465 → Done, Session 114)
+**Session 122 status:**
+- **1a COMPLETE** — 6/6 PRs merged (#242-#247, Sessions 114-119)
+- **1b IN PROGRESS** — 5/7 PRs merged, 2 remaining (Sessions 120-122)
 
-**1a PR breakdown (after Hard Rule #12 split):**
-| PR | Scope | Est. lines | Status |
-|---|---|---|---|
-| PR1 | migration 030 + `ObsEventBase` + `EventType` enum + `describe_observability_schema()` skeleton | ~250 | ✅ PR #242 (S114) |
-| PR2a | SDK (`ObservabilityClient` + buffer + spool) + DirectTarget + MemoryTarget + FastAPI+Celery lifespan wiring | ~500 | ✅ PR #243 (S115) |
-| PR2b | InternalHTTPTarget + `POST /obs/v1/events` ingest endpoint | ~200 | ✅ PR #244 (S116) |
-| PR3 | trace_id middleware + Celery propagation + structured JSON logging | ~400 | ✅ PR #245 (S117) |
-| PR4 | `ObservedHttpClient` + 10 providers + `rate_limiter_event` + retention | ~500 | 🟡 PR #246 (S118, open) |
-| PR5 | Strangler-fig refactor with `OBS_LEGACY_DIRECT_WRITES` + `wrote_via_legacy` dedup | ~450 | ⬜ Next |
-
-**Implementation subtasks (KAN-458 children):**
-| Ticket | PR | Status |
+**1a PR breakdown (COMPLETE):**
+| PR | Scope | Status |
 |---|---|---|
-| KAN-466 | PR1 | ✅ Done (S114) |
-| KAN-467 | PR2a | ✅ Done (S115) |
-| KAN-468 | PR2b+PR3 | ✅ Done (S116-117) |
-| KAN-469 | PR4 | 🟡 In Progress (S118) |
+| PR1 | Schema foundation + EventType + ObsEventBase | ✅ PR #242 (S114) |
+| PR2a | SDK core + DirectTarget + lifespan | ✅ PR #243 (S115) |
+| PR2b | InternalHTTPTarget + ingest endpoint | ✅ PR #244 (S116) |
+| PR3 | trace_id middleware + structured logging | ✅ PR #245 (S117) |
+| PR4 | ObservedHttpClient + 10 providers + rate_limiter_event | ✅ PR #246 (S118) |
+| PR5 | Strangler-fig refactor + OBS_LEGACY_DIRECT_WRITES | ✅ PR #247 (S119) |
+
+**1b PR breakdown (IN PROGRESS):**
+| PR | Scope | Status |
+|---|---|---|
+| PR1 | request_log + api_error_log + PII redaction + ObsHttpMiddleware | ✅ PR #250 (S121) |
+| PR2 | auth_event_log + oauth_event_log + email_send_log + login_attempts trace_id | ✅ PR #251 (S121) |
+| PR3 | slow_query + pool + migration + cache_operation | ✅ PR #253 (S122) |
+| PR4 | Celery heartbeat + beat drift + queue depth + retry | ✅ PR #254 (S122) |
+| PR5 | intent_log + reasoning_log + provider_health_snapshot | ✅ PR #255 (S122) |
+| PR6 | Frontend beacon + frontend_error_log + deploy_events | ⬜ KAN-481 |
+| PR7 | Semgrep observability rules (advisory) | ⬜ KAN-482 |
 
 ### Epic 2: Seed Universe (planned — blocked by Epic 1)
 

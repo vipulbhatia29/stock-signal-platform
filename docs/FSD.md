@@ -1301,6 +1301,8 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - **Agent Assessment:** multi-dimensional scoring engine (tool selection, grounding, termination, resilience, reasoning coherence) against golden dataset
 - **Command Center:** 5-zone admin dashboard with 15s auto-polling (see FR-20)
 - **Background Job Monitoring:** Pipeline run history with step durations, watermarks, next-run countdown
+- **Observability SDK (1a):** `ObservabilityClient` with buffered async/sync emission, 3 pluggable targets (DirectTarget, InternalHTTPTarget, MemoryTarget), JSONL disk spool, `ObservedHttpClient` for 10 external providers, strangler-fig migration of legacy emitters
+- **Full-stack instrumentation (1b):** 17 tables across 6 layers — HTTP request/error logging, auth/OAuth/email events, SQLAlchemy slow query detection (>500ms) + pool monitoring, Redis cache ops (1% sampled), Celery heartbeat (30s) + queue depth polling (60s), agent intent classification + ReAct reasoning snapshots with termination reason tracking. All instrumentation is fire-and-forget with `_in_obs_write` ContextVar feedback loop prevention
 
 ### NFR-7: Developer Experience ✅ IMPLEMENTED
 
@@ -1399,3 +1401,7 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 | FR-26 | Signal Convergence & Divergence UX (5 classifiers, traffic lights, rationale, E2E) | ✅ IMPLEMENTED |
 | FR-27 | Portfolio Forecast (Black-Litterman, Monte Carlo, CVaR, frontend cards) | ✅ IMPLEMENTED |
 | FR-28 | Observability Instrumentation (Langfuse, HttpMetrics, assessment, admin audit) | ✅ IMPLEMENTED |
+| FR-29 | Forecast Quality & Scale (nightly cap, weekly retrain, fast/slow split) | ✅ IMPLEMENTED |
+| FR-30 | API Rate Limiting (token bucket, 5 provider instances, ingest endpoint) | ✅ IMPLEMENTED |
+| FR-32 | Nightly Retention Purge (forecasts 30d, news 90d) | ✅ IMPLEMENTED |
+| NFR-6+ | Obs SDK + Full-Stack Instrumentation (17 tables, 6 layers, 19 event types) | ✅ IMPLEMENTED |
