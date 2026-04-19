@@ -353,6 +353,17 @@ async def react_loop(
         elapsed = time.monotonic() - wall_start
         if elapsed > WALL_CLOCK_TIMEOUT:
             logger.warning("react_loop_timeout", extra={"elapsed": elapsed, "iteration": i})
+            try:
+                from backend.observability.instrumentation.agent import emit_reasoning_log
+
+                emit_reasoning_log(
+                    loop_step=i,
+                    reasoning_type="synthesize",
+                    content_summary="wall clock timeout",
+                    termination_reason="wall_clock_timeout",
+                )
+            except Exception:  # noqa: BLE001
+                pass
             timeout_msg = (
                 "I ran out of time to complete the analysis. "
                 "Here is what I found so far." + DISCLAIMER
@@ -415,6 +426,23 @@ async def react_loop(
         if response.content:
             yield StreamEvent(type="thinking", content=response.content)
 
+        # 5b. Emit reasoning event (obs 1b PR5)
+        try:
+            from backend.observability.instrumentation.agent import emit_reasoning_log
+
+            emit_reasoning_log(
+                loop_step=i,
+                reasoning_type="plan",
+                content_summary=(response.content or "")[:500],
+                tool_calls_proposed=(
+                    {"tools": [tc["name"] for tc in response.tool_calls]}
+                    if response.has_tool_calls
+                    else None
+                ),
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
         # 6. If no tool calls → finish
         if not response.has_tool_calls:
             # Langfuse: rename iteration span to "synthesis" — this is the final answer
@@ -425,6 +453,17 @@ async def react_loop(
                 except Exception:
                     logger.debug("langfuse_synthesis_span_failed")
             final_content = response.content or ""
+            try:
+                from backend.observability.instrumentation.agent import emit_reasoning_log
+
+                emit_reasoning_log(
+                    loop_step=i,
+                    reasoning_type="synthesize",
+                    content_summary=final_content[:500],
+                    termination_reason="zero_tool_calls",
+                )
+            except Exception:  # noqa: BLE001
+                pass
             yield StreamEvent(type="token", content=final_content + DISCLAIMER)
             yield StreamEvent(type="done", usage=response.usage_dict())
             return
@@ -511,6 +550,17 @@ async def react_loop(
 
         if consecutive_failures >= CIRCUIT_BREAKER:
             logger.warning("react_loop_circuit_breaker", extra={"failures": consecutive_failures})
+            try:
+                from backend.observability.instrumentation.agent import emit_reasoning_log
+
+                emit_reasoning_log(
+                    loop_step=i,
+                    reasoning_type="synthesize",
+                    content_summary="circuit breaker triggered",
+                    termination_reason="exception",
+                )
+            except Exception:  # noqa: BLE001
+                pass
             scratchpad.append(
                 {
                     "role": "user",
@@ -532,6 +582,17 @@ async def react_loop(
             return
 
     # Exhausted MAX_ITERATIONS — force summary
+    try:
+        from backend.observability.instrumentation.agent import emit_reasoning_log
+
+        emit_reasoning_log(
+            loop_step=max_iterations,
+            reasoning_type="synthesize",
+            content_summary="max iterations exhausted",
+            termination_reason="max_iterations",
+        )
+    except Exception:  # noqa: BLE001
+        pass
     scratchpad.append(
         {
             "role": "user",

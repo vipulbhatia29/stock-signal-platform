@@ -268,6 +268,23 @@ async def _event_generator(
             held_tickers=[p.get("ticker") for p in user_context.get("positions", [])],
         )
 
+        # Emit intent classification event (obs 1b PR5)
+        try:
+            from backend.observability.instrumentation.agent import (
+                emit_intent_log,
+                hash_query_text,
+            )
+
+            emit_intent_log(
+                intent=classified.intent,
+                confidence=classified.confidence,
+                out_of_scope=classified.intent == "out_of_scope",
+                query_text_hash=hash_query_text(body.message),
+                decline_reason=classified.decline_message,
+            )
+        except Exception:  # noqa: BLE001
+            pass
+
         if classified.intent == "out_of_scope":
             await _log_decline("out_of_scope")
             decline_msg = classified.decline_message or (

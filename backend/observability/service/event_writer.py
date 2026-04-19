@@ -45,6 +45,9 @@ async def write_batch(events: list[ObsEventBase]) -> None:
     celery_heartbeat_events: list = []
     beat_schedule_run_events: list = []
     celery_queue_depth_events: list = []
+    agent_intent_events: list = []
+    agent_reasoning_events: list = []
+    provider_health_events: list = []
 
     for event in events:
         try:
@@ -86,6 +89,12 @@ async def write_batch(events: list[ObsEventBase]) -> None:
                 beat_schedule_run_events.append(event)
             elif event.event_type == EventType.CELERY_QUEUE_DEPTH:
                 celery_queue_depth_events.append(event)
+            elif event.event_type == EventType.AGENT_INTENT:
+                agent_intent_events.append(event)
+            elif event.event_type == EventType.AGENT_REASONING:
+                agent_reasoning_events.append(event)
+            elif event.event_type == EventType.PROVIDER_HEALTH_SNAPSHOT:
+                provider_health_events.append(event)
             else:
                 logger.debug("obs.event.unhandled", extra={"event_type": event.event_type.value})
         except Exception:  # noqa: BLE001 — per-event error isolation
@@ -255,3 +264,30 @@ async def write_batch(events: list[ObsEventBase]) -> None:
             await persist_celery_queue_depths(celery_queue_depth_events)
         except Exception:  # noqa: BLE001 — writer errors must not propagate
             logger.warning("obs.writer.celery_queue_depth_batch.failed", exc_info=True)
+
+    # Agent layer writers (PR5)
+    if agent_intent_events:
+        try:
+            from backend.observability.service.agent_writer import persist_agent_intents
+
+            await persist_agent_intents(agent_intent_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.agent_intent_batch.failed", exc_info=True)
+
+    if agent_reasoning_events:
+        try:
+            from backend.observability.service.agent_writer import persist_agent_reasoning
+
+            await persist_agent_reasoning(agent_reasoning_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.agent_reasoning_batch.failed", exc_info=True)
+
+    if provider_health_events:
+        try:
+            from backend.observability.service.agent_writer import (
+                persist_provider_health_snapshots,
+            )
+
+            await persist_provider_health_snapshots(provider_health_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.provider_health_batch.failed", exc_info=True)
