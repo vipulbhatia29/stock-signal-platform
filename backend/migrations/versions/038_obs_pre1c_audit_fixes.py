@@ -76,7 +76,7 @@ def upgrade() -> None:
         ("celery_queue_depth", "ix_celery_queue_depth_trace_id"),
         ("beat_schedule_run", "ix_beat_schedule_run_trace_id"),
         ("db_pool_event", "ix_db_pool_event_trace_id"),
-        ("auth_event_log", "ix_auth_event_log_trace_id"),
+        # auth_event_log trace_id index already created in migration 033
         ("agent_intent_log", "ix_agent_intent_log_trace_id"),
         ("agent_reasoning_log", "ix_agent_reasoning_log_trace_id"),
         ("provider_health_snapshot", "ix_provider_health_snapshot_trace_id"),
@@ -145,7 +145,7 @@ def downgrade() -> None:
         ("provider_health_snapshot", "ix_provider_health_snapshot_trace_id"),
         ("agent_reasoning_log", "ix_agent_reasoning_log_trace_id"),
         ("agent_intent_log", "ix_agent_intent_log_trace_id"),
-        ("auth_event_log", "ix_auth_event_log_trace_id"),
+        # auth_event_log trace_id index dropped by migration 033 downgrade
         ("db_pool_event", "ix_db_pool_event_trace_id"),
         ("beat_schedule_run", "ix_beat_schedule_run_trace_id"),
         ("celery_queue_depth", "ix_celery_queue_depth_trace_id"),
