@@ -39,6 +39,9 @@ SLOW_QUERY_LOG_RETENTION_DAYS = 30
 CACHE_OPERATION_LOG_RETENTION_DAYS = 7
 DB_POOL_EVENT_RETENTION_DAYS = 90
 SCHEMA_MIGRATION_LOG_RETENTION_DAYS = 365
+CELERY_HEARTBEAT_RETENTION_DAYS = 7
+BEAT_SCHEDULE_RUN_RETENTION_DAYS = 90
+CELERY_QUEUE_DEPTH_RETENTION_DAYS = 7
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_forecasts_task")
@@ -285,6 +288,33 @@ def purge_old_schema_migration_logs_task(run_id: uuid.UUID | None = None) -> dic
     )
 
 
+@celery_app.task(name="backend.tasks.retention.purge_old_celery_heartbeats_task")
+@tracked_task("celery_heartbeat_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_celery_heartbeats_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge celery_worker_heartbeat older than 7 days using drop_chunks (hypertable)."""
+    return asyncio.run(
+        _purge_obs_table("observability.celery_worker_heartbeat", CELERY_HEARTBEAT_RETENTION_DAYS)
+    )
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_beat_schedule_runs_task")
+@tracked_task("beat_schedule_run_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_beat_schedule_runs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge beat_schedule_run older than 90 days using row-level DELETE (regular table)."""
+    return asyncio.run(
+        _purge_obs_regular_table("beat_schedule_run", BEAT_SCHEDULE_RUN_RETENTION_DAYS)
+    )
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_celery_queue_depths_task")
+@tracked_task("celery_queue_depth_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_celery_queue_depths_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge celery_queue_depth older than 7 days using drop_chunks (hypertable)."""
+    return asyncio.run(
+        _purge_obs_table("observability.celery_queue_depth", CELERY_QUEUE_DEPTH_RETENTION_DAYS)
+    )
+
+
 async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
     """Row-level DELETE helper for regular (non-hypertable) observability tables.
 
@@ -304,6 +334,7 @@ async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
         "email_send_log",
         "db_pool_event",
         "schema_migration_log",
+        "beat_schedule_run",
     }
     if table not in _ALLOWED_TABLES:
         raise ValueError(f"Table {table!r} not in allowlist for regular-table retention")

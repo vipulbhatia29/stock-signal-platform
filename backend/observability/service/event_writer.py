@@ -42,6 +42,9 @@ async def write_batch(events: list[ObsEventBase]) -> None:
     db_pool_events: list = []
     schema_migration_events: list = []
     cache_operation_events: list = []
+    celery_heartbeat_events: list = []
+    beat_schedule_run_events: list = []
+    celery_queue_depth_events: list = []
 
     for event in events:
         try:
@@ -77,6 +80,12 @@ async def write_batch(events: list[ObsEventBase]) -> None:
                 schema_migration_events.append(event)
             elif event.event_type == EventType.CACHE_OPERATION:
                 cache_operation_events.append(event)
+            elif event.event_type == EventType.CELERY_HEARTBEAT:
+                celery_heartbeat_events.append(event)
+            elif event.event_type == EventType.BEAT_SCHEDULE_RUN:
+                beat_schedule_run_events.append(event)
+            elif event.event_type == EventType.CELERY_QUEUE_DEPTH:
+                celery_queue_depth_events.append(event)
             else:
                 logger.debug("obs.event.unhandled", extra={"event_type": event.event_type.value})
         except Exception:  # noqa: BLE001 — per-event error isolation
@@ -221,3 +230,28 @@ async def write_batch(events: list[ObsEventBase]) -> None:
             await persist_cache_operations(cache_operation_events)
         except Exception:  # noqa: BLE001 — writer errors must not propagate
             logger.warning("obs.writer.cache_operation_batch.failed", exc_info=True)
+
+    # Celery layer writers (PR4)
+    if celery_heartbeat_events:
+        try:
+            from backend.observability.service.celery_writer import persist_celery_heartbeats
+
+            await persist_celery_heartbeats(celery_heartbeat_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.celery_heartbeat_batch.failed", exc_info=True)
+
+    if beat_schedule_run_events:
+        try:
+            from backend.observability.service.celery_writer import persist_beat_schedule_runs
+
+            await persist_beat_schedule_runs(beat_schedule_run_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.beat_schedule_run_batch.failed", exc_info=True)
+
+    if celery_queue_depth_events:
+        try:
+            from backend.observability.service.celery_writer import persist_celery_queue_depths
+
+            await persist_celery_queue_depths(celery_queue_depth_events)
+        except Exception:  # noqa: BLE001 — writer errors must not propagate
+            logger.warning("obs.writer.celery_queue_depth_batch.failed", exc_info=True)

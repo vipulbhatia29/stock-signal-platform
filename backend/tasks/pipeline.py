@@ -54,6 +54,8 @@ class PipelineRunner:
         trigger: str = "scheduled",
         tickers_total: int = 0,
         celery_task_id: str | None = None,
+        retry_count: int = 0,
+        trace_id: str | None = None,
     ) -> uuid.UUID:
         """Create a PipelineRun row and return the run_id.
 
@@ -66,6 +68,8 @@ class PipelineRunner:
                 @tracked_task decorator reading celery.current_task.request.id,
                 PR2 dashboards can GROUP BY this column to aggregate retry
                 attempts of one logical invocation.
+            retry_count: Number of Celery retries for this task invocation.
+            trace_id: Distributed trace ID for correlation with obs events.
 
         Returns:
             UUID of the new PipelineRun row.
@@ -82,6 +86,8 @@ class PipelineRunner:
                 tickers_failed=0,
                 trigger=trigger,
                 celery_task_id=celery_task_id,
+                retry_count=retry_count,
+                trace_id=trace_id,
             )
             session.add(run)
             await session.commit()
@@ -540,6 +546,7 @@ def tracked_task(
             # LocalProxy returns None/lacks .request, RuntimeError if no
             # task context is active. A broader catch would hide bugs.
             celery_task_id: str | None = None
+            retry_count = 0
             try:
                 from celery import current_task
 
@@ -548,14 +555,30 @@ def tracked_task(
                     task_id = getattr(req, "id", None)
                     if isinstance(task_id, str):
                         celery_task_id = task_id
+                    retries = getattr(req, "retries", 0)
+                    if isinstance(retries, int):
+                        retry_count = retries
             except (ImportError, AttributeError, RuntimeError):
                 celery_task_id = None
+
+            # Read trace_id from ambient ContextVar for correlation
+            trace_id_str: str | None = None
+            try:
+                from backend.observability.context import trace_id_var
+
+                tid = trace_id_var.get()
+                if tid is not None:
+                    trace_id_str = str(tid)
+            except Exception:  # noqa: BLE001
+                pass
 
             run_id = await runner.start_run(
                 pipeline_name=pipeline_name,
                 trigger=trigger,
                 tickers_total=tickers_total,
                 celery_task_id=celery_task_id,
+                retry_count=retry_count,
+                trace_id=trace_id_str,
             )
             started_at = datetime.now(timezone.utc)
 

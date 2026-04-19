@@ -39,6 +39,10 @@ class EventType(str, Enum):
     DB_POOL_EVENT = "db_pool_event"
     SCHEMA_MIGRATION = "schema_migration"
     CACHE_OPERATION = "cache_operation"
+    # 1b: Celery layer
+    CELERY_HEARTBEAT = "celery_heartbeat"
+    BEAT_SCHEDULE_RUN = "beat_schedule_run"
+    CELERY_QUEUE_DEPTH = "celery_queue_depth"
 
 
 class AttributionLayer(str, Enum):
