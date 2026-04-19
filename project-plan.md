@@ -297,9 +297,10 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 **Why this sequence:** Observability must exist before seed runs (Epic 2 below) so anomalies surface cleanly, and before UI polish (Phase E) so dashboard data is real. User decision captured in Session 112 — "observability on every aspect is the core-objective".
 
-**Session 122 status:**
+**Session 124 status:**
 - **1a COMPLETE** — 6/6 PRs merged (#242-#247, Sessions 114-119)
-- **1b IN PROGRESS** — 5/7 PRs merged, 2 remaining (Sessions 120-122)
+- **1b COMPLETE** — 7/7 PRs merged (#250-#257, Sessions 120-123) + audit fixes (PR #259, Session 124)
+- **1c IN PROGRESS** — PR1 (anomaly engine + finding_log) implemented, PR pending. 6/7 PRs remaining.
 
 **1a PR breakdown (COMPLETE):**
 | PR | Scope | Status |
