@@ -7,6 +7,8 @@ schema is created by Alembic DDL and does not participate in the main metadata r
 """
 
 from backend.models.logs import LLMCallLog, ToolExecutionLog  # noqa: F401
+from backend.observability.models.agent_intent_log import AgentIntentLog
+from backend.observability.models.agent_reasoning_log import AgentReasoningLog
 from backend.observability.models.api_error_log import ApiErrorLog
 from backend.observability.models.auth_event_log import AuthEventLog
 from backend.observability.models.beat_schedule_run import BeatScheduleRun
@@ -17,6 +19,7 @@ from backend.observability.models.db_pool_event import DbPoolEvent as DbPoolEven
 from backend.observability.models.email_send_log import EmailSendLog
 from backend.observability.models.external_api_call import ExternalApiCallLog
 from backend.observability.models.oauth_event_log import OAuthEventLog
+from backend.observability.models.provider_health_snapshot import ProviderHealthSnapshot
 from backend.observability.models.rate_limiter_event import RateLimiterEvent
 from backend.observability.models.request_log import RequestLog
 from backend.observability.models.schema_migration_log import SchemaMigrationLog
@@ -41,4 +44,7 @@ __all__ = [
     "BeatScheduleRun",
     "CeleryQueueDepth",
     "CeleryWorkerHeartbeat",
+    "AgentIntentLog",
+    "AgentReasoningLog",
+    "ProviderHealthSnapshot",
 ]

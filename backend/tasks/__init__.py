@@ -190,6 +190,24 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.observability.poll_queue_depths",
         "schedule": 60,  # every 60 seconds
     },
+    # ── Obs 1b: Agent layer retention ──
+    "purge-agent-intent-logs-daily": {
+        "task": "backend.tasks.retention.purge_old_agent_intent_logs_task",
+        "schedule": crontab(hour=8, minute=15),
+    },
+    "purge-agent-reasoning-logs-daily": {
+        "task": "backend.tasks.retention.purge_old_agent_reasoning_logs_task",
+        "schedule": crontab(hour=8, minute=30),
+    },
+    "purge-provider-health-snapshots-daily": {
+        "task": "backend.tasks.retention.purge_old_provider_health_snapshots_task",
+        "schedule": crontab(hour=8, minute=45),
+    },
+    # ── Obs 1b: Agent layer — provider health snapshot ──
+    "snapshot-provider-health": {
+        "task": "backend.tasks.observability.snapshot_provider_health",
+        "schedule": 60,  # every 60 seconds
+    },
     # ── Weekly walk-forward backtest (Saturday 03:30 ET) ──
     "weekly-backtest": {
         "task": "backend.tasks.forecasting.run_backtest_task",
@@ -348,6 +366,21 @@ def poll_queue_depths_task() -> dict:
     except Exception:  # noqa: BLE001 — queue depth must not crash worker
         _obs_logger.debug("obs.queue_depth.poll_failed", exc_info=True)
     return {"status": "ok"}
+
+
+# ── Provider health snapshot task (PR5) — NOT @tracked_task ──────────────
+@celery_app.task(name="backend.tasks.observability.snapshot_provider_health")
+def snapshot_provider_health_task() -> dict:
+    """Snapshot all LLM provider health states every 60s.
+
+    Iterates all configured providers and emits PROVIDER_HEALTH_SNAPSHOT events.
+    NOT a @tracked_task to avoid recursion.
+    """
+    # LLMClient is request-scoped (FastAPI lifespan), not accessible from Celery.
+    # Provider health snapshot emission is deferred to 1c when a shared provider
+    # registry is available. Schema + table are ready for population.
+    _obs_logger.debug("obs.provider_health.snapshot — no-op (deferred to 1c)")
+    return {"status": "deferred"}
 
 
 # ── Trace propagation — signal handlers register on import (PR3) ──────────

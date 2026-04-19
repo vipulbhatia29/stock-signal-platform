@@ -43,6 +43,10 @@ class EventType(str, Enum):
     CELERY_HEARTBEAT = "celery_heartbeat"
     BEAT_SCHEDULE_RUN = "beat_schedule_run"
     CELERY_QUEUE_DEPTH = "celery_queue_depth"
+    # 1b: Agent layer
+    AGENT_INTENT = "agent_intent"
+    AGENT_REASONING = "agent_reasoning"
+    PROVIDER_HEALTH_SNAPSHOT = "provider_health_snapshot"
 
 
 class AttributionLayer(str, Enum):

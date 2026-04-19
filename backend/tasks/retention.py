@@ -42,6 +42,9 @@ SCHEMA_MIGRATION_LOG_RETENTION_DAYS = 365
 CELERY_HEARTBEAT_RETENTION_DAYS = 7
 BEAT_SCHEDULE_RUN_RETENTION_DAYS = 90
 CELERY_QUEUE_DEPTH_RETENTION_DAYS = 7
+AGENT_INTENT_LOG_RETENTION_DAYS = 30
+AGENT_REASONING_LOG_RETENTION_DAYS = 30
+PROVIDER_HEALTH_SNAPSHOT_RETENTION_DAYS = 30
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_forecasts_task")
@@ -315,6 +318,36 @@ def purge_old_celery_queue_depths_task(run_id: uuid.UUID | None = None) -> dict:
     )
 
 
+@celery_app.task(name="backend.tasks.retention.purge_old_agent_intent_logs_task")
+@tracked_task("agent_intent_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_agent_intent_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge agent_intent_log older than 30 days using row-level DELETE."""
+    return asyncio.run(
+        _purge_obs_regular_table("agent_intent_log", AGENT_INTENT_LOG_RETENTION_DAYS)
+    )
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_agent_reasoning_logs_task")
+@tracked_task("agent_reasoning_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_agent_reasoning_logs_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge agent_reasoning_log older than 30 days using row-level DELETE."""
+    return asyncio.run(
+        _purge_obs_regular_table("agent_reasoning_log", AGENT_REASONING_LOG_RETENTION_DAYS)
+    )
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_provider_health_snapshots_task")
+@tracked_task("provider_health_snapshot_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_provider_health_snapshots_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge provider_health_snapshot older than 30 days using drop_chunks."""
+    return asyncio.run(
+        _purge_obs_table(
+            "observability.provider_health_snapshot",
+            PROVIDER_HEALTH_SNAPSHOT_RETENTION_DAYS,
+        )
+    )
+
+
 async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
     """Row-level DELETE helper for regular (non-hypertable) observability tables.
 
@@ -335,6 +368,8 @@ async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
         "db_pool_event",
         "schema_migration_log",
         "beat_schedule_run",
+        "agent_intent_log",
+        "agent_reasoning_log",
     }
     if table not in _ALLOWED_TABLES:
         raise ValueError(f"Table {table!r} not in allowlist for regular-table retention")
