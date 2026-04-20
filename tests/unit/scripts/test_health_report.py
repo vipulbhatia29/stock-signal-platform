@@ -107,18 +107,23 @@ _TRACE_ENVELOPE = {
 
 class TestSinceToMinutes:
     def test_minutes(self) -> None:
+        """Verify '30m' converts to 30 minutes."""
         assert _since_to_minutes("30m") == 30
 
     def test_hours(self) -> None:
+        """Verify '1h' converts to 60 minutes."""
         assert _since_to_minutes("1h") == 60
 
     def test_days(self) -> None:
+        """Verify '7d' converts to 7*1440 minutes."""
         assert _since_to_minutes("7d") == 7 * 1440
 
     def test_24h(self) -> None:
+        """Verify '24h' converts to 1440 minutes."""
         assert _since_to_minutes("24h") == 1440
 
     def test_invalid_fallback(self) -> None:
+        """Verify invalid input falls back to 60 minutes."""
         assert _since_to_minutes("bogus") == 60
 
 
@@ -129,10 +134,12 @@ class TestSinceToMinutes:
 
 class TestExtractProviders:
     def test_extracts_provider_names(self) -> None:
+        """Verify provider names are extracted from health envelope."""
         providers = _extract_providers(_HEALTH_ENVELOPE)
         assert sorted(providers) == ["openai", "yfinance"]
 
     def test_empty_when_no_providers(self) -> None:
+        """Verify empty list when no providers in health data."""
         assert _extract_providers({"result": {}}) == []
 
 
@@ -143,6 +150,7 @@ class TestExtractProviders:
 
 class TestFmtFullReport:
     def test_contains_status_header(self) -> None:
+        """Verify Markdown output includes status header with overall health."""
         data = {
             "health": _HEALTH_ENVELOPE,
             "anomalies": _ANOMALIES_ENVELOPE,
@@ -154,6 +162,7 @@ class TestFmtFullReport:
         assert "GREEN" in md or "healthy" in md.lower()
 
     def test_contains_anomaly_section(self) -> None:
+        """Verify Markdown output includes anomaly findings section."""
         data = {
             "health": _HEALTH_ENVELOPE,
             "anomalies": _ANOMALIES_ENVELOPE,
@@ -165,6 +174,7 @@ class TestFmtFullReport:
         assert "yfinance 429 rate elevated" in md
 
     def test_contains_error_summary(self) -> None:
+        """Verify Markdown output includes error count by source."""
         data = {
             "health": _HEALTH_ENVELOPE,
             "anomalies": _ANOMALIES_ENVELOPE,
@@ -176,6 +186,7 @@ class TestFmtFullReport:
         assert "http: 2 rows" in md
 
     def test_no_anomalies_message(self) -> None:
+        """Verify 'No open anomalies' message when findings list is empty."""
         empty_anomalies = {
             "result": {"findings": []},
             "meta": {"total_count": 0},
@@ -190,6 +201,7 @@ class TestFmtFullReport:
         assert "No open anomalies" in md
 
     def test_external_api_table(self) -> None:
+        """Verify external API stats render as a Markdown table."""
         data = {
             "health": _HEALTH_ENVELOPE,
             "anomalies": _ANOMALIES_ENVELOPE,
@@ -213,12 +225,14 @@ class TestFmtFullReport:
 
 class TestFmtAnomalies:
     def test_renders_findings(self) -> None:
+        """Verify anomaly findings render with title, severity, and hint."""
         md = _fmt_anomalies(_ANOMALIES_ENVELOPE)
         assert "Open Anomalies (1)" in md
         assert "yfinance 429 rate elevated" in md
         assert "Hint:" in md
 
     def test_empty_findings(self) -> None:
+        """Verify empty findings produce 'No open anomalies' message."""
         empty = {"result": {"findings": []}}
         md = _fmt_anomalies(empty)
         assert "No open anomalies" in md
@@ -226,6 +240,7 @@ class TestFmtAnomalies:
 
 class TestFmtTrace:
     def test_renders_span_tree(self) -> None:
+        """Verify trace renders as indented span tree with kind and latency."""
         md = _fmt_trace(_TRACE_ENVELOPE)
         assert "Trace: abc-123" in md
         assert "[http]" in md
@@ -233,11 +248,13 @@ class TestFmtTrace:
         assert "120ms" in md
 
     def test_no_spans(self) -> None:
+        """Verify 'No spans found' message when trace has no spans."""
         empty = {"result": {"trace_id": "x", "spans": []}}
         md = _fmt_trace(empty)
         assert "No spans found" in md
 
     def test_flat_spans_fallback(self) -> None:
+        """Verify flat span list renders when no root_span exists."""
         flat = {
             "result": {
                 "trace_id": "x",
@@ -252,6 +269,7 @@ class TestFmtTrace:
 
 class TestFmtLayerReport:
     def test_renders_errors(self) -> None:
+        """Verify layer report renders error list with severity and count."""
         data = {
             "layer": "http",
             "errors": {
@@ -279,6 +297,7 @@ class TestFmtLayerReport:
 
 class TestParser:
     def test_defaults(self) -> None:
+        """Verify default arg values: since=1h, no filters, no flags."""
         parser = _build_parser()
         args = parser.parse_args([])
         assert args.since == "1h"
@@ -289,6 +308,7 @@ class TestParser:
         assert not args.json_output
 
     def test_all_flags(self) -> None:
+        """Verify --since, --anomalies, and --json flags parse correctly."""
         parser = _build_parser()
         args = parser.parse_args(["--since=24h", "--anomalies", "--json"])
         assert args.since == "24h"
@@ -296,12 +316,14 @@ class TestParser:
         assert args.json_output
 
     def test_layer_provider(self) -> None:
+        """Verify --layer and --provider parse correctly together."""
         parser = _build_parser()
         args = parser.parse_args(["--layer=external_api", "--provider=yfinance"])
         assert args.layer == "external_api"
         assert args.provider == "yfinance"
 
     def test_trace_flag(self) -> None:
+        """Verify --trace flag captures the trace ID."""
         parser = _build_parser()
         args = parser.parse_args(["--trace=abc-123"])
         assert args.trace == "abc-123"
@@ -315,6 +337,7 @@ class TestParser:
 class TestAsyncMain:
     @pytest.mark.asyncio
     async def test_full_report(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Verify full report mode calls platform_health and outputs Markdown."""
         from scripts.health_report import _async_main
 
         with (
@@ -348,6 +371,7 @@ class TestAsyncMain:
 
     @pytest.mark.asyncio
     async def test_json_output(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Verify --json flag outputs parseable JSON."""
         from scripts.health_report import _async_main
 
         with (
@@ -366,6 +390,7 @@ class TestAsyncMain:
 
     @pytest.mark.asyncio
     async def test_trace_mode(self, capsys: pytest.CaptureFixture[str]) -> None:
+        """Verify --trace flag calls get_trace and outputs trace ID."""
         from scripts.health_report import _async_main
 
         with patch(

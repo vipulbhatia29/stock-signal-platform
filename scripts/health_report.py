@@ -359,14 +359,18 @@ def _fmt_trace(data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _fmt_span(span: dict[str, Any], lines: list[str], indent: int) -> None:
+def _fmt_span(span: dict[str, Any], lines: list[str], indent: int, max_depth: int = 50) -> None:
     """Recursively format a span tree node.
 
     Args:
         span: Span dict with optional children.
         lines: Accumulator list of Markdown lines.
         indent: Current indentation depth.
+        max_depth: Maximum recursion depth to prevent runaway trees.
     """
+    if indent > max_depth:
+        lines.append("  " * indent + "- ... (depth limit reached)")
+        return
     prefix = "  " * indent
     kind = span.get("kind", "?")
     dur = span.get("duration_ms") or span.get("latency_ms", "?")
@@ -384,7 +388,7 @@ def _fmt_span(span: dict[str, Any], lines: list[str], indent: int) -> None:
     lines.append(f"{prefix}- {' '.join(detail_parts)}")
 
     for child in span.get("children", []):
-        _fmt_span(child, lines, indent + 1)
+        _fmt_span(child, lines, indent + 1, max_depth)
 
 
 def _fmt_layer_report(data: dict[str, Any], since: str) -> str:
