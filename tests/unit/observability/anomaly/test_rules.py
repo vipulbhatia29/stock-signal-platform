@@ -761,11 +761,11 @@ class TestWatermarkStalenessRule:
 class TestRuleRegistry:
     """Verifies the ALL_RULES registry is populated correctly."""
 
-    def test_all_rules_list_has_six_entries(self) -> None:
-        """ALL_RULES registry contains exactly 6 rule instances."""
+    def test_all_rules_list_has_twelve_entries(self) -> None:
+        """ALL_RULES registry contains exactly 12 rule instances."""
         from backend.observability.anomaly.rules import ALL_RULES
 
-        assert len(ALL_RULES) == 6
+        assert len(ALL_RULES) == 12
 
     def test_all_rules_are_anomaly_rule_instances(self) -> None:
         """Every entry in ALL_RULES is an AnomalyRule subclass instance."""
@@ -781,3 +781,482 @@ class TestRuleRegistry:
 
         names = [r.name for r in ALL_RULES]
         assert len(names) == len(set(names)), "Duplicate rule names detected"
+
+
+# ---------------------------------------------------------------------------
+# Rule 7: Worker Heartbeat Missing
+# ---------------------------------------------------------------------------
+
+
+class TestWorkerHeartbeatMissingRule:
+    """Tests for WorkerHeartbeatMissingRule."""
+
+    @pytest.mark.asyncio
+    async def test_stale_worker_returns_finding(self) -> None:
+        """Worker with last heartbeat >90s ago fires a finding."""
+        from backend.observability.anomaly.rules.worker_heartbeat_missing import (
+            WorkerHeartbeatMissingRule,
+        )
+
+        now = datetime.now(timezone.utc)
+        # Two distinct workers: one stale, one fresh
+        row_stale = MagicMock()
+        row_stale.worker_name = "celery@worker-1"
+        row_stale.latest_ts = now - timedelta(seconds=120)
+        row_stale.status = "alive"
+
+        row_fresh = MagicMock()
+        row_fresh.worker_name = "celery@worker-2"
+        row_fresh.latest_ts = now - timedelta(seconds=30)
+        row_fresh.status = "alive"
+
+        mock_session, _ = _make_session_mock(rows=[row_stale, row_fresh])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.worker_heartbeat_missing.async_session_factory",
+            mock_session,
+        ):
+            rule = WorkerHeartbeatMissingRule()
+            findings = await rule.evaluate()
+
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.kind == "worker_heartbeat_missing"
+        assert f.attribution_layer == "celery"
+        assert f.severity == "error"
+        assert "celery@worker-1" in f.title
+        assert f.dedup_key == "worker_heartbeat_missing:celery:celery@worker-1"
+
+    @pytest.mark.asyncio
+    async def test_shutdown_worker_is_skipped(self) -> None:
+        """Worker that gracefully shut down does not fire a finding."""
+        from backend.observability.anomaly.rules.worker_heartbeat_missing import (
+            WorkerHeartbeatMissingRule,
+        )
+
+        now = datetime.now(timezone.utc)
+        row = MagicMock()
+        row.worker_name = "celery@worker-1"
+        row.latest_ts = now - timedelta(seconds=120)
+        row.status = "shutdown"
+
+        mock_session, _ = _make_session_mock(rows=[row])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.worker_heartbeat_missing.async_session_factory",
+            mock_session,
+        ):
+            rule = WorkerHeartbeatMissingRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+    @pytest.mark.asyncio
+    async def test_all_workers_fresh_returns_empty(self) -> None:
+        """All workers heartbeated recently → no findings."""
+        from backend.observability.anomaly.rules.worker_heartbeat_missing import (
+            WorkerHeartbeatMissingRule,
+        )
+
+        now = datetime.now(timezone.utc)
+        row = MagicMock()
+        row.worker_name = "celery@worker-1"
+        row.latest_ts = now - timedelta(seconds=30)
+        row.status = "alive"
+
+        mock_session, _ = _make_session_mock(rows=[row])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.worker_heartbeat_missing.async_session_factory",
+            mock_session,
+        ):
+            rule = WorkerHeartbeatMissingRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+    @pytest.mark.asyncio
+    async def test_no_heartbeats_returns_empty(self) -> None:
+        """No heartbeat rows at all → no findings (no known workers)."""
+        from backend.observability.anomaly.rules.worker_heartbeat_missing import (
+            WorkerHeartbeatMissingRule,
+        )
+
+        mock_session, _ = _make_session_mock(rows=[])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.worker_heartbeat_missing.async_session_factory",
+            mock_session,
+        ):
+            rule = WorkerHeartbeatMissingRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 8: Beat Schedule Drift
+# ---------------------------------------------------------------------------
+
+
+class TestBeatScheduleDriftRule:
+    """Tests for BeatScheduleDriftRule."""
+
+    @pytest.mark.asyncio
+    async def test_high_drift_returns_finding(self) -> None:
+        """Beat run with drift >300s fires a finding."""
+        from backend.observability.anomaly.rules.beat_schedule_drift import (
+            BeatScheduleDriftRule,
+        )
+
+        row = MagicMock()
+        row.task_name = "backend.tasks.nightly_chain"
+        row.drift_seconds = 450.0
+        row.ts = datetime.now(timezone.utc) - timedelta(minutes=10)
+        row.outcome = "dispatched"
+
+        mock_session, _ = _make_session_mock(rows=[], scalars=[row])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.beat_schedule_drift.async_session_factory",
+            mock_session,
+        ):
+            rule = BeatScheduleDriftRule()
+            findings = await rule.evaluate()
+
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.kind == "beat_schedule_drift"
+        assert f.attribution_layer == "celery"
+        assert f.severity == "warning"
+        assert "nightly_chain" in f.title
+        assert f.dedup_key == "beat_schedule_drift:celery:backend.tasks.nightly_chain"
+
+    @pytest.mark.asyncio
+    async def test_no_drifting_runs_returns_empty(self) -> None:
+        """No beat runs exceeding drift threshold → no findings (SQL WHERE filters)."""
+        from backend.observability.anomaly.rules.beat_schedule_drift import (
+            BeatScheduleDriftRule,
+        )
+
+        mock_session, _ = _make_session_mock(rows=[], scalars=[])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.beat_schedule_drift.async_session_factory",
+            mock_session,
+        ):
+            rule = BeatScheduleDriftRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+    @pytest.mark.asyncio
+    async def test_no_beat_runs_returns_empty(self) -> None:
+        """No beat schedule runs in window → no findings."""
+        from backend.observability.anomaly.rules.beat_schedule_drift import (
+            BeatScheduleDriftRule,
+        )
+
+        mock_session, _ = _make_session_mock(rows=[], scalars=[])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.beat_schedule_drift.async_session_factory",
+            mock_session,
+        ):
+            rule = BeatScheduleDriftRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 9: 5xx Rate Elevated
+# ---------------------------------------------------------------------------
+
+
+class TestHttp5xxElevatedRule:
+    """Tests for Http5xxElevatedRule."""
+
+    @pytest.mark.asyncio
+    async def test_above_threshold_returns_finding(self) -> None:
+        """More than 5 5xx errors in 5min fires a finding."""
+        from backend.observability.anomaly.rules.http_5xx_elevated import (
+            Http5xxElevatedRule,
+        )
+
+        mock_session, mock_result = _make_session_mock(rows=[], scalar_one=8)
+        with _patch_factory(
+            "backend.observability.anomaly.rules.http_5xx_elevated.async_session_factory",
+            mock_session,
+        ):
+            rule = Http5xxElevatedRule()
+            findings = await rule.evaluate()
+
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.kind == "http_5xx_elevated"
+        assert f.attribution_layer == "api"
+        assert f.severity == "error"
+        assert f.evidence["count_5xx"] == 8
+        assert f.dedup_key == "http_5xx_elevated:api:all"
+
+    @pytest.mark.asyncio
+    async def test_below_threshold_returns_empty(self) -> None:
+        """3 5xx errors in 5min does not fire (threshold is >5)."""
+        from backend.observability.anomaly.rules.http_5xx_elevated import (
+            Http5xxElevatedRule,
+        )
+
+        mock_session, mock_result = _make_session_mock(rows=[], scalar_one=3)
+        with _patch_factory(
+            "backend.observability.anomaly.rules.http_5xx_elevated.async_session_factory",
+            mock_session,
+        ):
+            rule = Http5xxElevatedRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+    @pytest.mark.asyncio
+    async def test_zero_errors_returns_empty(self) -> None:
+        """Zero 5xx errors → no finding."""
+        from backend.observability.anomaly.rules.http_5xx_elevated import (
+            Http5xxElevatedRule,
+        )
+
+        mock_session, mock_result = _make_session_mock(rows=[], scalar_one=0)
+        with _patch_factory(
+            "backend.observability.anomaly.rules.http_5xx_elevated.async_session_factory",
+            mock_session,
+        ):
+            rule = Http5xxElevatedRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 10: Frontend Error Burst
+# ---------------------------------------------------------------------------
+
+
+class TestFrontendErrorBurstRule:
+    """Tests for FrontendErrorBurstRule."""
+
+    @pytest.mark.asyncio
+    async def test_burst_above_threshold_returns_finding(self) -> None:
+        """25 react_error_boundary errors in 5min fires a finding."""
+        from backend.observability.anomaly.rules.frontend_error_burst import (
+            FrontendErrorBurstRule,
+        )
+
+        row = MagicMock()
+        row.error_type = "react_error_boundary"
+        row.error_count = 25
+
+        mock_session, _ = _make_session_mock(rows=[row])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.frontend_error_burst.async_session_factory",
+            mock_session,
+        ):
+            rule = FrontendErrorBurstRule()
+            findings = await rule.evaluate()
+
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.kind == "frontend_error_burst"
+        assert f.attribution_layer == "frontend"
+        assert f.severity == "warning"
+        assert "react_error_boundary" in f.title
+        assert f.dedup_key == "frontend_error_burst:frontend:react_error_boundary"
+
+    @pytest.mark.asyncio
+    async def test_below_threshold_returns_empty(self) -> None:
+        """10 errors of same type in 5min does not fire (threshold is >20)."""
+        from backend.observability.anomaly.rules.frontend_error_burst import (
+            FrontendErrorBurstRule,
+        )
+
+        row = MagicMock()
+        row.error_type = "unhandled_rejection"
+        row.error_count = 10
+
+        mock_session, _ = _make_session_mock(rows=[row])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.frontend_error_burst.async_session_factory",
+            mock_session,
+        ):
+            rule = FrontendErrorBurstRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+    @pytest.mark.asyncio
+    async def test_no_frontend_errors_returns_empty(self) -> None:
+        """No frontend error rows → no findings."""
+        from backend.observability.anomaly.rules.frontend_error_burst import (
+            FrontendErrorBurstRule,
+        )
+
+        mock_session, _ = _make_session_mock(rows=[])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.frontend_error_burst.async_session_factory",
+            mock_session,
+        ):
+            rule = FrontendErrorBurstRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 11: DQ Critical Findings
+# ---------------------------------------------------------------------------
+
+
+class TestDqCriticalFindingsRule:
+    """Tests for DqCriticalFindingsRule."""
+
+    @pytest.mark.asyncio
+    async def test_critical_dq_returns_finding(self) -> None:
+        """Critical DQ check in the last run fires a finding."""
+        from backend.observability.anomaly.rules.dq_critical_findings import (
+            DqCriticalFindingsRule,
+        )
+
+        now = datetime.now(timezone.utc)
+        row = MagicMock()
+        row.check_name = "price_gap_check"
+        row.severity = "critical"
+        row.ticker = "AAPL"
+        row.message = "Price gap > 50% detected"
+        row.detected_at = now - timedelta(minutes=3)
+
+        mock_session, _ = _make_session_mock(rows=[], scalars=[row])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.dq_critical_findings.async_session_factory",
+            mock_session,
+        ):
+            rule = DqCriticalFindingsRule()
+            findings = await rule.evaluate()
+
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.kind == "dq_critical"
+        assert f.attribution_layer == "data_quality"
+        assert f.severity == "critical"
+        assert "price_gap_check" in f.title
+        assert f.dedup_key == "dq_critical:data_quality:price_gap_check"
+
+    @pytest.mark.asyncio
+    async def test_no_critical_findings_returns_empty(self) -> None:
+        """No critical DQ checks in window → no findings (SQL WHERE filters)."""
+        from backend.observability.anomaly.rules.dq_critical_findings import (
+            DqCriticalFindingsRule,
+        )
+
+        mock_session, _ = _make_session_mock(rows=[], scalars=[])
+        with _patch_factory(
+            "backend.observability.anomaly.rules.dq_critical_findings.async_session_factory",
+            mock_session,
+        ):
+            rule = DqCriticalFindingsRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+
+# ---------------------------------------------------------------------------
+# Rule 12: Agent Decline Rate Elevated
+# ---------------------------------------------------------------------------
+
+
+class TestAgentDeclineRateRule:
+    """Tests for AgentDeclineRateRule."""
+
+    @pytest.mark.asyncio
+    async def test_high_decline_rate_returns_finding(self) -> None:
+        """Decline rate >10% with ≥20 queries fires a finding."""
+        from backend.observability.anomaly.rules.agent_decline_rate import (
+            AgentDeclineRateRule,
+        )
+
+        row = MagicMock()
+        row.total_queries = 100
+        row.declined_queries = 15
+
+        mock_session, mock_result = _make_session_mock(rows=[])
+        mock_result.one = MagicMock(return_value=row)
+        with _patch_factory(
+            "backend.observability.anomaly.rules.agent_decline_rate.async_session_factory",
+            mock_session,
+        ):
+            rule = AgentDeclineRateRule()
+            findings = await rule.evaluate()
+
+        assert len(findings) == 1
+        f = findings[0]
+        assert f.kind == "agent_decline_rate_elevated"
+        assert f.attribution_layer == "agent"
+        assert f.severity == "warning"
+        assert f.evidence["decline_rate_pct"] == 15.0
+        assert f.dedup_key == "agent_decline_rate_elevated:agent:all"
+
+    @pytest.mark.asyncio
+    async def test_low_decline_rate_returns_empty(self) -> None:
+        """Decline rate at 5% does not fire."""
+        from backend.observability.anomaly.rules.agent_decline_rate import (
+            AgentDeclineRateRule,
+        )
+
+        row = MagicMock()
+        row.total_queries = 100
+        row.declined_queries = 5
+
+        mock_session, mock_result = _make_session_mock(rows=[])
+        mock_result.one = MagicMock(return_value=row)
+        with _patch_factory(
+            "backend.observability.anomaly.rules.agent_decline_rate.async_session_factory",
+            mock_session,
+        ):
+            rule = AgentDeclineRateRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+    @pytest.mark.asyncio
+    async def test_low_volume_skipped(self) -> None:
+        """Fewer than 20 total queries → skip (insufficient sample)."""
+        from backend.observability.anomaly.rules.agent_decline_rate import (
+            AgentDeclineRateRule,
+        )
+
+        row = MagicMock()
+        row.total_queries = 10
+        row.declined_queries = 5
+
+        mock_session, mock_result = _make_session_mock(rows=[])
+        mock_result.one = MagicMock(return_value=row)
+        with _patch_factory(
+            "backend.observability.anomaly.rules.agent_decline_rate.async_session_factory",
+            mock_session,
+        ):
+            rule = AgentDeclineRateRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
+
+    @pytest.mark.asyncio
+    async def test_no_intent_rows_returns_empty(self) -> None:
+        """Zero queries in window → no findings (below MIN_QUERY_COUNT)."""
+        from backend.observability.anomaly.rules.agent_decline_rate import (
+            AgentDeclineRateRule,
+        )
+
+        row = MagicMock()
+        row.total_queries = 0
+        row.declined_queries = 0
+
+        mock_session, mock_result = _make_session_mock(rows=[])
+        mock_result.one = MagicMock(return_value=row)
+        with _patch_factory(
+            "backend.observability.anomaly.rules.agent_decline_rate.async_session_factory",
+            mock_session,
+        ):
+            rule = AgentDeclineRateRule()
+            findings = await rule.evaluate()
+
+        assert findings == []
