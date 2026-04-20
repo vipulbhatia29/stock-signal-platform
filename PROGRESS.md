@@ -626,3 +626,33 @@ Full audit of 1a+1b infrastructure before starting 1c. 4 parallel agents invento
 - KAN-459 → Done, KAN-460 → In Progress
 - 1 PR merged (#259), 1 PR pending (anomaly engine)
 - Resume: Merge anomaly engine PR. Next: 1c PR2 (rules 7-12 + auto-close)
+
+---
+
+## Session 125 — Obs 1c PR2: Remaining 6 Anomaly Rules + Auto-Close (2026-04-19)
+
+**Branch:** `feat/obs-1c-pr2-anomaly-rules` → develop | **PR pending**
+
+### KAN-460 — Obs 1c PR2: Rules 7-12 + Auto-Close
+
+- **Migration 040:** `negative_check_count` INTEGER NOT NULL DEFAULT 0 on `observability.finding_log`
+- **6 new anomaly rules:**
+  7. Worker heartbeat missing — DISTINCT ON query, shutdown filter, >90s stale → error
+  8. Beat schedule drift — `drift_seconds > 300` in last hour → warning
+  9. 5xx rate elevated — `api_error_log` 5xx count > 5 in 5min → error
+  10. Frontend error burst — >20 same `error_type` in 5min → warning
+  11. DQ critical findings — `dq_check_history.severity=critical` in last hour (public schema) → critical
+  12. Agent decline rate — >10% `decline_reason` with ≥20 queries in 1h → warning
+- **Auto-close logic:** `auto_close_findings()` in persist.py — 3 consecutive negative checks (15min) → finding auto-resolves. Counter resets on re-fire. Dirty flag optimizes commits.
+- **Celery task wired:** `run_anomaly_scan_task` now calls `auto_close_findings()` after `persist_findings()`
+- **Registry:** `ALL_RULES` expanded from 6 → 12 rules
+- **Plan review (pre-implementation):** 2-persona (Backend Architect + Reliability) found 1 CRITICAL (mock path), 3 IMPORTANT (mock patterns, shutdown filter) — all fixed before dispatch
+- **Code review (post-implementation):** Opus 0 CRITICAL, 0 IMPORTANT — clean pass
+- TDD, FSD, project-plan updated
+
+### Session 125 Totals
+- Tests: 2496 → 2519 unit (+23 new: 19 rule + 4 auto-close), 0 failures
+- Alembic: 039 → 040 (`e0f1a2b3c4d5`)
+- 13 files changed, ~1300 insertions
+- 1 PR (pending)
+- Resume: Push PR, merge, JIRA audit. Next: 1c PR3 (MCP tools)

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Text, func
+from sqlalchemy import DateTime, Index, Integer, Text, func, text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -58,4 +58,7 @@ class FindingLog(Base):
 
     dedup_key: Mapped[str] = mapped_column(Text, nullable=False)
     jira_ticket_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    negative_check_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("0")
+    )
     env: Mapped[str] = mapped_column(Text, nullable=False)

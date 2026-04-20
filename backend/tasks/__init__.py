@@ -414,12 +414,24 @@ def run_anomaly_scan_task() -> dict:
 
     async def _run_scan() -> dict:
         from backend.observability.anomaly.engine import run_anomaly_scan
-        from backend.observability.anomaly.persist import persist_findings
+        from backend.observability.anomaly.persist import auto_close_findings, persist_findings
         from backend.observability.anomaly.rules import ALL_RULES
 
         findings = await run_anomaly_scan(rules=ALL_RULES)
         inserted, skipped = await persist_findings(findings)
-        return {"status": "ok", "findings": len(findings), "inserted": inserted, "skipped": skipped}
+
+        # Auto-close: pass the set of dedup_keys that fired this scan
+        fired_keys = {f.dedup_key for f in findings}
+        resolved, incremented = await auto_close_findings(fired_dedup_keys=fired_keys)
+
+        return {
+            "status": "ok",
+            "findings": len(findings),
+            "inserted": inserted,
+            "skipped": skipped,
+            "auto_resolved": resolved,
+            "auto_incremented": incremented,
+        }
 
     try:
         return asyncio.run(_run_scan())

@@ -2392,6 +2392,28 @@ class ObservedHttpClient(httpx.AsyncClient):
 | `provider_health_snapshot` | Hypertable (1h) | 30d | segmentby=provider | 036 |
 | `frontend_error_log` | Regular | 30d | — | 037 |
 | `deploy_events` | Regular | 365d | — | 037 |
+| `finding_log` | Regular | 180d | — | 039 |
+
+**Anomaly Detection Engine (1c):**
+
+Rule-based anomaly detection running via Celery Beat every 5 minutes. Rules extend `AnomalyRule` ABC (`backend/observability/anomaly/rules/`), run in parallel via `asyncio.gather` + `Semaphore(4)` with 30s per-rule timeout. Findings persist to `observability.finding_log` with dedup on `(dedup_key, status IN ('open','acknowledged'))`.
+
+| # | Rule | Table Queried | Threshold | Severity | Dedup Key |
+|---|------|--------------|-----------|----------|-----------|
+| 1 | External API error rate | `external_api_call_log` | ≥10% error rate, ≥10 calls/1h | warning/error | `...:external_api:{provider}` |
+| 2 | LLM cost spike | `llm_call_log` | >3× 7-day daily median | warning | `...:llm:daily` |
+| 3 | Slow query regression | `slow_query_log` | p95 >2× 7-day baseline | warning | `...:db:{query_hash}` |
+| 4 | DB pool exhaustion | `db_pool_event` | Any `exhausted` in 5min | critical | `...:db:pool` |
+| 5 | Rate limiter fallback | `rate_limiter_event` | Any `fallback_permissive` in 5min | warning | `...:rate_limiter:{limiter}` |
+| 6 | Watermark staleness | `pipeline_watermark` | >2× expected cadence | warning | `...:pipeline:{name}` |
+| 7 | Worker heartbeat missing | `celery_worker_heartbeat` | No heartbeat >90s (excl. shutdown) | error | `...:celery:{worker}` |
+| 8 | Beat schedule drift | `beat_schedule_run` | `drift_seconds` >300 in 1h | warning | `...:celery:{task}` |
+| 9 | 5xx rate elevated | `api_error_log` | >5 5xx in 5min | error | `...:api:all` |
+| 10 | Frontend error burst | `frontend_error_log` | >20 same `error_type` in 5min | warning | `...:frontend:{type}` |
+| 11 | DQ critical findings | `dq_check_history` | `severity=critical` in 1h | critical | `...:data_quality:{check}` |
+| 12 | Agent decline rate | `agent_intent_log` | >10% declined, ≥20 queries/1h | warning | `...:agent:all` |
+
+**Auto-close:** Findings auto-resolve after 3 consecutive scans (15 min) with no recurrence. `finding_log.negative_check_count` tracks consecutive clears; reset to 0 when the rule re-fires. Migration 040 added this column.
 
 **Instrumentation layers (1b Coverage):**
 | Layer | Module | Emission |

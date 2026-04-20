@@ -300,7 +300,7 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 **Session 124 status:**
 - **1a COMPLETE** — 6/6 PRs merged (#242-#247, Sessions 114-119)
 - **1b COMPLETE** — 7/7 PRs merged (#250-#257, Sessions 120-123) + audit fixes (PR #259, Session 124)
-- **1c IN PROGRESS** — PR1 (anomaly engine + finding_log) implemented, PR pending. 6/7 PRs remaining.
+- **1c IN PROGRESS** — PR1 (anomaly engine) + PR2 (rules 7-12 + auto-close) shipped. 5/7 PRs remaining.
 
 **1a PR breakdown (COMPLETE):**
 | PR | Scope | Status |
@@ -322,6 +322,17 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 | PR5 | intent_log + reasoning_log + provider_health_snapshot | ✅ PR #255 (S122) |
 | PR6 | Frontend beacon + frontend_error_log + deploy_events | ✅ PR #256 (S123) |
 | PR7 | Semgrep observability rules (advisory) | ✅ PR #257 (S123) |
+
+**1c PR breakdown (IN PROGRESS):**
+| PR | Scope | Status |
+|---|---|---|
+| PR1 | Anomaly engine + finding_log + rules 1-6 | ✅ PR #260 (S124) |
+| PR2 | Rules 7-12 + auto-close (3 negative checks → resolved) | ✅ S125 |
+| PR3 | MCP tools (13 agent consumption tools) | ⬜ Planned |
+| PR4 | CLI health_report script | ⬜ Planned |
+| PR5 | Admin REST query endpoints | ⬜ Planned |
+| PR6 | 8-zone admin dashboard | ⬜ Planned |
+| PR7 | JIRA draft integration | ⬜ Planned |
 
 ### Epic 2: Seed Universe (planned — blocked by Epic 1)
 
