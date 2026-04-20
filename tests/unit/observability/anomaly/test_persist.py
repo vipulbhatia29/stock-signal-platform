@@ -70,3 +70,128 @@ class TestPersistFindings:
         inserted, skipped = await persist_findings([])
         assert inserted == 0
         assert skipped == 0
+
+
+# ---------------------------------------------------------------------------
+# Auto-close tests
+# ---------------------------------------------------------------------------
+
+
+class TestAutoCloseFindings:
+    """Tests for auto_close_findings()."""
+
+    @pytest.mark.asyncio
+    async def test_increments_negative_check_count(self) -> None:
+        """Open finding not in fired_dedup_keys gets negative_check_count incremented."""
+        from backend.observability.anomaly.persist import auto_close_findings
+
+        finding_row = MagicMock()
+        finding_row.id = "f1"
+        finding_row.dedup_key = "some_rule:layer:entity"
+        finding_row.negative_check_count = 1
+        finding_row.status = "open"
+
+        mock_session = AsyncMock()
+        scalars_proxy = MagicMock()
+        scalars_proxy.all = MagicMock(return_value=[finding_row])
+        mock_result = MagicMock()
+        mock_result.scalars = MagicMock(return_value=scalars_proxy)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.commit = AsyncMock()
+
+        factory_mock = MagicMock()
+        factory_mock.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        factory_mock.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("backend.observability.anomaly.persist.async_session_factory", factory_mock):
+            resolved, incremented = await auto_close_findings(fired_dedup_keys=set())
+
+        assert incremented == 1
+        assert resolved == 0
+        assert finding_row.negative_check_count == 2
+
+    @pytest.mark.asyncio
+    async def test_resolves_after_three_consecutive_clears(self) -> None:
+        """Finding with negative_check_count=2 (will become 3) gets auto-resolved."""
+        from backend.observability.anomaly.persist import auto_close_findings
+
+        finding_row = MagicMock()
+        finding_row.id = "f2"
+        finding_row.dedup_key = "some_rule:layer:entity"
+        finding_row.negative_check_count = 2
+        finding_row.status = "open"
+        finding_row.resolved_at = None
+
+        mock_session = AsyncMock()
+        scalars_proxy = MagicMock()
+        scalars_proxy.all = MagicMock(return_value=[finding_row])
+        mock_result = MagicMock()
+        mock_result.scalars = MagicMock(return_value=scalars_proxy)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.commit = AsyncMock()
+
+        factory_mock = MagicMock()
+        factory_mock.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        factory_mock.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("backend.observability.anomaly.persist.async_session_factory", factory_mock):
+            resolved, incremented = await auto_close_findings(fired_dedup_keys=set())
+
+        assert resolved == 1
+        assert incremented == 0
+        assert finding_row.status == "resolved"
+        assert finding_row.resolved_at is not None
+
+    @pytest.mark.asyncio
+    async def test_resets_counter_when_refired(self) -> None:
+        """Finding whose dedup_key is in fired_dedup_keys gets counter reset to 0."""
+        from backend.observability.anomaly.persist import auto_close_findings
+
+        finding_row = MagicMock()
+        finding_row.id = "f3"
+        finding_row.dedup_key = "some_rule:layer:entity"
+        finding_row.negative_check_count = 2
+        finding_row.status = "open"
+
+        mock_session = AsyncMock()
+        scalars_proxy = MagicMock()
+        scalars_proxy.all = MagicMock(return_value=[finding_row])
+        mock_result = MagicMock()
+        mock_result.scalars = MagicMock(return_value=scalars_proxy)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.commit = AsyncMock()
+
+        factory_mock = MagicMock()
+        factory_mock.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        factory_mock.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("backend.observability.anomaly.persist.async_session_factory", factory_mock):
+            resolved, incremented = await auto_close_findings(
+                fired_dedup_keys={"some_rule:layer:entity"}
+            )
+
+        assert resolved == 0
+        assert incremented == 0
+        assert finding_row.negative_check_count == 0
+
+    @pytest.mark.asyncio
+    async def test_no_open_findings_returns_zeros(self) -> None:
+        """No open/acknowledged findings → (0, 0) returned."""
+        from backend.observability.anomaly.persist import auto_close_findings
+
+        mock_session = AsyncMock()
+        scalars_proxy = MagicMock()
+        scalars_proxy.all = MagicMock(return_value=[])
+        mock_result = MagicMock()
+        mock_result.scalars = MagicMock(return_value=scalars_proxy)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        factory_mock = MagicMock()
+        factory_mock.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        factory_mock.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("backend.observability.anomaly.persist.async_session_factory", factory_mock):
+            resolved, incremented = await auto_close_findings(fired_dedup_keys=set())
+
+        assert resolved == 0
+        assert incremented == 0
