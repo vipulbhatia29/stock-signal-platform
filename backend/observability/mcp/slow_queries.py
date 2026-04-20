@@ -111,7 +111,7 @@ async def _fetch_grouped(
         .group_by(SlowQueryLog.query_hash)
     )
     if query_hash is not None:
-        stmt = stmt.where(SlowQueryLog.query_hash == query_hash)
+        stmt = stmt.where(SlowQueryLog.query_hash == query_hash)  # nosemgrep: no-timing-unsafe-compare — DB filter, not secret comparison
 
     rows = (await db.execute(stmt)).all()
     return [

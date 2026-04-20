@@ -322,14 +322,14 @@ async def get_platform_health(window_min: int = 60) -> dict[str, Any]:
         _query_anomalies(),
     )
 
-    subsystems = [
-        http_stats,
-        db_stats,
-        cache_stats,
-        ext_stats,
-        celery_stats,
-        agent_stats,
-        frontend_stats,
+    subsystems: list[dict[str, Any]] = [
+        http_stats,  # type: ignore[list-item]
+        db_stats,  # type: ignore[list-item]
+        cache_stats,  # type: ignore[list-item]
+        ext_stats,  # type: ignore[list-item]
+        celery_stats,  # type: ignore[list-item]
+        agent_stats,  # type: ignore[list-item]
+        frontend_stats,  # type: ignore[list-item]
     ]
     overall_status = _worst([s["status"] for s in subsystems])
 
