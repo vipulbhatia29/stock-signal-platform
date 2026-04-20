@@ -1146,6 +1146,14 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - `GET /admin/chat-sessions/{session_id}` — full transcript with tool calls, costs, latency per step
 - `GET /admin/chat-stats` — aggregate usage (sessions/day, avg cost, top tools, error rate)
 
+**FR-28.8: Anomaly Detection Engine** ✅ IMPLEMENTED (KAN-460, Sessions 124-125)
+- 12 rule-based anomaly detectors running every 5 min via Celery Beat
+- Rules 1-6 (PR1): external API error rate, LLM cost spike, slow query regression, DB pool exhaustion, rate limiter fallback, watermark staleness
+- Rules 7-12 (PR2): worker heartbeat missing, beat schedule drift, 5xx rate elevated, frontend error burst, DQ critical findings, agent decline rate
+- Findings persisted to `observability.finding_log` with dedup on `(dedup_key, status)`
+- Auto-close: 3 consecutive negative checks (15 min) → finding auto-resolves
+- `negative_check_count` column tracks consecutive clears, resets on re-fire
+
 ### FR-29: Forecast Quality & Scale — DONE (KAN-424, Spec E)
 
 > Raises nightly new-model cap, switches Prophet retrain to weekly, and splits intraday refresh into fast/slow paths.
