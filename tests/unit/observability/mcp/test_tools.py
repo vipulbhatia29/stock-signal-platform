@@ -694,3 +694,342 @@ class TestGetSlowQueries:
 
         assert result["tool"] == "get_slow_queries"
         assert result["result"]["queries"] == []
+
+
+# ---------------------------------------------------------------------------
+# Tool 10: get_cost_breakdown
+# ---------------------------------------------------------------------------
+
+
+class TestGetCostBreakdown:
+    """Tests for the get_cost_breakdown MCP tool."""
+
+    def _make_empty_session(self) -> AsyncMock:
+        """Build a mock DB session returning no LLMCallLog rows."""
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_returns_envelope_structure(self) -> None:
+        """Verify get_cost_breakdown returns a valid MCP envelope with by and groups keys."""
+        from backend.observability.mcp.cost_breakdown import get_cost_breakdown
+
+        mock_session = self._make_empty_session()
+
+        with patch(
+            "backend.observability.mcp.cost_breakdown.async_session_factory"
+        ) as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_cost_breakdown(window="7d", by="provider")
+
+        assert result["tool"] == "get_cost_breakdown"
+        assert "result" in result
+        assert result["result"]["by"] == "provider"
+        assert "groups" in result["result"]
+        assert isinstance(result["result"]["groups"], list)
+        assert "meta" in result
+        assert "window" in result
+
+    @pytest.mark.asyncio
+    async def test_empty_db_returns_empty_groups(self) -> None:
+        """Verify empty DB returns zero groups without crashing."""
+        from backend.observability.mcp.cost_breakdown import get_cost_breakdown
+
+        mock_session = self._make_empty_session()
+
+        with patch(
+            "backend.observability.mcp.cost_breakdown.async_session_factory"
+        ) as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_cost_breakdown(window="24h", by="model", limit=10)
+
+        assert result["result"]["groups"] == []
+        assert result["meta"]["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_compare_to_prior_window_no_crash(self) -> None:
+        """Verify compare_to='prior_window' does not crash with empty data."""
+        from backend.observability.mcp.cost_breakdown import get_cost_breakdown
+
+        mock_session = self._make_empty_session()
+
+        with patch(
+            "backend.observability.mcp.cost_breakdown.async_session_factory"
+        ) as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_cost_breakdown(window="7d", by="tier", compare_to="prior_window")
+
+        assert result["tool"] == "get_cost_breakdown"
+        assert result["result"]["groups"] == []
+
+
+# ---------------------------------------------------------------------------
+# Tool 11: search_errors
+# ---------------------------------------------------------------------------
+
+
+class TestSearchErrors:
+    """Tests for the search_errors MCP tool."""
+
+    def _make_empty_session(self) -> AsyncMock:
+        """Build a mock DB session returning no rows."""
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_returns_envelope_structure(self) -> None:
+        """Verify search_errors returns a valid MCP envelope with query and matches."""
+        from backend.observability.mcp.search_errors import search_errors
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.search_errors.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await search_errors("ConnectionError")
+
+        assert result["tool"] == "search_errors"
+        assert "result" in result
+        assert result["result"]["query"] == "ConnectionError"
+        assert "matches" in result["result"]
+        assert isinstance(result["result"]["matches"], list)
+        assert "meta" in result
+        assert "window" in result
+
+    @pytest.mark.asyncio
+    async def test_empty_db_returns_empty_matches(self) -> None:
+        """Verify empty DB returns zero matches without crashing."""
+        from backend.observability.mcp.search_errors import search_errors
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.search_errors.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await search_errors("timeout", since="24h", limit=20)
+
+        assert result["result"]["matches"] == []
+        assert result["meta"]["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_like_wildcard_chars_escaped(self) -> None:
+        """Verify % and _ in query are escaped before building the LIKE pattern."""
+        from backend.observability.mcp.search_errors import _escape_like
+
+        assert _escape_like("50%") == r"50\%"
+        assert _escape_like("user_id") == r"user\_id"
+        assert _escape_like("plain text") == "plain text"
+        assert _escape_like("%_combo_%") == r"\%\_combo\_\%"
+
+
+# ---------------------------------------------------------------------------
+# Tool 12: get_deploys
+# ---------------------------------------------------------------------------
+
+
+class TestGetDeploys:
+    """Tests for the get_deploys MCP tool."""
+
+    def _make_empty_session(self) -> AsyncMock:
+        """Build a mock DB session returning no DeployEvent rows."""
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_returns_envelope_structure(self) -> None:
+        """Verify get_deploys returns a valid MCP envelope with deploys list."""
+        from backend.observability.mcp.deploys import get_deploys
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.deploys.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_deploys()
+
+        assert result["tool"] == "get_deploys"
+        assert "result" in result
+        assert "deploys" in result["result"]
+        assert isinstance(result["result"]["deploys"], list)
+        assert "meta" in result
+        assert "window" in result
+
+    @pytest.mark.asyncio
+    async def test_empty_db_returns_empty_deploys(self) -> None:
+        """Verify empty DB returns zero deploys without crashing."""
+        from backend.observability.mcp.deploys import get_deploys
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.deploys.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_deploys(since="30d", limit=50)
+
+        assert result["result"]["deploys"] == []
+        assert result["meta"]["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_deploy_row_has_expected_fields(self) -> None:
+        """Verify that a non-empty result row contains the required deploy fields."""
+        from datetime import datetime as dt
+        from datetime import timezone
+
+        from backend.observability.mcp.deploys import get_deploys
+
+        mock_row = MagicMock()
+        mock_row.ts = dt(2026, 4, 1, 12, 0, 0, tzinfo=timezone.utc)
+        mock_row.git_sha = "abc123"
+        mock_row.branch = "develop"
+        mock_row.pr_number = 260
+        mock_row.author = "sigmoid"
+        mock_row.commit_message = "fix: something"
+        mock_row.migrations_applied = []
+        mock_row.env = "prod"
+        mock_row.deploy_duration_seconds = 45.2
+        mock_row.status = "success"
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_row]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("backend.observability.mcp.deploys.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_deploys(since="30d")
+
+        deploys = result["result"]["deploys"]
+        assert len(deploys) == 1
+        deploy = deploys[0]
+        for field in (
+            "ts",
+            "git_sha",
+            "branch",
+            "pr_number",
+            "author",
+            "commit_message",
+            "migrations_applied",
+            "env",
+            "deploy_duration_seconds",
+            "status",
+        ):
+            assert field in deploy, f"Missing field: {field}"
+        assert deploy["status"] == "success"
+        assert deploy["branch"] == "develop"
+
+
+# ---------------------------------------------------------------------------
+# Tool 13: get_observability_health
+# ---------------------------------------------------------------------------
+
+
+class TestGetObservabilityHealth:
+    """Tests for the get_observability_health MCP tool."""
+
+    def _make_empty_session(self) -> AsyncMock:
+        """Build a mock DB session where MAX queries return None."""
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_returns_envelope_structure(self) -> None:
+        """Verify get_observability_health returns a valid MCP envelope."""
+        from backend.observability.mcp.obs_health import get_observability_health
+
+        mock_session = self._make_empty_session()
+
+        with (
+            patch("backend.observability.mcp.obs_health.async_session_factory") as mock_factory,
+            patch("backend.observability.mcp.obs_health._get_spool_size_bytes", return_value=None),
+            patch("backend.observability.mcp.obs_health._get_buffer_stats", return_value=None),
+        ):
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_observability_health()
+
+        assert result["tool"] == "get_observability_health"
+        assert "result" in result
+        assert "last_writes" in result["result"]
+        assert "spool_size_bytes" in result["result"]
+        assert "buffer" in result["result"]
+        assert "config" in result["result"]
+        assert "meta" in result
+        assert "window" in result
+
+    @pytest.mark.asyncio
+    async def test_last_writes_contain_all_tables(self) -> None:
+        """Verify last_writes dict contains all five expected table keys."""
+        from backend.observability.mcp.obs_health import get_observability_health
+
+        mock_session = self._make_empty_session()
+
+        with (
+            patch("backend.observability.mcp.obs_health.async_session_factory") as mock_factory,
+            patch("backend.observability.mcp.obs_health._get_spool_size_bytes", return_value=None),
+            patch("backend.observability.mcp.obs_health._get_buffer_stats", return_value=None),
+        ):
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_observability_health()
+
+        last_writes = result["result"]["last_writes"]
+        for key in (
+            "request_log",
+            "external_api_call_log",
+            "slow_query_log",
+            "finding_log",
+            "deploy_events",
+        ):
+            assert key in last_writes, f"Missing last_write key: {key}"
+        # Empty DB → all timestamps should be None
+        for key, val in last_writes.items():
+            assert val is None, f"Expected None for {key} with empty DB, got {val}"
+
+    @pytest.mark.asyncio
+    async def test_config_snapshot_contains_required_keys(self) -> None:
+        """Verify the config snapshot contains all required OBS settings keys."""
+        from backend.observability.mcp.obs_health import get_observability_health
+
+        mock_session = self._make_empty_session()
+
+        with (
+            patch("backend.observability.mcp.obs_health.async_session_factory") as mock_factory,
+            patch("backend.observability.mcp.obs_health._get_spool_size_bytes", return_value=0),
+            patch(
+                "backend.observability.mcp.obs_health._get_buffer_stats",
+                return_value={"queue_depth": 0, "drops": 0},
+            ),
+        ):
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_observability_health()
+
+        config = result["result"]["config"]
+        for key in (
+            "OBS_ENABLED",
+            "OBS_SPOOL_ENABLED",
+            "OBS_TARGET_TYPE",
+            "OBS_LEGACY_DIRECT_WRITES",
+        ):
+            assert key in config, f"Missing config key: {key}"
+
+        assert result["result"]["spool_size_bytes"] == 0
+        assert result["result"]["buffer"]["queue_depth"] == 0
+        assert result["result"]["buffer"]["drops"] == 0
