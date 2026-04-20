@@ -842,9 +842,12 @@ class TestGetDeploys:
     def _make_empty_session(self) -> AsyncMock:
         """Build a mock DB session returning no DeployEvent rows."""
         mock_session = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute = AsyncMock(return_value=mock_result)
+        # First execute returns count=0, second returns empty rows
+        count_result = MagicMock()
+        count_result.scalar.return_value = 0
+        rows_result = MagicMock()
+        rows_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(side_effect=[count_result, rows_result])
         return mock_session
 
     @pytest.mark.asyncio
@@ -901,11 +904,13 @@ class TestGetDeploys:
         mock_row.deploy_duration_seconds = 45.2
         mock_row.status = "success"
 
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = [mock_row]
+        count_result = MagicMock()
+        count_result.scalar.return_value = 1
+        rows_result = MagicMock()
+        rows_result.scalars.return_value.all.return_value = [mock_row]
 
         mock_session = AsyncMock()
-        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_session.execute = AsyncMock(side_effect=[count_result, rows_result])
 
         with patch("backend.observability.mcp.deploys.async_session_factory") as mock_factory:
             mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)

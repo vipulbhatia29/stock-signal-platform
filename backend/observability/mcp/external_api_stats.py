@@ -177,7 +177,9 @@ async def _fetch_rate_limit_count(
     """
     stmt = select(func.count()).where(
         RateLimiterEvent.ts >= cutoff,
-        RateLimiterEvent.limiter_name.ilike(f"%{provider}%"),
+        RateLimiterEvent.limiter_name.ilike(
+            f"%{provider.replace('%', r'\\%').replace('_', r'\\_')}%"
+        ),
     )
     result = (await db.execute(stmt)).scalar()
     return int(result or 0)

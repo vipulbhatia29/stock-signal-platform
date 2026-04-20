@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy import func, select
@@ -137,7 +137,7 @@ async def get_cost_breakdown(
     clamped_limit = clamp_limit(limit)
 
     if compare_to == "prior_window":
-        window_duration = datetime.now().replace(tzinfo=cutoff.tzinfo) - cutoff
+        window_duration = datetime.now(timezone.utc) - cutoff
         prior_end = cutoff
         prior_start = cutoff - window_duration
 

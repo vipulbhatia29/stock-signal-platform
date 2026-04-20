@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from backend.database import async_session_factory
 from backend.observability.mcp._helpers import build_envelope, clamp_limit, parse_since
@@ -39,6 +39,8 @@ async def get_deploys(
     clamped_limit = clamp_limit(limit)
 
     async with async_session_factory() as db:
+        count_stmt = select(func.count()).where(DeployEvent.ts >= cutoff)
+        total = (await db.execute(count_stmt)).scalar() or 0
         stmt = (
             select(DeployEvent)
             .where(DeployEvent.ts >= cutoff)
@@ -66,7 +68,7 @@ async def get_deploys(
     return build_envelope(
         "get_deploys",
         {"deploys": deploys},
-        total_count=len(deploys),
+        total_count=total,
         limit=clamped_limit,
         since=cutoff,
     )

@@ -294,8 +294,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from backend.mcp_server.observability_tools import create_obs_mcp_app
 
     obs_mcp = create_obs_mcp_app()
-    app.mount("/obs-mcp", obs_mcp.http_app())
-    logger.info("Observability MCP server mounted at /obs-mcp")
+    obs_mcp_app = obs_mcp.http_app()
+    obs_mcp_app.add_middleware(MCPAuthMiddleware)
+    app.mount("/obs-mcp", obs_mcp_app)
+    logger.info("Observability MCP server mounted at /obs-mcp (JWT auth enforced)")
 
     # Store on app.state (not module globals — rule #7)
     app.state.registry = registry
