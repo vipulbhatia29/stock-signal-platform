@@ -437,3 +437,9 @@ from backend.observability.routers.ingest import (  # noqa: E402
 app.include_router(frontend_errors_router, prefix="/api/v1")
 app.include_router(deploy_events_router, prefix="/api/v1")
 app.include_router(obs_ingest_router)  # no /api/v1 prefix — spec §2.2b
+
+from backend.observability.routers.admin_query import (  # noqa: E402
+    router as obs_admin_query_router,
+)
+
+app.include_router(obs_admin_query_router, prefix="/api/v1")
