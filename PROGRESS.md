@@ -581,3 +581,48 @@ Planning session — 7 PR-scoped plans written + reviewed. See archive for detai
 - **Obs 1b: 7/7 PRs shipped (PR1-PR7). KAN-459 COMPLETE.**
 - TDD + FSD + project-plan updated
 - Resume: Transition KAN-459 → Done. Next: Obs 1c (KAN-460) or backlog
+
+---
+
+## Session 124 — Pre-1c Audit + Obs 1c PR1: Anomaly Engine (2026-04-19)
+
+**Branches:** `fix/KAN-483-484-obs-audit-cleanup` → develop (PR #259 merged), `feat/KAN-460-obs-1c-pr1-anomaly-engine` → develop (PR pending)
+
+### Pre-1c Observability Audit
+Full audit of 1a+1b infrastructure before starting 1c. 4 parallel agents inventoried all models, migrations, schemas, writers, endpoints, and trace_id propagation.
+
+**Findings:**
+- 5 CRITICAL: rate_limiter nullable mismatch (C2), metadata vs extra_data naming (C3), ghost request_log_id (C4), oauth missing span_id (C5), missing parent_span_id on 4 tables (H1)
+- 5 HIGH: missing trace_id indexes on 10+ tables (H2), full-text search indexes needed (H3), non-hypertable ts indexes (H4), Tool 13 needs data source (H5)
+- 4 MEDIUM: composite indexes, schema boundary, describe_schema skeleton
+- **GREEN:** trace_id propagation complete, all endpoints resolve, all writers valid, event dispatch complete
+
+**PR #259 (KAN-483 + KAN-484):** Migration 038 — fixed all CRITICAL + HIGH index gaps. 25+ indexes added. CI passed after fixing duplicate `ix_auth_event_log_trace_id` (already in migration 033).
+
+**JIRA tickets created:** KAN-483 (Bug, Done), KAN-484 (Task, Done), KAN-485 (full-text search — 1c scope), KAN-486 (Tool 13 design — 1c scope)
+
+**KAN-485 design decision:** pg_trgm GIN indexes (not tsvector). 5 hard constraints documented: 3-char min search, compressed chunk cap, CONCURRENTLY+autocommit, pg_trgm extension dep, index size monitoring.
+
+### KAN-460 — Obs 1c PR1: Anomaly Engine
+- **Migration 039:** `finding_log` table (21 columns, 3 composite indexes, observability schema)
+- **AnomalyRule ABC + Finding frozen dataclass** — contract for all rules
+- **Engine orchestrator:** `asyncio.gather` + `Semaphore(4)` + 30s per-rule timeout. Crashing/slow rules don't block others.
+- **Finding persistence with dedup:** skip if open/acknowledged finding with same `dedup_key` exists. `_in_obs_write` guard on commit.
+- **Celery beat task:** `run_anomaly_scan` every 5 min, single `asyncio.run()` wrapper (review fix: was double event loop)
+- **6 anomaly rules:**
+  1. External API error rate > 10% (dynamic severity: warning < 50%, error >= 50%)
+  2. LLM cost spike > 3× 7-day daily median
+  3. Slow query regression: p95 > 2× 7-day baseline
+  4. DB pool exhaustion in last 5 min (always critical)
+  5. Rate limiter fallback_permissive (safety bypass, always fire)
+  6. Watermark staleness > 2× expected cadence
+- **Finding retention:** 180 days, beat schedule 9:30 AM
+- **Code review:** 2 CRITICAL fixed (_in_obs_write guard, double asyncio.run), 2 IMPORTANT fixed (dynamic severity, inline imports)
+
+### Session 124 Totals
+- Tests: 2460 → 2496 unit (+36 new anomaly tests), 0 failures
+- Alembic: 037 → 039 (038 audit fixes + 039 finding_log)
+- 4 JIRA tickets created (KAN-483, KAN-484, KAN-485, KAN-486), 2 resolved
+- KAN-459 → Done, KAN-460 → In Progress
+- 1 PR merged (#259), 1 PR pending (anomaly engine)
+- Resume: Merge anomaly engine PR. Next: 1c PR2 (rules 7-12 + auto-close)

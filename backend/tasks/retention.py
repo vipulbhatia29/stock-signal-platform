@@ -47,6 +47,7 @@ AGENT_REASONING_LOG_RETENTION_DAYS = 30
 PROVIDER_HEALTH_SNAPSHOT_RETENTION_DAYS = 30
 FRONTEND_ERROR_LOG_RETENTION_DAYS = 30
 DEPLOY_EVENTS_RETENTION_DAYS = 365
+FINDING_LOG_RETENTION_DAYS = 180
 
 
 @celery_app.task(name="backend.tasks.retention.purge_old_forecasts_task")
@@ -364,6 +365,38 @@ def purge_old_frontend_error_logs_task(run_id: uuid.UUID | None = None) -> dict:
 def purge_old_deploy_events_task(run_id: uuid.UUID | None = None) -> dict:
     """Purge deploy_events older than 365 days using row-level DELETE (regular table)."""
     return asyncio.run(_purge_obs_regular_table("deploy_events", DEPLOY_EVENTS_RETENTION_DAYS))
+
+
+@celery_app.task(name="backend.tasks.retention.purge_old_findings_task")
+@tracked_task("finding_log_retention", trigger="scheduled")  # type: ignore[arg-type]
+def purge_old_findings_task(run_id: uuid.UUID | None = None) -> dict:
+    """Purge findings older than 180 days using row-level DELETE (regular table)."""
+    return asyncio.run(_purge_old_findings_async())
+
+
+async def _purge_old_findings_async() -> dict:
+    """Delete observability.finding_log rows with created_at older than 180 days.
+
+    Uses raw SQL DELETE (not ORM) to avoid importing FindingLog into the retention
+    module (observability schema models must not be imported at module level).
+    finding_log is a regular table — drop_chunks() does not apply.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(days=FINDING_LOG_RETENTION_DAYS)
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text(  # noqa: S608 — table name is a constant, not user input
+                "DELETE FROM observability.finding_log WHERE created_at < :cutoff"
+            ),
+            {"cutoff": cutoff},
+        )
+        deleted = result.rowcount or 0  # type: ignore[union-attr]
+        await db.commit()
+    logger.info(
+        "observability.finding_log retention: deleted %d rows older than %s",
+        deleted,
+        cutoff.date(),
+    )
+    return {"status": "ok", "deleted": deleted, "cutoff": cutoff.isoformat()}
 
 
 async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
