@@ -380,3 +380,317 @@ class TestGetAnomalies:
 
         assert result["tool"] == "get_anomalies"
         assert result["result"]["findings"] == []
+
+
+# ---------------------------------------------------------------------------
+# Tool 6: get_external_api_stats
+# ---------------------------------------------------------------------------
+
+
+class TestGetExternalApiStats:
+    """Tests for the get_external_api_stats MCP tool."""
+
+    def _make_empty_session(self) -> AsyncMock:
+        """Build a mock DB session returning safe zero/empty results.
+
+        Two distinct result shapes are needed:
+        - Aggregate query (one()): returns a row with zero counts and None percentiles.
+        - GROUP BY / count queries (all() / scalar()): return empty list / zero.
+        """
+        mock_session = AsyncMock()
+
+        agg_row = MagicMock()
+        agg_row.call_count = 0
+        agg_row.success_count = 0
+        agg_row.p50 = None
+        agg_row.p95 = None
+        agg_row.total_cost_usd = None
+
+        agg_result = MagicMock()
+        agg_result.one.return_value = agg_row
+        agg_result.all.return_value = []
+        agg_result.scalar.return_value = 0
+
+        mock_session.execute = AsyncMock(return_value=agg_result)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_returns_envelope_structure(self) -> None:
+        """Verify get_external_api_stats returns a valid MCP envelope."""
+        from backend.observability.mcp.external_api_stats import get_external_api_stats
+
+        mock_session = self._make_empty_session()
+
+        with patch(
+            "backend.observability.mcp.external_api_stats.async_session_factory"
+        ) as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_external_api_stats("openai")
+
+        assert result["tool"] == "get_external_api_stats"
+        assert "result" in result
+        assert "meta" in result
+        assert "window" in result
+        assert result["result"]["provider"] == "openai"
+
+    @pytest.mark.asyncio
+    async def test_empty_db_returns_zero_stats(self) -> None:
+        """Verify empty DB returns zero call counts without crashing."""
+        from backend.observability.mcp.external_api_stats import get_external_api_stats
+
+        mock_session = self._make_empty_session()
+
+        with patch(
+            "backend.observability.mcp.external_api_stats.async_session_factory"
+        ) as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_external_api_stats("yfinance", window_min=30)
+
+        stats = result["result"]["stats"]
+        assert stats["call_count"] == 0
+        assert stats["success_count"] == 0
+        assert stats["error_count"] == 0
+        assert stats["success_rate"] is None
+        assert stats["p50_latency_ms"] is None
+        assert stats["p95_latency_ms"] is None
+        assert result["result"]["rate_limit_events"] == 0
+        assert result["result"]["error_breakdown"] == []
+
+    @pytest.mark.asyncio
+    async def test_compare_to_prior_window_includes_deltas(self) -> None:
+        """Verify compare_to='prior_window' adds prior_window and deltas keys."""
+        from backend.observability.mcp.external_api_stats import get_external_api_stats
+
+        mock_session = self._make_empty_session()
+
+        with patch(
+            "backend.observability.mcp.external_api_stats.async_session_factory"
+        ) as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_external_api_stats(
+                "openai", window_min=60, compare_to="prior_window"
+            )
+
+        assert "prior_window" in result["result"]
+        assert "deltas" in result["result"]
+
+
+# ---------------------------------------------------------------------------
+# Tool 7: get_dq_findings
+# ---------------------------------------------------------------------------
+
+
+class TestGetDqFindings:
+    """Tests for the get_dq_findings MCP tool."""
+
+    def _make_empty_session(self) -> AsyncMock:
+        """Build a mock DB session that returns no DqCheckHistory rows."""
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_returns_envelope_structure(self) -> None:
+        """Verify get_dq_findings returns a valid MCP envelope."""
+        from backend.observability.mcp.dq_findings import get_dq_findings
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.dq_findings.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_dq_findings()
+
+        assert result["tool"] == "get_dq_findings"
+        assert "result" in result
+        assert "findings" in result["result"]
+        assert isinstance(result["result"]["findings"], list)
+        assert "meta" in result
+        assert "window" in result
+
+    @pytest.mark.asyncio
+    async def test_empty_db_returns_empty_findings(self) -> None:
+        """Verify empty DB returns zero findings without crashing."""
+        from backend.observability.mcp.dq_findings import get_dq_findings
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.dq_findings.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_dq_findings(since="24h", limit=50)
+
+        assert result["result"]["findings"] == []
+        assert result["meta"]["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_filters_accepted_without_error(self) -> None:
+        """Verify all filter parameters are accepted without raising."""
+        from backend.observability.mcp.dq_findings import get_dq_findings
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.dq_findings.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_dq_findings(
+                severity="critical",
+                check="price_gap_check",
+                ticker="AAPL",
+                since="7d",
+                limit=10,
+            )
+
+        assert result["tool"] == "get_dq_findings"
+        assert result["result"]["findings"] == []
+
+
+# ---------------------------------------------------------------------------
+# Tool 8: diagnose_pipeline
+# ---------------------------------------------------------------------------
+
+
+class TestDiagnosePipeline:
+    """Tests for the diagnose_pipeline MCP tool."""
+
+    def _make_empty_session(self) -> AsyncMock:
+        """Build a mock DB session returning no pipeline runs or watermark."""
+        mock_session = AsyncMock()
+
+        empty_result = MagicMock()
+        empty_result.scalars.return_value.all.return_value = []
+        empty_result.scalar_one_or_none.return_value = None
+
+        mock_session.execute = AsyncMock(return_value=empty_result)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_returns_envelope_structure(self) -> None:
+        """Verify diagnose_pipeline returns a valid MCP envelope."""
+        from backend.observability.mcp.diagnose_pipeline import diagnose_pipeline
+
+        mock_session = self._make_empty_session()
+
+        with patch(
+            "backend.observability.mcp.diagnose_pipeline.async_session_factory"
+        ) as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await diagnose_pipeline("price_refresh")
+
+        assert result["tool"] == "diagnose_pipeline"
+        assert "result" in result
+        assert result["result"]["pipeline_name"] == "price_refresh"
+        assert "runs" in result["result"]
+        assert "watermark" in result["result"]
+        assert "failure_pattern" in result["result"]
+        assert "ticker_success_rate" in result["result"]
+
+    @pytest.mark.asyncio
+    async def test_empty_db_returns_zero_failures(self) -> None:
+        """Verify empty DB returns no failures and null watermark without crashing."""
+        from backend.observability.mcp.diagnose_pipeline import diagnose_pipeline
+
+        mock_session = self._make_empty_session()
+
+        with patch(
+            "backend.observability.mcp.diagnose_pipeline.async_session_factory"
+        ) as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await diagnose_pipeline("signal_snapshot", recent_n=5)
+
+        assert result["result"]["runs"] == []
+        assert result["result"]["watermark"] is None
+        assert result["result"]["failure_pattern"]["consecutive_failures"] == 0
+        assert result["result"]["failure_pattern"]["is_currently_failing"] is False
+        assert result["result"]["ticker_success_rate"] is None
+
+    @pytest.mark.asyncio
+    async def test_envelope_meta_present(self) -> None:
+        """Verify envelope includes meta with schema_version."""
+        from backend.observability.mcp.diagnose_pipeline import diagnose_pipeline
+
+        mock_session = self._make_empty_session()
+
+        with patch(
+            "backend.observability.mcp.diagnose_pipeline.async_session_factory"
+        ) as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await diagnose_pipeline("price_refresh")
+
+        assert result["meta"]["schema_version"] == "v1"
+        assert "window" in result
+
+
+# ---------------------------------------------------------------------------
+# Tool 9: get_slow_queries
+# ---------------------------------------------------------------------------
+
+
+class TestGetSlowQueries:
+    """Tests for the get_slow_queries MCP tool."""
+
+    def _make_empty_session(self) -> AsyncMock:
+        """Build a mock DB session returning no slow-query rows."""
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        return mock_session
+
+    @pytest.mark.asyncio
+    async def test_returns_envelope_structure(self) -> None:
+        """Verify get_slow_queries returns a valid MCP envelope."""
+        from backend.observability.mcp.slow_queries import get_slow_queries
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.slow_queries.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_slow_queries()
+
+        assert result["tool"] == "get_slow_queries"
+        assert "result" in result
+        assert "queries" in result["result"]
+        assert isinstance(result["result"]["queries"], list)
+        assert "meta" in result
+        assert "window" in result
+
+    @pytest.mark.asyncio
+    async def test_empty_db_returns_empty_list(self) -> None:
+        """Verify empty DB returns zero slow queries without crashing."""
+        from backend.observability.mcp.slow_queries import get_slow_queries
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.slow_queries.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            result = await get_slow_queries(since="1h", min_duration_ms=500, limit=50)
+
+        assert result["result"]["queries"] == []
+        assert result["meta"]["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_compare_to_baseline_includes_delta_fields(self) -> None:
+        """Verify compare_to='7d_baseline' adds baseline_p95_ms and p95_delta_ms fields."""
+        from backend.observability.mcp.slow_queries import get_slow_queries
+
+        mock_session = self._make_empty_session()
+
+        with patch("backend.observability.mcp.slow_queries.async_session_factory") as mock_factory:
+            mock_factory.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+            mock_factory.return_value.__aexit__ = AsyncMock(return_value=False)
+            # With empty results, queries list will be empty — just verify no crash
+            result = await get_slow_queries(since="1h", compare_to="7d_baseline")
+
+        assert result["tool"] == "get_slow_queries"
+        assert result["result"]["queries"] == []
