@@ -1,4 +1,5 @@
 """Shared helpers for observability MCP tools."""
+
 from __future__ import annotations
 
 import logging

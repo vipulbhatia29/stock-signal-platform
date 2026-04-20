@@ -136,7 +136,7 @@ async def _fetch_pipeline_errors(cutoff: datetime, ticker: str | None) -> list[d
         {
             "source": _SRC_CELERY,
             "ts": r.started_at,
-            "message": str(r.error_summary) if r.error_summary else "Pipeline failed",
+            "message": r.error_summary.get("error", "Pipeline failed") if isinstance(r.error_summary, dict) else "Pipeline failed",
             "severity": "error",
             "trace_id": None,
             "stack_signature": None,
@@ -168,6 +168,7 @@ async def _fetch_frontend_errors(cutoff: datetime, user_id: str | None) -> list[
             "stack_signature": None,
             "details": {
                 "error_type": r.error_type,
+                "error_stack": r.error_stack,
                 "page_route": r.page_route,
                 "component_name": r.component_name,
             },

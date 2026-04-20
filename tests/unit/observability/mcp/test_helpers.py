@@ -1,9 +1,8 @@
 """Tests for MCP tool shared helpers."""
+
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-
-import pytest
 
 from backend.observability.mcp._helpers import build_envelope, clamp_limit, parse_since
 

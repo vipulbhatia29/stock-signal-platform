@@ -44,6 +44,7 @@ def _finding_to_dict(f: FindingLog) -> dict[str, Any]:
         "status": f.status,
         "title": f.title,
         "evidence": f.evidence,
+        "suggested_jira_fields": f.evidence.get("suggested_jira_fields") if isinstance(f.evidence, dict) else None,
         "remediation_hint": f.remediation_hint,
         "related_traces": f.related_traces,
         "opened_at": f.opened_at.isoformat() if f.opened_at else None,

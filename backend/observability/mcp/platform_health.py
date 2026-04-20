@@ -103,10 +103,9 @@ async def _query_db(cutoff: datetime) -> dict[str, Any]:
             DbPoolEventModel.ts >= cutoff,
             DbPoolEventModel.pool_event_type == "exhausted",
         )
-        slow_row, pool_count = await asyncio.gather(
-            db.execute(slow_stmt),
-            db.execute(pool_stmt),
-        )
+        # Sequential — AsyncSession is not concurrency-safe
+        slow_row = await db.execute(slow_stmt)
+        pool_count = await db.execute(pool_stmt)
     slow = slow_row.one()
     slow_count = slow.slow_count or 0
     p95 = float(slow.p95_ms) if slow.p95_ms is not None else None
@@ -216,10 +215,9 @@ async def _query_celery(cutoff: datetime) -> dict[str, Any]:
             (CeleryQueueDepth.queue_name == subq.c.queue_name)
             & (CeleryQueueDepth.ts == subq.c.latest_ts),
         )
-        worker_count_res, depth_rows = await asyncio.gather(
-            db.execute(worker_stmt),
-            db.execute(depth_stmt),
-        )
+        # Sequential — AsyncSession is not concurrency-safe
+        worker_count_res = await db.execute(worker_stmt)
+        depth_rows = await db.execute(depth_stmt)
     active_workers = worker_count_res.scalar() or 0
     queue_depths = {row.queue_name: row.depth for row in depth_rows.all()}
     total_depth = sum(queue_depths.values())
