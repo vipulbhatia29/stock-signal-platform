@@ -290,6 +290,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.mount("/mcp", mcp_app)
     logger.info("FastMCP server mounted at /mcp (JWT auth enforced)")
 
+    # 5b. Observability MCP server — 13 read-only intelligence tools
+    from backend.mcp_server.observability_tools import create_obs_mcp_app
+
+    obs_mcp = create_obs_mcp_app()
+    app.mount("/obs-mcp", obs_mcp.http_app())
+    logger.info("Observability MCP server mounted at /obs-mcp")
+
     # Store on app.state (not module globals — rule #7)
     app.state.registry = registry
     app.state.tool_registry = registry  # alias for get_tool_schemas_for_group()
