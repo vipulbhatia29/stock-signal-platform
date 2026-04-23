@@ -95,3 +95,7 @@ docs/superpowers/plans/2026-03-28-implement-local-hybrid-workflow-plan.md
 
 # Benchmark worktrees (ephemeral)
 .benchmark/
+
+# Model bake-off workspace (do not commit)
+.claude-eval/
+.claude/worktrees/
