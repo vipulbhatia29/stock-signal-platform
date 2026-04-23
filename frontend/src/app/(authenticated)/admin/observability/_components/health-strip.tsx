@@ -34,9 +34,11 @@ function getSubsystemStat(key: string, data: SubsystemHealth): string {
 }
 
 function HealthPill({
+  subsystemKey,
   name,
   subsystem,
 }: {
+  subsystemKey: string;
   name: string;
   subsystem: SubsystemHealth;
 }) {
@@ -52,12 +54,7 @@ function HealthPill({
       <StatusDot status={status} size="sm" />
       <span className="text-sm font-medium">{name}</span>
       <span className="text-xs text-muted-foreground">
-        {getSubsystemStat(
-          Object.entries(SUBSYSTEM_LABELS).find(
-            ([, v]) => v === name
-          )?.[0] ?? "",
-          subsystem
-        )}
+        {getSubsystemStat(subsystemKey, subsystem)}
       </span>
     </div>
   );
@@ -110,6 +107,7 @@ export function HealthStrip({
       {entries.map(([key, subsystem]) => (
         <HealthPill
           key={key}
+          subsystemKey={key}
           name={SUBSYSTEM_LABELS[key] ?? key}
           subsystem={subsystem}
         />
