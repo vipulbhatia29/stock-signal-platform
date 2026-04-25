@@ -297,12 +297,12 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 **Why this sequence:** Observability must exist before seed runs (Epic 2 below) so anomalies surface cleanly, and before UI polish (Phase E) so dashboard data is real. User decision captured in Session 112 — "observability on every aspect is the core-objective".
 
-**Session 128 status:**
+**Session 129 status:**
 - **1a COMPLETE** — 6/6 PRs merged (#242-#247, Sessions 114-119)
 - **1b COMPLETE** — 7/7 PRs merged (#250-#257, Sessions 120-123) + audit fixes (PR #259, Session 124)
-- **1c IN PROGRESS** — PR1-PR5 + PR6-T1 shipped. PR6-T2 (zones 2-8) in review. 1 PR remaining (PR7 JIRA draft).
+- **1c COMPLETE** — 9/9 items shipped (Sessions 124-129)
 
-**1c PR breakdown (IN PROGRESS):**
+**1c PR breakdown (COMPLETE):**
 | PR | Scope | Status |
 |---|---|---|
 | PR1 | Anomaly engine + finding_log + rules 1-6 | ✅ PR #260 (S124) |
@@ -311,8 +311,9 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 | PR4 | CLI health_report script | ✅ #263 (S127) |
 | PR5 | Admin REST query endpoints | ✅ #264 (S127) |
 | PR6-T1 | Page shell + Zone 1 health strip | ✅ #265 (S127) |
-| PR6-T2 | Zones 2-8: error stream, anomaly findings, external API, cost, pipeline, DQ | 🟡 S128 (in review) |
-| PR7 | JIRA draft integration | ⬜ Planned |
+| PR6-T2 | Zones 2-8: error stream, anomaly findings, external API, cost, pipeline, DQ | ✅ #267 (S128) |
+| PR6-T5+T6 | Zone 3 enhancements (PATCH ack/suppress, kind filter) + Zone 4 trace explorer (waterfall) | ✅ #268 (S129, KAN-491+KAN-492) |
+| PR7 | JIRA draft integration (POST /jira-draft, observed HTTP client, ExternalProvider.JIRA) | ✅ #269 (S129) |
 
 ### Epic 2: Seed Universe (planned — blocked by Epic 1)
 
