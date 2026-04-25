@@ -62,6 +62,7 @@ async def get_anomalies(
     since: str | None = None,
     severity: str | None = None,
     attribution_layer: str | None = None,
+    kind: str | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
     """Return anomaly findings from FindingLog, ranked by severity.
@@ -73,6 +74,7 @@ async def get_anomalies(
         severity: Optional severity filter (critical, error, warning, info).
         attribution_layer: Optional attribution layer filter (http, db, cache,
             external_api, celery, agent, frontend).
+        kind: Optional kind filter to narrow findings by type.
         limit: Maximum number of results to return (clamped to 500).
 
     Returns:
@@ -92,6 +94,9 @@ async def get_anomalies(
 
         if attribution_layer is not None:
             stmt = stmt.where(FindingLog.attribution_layer == attribution_layer)
+
+        if kind is not None:
+            stmt = stmt.where(FindingLog.kind == kind)
 
         stmt = stmt.order_by(_SEVERITY_RANK, FindingLog.opened_at.desc())
 

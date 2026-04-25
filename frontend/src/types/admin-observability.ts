@@ -78,6 +78,41 @@ export interface AdminFindingsResult {
 export type AdminFindingsEnvelope = AdminObsEnvelope<AdminFindingsResult>;
 
 // ---------------------------------------------------------------------------
+// Zone 4: Trace Explorer
+// ---------------------------------------------------------------------------
+
+/** Recursive span node from the trace tree. */
+export interface SpanNode {
+  span_id: string;
+  parent_span_id: string | null;
+  kind: string;
+  ts: string | null;
+  latency_ms: number | null;
+  details: Record<string, unknown>;
+  children: SpanNode[];
+}
+
+/** Flattened span for waterfall rendering. */
+export interface FlatSpan {
+  span_id: string;
+  parent_span_id: string | null;
+  kind: string;
+  ts: string | null;
+  latency_ms: number | null;
+  details: Record<string, unknown>;
+  depth: number;
+}
+
+export interface AdminTraceResult {
+  trace_id: string;
+  root_span: SpanNode | null;
+  flat_spans?: SpanNode[];
+  span_count: number;
+}
+
+export type AdminTraceEnvelope = AdminObsEnvelope<AdminTraceResult>;
+
+// ---------------------------------------------------------------------------
 // Zone 5: External API
 // ---------------------------------------------------------------------------
 

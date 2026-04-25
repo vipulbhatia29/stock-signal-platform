@@ -150,6 +150,99 @@ function FindingCard({
   );
 }
 
+const LAYER_VALUES = [
+  "all", "http", "db", "cache", "external_api", "celery", "agent", "frontend", "tool",
+] as const;
+
+const KIND_VALUES = [
+  "all",
+  "http_5xx_elevated",
+  "external_api_error_rate_elevated",
+  "slow_query_regression",
+  "db_pool_exhaustion",
+  "llm_cost_spike",
+  "beat_schedule_drift",
+  "watermark_stale",
+  "worker_heartbeat_missing",
+  "frontend_error_burst",
+  "rate_limiter_fallback",
+  "agent_decline_rate_elevated",
+  "dq_critical",
+] as const;
+
+function FindingsFilters({
+  statusFilter,
+  setStatusFilter,
+  severityFilter,
+  setSeverityFilter,
+  layerFilter,
+  setLayerFilter,
+  kindFilter,
+  setKindFilter,
+}: {
+  statusFilter: string;
+  setStatusFilter: (v: string) => void;
+  severityFilter: string;
+  setSeverityFilter: (v: string) => void;
+  layerFilter: string;
+  setLayerFilter: (v: string) => void;
+  kindFilter: string;
+  setKindFilter: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <Select value={statusFilter} onValueChange={(v) => { if (v) setStatusFilter(v); }}>
+        <SelectTrigger size="sm" className="w-[130px]">
+          <SelectValue placeholder="Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="open">Open</SelectItem>
+          <SelectItem value="acknowledged">Acknowledged</SelectItem>
+          <SelectItem value="resolved">Resolved</SelectItem>
+          <SelectItem value="suppressed">Suppressed</SelectItem>
+          <SelectItem value="all">All</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={severityFilter} onValueChange={(v) => { if (v) setSeverityFilter(v); }}>
+        <SelectTrigger size="sm" className="w-[120px]">
+          <SelectValue placeholder="Severity" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All</SelectItem>
+          <SelectItem value="critical">Critical</SelectItem>
+          <SelectItem value="error">Error</SelectItem>
+          <SelectItem value="warning">Warning</SelectItem>
+          <SelectItem value="info">Info</SelectItem>
+        </SelectContent>
+      </Select>
+      <Select value={layerFilter} onValueChange={(v) => { if (v) setLayerFilter(v); }}>
+        <SelectTrigger size="sm" className="w-[130px]">
+          <SelectValue placeholder="Layer" />
+        </SelectTrigger>
+        <SelectContent>
+          {LAYER_VALUES.map((l) => (
+            <SelectItem key={l} value={l}>
+              {l === "all" ? "All layers" : l}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <Select value={kindFilter} onValueChange={(v) => { if (v) setKindFilter(v); }}>
+        <SelectTrigger size="sm" className="w-[120px]">
+          <SelectValue placeholder="Kind" />
+        </SelectTrigger>
+        <SelectContent>
+          {KIND_VALUES.map((k) => (
+            <SelectItem key={k} value={k}>
+              {k === "all" ? "All kinds" : k}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function FindingCardSkeleton() {
   return (
     <div className="rounded-lg border border-border bg-card p-4 space-y-2">
@@ -169,10 +262,14 @@ function FindingCardSkeleton() {
 export function AnomalyFindings({ onOpenTrace }: { onOpenTrace: OpenTraceFn }) {
   const [statusFilter, setStatusFilter] = useState("open");
   const [severityFilter, setSeverityFilter] = useState<string>("all");
+  const [layerFilter, setLayerFilter] = useState<string>("all");
+  const [kindFilter, setKindFilter] = useState<string>("all");
 
   const { data, isLoading, error } = useAdminFindings({
     status: statusFilter !== "all" ? statusFilter : undefined,
     severity: severityFilter !== "all" ? severityFilter : undefined,
+    attribution_layer: layerFilter !== "all" ? layerFilter : undefined,
+    kind: kindFilter !== "all" ? kindFilter : undefined,
   });
 
   const acknowledgeMutation = useAcknowledgeFinding();
@@ -190,32 +287,16 @@ export function AnomalyFindings({ onOpenTrace }: { onOpenTrace: OpenTraceFn }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <Select value={statusFilter} onValueChange={(v) => { if (v) setStatusFilter(v); }}>
-          <SelectTrigger size="sm" className="w-[140px]">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="open">Open</SelectItem>
-            <SelectItem value="acknowledged">Acknowledged</SelectItem>
-            <SelectItem value="resolved">Resolved</SelectItem>
-            <SelectItem value="suppressed">Suppressed</SelectItem>
-            <SelectItem value="all">All</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={severityFilter} onValueChange={(v) => { if (v) setSeverityFilter(v); }}>
-          <SelectTrigger size="sm" className="w-[140px]">
-            <SelectValue placeholder="Severity" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="critical">Critical</SelectItem>
-            <SelectItem value="error">Error</SelectItem>
-            <SelectItem value="warning">Warning</SelectItem>
-            <SelectItem value="info">Info</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+      <FindingsFilters
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        severityFilter={severityFilter}
+        setSeverityFilter={setSeverityFilter}
+        layerFilter={layerFilter}
+        setLayerFilter={setLayerFilter}
+        kindFilter={kindFilter}
+        setKindFilter={setKindFilter}
+      />
 
       {isLoading ? (
         <div className="space-y-3">

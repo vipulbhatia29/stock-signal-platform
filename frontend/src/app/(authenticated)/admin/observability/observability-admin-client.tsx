@@ -13,6 +13,7 @@ import { ExternalApiDashboard } from "./_components/external-api-dashboard";
 import { CostBreakdown } from "./_components/cost-breakdown";
 import { PipelineHealth } from "./_components/pipeline-health";
 import { DqScanner } from "./_components/dq-scanner";
+import { TraceExplorer } from "./_components/trace-explorer";
 
 type TabKey = "overview" | "apis-cost" | "infrastructure" | "trace-explorer";
 
@@ -29,6 +30,13 @@ export default function ObservabilityAdminClient() {
       router.replace("/dashboard");
     }
   }, [userLoading, isAdmin, router]);
+
+  useEffect(() => {
+    if (pendingTraceId && activeTab === "trace-explorer") {
+      const timer = setTimeout(() => setPendingTraceId(null), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingTraceId, activeTab]);
 
   if (userLoading || (!isAdmin && !userLoading)) {
     return null;
@@ -90,14 +98,7 @@ export default function ObservabilityAdminClient() {
         </TabsContent>
 
         <TabsContent value="trace-explorer" className="mt-4 space-y-4">
-          <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-            Zone 4 (Trace Explorer) — coming soon.
-            {pendingTraceId && (
-              <p className="mt-2">
-                Pending trace: <code className="text-foreground">{pendingTraceId}</code>
-              </p>
-            )}
-          </div>
+          <TraceExplorer initialTraceId={pendingTraceId} />
         </TabsContent>
       </Tabs>
     </PageTransition>
