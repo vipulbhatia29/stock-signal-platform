@@ -2429,7 +2429,9 @@ Rule-based anomaly detection running via Celery Beat every 5 minutes. Rules exte
 
 **Feedback loop guard:** `_in_obs_write` ContextVar in `instrumentation/db.py` — set by all obs writers before `session.commit()`, checked by `after_execute` hook to skip re-emission.
 
-**Retention tasks (all via Celery Beat):**
+**Retention tasks (all via Celery Beat, `backend/tasks/retention.py`):**
+
+*Legacy tables:*
 | Task | Table | Window | Method |
 |---|---|---|---|
 | `purge_old_llm_call_log_task` | `llm_call_log` | 30d | `drop_chunks` (hypertable) |
@@ -2437,7 +2439,118 @@ Rule-based anomaly detection running via Celery Beat every 5 minutes. Rules exte
 | `purge_old_pipeline_runs_task` | `pipeline_runs` | 90d | DELETE (regular table) |
 | `purge_old_dq_check_history_task` | `dq_check_history` | 90d | DELETE (regular table) |
 
+*Observability schema tables (18 tasks):*
+| Task | Table | Window | Method |
+|---|---|---|---|
+| `purge_old_request_logs_task` | `observability.request_log` | 30d | `drop_chunks` |
+| `purge_old_api_error_logs_task` | `observability.api_error_log` | 90d | `drop_chunks` |
+| `purge_old_slow_query_logs_task` | `observability.slow_query_log` | 30d | `drop_chunks` |
+| `purge_old_cache_operation_logs_task` | `observability.cache_operation_log` | 7d | `drop_chunks` |
+| `purge_old_celery_heartbeats_task` | `observability.celery_worker_heartbeat` | 7d | `drop_chunks` |
+| `purge_old_celery_queue_depths_task` | `observability.celery_queue_depth` | 7d | `drop_chunks` |
+| `purge_old_provider_health_snapshots_task` | `observability.provider_health_snapshot` | 30d | `drop_chunks` |
+| `purge_old_auth_event_logs_task` | `observability.auth_event_log` | 90d | DELETE (regular) |
+| `purge_old_oauth_event_logs_task` | `observability.oauth_event_log` | 90d | DELETE (regular) |
+| `purge_old_email_send_logs_task` | `observability.email_send_log` | 90d | DELETE (regular) |
+| `purge_old_db_pool_events_task` | `observability.db_pool_event` | 90d | DELETE (regular) |
+| `purge_old_schema_migration_logs_task` | `observability.schema_migration_log` | 365d | DELETE (regular) |
+| `purge_old_beat_schedule_runs_task` | `observability.beat_schedule_run` | 90d | DELETE (regular) |
+| `purge_old_agent_intent_logs_task` | `observability.agent_intent_log` | 30d | DELETE (regular) |
+| `purge_old_agent_reasoning_logs_task` | `observability.agent_reasoning_log` | 30d | DELETE (regular) |
+| `purge_old_frontend_error_logs_task` | `observability.frontend_error_log` | 30d | DELETE (regular) |
+| `purge_old_deploy_events_task` | `observability.deploy_events` | 365d | DELETE (regular) |
+| `purge_old_findings_task` | `observability.finding_log` | 180d | DELETE (regular) |
+
+All hypertable tasks use `make_interval(days => :days)` for asyncpg-compatible parameterization (not `INTERVAL :interval`).
+
 **Kill switches:** `OBS_ENABLED=false` (all paths no-op), `OBS_SPOOL_ENABLED=false` (overflow drops instead of spooling)
+
+#### 10.3.7 MCP Observability Tools
+
+13 read-only intelligence tools in `backend/observability/mcp/`. All async, all return dict wrapped in standard MCP envelope via `build_envelope()`: `{"tool": str, "window": {...}, "result": {...}, "meta": {"total_count", "truncated", "schema_version"}}`.
+
+| Tool | Module | Signature | Purpose |
+|---|---|---|---|
+| `get_platform_health` | `platform_health.py` | `(window_min=60)` | Overall status + 7 subsystem health dicts + open anomaly count |
+| `get_trace` | `trace.py` | `(trace_id: str)` | Reconstruct span tree from multi-table data (9 span kinds) |
+| `get_anomalies` | `anomalies.py` | `(status, since, severity, attribution_layer, kind, limit)` | Anomaly findings filtered by severity/status/layer |
+| `search_errors` | `search_errors.py` | `(query, since="24h", limit=50)` | ILIKE search across api_error_log + external_api + frontend + findings |
+| `get_observability_health` | `obs_health.py` | `()` | Obs system self-report: last writes, spool size, buffer stats, config |
+| `get_recent_errors` | `recent_errors.py` | `(since, severity, subsystem, limit)` | Unified error stream from 4 error tables |
+| `get_cost_breakdown` | `cost_breakdown.py` | `(window, by, limit, compare_to)` | LLM cost by provider/model/tier/user |
+| `get_external_api_stats` | `external_api_stats.py` | `(provider, window_min, compare_to)` | Per-provider call/error/latency stats |
+| `get_deploys` | `deploys.py` | `(since, limit)` | Recent deployment events |
+| `describe_observability_schema` | `describe_schema.py` | `()` | ORM model introspection + event type list |
+| `diagnose_pipeline` | `diagnose_pipeline.py` | `(pipeline_name, recent_n)` | Pipeline run history + failure patterns |
+| `get_dq_findings` | `dq_findings.py` | `(severity, check, ticker, since, limit)` | Data quality check findings |
+| `get_slow_queries` | `slow_queries.py` | `(since, min_duration_ms, limit)` | Slow query log analysis |
+
+All tools use `async_session_factory` from `backend.database` — extraction requires migrating to obs-service-owned DB connection or HTTP proxy.
+
+#### 10.3.8 Admin Observability Dashboard
+
+8-zone admin dashboard at `/admin/observability` with 11 backend endpoints. All require `UserRole.ADMIN`.
+
+**Router:** `backend/observability/routers/admin_query.py` mounted at `/api/v1/observability/admin/`
+
+| Zone | Endpoint | Method | Purpose |
+|---|---|---|---|
+| 1 | `/kpis` | GET | Subsystem health pills (7 subsystems) + open anomaly count |
+| 2 | `/errors` | GET | Live error stream with subsystem/severity/time filters |
+| 3 | `/findings` | GET | Anomaly findings with status/severity/kind/layer filters |
+| 3 | `/findings/{id}/acknowledge` | PATCH | Transition finding to acknowledged |
+| 3 | `/findings/{id}/suppress` | PATCH | Suppress finding for 1h/4h/24h |
+| 3 | `/findings/{id}/jira-draft` | POST | Create JIRA issue from finding (idempotent) |
+| 4 | `/trace/{trace_id}` | GET | Span tree reconstruction (waterfall view) |
+| 5 | `/externals` | GET | Per-provider API stats with comparison window |
+| 6 | `/costs` | GET | LLM cost breakdown by provider/model/tier/user |
+| 7 | `/pipelines` | GET | Pipeline diagnostics (recent runs, watermarks) |
+| 8 | `/dq` | GET | Data quality findings |
+
+**Frontend:** 4-tab layout in `frontend/src/components/admin/observability/`:
+- **Overview**: health-strip + error-stream + anomaly-findings (Zones 1-3)
+- **APIs & Cost**: external-api-dashboard + cost-breakdown (Zones 5-6)
+- **Infrastructure**: pipeline-health + dq-scanner (Zones 7-8)
+- **Trace Explorer**: trace-explorer with span waterfall (Zone 4)
+
+#### 10.3.9 Observability Integration Tests
+
+48 integration tests in `tests/integration/observability/` validating real DB behavior (not mocked).
+
+| File | Tests | What it validates |
+|---|---|---|
+| `conftest.py` | — | 6 factories, `_patch_session_factory` (in-place mutation), `_clean_obs_tables`, `insert_obs_rows` |
+| `test_sdk_pipeline.py` | 6 | SDK emit → DirectTarget → DB persistence for 5 event types + disabled no-op |
+| `test_trace_propagation.py` | 5 | Trace ID generation/adoption, `_in_obs_write` feedback guard, auth event recursion guard |
+| `test_anomaly_lifecycle.py` | 5 | Rule finding → dedup → auto-close after 3 negative checks → JIRA draft |
+| `test_admin_endpoints.py` | 7 | Auth enforcement, KPI response, error filtering, finding acknowledge/suppress |
+| `test_mcp_tools.py` | 5 | MCP envelope structure for health, trace, anomalies, search, obs-health |
+| `test_retention.py` | 21 | Regular table purge + allowlist rejection + 18 parametrized task existence |
+
+**Key pattern:** `_patch_session_factory` uses `original_factory.configure(bind=test_engine)` for in-place mutation — does NOT replace the module attribute (42 modules hold import-time bindings).
+
+#### 10.3.10 Extraction Readiness (Microservice Boundary)
+
+The observability system is designed for extraction to a standalone service. Key seams:
+
+**Ready to extract (25 components):**
+- Routers: admin_query, command_center, frontend_errors, deploy_events, ingest
+- Logic: anomaly engine + 12 rules, retention tasks (18 purge functions)
+- MCP: 13 observability tools (deployable as separate MCP server)
+- Query layer: queries.py (695 lines), all MCP tool implementations
+
+**Must stay in main app (15 components):**
+- TraceIdMiddleware (owns `trace_id_var` ContextVar)
+- ObsHttpMiddleware, DB pool hooks, cache/auth/celery/agent instrumentation
+- ObservedHttpClient (wraps all external HTTP calls)
+- YfinanceObservedSession (requests.Session subclass)
+- Event emission points (36 sites using `_maybe_get_obs_client()` — already defensive)
+
+**Extraction strategy:**
+1. Set `OBS_TARGET_TYPE=internal_http` + `OBS_TARGET_URL=<obs-service>`
+2. Obs service exposes `/obs/v1/events` ingest endpoint (already implemented)
+3. Migrate routers + retention + anomaly engine to obs service
+4. Main app keeps instrumentation hooks + event emission (unchanged)
 
 #### 10.3.5 Health Checks
 

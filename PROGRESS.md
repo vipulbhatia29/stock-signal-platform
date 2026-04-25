@@ -758,3 +758,61 @@ Full audit of 1a+1b infrastructure before starting 1c. 4 parallel agents invento
 - 13 files changed, ~1300 insertions
 - 1 PR (pending)
 - Resume: Push PR, merge, JIRA audit. Next: 1c PR3 (MCP tools)
+
+---
+
+## Session 130 — Obs Suite Validation: Spec + Epic (2026-04-25)
+**Branch:** docs only | **Epic KAN-493 created**
+- Spec written: `docs/superpowers/specs/2026-04-25-observability-integration-test-suite.md`
+- 3-PR split: PR1 (fixtures+SDK+trace), PR2 (anomaly+admin), PR3 (MCP+retention)
+- 5-persona spec review completed + approved
+- Plan next (KAN-498)
+
+## Session 131 — KAN-501 PR1: Obs Test Fixtures + SDK + Trace (2026-04-25)
+**Branch:** `feat/KAN-500-obs-test-pr1` → develop | **PR #272 merged**
+- conftest.py: 6 factories, `_patch_session_factory`, `_clean_obs_tables`, `insert_obs_rows`
+- test_sdk_pipeline.py: 6 tests (5 event types + disabled no-op)
+- test_trace_propagation.py: 5 tests (trace gen, adoption, obs write guard, auth recursion guard)
+- Tests: 11 integration passed
+
+## Session 132 — KAN-501 PR2: Anomaly Lifecycle + Admin Endpoints (2026-04-25)
+**Branch:** `feat/KAN-501-pr2-anomaly-admin-tests` → develop | **PR #273 merged**
+- test_anomaly_lifecycle.py: 5 tests (rule→finding→dedup→auto-close→JIRA draft)
+- test_admin_endpoints.py: 7 tests (auth enforcement, KPIs, errors, findings ack/suppress)
+- Key patterns: MCP envelope at `response.json()["result"]["key"]`, admin_mutating_headers fixture
+- Tests: 12 integration passed
+
+## Session 133 — KAN-501 PR3: MCP Tools + Retention Tests + Bug Fixes (2026-04-25)
+
+**Branch:** `feat/KAN-501-pr3-mcp-retention-tests` → develop | **PR #274 merged**
+
+### New integration tests (PR3 of 3)
+- **test_mcp_tools.py (5 tests):** platform health envelope, trace span reconstruction, anomalies severity filter, error text search, obs health self-report
+- **test_retention.py (21 tests):** regular table purge with row-level assertions, allowlist rejection, hypertable xfail (non-hypertable container), 18 parametrized task existence checks
+
+### Bug fix: asyncpg INTERVAL parameterization
+- **Root cause:** All 5 retention SQL statements used `INTERVAL :interval` which asyncpg parameterizes as `INTERVAL $1` — invalid PostgreSQL prepared statement syntax
+- **Fix:** Replaced with `make_interval(days => :days)` and integer params across `backend/tasks/retention.py`
+- **Impact:** Unit tests missed this because they mock the DB session. Integration tests caught it.
+- Updated 3 unit test files asserting old parameter format
+
+### 4 pre-existing integration test fixes
+- `test_cache_integration.py`: Redis fixture `scope="module"` → `scope="function"` (event loop mismatch)
+- `test_observability_integration.py`: UUID-to-str comparison fix + `total_groups` → `len(result["groups"])`
+- `test_describe_schema.py`: MCP envelope navigation + `schema_version` resilience for non-migration DBs
+
+### KAN-503 filed (Low)
+- Migration 030 seed data (`schema_versions` row) not visible in test DB (metadata.create_all doesn't run Alembic seeds)
+- Affects test_migration_030 + test_describe_schema partial
+
+### TDD + FSD documentation overhaul
+- TDD: Added full 18-table retention policy table, MCP tools section (13 tools), admin obs dashboard endpoints (8 zones), integration test documentation, extraction readiness assessment
+- FSD: Added FR-28.9 (MCP tools), FR-28.10 (admin dashboard), FR-28.11 (retention), FR-28.12 (integration tests)
+
+### Session 133 Totals
+- Tests: 2629 unit (0 failures) + 78 integration (1 xfail) + 454 API
+- 1 JIRA bug filed (KAN-503)
+- 1 PR merged (#274), 8 files changed, 271 insertions
+- **KAN-501 (Obs Suite Validation) COMPLETE — 3/3 PRs merged (#272, #273, #274)**
+- **Epic KAN-493 implementation phase complete** — 48 integration tests across 7 files
+- Resume: Architecture docs for obs extraction, or next epic
