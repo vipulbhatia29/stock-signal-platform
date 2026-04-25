@@ -297,41 +297,21 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 **Why this sequence:** Observability must exist before seed runs (Epic 2 below) so anomalies surface cleanly, and before UI polish (Phase E) so dashboard data is real. User decision captured in Session 112 — "observability on every aspect is the core-objective".
 
-**Session 124 status:**
+**Session 128 status:**
 - **1a COMPLETE** — 6/6 PRs merged (#242-#247, Sessions 114-119)
 - **1b COMPLETE** — 7/7 PRs merged (#250-#257, Sessions 120-123) + audit fixes (PR #259, Session 124)
-- **1c IN PROGRESS** — PR1 (anomaly engine) + PR2 (rules 7-12 + auto-close) shipped. 5/7 PRs remaining.
-
-**1a PR breakdown (COMPLETE):**
-| PR | Scope | Status |
-|---|---|---|
-| PR1 | Schema foundation + EventType + ObsEventBase | ✅ PR #242 (S114) |
-| PR2a | SDK core + DirectTarget + lifespan | ✅ PR #243 (S115) |
-| PR2b | InternalHTTPTarget + ingest endpoint | ✅ PR #244 (S116) |
-| PR3 | trace_id middleware + structured logging | ✅ PR #245 (S117) |
-| PR4 | ObservedHttpClient + 10 providers + rate_limiter_event | ✅ PR #246 (S118) |
-| PR5 | Strangler-fig refactor + OBS_LEGACY_DIRECT_WRITES | ✅ PR #247 (S119) |
-
-**1b PR breakdown (IN PROGRESS):**
-| PR | Scope | Status |
-|---|---|---|
-| PR1 | request_log + api_error_log + PII redaction + ObsHttpMiddleware | ✅ PR #250 (S121) |
-| PR2 | auth_event_log + oauth_event_log + email_send_log + login_attempts trace_id | ✅ PR #251 (S121) |
-| PR3 | slow_query + pool + migration + cache_operation | ✅ PR #253 (S122) |
-| PR4 | Celery heartbeat + beat drift + queue depth + retry | ✅ PR #254 (S122) |
-| PR5 | intent_log + reasoning_log + provider_health_snapshot | ✅ PR #255 (S122) |
-| PR6 | Frontend beacon + frontend_error_log + deploy_events | ✅ PR #256 (S123) |
-| PR7 | Semgrep observability rules (advisory) | ✅ PR #257 (S123) |
+- **1c IN PROGRESS** — PR1-PR5 + PR6-T1 shipped. PR6-T2 (zones 2-8) in review. 1 PR remaining (PR7 JIRA draft).
 
 **1c PR breakdown (IN PROGRESS):**
 | PR | Scope | Status |
 |---|---|---|
 | PR1 | Anomaly engine + finding_log + rules 1-6 | ✅ PR #260 (S124) |
-| PR2 | Rules 7-12 + auto-close (3 negative checks → resolved) | ✅ S125 |
-| PR3 | MCP tools (13 agent consumption tools) | ⬜ Planned |
-| PR4 | CLI health_report script | ⬜ Planned |
-| PR5 | Admin REST query endpoints | ⬜ Planned |
-| PR6 | 8-zone admin dashboard | ⬜ Planned |
+| PR2 | Rules 7-12 + auto-close (3 negative checks → resolved) | ✅ #261 (S125) |
+| PR3 | MCP tools (13 agent consumption tools) | ✅ #262 (S126) |
+| PR4 | CLI health_report script | ✅ #263 (S127) |
+| PR5 | Admin REST query endpoints | ✅ #264 (S127) |
+| PR6-T1 | Page shell + Zone 1 health strip | ✅ #265 (S127) |
+| PR6-T2 | Zones 2-8: error stream, anomaly findings, external API, cost, pipeline, DQ | 🟡 S128 (in review) |
 | PR7 | JIRA draft integration | ⬜ Planned |
 
 ### Epic 2: Seed Universe (planned — blocked by Epic 1)

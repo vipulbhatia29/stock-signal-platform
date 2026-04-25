@@ -7,6 +7,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { useAdminKpis } from "@/hooks/use-admin-observability";
 import { HealthStrip } from "./_components/health-strip";
+import { ErrorStream } from "./_components/error-stream";
+import { AnomalyFindings } from "./_components/anomaly-findings";
+import { ExternalApiDashboard } from "./_components/external-api-dashboard";
+import { CostBreakdown } from "./_components/cost-breakdown";
+import { PipelineHealth } from "./_components/pipeline-health";
+import { DqScanner } from "./_components/dq-scanner";
 
 type TabKey = "overview" | "apis-cost" | "infrastructure" | "trace-explorer";
 
@@ -28,8 +34,6 @@ export default function ObservabilityAdminClient() {
     return null;
   }
 
-  // Used by Zone 2/Zone 3 components to navigate to the Trace Explorer tab.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const openTrace = (traceId: string) => {
     setPendingTraceId(traceId);
     setActiveTab("trace-explorer");
@@ -69,21 +73,20 @@ export default function ObservabilityAdminClient() {
         </TabsList>
 
         <TabsContent value="overview" className="mt-4 space-y-4">
-          <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-            Zone 2 (Error Stream) and Zone 3 (Anomaly Findings) — coming soon.
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ErrorStream onOpenTrace={openTrace} />
+            <AnomalyFindings onOpenTrace={openTrace} />
           </div>
         </TabsContent>
 
         <TabsContent value="apis-cost" className="mt-4 space-y-4">
-          <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-            Zone 5 (External API) and Zone 6 (Cost Breakdown) — coming soon.
-          </div>
+          <ExternalApiDashboard />
+          <CostBreakdown onOpenTrace={openTrace} />
         </TabsContent>
 
         <TabsContent value="infrastructure" className="mt-4 space-y-4">
-          <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-            Zone 7 (Pipeline Health) and Zone 8 (DQ Scanner) — coming soon.
-          </div>
+          <PipelineHealth />
+          <DqScanner />
         </TabsContent>
 
         <TabsContent value="trace-explorer" className="mt-4 space-y-4">
