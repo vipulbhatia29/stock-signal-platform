@@ -85,8 +85,8 @@ async def _purge_old_news_articles_async() -> dict:
     """
     async with async_session_factory() as db:
         result = await db.execute(
-            text("SELECT drop_chunks('news_articles', older_than => INTERVAL :interval)"),
-            {"interval": f"{NEWS_RETENTION_DAYS} days"},
+            text("SELECT drop_chunks('news_articles', older_than => make_interval(days => :days))"),
+            {"days": NEWS_RETENTION_DAYS},
         )
         rows = result.fetchall()
         dropped = len(rows)
@@ -114,8 +114,8 @@ async def _purge_old_llm_call_log_async() -> dict:
     """
     async with async_session_factory() as db:
         result = await db.execute(
-            text("SELECT drop_chunks('llm_call_log', older_than => INTERVAL :interval)"),
-            {"interval": f"{LLM_CALL_LOG_RETENTION_DAYS} days"},
+            text("SELECT drop_chunks('llm_call_log', older_than => make_interval(days => :days))"),
+            {"days": LLM_CALL_LOG_RETENTION_DAYS},
         )
         rows = result.fetchall()
         dropped = len(rows)
@@ -147,8 +147,11 @@ async def _purge_old_tool_execution_log_async() -> dict:
     """
     async with async_session_factory() as db:
         result = await db.execute(
-            text("SELECT drop_chunks('tool_execution_log', older_than => INTERVAL :interval)"),
-            {"interval": f"{TOOL_EXECUTION_LOG_RETENTION_DAYS} days"},
+            text(
+                "SELECT drop_chunks('tool_execution_log',"
+                " older_than => make_interval(days => :days))"
+            ),
+            {"days": TOOL_EXECUTION_LOG_RETENTION_DAYS},
         )
         rows = result.fetchall()
         dropped = len(rows)
@@ -430,9 +433,9 @@ async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
     async with async_session_factory() as db:
         result = await db.execute(
             text(  # noqa: S608 — table name is a constant, not user input
-                f"DELETE FROM observability.{table} WHERE ts < now() - INTERVAL :interval"
+                f"DELETE FROM observability.{table} WHERE ts < now() - make_interval(days => :days)"
             ),
-            {"interval": f"{retention_days} days"},
+            {"days": retention_days},
         )
         deleted = result.rowcount or 0  # type: ignore[union-attr]
         await db.commit()
@@ -457,8 +460,8 @@ async def _purge_obs_table(table: str, retention_days: int) -> dict:
     """
     async with async_session_factory() as db:
         result = await db.execute(
-            text(f"SELECT drop_chunks('{table}', older_than => INTERVAL :interval)"),  # noqa: S608
-            {"interval": f"{retention_days} days"},
+            text(f"SELECT drop_chunks('{table}', older_than => make_interval(days => :days))"),  # noqa: S608
+            {"days": retention_days},
         )
         rows = result.fetchall()
         dropped = len(rows)

@@ -128,7 +128,7 @@ class TestPurgeOldNewsArticles:
 
         execute_call = mock_session.execute.call_args
         params = execute_call[0][1]
-        assert params == {"interval": "90 days"}
+        assert params == {"days": 90}
 
     @pytest.mark.asyncio
     async def test_returns_zero_when_no_chunks_to_drop(self) -> None:
