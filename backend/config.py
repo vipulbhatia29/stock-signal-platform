@@ -98,6 +98,12 @@ class Settings(BaseSettings):
     EMAIL_FROM_ADDRESS: str = "noreply@stocksignal.app"
     FRONTEND_BASE_URL: str = "http://localhost:3000"
 
+    # --- JIRA (Atlassian Cloud) ---
+    JIRA_API_EMAIL: str = ""
+    JIRA_API_TOKEN: str = ""
+    JIRA_SITE_URL: str = "https://vipulbhatia29.atlassian.net"
+    JIRA_PROJECT_KEY: str = "KAN"
+
     # --- Agent ---
     MCP_TOOLS: bool = True  # MCP stdio transport for agent tool calls (kill switch: set False)
     MAX_TOOL_RESULT_CHARS: int = 3000  # Truncate tool results before synthesis
