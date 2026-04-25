@@ -198,7 +198,9 @@ async def test_obs_disabled_no_writes(obs_db_session, _patch_session_factory):
         buffer_size=1000,
         enabled=False,
     )
-    await client.start()
+    # No start() — consistent with obs_client fixture (avoids flush loop race).
+    # enabled=False means start() is a no-op anyway, but skipping prevents
+    # copy-paste into enabled=True contexts.
     event = RequestLogEvent(
         **_base_fields(uuid.uuid4()),
         method="GET",
@@ -209,7 +211,6 @@ async def test_obs_disabled_no_writes(obs_db_session, _patch_session_factory):
     )
     await client.emit(event)
     await client.flush()
-    await client.stop()
 
     result = await obs_db_session.execute(
         text("SELECT count(*) FROM observability.request_log WHERE path = '/disabled'"),

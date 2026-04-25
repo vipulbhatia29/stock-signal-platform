@@ -157,7 +157,7 @@ async def _patch_session_factory(db_url):
 @pytest_asyncio.fixture
 async def obs_db_session(db_url):
     """Async session for direct obs table reads/writes in assertions."""
-    engine = create_async_engine(db_url, echo=False)
+    engine = create_async_engine(db_url, echo=False, poolclass=NullPool)
     sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     async with sf() as session:
         yield session
