@@ -64,8 +64,9 @@ async def test_findings_ranked_by_severity(
     severities = [f["severity"] for f in items]
     crit_idx = next((i for i, s in enumerate(severities) if s == "CRITICAL"), None)
     info_idx = next((i for i, s in enumerate(severities) if s == "INFO"), None)
-    if crit_idx is not None and info_idx is not None:
-        assert crit_idx < info_idx, "CRITICAL should rank before INFO"
+    assert crit_idx is not None, "CRITICAL finding not returned"
+    assert info_idx is not None, "INFO finding not returned"
+    assert crit_idx < info_idx, "CRITICAL should rank before INFO"
 
 
 @pytest.mark.asyncio
