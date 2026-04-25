@@ -264,6 +264,8 @@ async def create_jira_draft(
     import httpx
 
     from backend.config import settings
+    from backend.observability.instrumentation.providers import ExternalProvider
+    from backend.services.http_client import get_observed_http_client
 
     if not settings.JIRA_API_EMAIL or not settings.JIRA_API_TOKEN:
         raise HTTPException(status_code=503, detail="JIRA integration not configured")
@@ -323,20 +325,22 @@ async def create_jira_draft(
         }
 
         api_url = f"{settings.JIRA_SITE_URL}/rest/api/3/issue"
+        client = get_observed_http_client(ExternalProvider.JIRA)
         try:
-            async with httpx.AsyncClient() as client:
-                resp = await client.post(
-                    api_url,
-                    json=jira_payload,
-                    auth=(settings.JIRA_API_EMAIL, settings.JIRA_API_TOKEN),
-                    headers={"Accept": "application/json"},
-                    timeout=15.0,
-                )
-                resp.raise_for_status()
-                jira_data = resp.json()
+            resp = await client.post(
+                api_url,
+                json=jira_payload,
+                auth=(settings.JIRA_API_EMAIL, settings.JIRA_API_TOKEN),
+                headers={"Accept": "application/json"},
+                timeout=15.0,
+            )
+            resp.raise_for_status()
+            jira_data = resp.json()
         except httpx.HTTPError:
             logger.exception("Failed to create JIRA issue for finding %s", finding_id)
             raise HTTPException(status_code=502, detail="Failed to create JIRA issue")
+        finally:
+            await client.aclose()
 
         jira_key = jira_data.get("key", "")
         finding.jira_ticket_key = jira_key

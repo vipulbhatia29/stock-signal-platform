@@ -38,6 +38,7 @@ class ExternalProvider(str, Enum):
         GROQ: Groq fast-inference API.
         RESEND: Resend transactional email API.
         GOOGLE_OAUTH: Google OAuth 2.0 token and user-info endpoints.
+        JIRA: Atlassian JIRA Cloud REST API.
     """
 
     YFINANCE = "yfinance"
@@ -50,6 +51,7 @@ class ExternalProvider(str, Enum):
     GROQ = "groq"
     RESEND = "resend"
     GOOGLE_OAUTH = "google_oauth"
+    JIRA = "jira"
 
 
 class ErrorReason(str, Enum):
