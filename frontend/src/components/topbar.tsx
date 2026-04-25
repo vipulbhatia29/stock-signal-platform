@@ -19,6 +19,11 @@ const PAGE_LABELS: Record<string, string> = {
   "/screener": "Screener",
   "/portfolio": "Portfolio",
   "/sectors": "Sectors",
+  "/observability": "Observability",
+  "/account": "Account",
+  "/admin/observability": "Observability Admin",
+  "/admin/pipelines": "Pipeline Control",
+  "/admin/command-center": "Command Center",
 };
 
 export function Topbar({ onAddTicker }: TopbarProps) {

@@ -104,6 +104,139 @@ test.describe("Lighthouse Audits", () => {
         },
       });
     });
+
+    test("Sectors — performance baseline", async () => {
+      await page.goto("http://localhost:3000/sectors", {
+        waitUntil: "networkidle",
+      });
+
+      await playAudit({
+        page,
+        port: LIGHTHOUSE_PORT,
+        thresholds: {
+          performance: 30,
+          accessibility: 80,
+          "best-practices": 70,
+        },
+        reports: {
+          formats: { html: false },
+        },
+      });
+    });
+
+    test("Account — performance baseline", async () => {
+      await page.goto("http://localhost:3000/account", {
+        waitUntil: "networkidle",
+      });
+
+      await playAudit({
+        page,
+        port: LIGHTHOUSE_PORT,
+        thresholds: {
+          performance: 30,
+          accessibility: 80,
+          "best-practices": 70,
+        },
+        reports: {
+          formats: { html: false },
+        },
+      });
+    });
+
+    test("Stock Detail (AAPL) — performance baseline", async () => {
+      await page.goto("http://localhost:3000/stocks/AAPL", {
+        waitUntil: "networkidle",
+      });
+
+      await playAudit({
+        page,
+        port: LIGHTHOUSE_PORT,
+        thresholds: {
+          performance: 25,
+          accessibility: 80,
+          "best-practices": 70,
+        },
+        reports: {
+          formats: { html: false },
+        },
+      });
+    });
+
+    test("User Observability — performance baseline", async () => {
+      await page.goto("http://localhost:3000/observability", {
+        waitUntil: "networkidle",
+      });
+
+      await playAudit({
+        page,
+        port: LIGHTHOUSE_PORT,
+        thresholds: {
+          performance: 25,
+          accessibility: 80,
+          "best-practices": 70,
+        },
+        reports: {
+          formats: { html: false },
+        },
+      });
+    });
+
+    test("Admin Observability — performance baseline", async () => {
+      await page.goto("http://localhost:3000/admin/observability", {
+        waitUntil: "networkidle",
+      });
+
+      await playAudit({
+        page,
+        port: LIGHTHOUSE_PORT,
+        thresholds: {
+          performance: 25,
+          accessibility: 75,
+          "best-practices": 70,
+        },
+        reports: {
+          formats: { html: false },
+        },
+      });
+    });
+
+    test("Admin Pipelines — performance baseline", async () => {
+      await page.goto("http://localhost:3000/admin/pipelines", {
+        waitUntil: "networkidle",
+      });
+
+      await playAudit({
+        page,
+        port: LIGHTHOUSE_PORT,
+        thresholds: {
+          performance: 30,
+          accessibility: 75,
+          "best-practices": 70,
+        },
+        reports: {
+          formats: { html: false },
+        },
+      });
+    });
+
+    test("Admin Command Center — performance baseline", async () => {
+      await page.goto("http://localhost:3000/admin/command-center", {
+        waitUntil: "networkidle",
+      });
+
+      await playAudit({
+        page,
+        port: LIGHTHOUSE_PORT,
+        thresholds: {
+          performance: 25,
+          accessibility: 75,
+          "best-practices": 70,
+        },
+        reports: {
+          formats: { html: false },
+        },
+      });
+    });
   });
 
   test.describe("Public Pages", () => {

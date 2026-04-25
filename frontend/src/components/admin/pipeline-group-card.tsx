@@ -33,9 +33,17 @@ export function PipelineGroupCard({
   return (
     <div className="rounded-lg border border-border bg-card2 overflow-hidden">
       {/* Header — always visible */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors"
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setIsOpen(!isOpen);
+          }
+        }}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/[0.02] transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-3">
           <ChevronDown
@@ -81,7 +89,7 @@ export function PipelineGroupCard({
             {isRunning ? "Running" : "Run All"}
           </button>
         </div>
-      </button>
+      </div>
 
       {/* Body — task list by execution phase */}
       {isOpen && (
