@@ -11,8 +11,8 @@ import pytest
 from backend.observability.instrumentation.providers import ErrorReason, ExternalProvider
 
 
-def test_external_provider_enum_covers_10_providers() -> None:
-    """ExternalProvider must enumerate exactly the 10 known external services."""
+def test_external_provider_enum_covers_all_providers() -> None:
+    """ExternalProvider must enumerate exactly the known external services."""
     names = {p.value for p in ExternalProvider}
     assert names == {
         "yfinance",
@@ -25,6 +25,7 @@ def test_external_provider_enum_covers_10_providers() -> None:
         "groq",
         "resend",
         "google_oauth",
+        "jira",
     }
 
 
