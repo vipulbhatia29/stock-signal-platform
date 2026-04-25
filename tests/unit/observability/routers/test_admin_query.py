@@ -188,7 +188,7 @@ class TestFindings:
     """Zone 3: Anomaly findings."""
 
     def test_delegates_to_get_anomalies(self, admin_client: TestClient) -> None:
-        """Should call get_anomalies with filters."""
+        """Should call get_anomalies with filters including new kind param."""
         with patch(
             "backend.observability.mcp.anomalies.get_anomalies",
             new_callable=AsyncMock,
@@ -204,6 +204,28 @@ class TestFindings:
                 since=None,
                 severity="critical",
                 attribution_layer=None,
+                kind=None,
+                limit=50,
+            )
+
+    def test_kind_filter_passed_through(self, admin_client: TestClient) -> None:
+        """kind query param should be forwarded to get_anomalies."""
+        with patch(
+            "backend.observability.mcp.anomalies.get_anomalies",
+            new_callable=AsyncMock,
+            return_value=_MOCK_ENVELOPE,
+        ) as mock:
+            resp = admin_client.get(
+                "/api/v1/observability/admin/findings",
+                params={"kind": "latency_spike"},
+            )
+            assert resp.status_code == 200
+            mock.assert_awaited_once_with(
+                status="open",
+                since=None,
+                severity=None,
+                attribution_layer=None,
+                kind="latency_spike",
                 limit=50,
             )
 
@@ -305,3 +327,151 @@ class TestDq:
             mock.assert_awaited_once_with(
                 severity="critical", check=None, ticker=None, since="7d", limit=50
             )
+
+
+# ---------------------------------------------------------------------------
+# PATCH /findings/{id}/acknowledge and /findings/{id}/suppress
+# ---------------------------------------------------------------------------
+
+_MOCK_FINDING_DICT = {
+    "id": "test-finding-id",
+    "kind": "latency_spike",
+    "attribution_layer": "http",
+    "severity": "error",
+    "status": "acknowledged",
+    "title": "Test finding",
+    "evidence": {},
+    "remediation_hint": None,
+    "related_traces": None,
+    "opened_at": "2026-04-24T10:00:00+00:00",
+    "closed_at": None,
+    "dedup_key": "test-dedup",
+    "jira_ticket_key": None,
+    "negative_check_count": 0,
+    "acknowledged_by": "user-id",
+    "acknowledged_at": "2026-04-24T10:01:00+00:00",
+    "resolved_by": None,
+    "resolved_at": None,
+    "suppressed_until": None,
+    "suppression_reason": None,
+    "created_at": "2026-04-24T10:00:00+00:00",
+    "env": "dev",
+}
+
+
+def _make_mock_session_factory(finding: object | None) -> MagicMock:
+    """Build a mock async_session_factory context manager returning `finding`."""
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = finding
+
+    mock_session = AsyncMock()
+    mock_session.execute = AsyncMock(return_value=mock_result)
+    mock_session.commit = AsyncMock()
+    mock_session.refresh = AsyncMock()
+
+    mock_cm = AsyncMock()
+    mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
+    mock_cm.__aexit__ = AsyncMock(return_value=False)
+
+    mock_factory = MagicMock(return_value=mock_cm)
+    return mock_factory
+
+
+class TestAcknowledgeFinding:
+    """PATCH /findings/{id}/acknowledge."""
+
+    def test_acknowledge_finding_happy_path(self, admin_client: TestClient) -> None:
+        """Happy path: finding is found, status set to acknowledged, dict returned."""
+        mock_finding = MagicMock()
+        mock_finding.status = "open"
+        mock_factory = _make_mock_session_factory(mock_finding)
+
+        with (
+            patch(
+                "backend.observability.routers.admin_query.async_session_factory",
+                mock_factory,
+            ),
+            patch(
+                "backend.observability.routers.admin_query._serialize_finding",
+                return_value=_MOCK_FINDING_DICT,
+            ),
+        ):
+            resp = admin_client.patch(
+                "/api/v1/observability/admin/findings/test-finding-id/acknowledge"
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "acknowledged"
+
+    def test_acknowledge_finding_not_found(self, admin_client: TestClient) -> None:
+        """Should return 404 when the finding does not exist."""
+        mock_factory = _make_mock_session_factory(None)
+
+        with patch(
+            "backend.observability.routers.admin_query.async_session_factory",
+            mock_factory,
+        ):
+            resp = admin_client.patch(
+                "/api/v1/observability/admin/findings/nonexistent-id/acknowledge"
+            )
+
+        assert resp.status_code == 404
+
+    def test_acknowledge_finding_not_admin(self, nonadmin_client: TestClient) -> None:
+        """Non-admin user should get 403."""
+        resp = nonadmin_client.patch("/api/v1/observability/admin/findings/some-id/acknowledge")
+        assert resp.status_code == 403
+
+
+class TestSuppressFinding:
+    """PATCH /findings/{id}/suppress."""
+
+    def test_suppress_finding_happy_path(self, admin_client: TestClient) -> None:
+        """Happy path: finding is found, status set to suppressed, dict returned."""
+        mock_finding = MagicMock()
+        mock_finding.status = "open"
+        mock_factory = _make_mock_session_factory(mock_finding)
+
+        suppressed_dict = {
+            **_MOCK_FINDING_DICT,
+            "status": "suppressed",
+            "suppressed_until": "2026-04-24T11:00:00+00:00",
+        }
+
+        with (
+            patch(
+                "backend.observability.routers.admin_query.async_session_factory",
+                mock_factory,
+            ),
+            patch(
+                "backend.observability.routers.admin_query._serialize_finding",
+                return_value=suppressed_dict,
+            ),
+        ):
+            resp = admin_client.patch(
+                "/api/v1/observability/admin/findings/test-finding-id/suppress",
+                params={"duration": "1h"},
+            )
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "suppressed"
+        assert resp.json()["suppressed_until"] is not None
+
+    def test_suppress_finding_not_found(self, admin_client: TestClient) -> None:
+        """Should return 404 when the finding does not exist."""
+        mock_factory = _make_mock_session_factory(None)
+
+        with patch(
+            "backend.observability.routers.admin_query.async_session_factory",
+            mock_factory,
+        ):
+            resp = admin_client.patch(
+                "/api/v1/observability/admin/findings/nonexistent-id/suppress"
+            )
+
+        assert resp.status_code == 404
+
+    def test_suppress_finding_not_admin(self, nonadmin_client: TestClient) -> None:
+        """Non-admin user should get 403."""
+        resp = nonadmin_client.patch("/api/v1/observability/admin/findings/some-id/suppress")
+        assert resp.status_code == 403

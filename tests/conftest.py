@@ -108,6 +108,7 @@ async def _setup_database(db_url):
     engine = create_async_engine(db_url, echo=False)
     async with engine.begin() as conn:
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
+        await conn.execute(sa.text("CREATE SCHEMA IF NOT EXISTS observability"))
         await conn.run_sync(Base.metadata.create_all)
     await engine.dispose()
     yield
@@ -145,7 +146,9 @@ async def client(db_url) -> AsyncGenerator[AsyncClient, None]:
     # Clean up all data after each test
     async with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
-            await conn.execute(sa.text(f'TRUNCATE TABLE "{table.name}" CASCADE'))
+            schema = table.schema
+            qualified = f'"{schema}"."{table.name}"' if schema else f'"{table.name}"'
+            await conn.execute(sa.text(f"TRUNCATE TABLE {qualified} CASCADE"))
 
     await engine.dispose()
 
