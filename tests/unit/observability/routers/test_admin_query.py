@@ -475,3 +475,78 @@ class TestSuppressFinding:
         """Non-admin user should get 403."""
         resp = nonadmin_client.patch("/api/v1/observability/admin/findings/some-id/suppress")
         assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# POST /findings/{id}/jira-draft
+# ---------------------------------------------------------------------------
+
+
+class TestCreateJiraDraft:
+    """POST /findings/{id}/jira-draft."""
+
+    def test_jira_draft_not_configured(self, admin_client: TestClient) -> None:
+        """Should return 503 when JIRA credentials are not set."""
+        mock_finding = MagicMock()
+        mock_finding.jira_ticket_key = None
+        mock_factory = _make_mock_session_factory(mock_finding)
+
+        with (
+            patch(
+                "backend.observability.routers.admin_query.async_session_factory",
+                mock_factory,
+            ),
+            patch("backend.config.settings") as mock_settings,
+        ):
+            mock_settings.JIRA_API_EMAIL = ""
+            mock_settings.JIRA_API_TOKEN = ""
+            resp = admin_client.post("/api/v1/observability/admin/findings/test-id/jira-draft")
+
+        assert resp.status_code == 503
+
+    def test_jira_draft_finding_not_found(self, admin_client: TestClient) -> None:
+        """Should return 404 when the finding does not exist."""
+        mock_factory = _make_mock_session_factory(None)
+
+        with (
+            patch(
+                "backend.observability.routers.admin_query.async_session_factory",
+                mock_factory,
+            ),
+            patch("backend.config.settings") as mock_settings,
+        ):
+            mock_settings.JIRA_API_EMAIL = "test@example.com"
+            mock_settings.JIRA_API_TOKEN = "token"
+            resp = admin_client.post(
+                "/api/v1/observability/admin/findings/nonexistent-id/jira-draft"
+            )
+
+        assert resp.status_code == 404
+
+    def test_jira_draft_already_exists(self, admin_client: TestClient) -> None:
+        """Should return existing JIRA key when finding already has one."""
+        mock_finding = MagicMock()
+        mock_finding.jira_ticket_key = "KAN-999"
+        mock_factory = _make_mock_session_factory(mock_finding)
+
+        with (
+            patch(
+                "backend.observability.routers.admin_query.async_session_factory",
+                mock_factory,
+            ),
+            patch("backend.config.settings") as mock_settings,
+        ):
+            mock_settings.JIRA_API_EMAIL = "test@example.com"
+            mock_settings.JIRA_API_TOKEN = "token"
+            mock_settings.JIRA_SITE_URL = "https://test.atlassian.net"
+            resp = admin_client.post("/api/v1/observability/admin/findings/test-id/jira-draft")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["jira_key"] == "KAN-999"
+        assert data["already_exists"] is True
+
+    def test_jira_draft_not_admin(self, nonadmin_client: TestClient) -> None:
+        """Non-admin user should get 403."""
+        resp = nonadmin_client.post("/api/v1/observability/admin/findings/some-id/jira-draft")
+        assert resp.status_code == 403

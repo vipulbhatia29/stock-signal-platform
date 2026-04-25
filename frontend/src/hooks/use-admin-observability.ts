@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { get, patch } from "@/lib/api";
+import { get, patch, post } from "@/lib/api";
 import type {
   AdminKpisEnvelope,
   AdminErrorsEnvelope,
@@ -126,6 +126,25 @@ export function useSuppressFinding() {
     mutationFn: (findingId: string) =>
       patch<Finding>(
         `/observability/admin/findings/${findingId}/suppress?duration=1h`
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-obs", "findings"] });
+    },
+  });
+}
+
+export interface JiraDraftResult {
+  jira_key: string;
+  jira_url: string;
+  already_exists: boolean;
+}
+
+export function useCreateJiraDraft() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (findingId: string) =>
+      post<JiraDraftResult>(
+        `/observability/admin/findings/${findingId}/jira-draft`
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-obs", "findings"] });

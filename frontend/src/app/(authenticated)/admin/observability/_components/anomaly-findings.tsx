@@ -16,6 +16,7 @@ import {
   useAdminFindings,
   useAcknowledgeFinding,
   useSuppressFinding,
+  useCreateJiraDraft,
 } from "@/hooks/use-admin-observability";
 import type { Finding, FindingSeverity } from "@/types/admin-observability";
 import type { OpenTraceFn } from "../observability-admin-client";
@@ -38,15 +39,19 @@ function FindingCard({
   onAcknowledge,
   onSuppress,
   onOpenTrace,
+  onCreateJira,
   isAcking,
   isSuppressing,
+  isCreatingJira,
 }: {
   finding: Finding;
   onAcknowledge: () => void;
   onSuppress: () => void;
   onOpenTrace: () => void;
+  onCreateJira: () => void;
   isAcking: boolean;
   isSuppressing: boolean;
+  isCreatingJira: boolean;
 }) {
   const isMuted =
     finding.status === "acknowledged" || finding.status === "suppressed";
@@ -145,6 +150,21 @@ function FindingCard({
         >
           Open Trace
         </Button>
+        {finding.jira_ticket_key ? (
+          <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+            {finding.jira_ticket_key}
+          </Badge>
+        ) : (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onCreateJira}
+            disabled={isCreatingJira}
+            className="h-7 text-xs"
+          >
+            {isCreatingJira ? "..." : "Create JIRA"}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -274,6 +294,7 @@ export function AnomalyFindings({ onOpenTrace }: { onOpenTrace: OpenTraceFn }) {
 
   const acknowledgeMutation = useAcknowledgeFinding();
   const suppressMutation = useSuppressFinding();
+  const jiraDraftMutation = useCreateJiraDraft();
 
   const findings = data?.result?.findings ?? [];
 
@@ -324,8 +345,16 @@ export function AnomalyFindings({ onOpenTrace }: { onOpenTrace: OpenTraceFn }) {
                 const firstTrace = finding.related_traces?.[0];
                 if (firstTrace) onOpenTrace(firstTrace);
               }}
+              onCreateJira={() =>
+                jiraDraftMutation.mutate(finding.id, {
+                  onSuccess: (data) => {
+                    if (data.jira_url) window.open(data.jira_url, "_blank");
+                  },
+                })
+              }
               isAcking={acknowledgeMutation.isPending && acknowledgeMutation.variables === finding.id}
               isSuppressing={suppressMutation.isPending && suppressMutation.variables === finding.id}
+              isCreatingJira={jiraDraftMutation.isPending && jiraDraftMutation.variables === finding.id}
             />
           ))}
         </div>

@@ -219,6 +219,136 @@ async def suppress_finding(
     return _serialize_finding(finding)
 
 
+_SEVERITY_TO_JIRA_PRIORITY: dict[str, str] = {
+    "critical": "Highest",
+    "error": "High",
+    "warning": "Medium",
+    "info": "Low",
+}
+
+
+@router.post(
+    "/findings/{finding_id}/jira-draft",
+    summary="Zone 3: Create JIRA draft from finding",
+    description="Create a JIRA issue pre-filled with finding details.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not admin"},
+        404: {"description": "Finding not found"},
+        503: {"description": "JIRA not configured"},
+    },
+)
+async def create_jira_draft(
+    finding_id: str,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Create a JIRA issue from an anomaly finding.
+
+    Fetches the finding, builds an issue payload, and creates it in JIRA
+    via REST API v3. Updates the finding's jira_ticket_key on success.
+
+    Args:
+        finding_id: UUID of the finding to create a JIRA draft for.
+        user: Authenticated admin user (injected by FastAPI).
+
+    Returns:
+        Dict with jira_key, jira_url, and the finding draft fields.
+
+    Raises:
+        HTTPException: 404 if the finding does not exist.
+        HTTPException: 503 if JIRA credentials are not configured.
+    """
+    require_admin(user)
+    import json
+
+    import httpx
+
+    from backend.config import settings
+
+    if not settings.JIRA_API_EMAIL or not settings.JIRA_API_TOKEN:
+        raise HTTPException(status_code=503, detail="JIRA integration not configured")
+
+    async with async_session_factory() as db:
+        result = await db.execute(select(FindingLog).where(FindingLog.id == finding_id))
+        finding = result.scalar_one_or_none()
+        if finding is None:
+            raise HTTPException(status_code=404, detail="Finding not found")
+
+        if finding.jira_ticket_key:
+            return {
+                "jira_key": finding.jira_ticket_key,
+                "jira_url": (f"{settings.JIRA_SITE_URL}/browse/{finding.jira_ticket_key}"),
+                "already_exists": True,
+            }
+
+        # Build description
+        evidence_str = json.dumps(finding.evidence, indent=2, default=str)
+        traces_str = ""
+        if finding.related_traces:
+            traces_str = "\n".join(f"- {tid}" for tid in finding.related_traces)
+        description = (
+            f"*Auto-generated from observability finding*\n\n"
+            f"h3. Evidence\n{{code:json}}\n{evidence_str}\n{{code}}\n\n"
+        )
+        if finding.remediation_hint:
+            description += f"h3. Remediation\n{finding.remediation_hint}\n\n"
+        if traces_str:
+            description += f"h3. Related Traces\n{traces_str}\n\n"
+        description += (
+            f"h3. Metadata\n"
+            f"- *Layer:* {finding.attribution_layer}\n"
+            f"- *Kind:* {finding.kind}\n"
+            f"- *Severity:* {finding.severity}\n"
+            f"- *Opened:* {finding.opened_at.isoformat() if finding.opened_at else 'N/A'}\n"
+        )
+
+        # Create via JIRA REST API v3
+        jira_payload = {
+            "fields": {
+                "project": {"key": settings.JIRA_PROJECT_KEY},
+                "summary": f"[obs] {finding.title}",
+                "description": {
+                    "type": "doc",
+                    "version": 1,
+                    "content": [
+                        {
+                            "type": "paragraph",
+                            "content": [{"type": "text", "text": description}],
+                        }
+                    ],
+                },
+                "issuetype": {"name": "Bug"},
+                "labels": ["obs-generated", finding.attribution_layer],
+            }
+        }
+
+        api_url = f"{settings.JIRA_SITE_URL}/rest/api/3/issue"
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    api_url,
+                    json=jira_payload,
+                    auth=(settings.JIRA_API_EMAIL, settings.JIRA_API_TOKEN),
+                    headers={"Accept": "application/json"},
+                    timeout=15.0,
+                )
+                resp.raise_for_status()
+                jira_data = resp.json()
+        except httpx.HTTPError:
+            logger.exception("Failed to create JIRA issue for finding %s", finding_id)
+            raise HTTPException(status_code=502, detail="Failed to create JIRA issue")
+
+        jira_key = jira_data.get("key", "")
+        finding.jira_ticket_key = jira_key
+        await db.commit()
+
+    return {
+        "jira_key": jira_key,
+        "jira_url": f"{settings.JIRA_SITE_URL}/browse/{jira_key}",
+        "already_exists": False,
+    }
+
+
 @router.get(
     "/trace/{trace_id}",
     summary="Zone 4: Trace explorer",
