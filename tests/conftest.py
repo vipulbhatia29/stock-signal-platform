@@ -146,7 +146,9 @@ async def client(db_url) -> AsyncGenerator[AsyncClient, None]:
     # Clean up all data after each test
     async with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
-            await conn.execute(sa.text(f'TRUNCATE TABLE "{table.name}" CASCADE'))
+            schema = table.schema
+            qualified = f'"{schema}"."{table.name}"' if schema else f'"{table.name}"'
+            await conn.execute(sa.text(f"TRUNCATE TABLE {qualified} CASCADE"))
 
     await engine.dispose()
 

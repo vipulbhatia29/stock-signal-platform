@@ -419,9 +419,7 @@ class TestAcknowledgeFinding:
 
     def test_acknowledge_finding_not_admin(self, nonadmin_client: TestClient) -> None:
         """Non-admin user should get 403."""
-        resp = nonadmin_client.patch(
-            "/api/v1/observability/admin/findings/some-id/acknowledge"
-        )
+        resp = nonadmin_client.patch("/api/v1/observability/admin/findings/some-id/acknowledge")
         assert resp.status_code == 403
 
 
@@ -475,7 +473,5 @@ class TestSuppressFinding:
 
     def test_suppress_finding_not_admin(self, nonadmin_client: TestClient) -> None:
         """Non-admin user should get 403."""
-        resp = nonadmin_client.patch(
-            "/api/v1/observability/admin/findings/some-id/suppress"
-        )
+        resp = nonadmin_client.patch("/api/v1/observability/admin/findings/some-id/suppress")
         assert resp.status_code == 403
