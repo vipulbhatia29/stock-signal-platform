@@ -85,6 +85,62 @@ ORPHAN_DELETE_START### KAN-425 — Spec F Rate Limiters F2/F3/F4 (PR #220 merged
 
 ---
 
+## Sessions 126-127 (compact — see archive for detail)
+**S126:** Obs 1c PR3 MCP tools (#262). **S127:** PR4 CLI health_report (#263) + PR5 admin endpoints (#264) + PR6-T1 page shell + Zone 1 health strip (#265) + fix (#266). 1c: 6/8 items shipped.
+
+---
+
+## Session 128 — Obs 1c PR6-T2: Dashboard Zones 2-8 (2026-04-24)
+
+**Branch:** `feat/KAN-488-489-490-zones-2-8` → develop | **PR pending**
+
+### KAN-488 + KAN-489 + KAN-490 — Dashboard Zones 2, 3, 5, 6, 7, 8
+
+**Implementation approach:** 3 parallel Sonnet subagents in worktrees, Opus orchestration + review.
+
+**Subagent incidents:**
+- All 3 agents blocked on Write permissions (not in project settings allow list) — required continuation dispatches
+- KAN-488 agent replaced types file instead of appending — dropped all Finding/Anomaly types + hooks
+- Zone 3 (anomaly-findings.tsx) discovered to never have been on develop — only on eval benchmark branches (KAN-491). Restored from eval commit.
+- Write permission added to project settings to prevent future blocks.
+
+**Components shipped (8 new + 1 shared utility):**
+- **Zone 2:** `error-stream.tsx` — live error table with layer/severity/time/trace filters, 15s polling
+- **Zone 3:** `anomaly-findings.tsx` — finding cards with Ack/Suppress/Open Trace actions, status+severity filters
+- **Zone 5:** `external-api-dashboard.tsx` + `provider-row.tsx` — per-provider stats with expandable error breakdown
+- **Zone 6:** `cost-breakdown.tsx` + `cost-chart.tsx` — Recharts bar chart by provider/model/tier/user, top-10 table
+- **Zone 7:** `pipeline-health.tsx` — pipeline selector, run history table with expandable step durations
+- **Zone 8:** `dq-scanner.tsx` — DQ findings list with severity/time filters, disabled "Run Now" placeholder
+- **Shared:** `shared.ts` — `formatRelativeTime`, `LAYER_COLORS`, `LAYER_LABELS`, `SEVERITY_COLORS`
+
+**Page shell updates:**
+- Overview tab: Zone 2 + Zone 3 side-by-side (`grid-cols-1 lg:grid-cols-2`)
+- APIs & Cost tab: Zone 5 + Zone 6 stacked
+- Infrastructure tab: Zone 7 + Zone 8 stacked
+- Trace Explorer tab: still placeholder (KAN-492)
+
+**Opus deep review findings (1C + 7H + 8M + 5L):**
+- **C1 FIXED:** `success_rate` displayed as ratio (0.98%) instead of percentage (98.3%) — added `toPercent()` conversion
+- **H4/H5 FIXED:** "All" status filter sent `"all"` to backend → empty results — now sends `undefined`
+- **M4 FIXED:** Cost table click handler sent provider name as trace_id — removed bogus handler
+- **M7 FIXED:** ErrorStream used array index as React key — changed to composite `${ts}-${source}-${i}`
+- **M8 FIXED:** Ack/Suppress `isPending` disabled ALL cards — now scoped per-finding via `mutation.variables`
+- **H3 FIXED:** Missing `attribution_layer` + `limit` params on findings hook
+- **H2 FIXED:** Removed `suppressed_until` display (backend doesn't return it)
+- **M1/M2/M3 FIXED:** Extracted 4 duplicate `formatRelativeTime` + 2 duplicate `LAYER_COLORS` + 2 duplicate `SEVERITY_COLORS` to `shared.ts`
+
+**Tests:** 5 new test files, 64 tests passing across 6 suites
+**Types:** Clean (`tsc --noEmit`)
+**Lint:** Clean (`eslint`)
+
+### Session 128 Totals
+- Tests: 64 frontend admin/observability tests (16 error-stream + 7 pipeline + 8 dq + 12 external-api + 12 cost + 9 health-strip)
+- 3 JIRA tickets: KAN-488, KAN-489, KAN-490 → In Progress
+- 14 new files + 4 modified files
+- Resume: Commit + push PR. Batch 2: KAN-491 (Zone 3 enhancements) + KAN-492 (Zone 4 trace explorer). Then PR7 (JIRA draft).
+
+---
+
 ## Session 107 — KAN-424 Spec E Forecast Quality & Scale (2026-04-12)
 
 **Branch:** `feat/KAN-424-forecast-quality-scale` → develop | **PR #225**

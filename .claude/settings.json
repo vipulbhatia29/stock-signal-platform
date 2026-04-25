@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Edit",
+      "Write",
       "Bash(uv *)",
       "Bash(pytest *)",
       "Bash(docker compose *)",
