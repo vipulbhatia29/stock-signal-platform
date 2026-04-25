@@ -44,6 +44,8 @@ Truly cross-project patterns only — nothing stock-signal-platform specific her
 | conventions/jira-sdlc-workflow | **MANDATORY** — full JIRA SDLC process, board, refinement lifecycle, branching, CI/CD, automation rules, transition IDs |
 | architecture/cicd-pipeline | CI/CD workflows, branch protection, fixture split, test expectations, GitHub secrets |
 | architecture/mcp-transport-strategy | stdio (Phase 5.6) → Streamable HTTP (Phase 6), transport evolution |
+| project/ui-polish-phase | Lovable prototype comparison, page-by-page gap analysis, deferred to KAN-400 |
+| future_work/AgentArchitectureBrainstorming | Session 60 3-prong analysis — mostly resolved (Steps 1-3 done S62-64). Pointer only. |
 | project/jira-integration-brainstorm | JIRA instance details, full ticket map (KAN-1 through KAN-29), transition IDs, automation rules |
 
 ## Scope Rule

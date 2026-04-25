@@ -9,12 +9,13 @@ category: project
 
 ```bash
 # Backend — fast, no external deps
-uv run pytest tests/unit/ -v                          # Unit tests (~2233, <60s)
+uv run pytest tests/unit/ -v                          # Unit tests (~2629, <60s)
 uv run pytest tests/unit/ -n auto                     # Unit tests parallel (xdist)
 uv run pytest tests/unit/test_{module}.py -v          # Single module
 
 # Backend — requires Docker (testcontainers auto-manages Postgres+Redis)
-uv run pytest tests/integration/ -v                   # Integration tests (sequential — shared DB)
+uv run pytest tests/integration/ -v                   # Integration tests (~78, sequential — shared DB)
+uv run pytest tests/integration/observability/ -v -m integration  # Obs integration suite (48 tests)
 uv run pytest tests/api/ -v                           # API endpoint tests (~454, sequential)
 
 # Full suite with coverage
@@ -52,6 +53,9 @@ tests/
 - **T1 (unit):** Pure logic, run parallel with xdist (`-n auto`)
 - **T2 (API):** FastAPI endpoints, sequential (shared DB → race conditions)
 - **T3 (integration):** Real testcontainers, sequential, fixtures with lifecycle
+  - `tests/integration/observability/` — 48 obs tests: SDK pipeline, trace propagation, anomaly lifecycle, admin endpoints, MCP tools, retention
+  - Key pattern: `_patch_session_factory` mutates `async_session_factory` in-place (42 modules hold import-time bindings)
+  - 6 factory-boy factories: RequestLog, ApiErrorLog, FindingLog, CeleryHeartbeat, AuthEventLog, ExternalApiCall
 - **T4 (E2E):** Playwright, production build (never dev server), WCAG 2.0 AA accessibility
 - **T5 (nightly):** Lighthouse + chart sizing + responsive testing (weekday 04:00 UTC)
 

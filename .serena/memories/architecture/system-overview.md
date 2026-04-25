@@ -1,7 +1,7 @@
 ---
 scope: project
 category: architecture
-updated_by: session-118
+updated_by: session-133
 ---
 
 # System Architecture Overview
@@ -84,50 +84,20 @@ updated_by: session-118
 **Phase 8.6+ additions (7):** convergence, news_sentiment, audit, warm_data (extended), assessment_runner, scoring_engine, golden_dataset, seed_tasks
 **Pipeline Overhaul additions (2):** dq_scan, retention
 
-## Observability Package (backend/observability/, 30+ Python files)
+## Observability Package (backend/observability/, 120+ Python files across 11 subdirectories)
 
-**Top-level (9):** `__init__.py`, `collector.py`, `writer.py`, `langfuse.py`, `context.py`, `token_budget.py`, `queries.py`, `client.py`, `bootstrap.py`, `buffer.py`, `spool.py`
-- `metrics/` subpackage (5): `__init__.py`, `db_pool.py`, `health_checks.py`, `http_middleware.py`, `pipeline_stats.py` — Prometheus-style metric recording
-- `routers/` subpackage (6): `__init__.py`, `admin.py`, `health.py`, `user_observability.py`, `command_center.py`, `ingest.py`
-- `models/` subpackage (4): `__init__.py`, `schema_versions.py`, `external_api_call.py`, `rate_limiter_event.py`
-- `schema/` subpackage (4): `__init__.py`, `v1.py`, `external_api_events.py`, `rate_limiter_events.py`
-- `targets/` subpackage (5): `__init__.py`, `base.py`, `direct.py`, `internal_http.py`, `memory.py`
-- `service/` subpackage (4): `__init__.py`, `event_writer.py`, `external_api_writer.py`, `rate_limiter_writer.py`
-- `instrumentation/` subpackage (4): `__init__.py`, `external_api.py`, `providers.py`, `yfinance_session.py`
-- `mcp/describe_schema.py` (skeleton)
-
-## Agent Architecture — ReAct Loop (Phase 8B, Session 63)
-
-Single-LLM reasoning loop (old Plan->Execute->Synthesize behind REACT_AGENT=false flag):
-1. **Reason:** LLM observes scratchpad -> outputs thought + next_action OR finish
-2. **Act:** Runs ONE tool, appends result to scratchpad
-3. **Loop:** Repeats until LLM emits finish or circuit breaker (max iterations)
-4. **Fast path:** Rule-based intent classifier filters tool set (zero LLM cost for out_of_scope/simple_lookup)
-
-25 internal tools + 4 MCP adapters = 29 total.
-
-## LLM Routing (Phase 6A)
-
-Data-driven cascade from `llm_model_config` DB table (migration 012). TokenBudget tracks per-model limits via Redis sorted sets (KAN-186, Session 67 — multi-worker safe, fail-open). Admin API at `/api/v1/admin/llm-models`.
+**Top-level (11):** `__init__.py`, `client.py`, `bootstrap.py`, `buffer.py`, `spool.py`, `collector.py`, `writer.py`, `langfuse.py`, `context.py`, `token_budget.py`, `span.py`, `queries.py`
+- `models/` (21 ORM models): All in `observability` schema. 17 hypertables + 4 regular tables. NOT in `backend/models/__init__.py`.
+- `schema/` (11): `v1.py` (ObsEventBase, EventType 24 types, AttributionLayer 10, Severity 4) + per-layer event schemas
+- `targets/` (5): `base.py` (protocol), `direct.py`, `internal_http.py`, `memory.py`
+- `service/` (11 event writers): `event_writer.py` (dispatcher) + 10 specialized writers routing events to DB
+- `instrumentation/` (10): HTTP middleware, DB hooks, cache, auth, celery, agent, external_api, yfinance, providers, pii_redact
+- `mcp/` (13 MCP tools): platform_health, trace, anomalies, search_errors, obs_health, cost_breakdown, external_api_stats, deploys, describe_schema, diagnose_pipeline, dq_findings, recent_errors, slow_queries
+- `anomaly/` (14): engine.py, persist.py, base.py + 12 anomaly rules
+- `routers/` (8): health, ingest, user_observability, admin, admin_query, command_center, deploy_events, frontend_errors
+- `metrics/` (5): db_pool, health_checks, http_middleware, pipeline_stats
 
 ## DB Migrations
 
-Alembic head: migration 031 (`d5e6f7a8b9c0` — external_api + rate_limiter hypertables).
-Recent migrations: 025 (ticker_ingestion_state), 026 (celery_task_id on pipeline_runs), 027 (dq_check_history), 028 (timescaledb_compression), 029 (backtest_unique_constraint), 030 (observability schema + schema_versions), 031 (external_api_call_log + rate_limiter_event hypertables).
-No gaps in revision chain.
-
-## Core Architecture Patterns
-
-- **No module-level mutable state** — constants + settings only
-- **Async by default** — Celery tasks bridge via `asyncio.run()`
-- **Tool boundary for external APIs** — all external calls through `backend/tools/`
-- **Pre-computed signals** — nightly Celery Beat; dashboard reads pre-computed data
-- **Three-layer MCP** — consume external MCPs -> enrich -> expose at `/mcp`
-- **Cache invalidation via events** — Celery tasks emit cache-buster payloads on signal change
-- **Langfuse tracing on all LLM calls** — cost + latency visibility for token budget enforcement
-
-## Environment Variables
-
-All secrets in `backend/.env` (gitignored). Template: `backend/.env.example`.
-CI-only: `CI_DATABASE_URL`, `CI_REDIS_URL`, `CI_JWT_SECRET_KEY`, `CI_JWT_ALGORITHM`, `CI_POSTGRES_PASSWORD`
-Phase 8.6+ additions: `LANGFUSE_*`, `RESEND_API_KEY`, `GOOGLE_OAUTH_CLIENT_ID/SECRET`, news provider API keys
+Alembic head: migration 040 (`e0f1a2b3c4d5` — negative_check_count on finding_log).
+Recent obs migrations: 030 (schema + schema_versions), 031 (external_api + rate_limiter), 032 (request_log + api_error_log), 033 (auth + oauth + email), 034 (slow_query + cache + db_pool + schema_migration), 035 (celery + beat + queue_depth), 036 (agent + provider_health), 037 (frontend_error + deploy_events), 038 (audit indexes), 039 (finding_log), 040 (negative_check_count).

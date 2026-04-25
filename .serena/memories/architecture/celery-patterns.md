@@ -59,6 +59,14 @@ def compute_signals_for_ticker(ticker: str) -> dict:
 
 Always use explicit `name=` to avoid import-path-based task naming breaking on refactors.
 
+## Observability Tasks (Session 118-133)
+
+- **18 retention tasks** in `backend/tasks/retention.py` — purge obs tables on schedule (7d-365d windows). Hypertables use `drop_chunks()`, regular tables use `DELETE`. All use `make_interval(days => :days)` for asyncpg-safe SQL.
+- **Anomaly scan** — `run_anomaly_scan` every 5min via Celery Beat. Runs 12 rules in parallel (`asyncio.gather + Semaphore(4)`, 30s per-rule timeout). Calls `persist_findings()` then `auto_close_findings()`.
+- **Celery heartbeat** — daemon thread (30s interval) emits `CELERY_HEARTBEAT` events.
+- **Queue depth** — `emit_queue_depth` every 2min via Beat, reads Redis LLEN per queue.
+- **@tracked_task decorator** — wraps Celery tasks with lifecycle tracking (PipelineRun rows). Auto-injects `run_id: uuid.UUID`. Emits `PIPELINE_LIFECYCLE` events (started + terminal). Uses `emit_sync` (safe from Celery `asyncio.run` context).
+
 ## Redis as Broker
 
 - Celery uses Redis as both broker and result backend.
