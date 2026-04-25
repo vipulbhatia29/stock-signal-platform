@@ -12,6 +12,7 @@ from pathlib import Path
 
 import factory
 import pytest_asyncio
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -140,18 +141,30 @@ class ExternalApiCallFactory(factory.Factory):
 # -- Core fixtures -----------------------------------------------------------
 @pytest_asyncio.fixture
 async def _patch_session_factory(db_url):
-    """Monkeypatch async_session_factory so anomaly rules, MCP tools, and
-    retention tasks query the test DB instead of settings.DATABASE_URL."""
-    engine = create_async_engine(db_url, echo=False, poolclass=NullPool)
-    test_factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    """Reconfigure the EXISTING async_session_factory to use the test DB engine.
+
+    42 modules do ``from backend.database import async_session_factory``, which
+    creates local bindings that survive module-level attribute replacement.
+    Using ``configure(bind=...)`` mutates the factory instance in-place, so ALL
+    holders of a reference — anomaly rules, MCP tools, admin endpoints, retention
+    tasks, writers — automatically use the test DB without individual patching.
+    """
+    test_engine = create_async_engine(db_url, echo=False, poolclass=NullPool)
 
     import backend.database
 
-    original = backend.database.async_session_factory
-    backend.database.async_session_factory = test_factory
+    original_factory = backend.database.async_session_factory
+    # Save the original engine (bind) from the factory's kw dict
+    original_bind = original_factory.kw.get("bind")
+
+    # Reconfigure in-place — all modules holding a reference see the change
+    original_factory.configure(bind=test_engine)
+
     yield
-    backend.database.async_session_factory = original
-    await engine.dispose()
+
+    # Restore original engine
+    original_factory.configure(bind=original_bind)
+    await test_engine.dispose()
 
 
 @pytest_asyncio.fixture
@@ -203,9 +216,51 @@ async def admin_user(db_session):
 
 @pytest_asyncio.fixture
 async def admin_auth_headers(admin_user):
-    """JWT cookie headers for an admin user."""
+    """JWT cookie headers for an admin user (GET requests only)."""
     token = create_access_token(admin_user.id)
     return {"Cookie": f"access_token={token}"}
+
+
+@pytest_asyncio.fixture
+async def admin_mutating_headers(admin_user):
+    """JWT cookie + CSRF headers for admin mutating requests (POST/PATCH/PUT/DELETE).
+
+    CSRF middleware requires csrf_token cookie + X-CSRF-Token header to match.
+    """
+    token = create_access_token(admin_user.id)
+    csrf_token = "test-csrf-token"
+    return {
+        "Cookie": f"access_token={token}; csrf_token={csrf_token}",
+        "X-CSRF-Token": csrf_token,
+    }
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _clean_obs_tables(db_url):
+    """Truncate all observability tables before each test to prevent data leakage.
+
+    Tests that don't use the ``client`` fixture miss its teardown-based truncation.
+    This autouse fixture ensures obs tables are clean regardless of which fixtures
+    a test pulls in.
+    """
+    engine = create_async_engine(db_url, echo=False, poolclass=NullPool)
+    sf = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with sf() as session:
+        # Truncate all obs tables that factories touch
+        await session.execute(
+            text(
+                "TRUNCATE TABLE observability.finding_log, "
+                "observability.api_error_log, "
+                "observability.request_log, "
+                "observability.auth_event_log, "
+                "observability.external_api_call_log, "
+                "observability.celery_worker_heartbeat "
+                "CASCADE"
+            )
+        )
+        await session.commit()
+    await engine.dispose()
+    yield
 
 
 async def insert_obs_rows(session: AsyncSession, rows) -> None:
