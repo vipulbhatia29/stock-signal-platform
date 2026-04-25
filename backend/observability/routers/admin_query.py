@@ -8,11 +8,15 @@ role via ``require_admin()``. These serve the 8-zone admin UI at
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 
+from backend.database import async_session_factory
 from backend.dependencies import get_current_user, require_admin
 from backend.models.user import User
+from backend.observability.models.finding_log import FindingLog
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +84,7 @@ async def get_admin_findings(
     since: str | None = Query(default=None, description="Relative time window"),
     severity: str | None = Query(default=None, description="Severity filter"),
     attribution_layer: str | None = Query(default=None, description="Layer filter"),
+    kind: str | None = Query(default=None, description="Kind filter"),
     limit: int = Query(default=50, ge=1, le=500, description="Max results"),
 ) -> dict:
     """Return anomaly findings for the admin dashboard."""
@@ -91,8 +96,127 @@ async def get_admin_findings(
         since=since,
         severity=severity,
         attribution_layer=attribution_layer,
+        kind=kind,
         limit=limit,
     )
+
+
+_DURATION_MAP: dict[str, timedelta] = {
+    "1h": timedelta(hours=1),
+    "4h": timedelta(hours=4),
+    "24h": timedelta(hours=24),
+}
+
+
+def _serialize_finding(finding: FindingLog) -> dict:
+    """Serialize a FindingLog ORM instance to a JSON-safe dict.
+
+    Args:
+        finding: A FindingLog ORM instance.
+
+    Returns:
+        Dict with all column values; datetime fields converted to ISO 8601.
+    """
+    result: dict = {}
+    for col in FindingLog.__table__.columns:
+        value = getattr(finding, col.name)
+        if hasattr(value, "isoformat"):
+            value = value.isoformat()
+        result[col.name] = value
+    return result
+
+
+@router.patch(
+    "/findings/{finding_id}/acknowledge",
+    summary="Zone 3: Acknowledge a finding",
+    description="Mark a finding as acknowledged by the current admin user.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not admin"},
+        404: {"description": "Finding not found"},
+    },
+)
+async def acknowledge_finding(
+    finding_id: str,
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Acknowledge an anomaly finding.
+
+    Args:
+        finding_id: UUID of the finding to acknowledge.
+        user: Authenticated admin user (injected by FastAPI).
+
+    Returns:
+        The updated finding as a serialized dict.
+
+    Raises:
+        HTTPException: 404 if the finding does not exist.
+    """
+    require_admin(user)
+    from sqlalchemy import func
+
+    async with async_session_factory() as db:
+        result = await db.execute(select(FindingLog).where(FindingLog.id == finding_id))
+        finding = result.scalar_one_or_none()
+        if finding is None:
+            raise HTTPException(status_code=404, detail="Finding not found")
+
+        finding.status = "acknowledged"
+        finding.acknowledged_by = str(user.id)
+        finding.acknowledged_at = func.now()
+        await db.commit()
+        await db.refresh(finding)
+
+    return _serialize_finding(finding)
+
+
+@router.patch(
+    "/findings/{finding_id}/suppress",
+    summary="Zone 3: Suppress a finding",
+    description="Suppress a finding for a specified duration.",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "Not admin"},
+        404: {"description": "Finding not found"},
+    },
+)
+async def suppress_finding(
+    finding_id: str,
+    user: User = Depends(get_current_user),
+    duration: str = Query(default="1h", description="Suppression duration (1h, 4h, 24h)"),
+) -> dict:
+    """Suppress an anomaly finding for a given duration.
+
+    Args:
+        finding_id: UUID of the finding to suppress.
+        user: Authenticated admin user (injected by FastAPI).
+        duration: Suppression window string. Supported values: "1h", "4h", "24h".
+            Defaults to "1h".
+
+    Returns:
+        The updated finding as a serialized dict.
+
+    Raises:
+        HTTPException: 404 if the finding does not exist.
+    """
+    require_admin(user)
+    from sqlalchemy import func
+
+    td = _DURATION_MAP.get(duration, timedelta(hours=1))
+
+    async with async_session_factory() as db:
+        result = await db.execute(select(FindingLog).where(FindingLog.id == finding_id))
+        finding = result.scalar_one_or_none()
+        if finding is None:
+            raise HTTPException(status_code=404, detail="Finding not found")
+
+        finding.status = "suppressed"
+        finding.suppressed_until = func.now() + td
+        finding.suppression_reason = "Manual suppression from admin UI"
+        await db.commit()
+        await db.refresh(finding)
+
+    return _serialize_finding(finding)
 
 
 @router.get(

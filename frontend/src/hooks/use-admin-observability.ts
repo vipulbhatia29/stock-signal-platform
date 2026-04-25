@@ -84,6 +84,7 @@ export function useAdminFindings(params: {
   status?: string;
   severity?: string;
   attribution_layer?: string;
+  kind?: string;
   since?: string;
   limit?: number;
 }) {
@@ -91,6 +92,7 @@ export function useAdminFindings(params: {
   if (params.status) searchParams.set("status", params.status);
   if (params.severity) searchParams.set("severity", params.severity);
   if (params.attribution_layer) searchParams.set("attribution_layer", params.attribution_layer);
+  if (params.kind) searchParams.set("kind", params.kind);
   if (params.since) searchParams.set("since", params.since);
   if (params.limit) searchParams.set("limit", String(params.limit));
   const qs = searchParams.toString();

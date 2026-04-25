@@ -108,6 +108,7 @@ async def _setup_database(db_url):
     engine = create_async_engine(db_url, echo=False)
     async with engine.begin() as conn:
         await conn.execute(sa.text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
+        await conn.execute(sa.text("CREATE SCHEMA IF NOT EXISTS observability"))
         await conn.run_sync(Base.metadata.create_all)
     await engine.dispose()
     yield
