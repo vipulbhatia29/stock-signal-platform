@@ -132,15 +132,16 @@ class TestHavingCostFilter:
 
         result = await get_query_list(obs_db_session, cost_min=0.005)
 
+        # get_query_list returns query_id as UUID objects, not strings
         returned_query_ids = {item["query_id"] for item in result["items"]}
 
         # The cheap query must be excluded
-        assert str(qid_cheap) not in returned_query_ids, (
+        assert qid_cheap not in returned_query_ids, (
             "query with cost 0.001 should be excluded by cost_min=0.005"
         )
 
         # At least the two seeded queries above the threshold are present
-        assert str(qid_mid) in returned_query_ids or str(qid_expensive) in returned_query_ids, (
+        assert qid_mid in returned_query_ids or qid_expensive in returned_query_ids, (
             "at least one qualifying query must appear in results"
         )
 
@@ -152,7 +153,7 @@ class TestHavingCostFilter:
         assert result["total"] >= 2, (
             f"Expected at least 2 results (mid + expensive), got total={result['total']}"
         )
-        assert result["total"] < 3 or str(qid_cheap) not in returned_query_ids, (
+        assert result["total"] < 3 or qid_cheap not in returned_query_ids, (
             "If total==3, the cheap query must NOT appear in items"
         )
 
@@ -186,8 +187,9 @@ class TestDateTruncBucketing:
         result = await get_query_groups(obs_db_session, group_by="date", bucket="week")
 
         # We expect at least 2 groups (may have more from other test data)
-        assert result["total_groups"] >= 2, (
-            f"Expected at least 2 week buckets, got {result['total_groups']}"
+        # get_query_groups returns "groups" list and "total_queries" count
+        assert len(result["groups"]) >= 2, (
+            f"Expected at least 2 week buckets, got {len(result['groups'])}"
         )
 
         # All bucket keys must be ISO 8601 strings (not raw datetime objects)

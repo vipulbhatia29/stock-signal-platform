@@ -22,12 +22,16 @@ from backend.services.cache import CacheService, CacheTier
 REDIS_URL = "redis://localhost:6380/1"  # DB 1 for integration tests (separate from dev)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 async def redis_client():
     """Connect to real Redis on port 6380 (local dev).
 
-    Skips the test module if Redis is not reachable — this is expected
-    behavior when running unit tests without Redis.
+    Function-scoped (not module) because pytest-asyncio creates a new event
+    loop per test — a module-scoped client binds to the first loop and breaks
+    on subsequent tests.
+
+    Skips the test if Redis is not reachable — this is expected behavior
+    when running unit tests without Redis.
     """
     try:
         client = aioredis.from_url(REDIS_URL, decode_responses=True, socket_timeout=1.0)
