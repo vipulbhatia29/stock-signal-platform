@@ -434,7 +434,11 @@ class TestSuppressFinding:
         mock_finding.status = "open"
         mock_factory = _make_mock_session_factory(mock_finding)
 
-        suppressed_dict = {**_MOCK_FINDING_DICT, "status": "suppressed", "suppressed_until": "2026-04-24T11:00:00+00:00"}
+        suppressed_dict = {
+            **_MOCK_FINDING_DICT,
+            "status": "suppressed",
+            "suppressed_until": "2026-04-24T11:00:00+00:00",
+        }
 
         with (
             patch(
