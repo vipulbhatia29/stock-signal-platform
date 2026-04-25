@@ -353,11 +353,74 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 > Rebuild + validate the 10y ticker universe with observability coverage in place. Design work still pending; start after 1a merges so seed runs emit structured events.
 
-### Phase E: UI Overhaul (Epic KAN-400) — To Do (after Epic 1+2)
+### Phase E: UI Overhaul (Epic KAN-400) — NEXT (Session 134 gap analysis complete)
 
-> Surface all backend data that has no frontend representation. Prerequisite for visual regression baseline (KAN-363) and Playwright E2E refresh (KAN-217).
+> Surface all backend data that has no frontend representation. Session 134 UI walkthrough confirmed all existing pages render correctly with graceful empty states. 11 backend features identified with no frontend UI. Prerequisite for visual regression baseline (KAN-363) and Playwright E2E refresh (KAN-217).
 
-**Scope (from Frontend Backlog):**
+**Session 134 UI Assessment:** 15 pages walked through with Playwright. 13/15 render correctly. 3 bugs fixed (pipeline_runs columns, nested button, breadcrumb). 6 new E2E test files added (~50 tests). Lighthouse expanded to 12 pages.
+
+**Priority 1 — Backend features with NO frontend UI:**
+
+| # | Feature | Backend Endpoints | Effort Est. |
+|---|---------|-------------------|-------------|
+| E-1 | **Stock Intelligence Display** | `/stocks/{ticker}/intelligence` (hook exists, no component) | ~1 day |
+| E-2 | **Backtesting Dashboard** | `/backtests/run`, `/{ticker}`, `/{ticker}/history`, `/summary/all` | ~2-3 days |
+| E-3 | **LLM Admin Console** | 11 endpoints under `/observability/llm/*` (models, tiers, usage, chat sessions, costs) | ~2-3 days |
+
+**Priority 2 — Partial implementations:**
+
+| # | Feature | Gap | Effort Est. |
+|---|---------|-----|-------------|
+| E-4 | Audit Log Viewer | `/admin/pipelines/audit-log` — no admin UI | ~0.5 day |
+| E-5 | Task Status Monitor | `/tasks/{task_id}/status` — no progress UI | ~0.5 day |
+| E-6 | Forecast Component Breakdown | `/portfolio/{id}/forecast/components` — no drill-down | ~1 day |
+| E-7 | Sentiment Article Browser | `/sentiment/articles` — no listing page | ~1 day |
+| E-8 | Command Center Forecast Health | `/admin/command-center/forecast-health` — no panel/hook | ~0.5 day |
+| E-9 | System Health Drill-down | Command Center panel has no "View Details" | ~0.5 day |
+
+**Priority 2b — Command Center missing panels (from `command-center-prototype.html`):**
+
+The HTML prototype defined 8 panels but only 4 shipped + 1 partial. Each panel also needs a drill-down sheet (slide-over detail view) like the shipped panels have.
+
+| # | Panel | Backend Schema | Backend Collector | Backend Drill-down | Frontend Component | Frontend Types | Status |
+|---|-------|---------------|-------------------|-------------------|-------------------|---------------|--------|
+| E-10 | **Cache Performance** | **Missing** | **Missing** | **Missing** | **Missing** | **Missing** | Zero impl |
+| E-11 | **Chat & Agent** | **Missing** | **Missing** | **Missing** | **Missing** | **Missing** | Zero impl |
+| E-12 | **Auth & Security** | **Missing** | **Missing** | **Missing** | **Missing** | **Missing** | Zero impl |
+| E-13 | **Alerts & Forecasting** | `ForecastHealthZone` exists (partial) | `_get_forecast_health_safe()` exists (partial) | **Missing** | **Missing** | **Missing** | Backend partial |
+
+**Per-panel implementation requirements:**
+
+**E-10 Cache Performance** (~1 day):
+- Backend: `CachePerformanceZone` schema + `_get_cache_performance()` collector (Redis INFO, DBSIZE, namespace SCAN) + drill-down endpoint
+- Data source: Redis `INFO` command (memory, keyspace), `cache_operation_log` obs table (hit/miss rates)
+- Frontend: `cache-performance-panel.tsx` + `cache-detail.tsx` + types + hit rate donut chart (Recharts PieChart)
+- Prototype: donut (78% hit), namespace list (7 entries), memory bar (45/256 MB)
+
+**E-11 Chat & Agent** (~1.5 days):
+- Backend: `ChatAgentZone` schema + `_get_chat_agent()` collector + drill-down endpoint
+- Data source: `agent_intent_log`, `agent_reasoning_log`, `tool_execution_log`, `chat_message` tables
+- Frontend: `chat-agent-panel.tsx` + `chat-agent-detail.tsx` + types + top tools bar chart (Recharts BarChart)
+- Prototype: messages/hr (34, peak annotation), avg response (3.2s P95), tool calls (1247, 78% cached), feedback (89% positive), top 5 tools
+
+**E-12 Auth & Security** (~1 day):
+- Backend: `AuthSecurityZone` schema + `_get_auth_security()` collector + drill-down endpoint
+- Data source: `auth_event_log`, `login_attempts`, `rate_limiter_event` obs tables, `users` table (active count)
+- Frontend: `auth-security-panel.tsx` + `auth-security-detail.tsx` + types
+- Prototype: active users (12), login success% (98.5%), failed logins (7), token refresh (45/hr), rate limits (3 today)
+
+**E-13 Alerts & Forecasting** (~1.5 days):
+- Backend: Extend `ForecastHealthZone` (add stale/drifting counts, accuracy, VIX) + `AlertsZone` schema + collector + drill-down
+- Data source: `finding_log` (anomaly alerts), `in_app_alerts`, `forecast_results`, `backtest_runs`, `model_versions`
+- Frontend: `alerts-forecasting-panel.tsx` + detail + types + severity bar chart (Recharts)
+- Prototype: severity chart (critical/warning/info), dedup suppressed (23), unread (9), fresh/stale/drifting models, MAPE accuracy, VIX regime
+
+**Also needed for shipped panels — minor enhancements:**
+- API Traffic: sparkline area chart (Recharts), P50/P99 in main view
+- LLM Operations: provider tab selector (Groq/Anthropic/OpenAI)
+- Pipeline: step-by-step execution timeline with per-step timings
+
+**Priority 3 — Original scope (from Frontend Backlog):**
 - Stock detail: revenue/margins/growth card, analyst price targets viz, earnings history chart, company profile section, analyst consensus chart, candlestick toggle (KAN-150), benchmark chart (KAN-151)
 - Portfolio: strategy picker UI for 3 rebalancing strategies
 - Chat: artifact bar enhancements (tool buttons, scroll pill, agent badge, auto-retry)

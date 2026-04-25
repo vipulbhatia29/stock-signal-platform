@@ -816,3 +816,58 @@ Full audit of 1a+1b infrastructure before starting 1c. 4 parallel agents invento
 - **KAN-501 (Obs Suite Validation) COMPLETE — 3/3 PRs merged (#272, #273, #274)**
 - **Epic KAN-493 implementation phase complete** — 48 integration tests across 7 files
 - Resume: Architecture docs for obs extraction, or next epic
+
+---
+
+## Session 134 — UI State Assessment + Bug Fixes + Gap Analysis (2026-04-25)
+
+### UI Walkthrough (15 pages, 13 screenshots)
+Full Playwright-driven walkthrough of every page in the running app:
+- **Login/Register:** Working. Split layout, Google OAuth, email/password, forgot password, create account links.
+- **Dashboard:** Working. 5-zone layout (Market Pulse, Signals, Portfolio, Alerts, News), AI Analyst panel, onboarding CTA.
+- **Screener:** Working. Filters (Index/RSI/MACD/Sector/Score slider), All Stocks/Watchlist tabs, Overview/Signals/Performance sub-tabs.
+- **Portfolio:** Working. 4 summary cards, value history, forecast intelligence, positions, sector allocation — all with graceful empty states.
+- **Sectors:** Working. All/Portfolio/Watchlist filter tabs, empty state.
+- **Stock Detail (AAPL):** Working. Ticker display, "Run Analysis" CTA for on-demand ingest.
+- **Account:** Working. Profile, Security (change password), Linked Accounts (Google), Danger Zone (delete).
+- **User Observability:** Working. 5 KPI cards, Usage Analytics (7 dimension tabs), Query History (5 filters), AI Quality.
+- **Admin Obs Overview:** Partial. Health strip (7 subsystems) working. **Error stream 500** — `pipeline_runs.trace_id` missing.
+- **Admin Obs APIs & Cost:** Working. 5 providers table, cost breakdown, time ranges.
+- **Admin Obs Infrastructure:** Partial. DQ Scanner working. **Pipeline data 500** — same root cause.
+- **Admin Obs Trace Explorer:** Working. Trace ID input + Load button.
+- **Admin Pipelines:** Working. 8 task groups, Run All buttons, cache controls. **Nested button HTML violation** found.
+- **Admin Command Center:** Working. All 4 panels with live real data (System Health, API Traffic, LLM Ops, Pipeline).
+
+### Bug Fixes (3)
+1. **`pipeline_runs.trace_id` + `celery_task_id` missing** — DB was at older Alembic rev, stamped to head but migration 035 columns never applied. Fixed via ALTER TABLE. Resolved 500s on admin obs Overview + Infrastructure tabs.
+2. **Nested `<button>` in Pipeline Control** — outer `<button>` → `<div role="button">` with keyboard handlers in `pipeline-group-card.tsx`.
+3. **Breadcrumb showing "Dashboard" on all admin pages** — added 5 missing routes to `PAGE_LABELS` in `topbar.tsx` (Observability, Account, Obs Admin, Pipeline Control, Command Center).
+
+### Backend-Frontend Gap Analysis
+Research agent audited all backend routers vs frontend hooks/pages. **11 backend features with no frontend UI:**
+
+**HIGH:** Backtesting System (4 endpoints), LLM Admin Console (11 endpoints), Stock Intelligence Display (hook exists, no component)
+**MEDIUM:** Audit Log Viewer, Task Status Monitor, Forecast Components, Article Browser, Command Center Forecast Health
+**LOW:** System Health drill-down, Individual Task Trigger, Ingestion Health Dashboard
+
+### E2E Test Expansion (6 new files, ~50 tests)
+- `auth/auth-links.spec.ts` — login↔register links, Google OAuth, remember me
+- `sectors/sectors.spec.ts` — page render, empty state, filter tab switching
+- `account/account.spec.ts` — all 4 sections (Profile, Security, Linked Accounts, Danger Zone)
+- `admin/observability.spec.ts` — health strip, 4-tab navigation, error stream, APIs table, DQ scanner, trace explorer
+- `admin/pipelines.spec.ts` — groups render, Run All buttons, expand/collapse, cache controls
+- `observability/user-observability.spec.ts` — KPI cards, 7 analytics tabs, time ranges, query history filters
+
+### Lighthouse Expansion
+Added 7 new pages to automated Lighthouse audits (total 12): Sectors, Account, Stock Detail, User Observability, Admin Observability, Admin Pipelines, Admin Command Center.
+
+### Command Center Prototype Gap (late discovery)
+`command-center-prototype.html` defines 8 panels but only 4 shipped + 1 partial. Missing: Cache Performance, Chat & Agent, Auth & Security, Alerts & Forecasting. Backend obs tables have the raw data — needs collector functions, schemas, drill-down endpoints, React components, and TypeScript types. Added as E-10 through E-13 in project-plan.md Phase E scope.
+
+### Session 134 Totals
+- Tests: 2629 unit (0 failures, confirmed green), ~50 new E2E tests (6 files)
+- 2 frontend files changed (pipeline-group-card.tsx, topbar.tsx)
+- 6 new E2E test files + 1 expanded Lighthouse spec
+- 0 JIRA tickets (gap analysis documented for KAN-400 UI Overhaul planning)
+- **13 UI gaps identified** (E-1 through E-13): 3 major feature gaps + 4 partial + 4 command center panels + 2 low-priority
+- Resume: Start UI Overhaul (KAN-400) using gap analysis. Priority order in project-plan.md Phase E.
