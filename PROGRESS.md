@@ -141,6 +141,52 @@ ORPHAN_DELETE_START### KAN-425 — Spec F Rate Limiters F2/F3/F4 (PR #220 merged
 
 ---
 
+## Session 129 — Obs 1c Batch 2: KAN-491 + KAN-492 + PR7 (2026-04-25)
+
+**Branches:** `feat/KAN-491-492-zone3-zone4` (PR #268) + `feat/obs-1c-pr7-jira-draft` (PR #269)
+
+### KAN-491 + KAN-492 — Zone 3 Enhancements + Zone 4 Trace Explorer (PR #268)
+
+**Implementation:** Parallel Sonnet subagents in worktrees, Opus review + merge.
+
+**KAN-491 (Zone 3 enhancements):**
+- Backend: PATCH `/findings/{id}/acknowledge` + `/suppress` endpoints
+- Backend: `kind` filter on GET `/findings` (server-side, indexed)
+- Frontend: `attribution_layer` + `kind` filter dropdowns (12 real anomaly rule kinds)
+- Tests: 7 new (happy path + 404 + 403 for both PATCH endpoints + kind passthrough)
+
+**KAN-492 (Zone 4 trace explorer):**
+- `trace-explorer.tsx` (420 lines, 7 sub-components): waterfall timeline with positioned divs
+- `SpanNode`, `FlatSpan`, `AdminTraceEnvelope` types + `useAdminTrace` hook (one-shot)
+- Span detail panel, color legend (9 span kinds), adaptive time axis
+- Cross-tab `pendingTraceId` wiring from Zone 2/3 "Open Trace" buttons
+
+**Opus review caught 3 bugs:**
+1. **CRITICAL:** `totalDurationMs` was sum of durations, not wall-clock range — fixed to `max(ts+latency) - min(ts)`
+2. **MEDIUM:** `KIND_VALUES` were fabricated — replaced with 12 actual anomaly rule kinds from rules/*.py
+3. **ESLint:** `useEffect` placed after early return — moved before
+
+**Infra fix:** `tests/conftest.py` — added `CREATE SCHEMA IF NOT EXISTS observability` + schema-qualified TRUNCATE for teardown.
+
+### PR7 — JIRA Draft Integration (PR #269)
+
+- POST `/findings/{id}/jira-draft` — creates JIRA issue via REST API v3
+- Config: `JIRA_API_EMAIL`, `JIRA_API_TOKEN`, `JIRA_SITE_URL`, `JIRA_PROJECT_KEY`
+- Returns 503 gracefully when credentials not configured
+- Idempotent: returns existing `jira_ticket_key` if already linked
+- Uses `get_observed_http_client(ExternalProvider.JIRA)` (semgrep-compliant)
+- Frontend: "Create JIRA" button on finding cards, `jira_ticket_key` badge when linked
+- 4 new tests (not-configured, not-found, already-exists, not-admin)
+
+### Session 129 Totals
+- Tests: 2618 → 2625 unit (PR #268) + 4 more (PR #269)
+- PRs merged: #268 (KAN-491+KAN-492), #269 (PR7 JIRA draft)
+- JIRA: KAN-491, KAN-492 → Done. **Obs 1c (KAN-460) COMPLETE — 9/9 items shipped.**
+- **Epic KAN-457 fully complete:** 1a (6/6) + 1b (7/7) + 1c (9/9) = 22 PRs merged.
+- Resume: Epic 2 (Seed Universe) or KAN-400 (UI Overhaul)
+
+---
+
 ## Session 107 — KAN-424 Spec E Forecast Quality & Scale (2026-04-12)
 
 **Branch:** `feat/KAN-424-forecast-quality-scale` → develop | **PR #225**
