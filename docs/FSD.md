@@ -1154,6 +1154,32 @@ The dashboard is a 5-zone Daily Intelligence Briefing designed for passive inves
 - Auto-close: 3 consecutive negative checks (15 min) → finding auto-resolves
 - `negative_check_count` column tracks consecutive clears, resets on re-fire
 
+**FR-28.9: MCP Observability Tools** ✅ IMPLEMENTED (KAN-460, Sessions 126-127)
+- 13 read-only async tools in `backend/observability/mcp/` — AI agent intelligence layer
+- All return standard MCP envelope: `{"tool", "window", "result", "meta"}`
+- Key tools: `get_platform_health` (7 subsystems), `get_trace` (span tree reconstruction), `get_anomalies` (finding queries), `search_errors` (ILIKE across 4 tables), `get_observability_health` (self-diagnostics)
+- Additional: `get_cost_breakdown`, `get_external_api_stats`, `get_deploys`, `describe_observability_schema`, `diagnose_pipeline`, `get_dq_findings`, `get_recent_errors`, `get_slow_queries`
+
+**FR-28.10: Admin Observability Dashboard** ✅ IMPLEMENTED (KAN-488-492, Sessions 128-129)
+- 8-zone admin dashboard at `/admin/observability` (4-tab layout)
+- Zone 1: Health strip (subsystem pills), Zone 2: Error stream (live), Zone 3: Anomaly findings (ack/suppress/JIRA)
+- Zone 4: Trace explorer (span waterfall), Zone 5: External API stats, Zone 6: Cost breakdown
+- Zone 7: Pipeline diagnostics, Zone 8: DQ scanner
+- 11 backend endpoints in `admin_query.py` (GET queries + PATCH mutations + POST JIRA draft)
+- Frontend: 8 components + shared utilities + `useAdminObservability` hook (8 queries + 3 mutations)
+
+**FR-28.11: Retention Policies** ✅ IMPLEMENTED (Sessions 118-133)
+- 22 Celery Beat retention tasks covering all obs + legacy tables
+- Hypertable purge via `drop_chunks()` (7 tables), regular purge via `DELETE` (11 tables)
+- Retention windows: 7d (cache, heartbeat, queue depth) → 30d (request, slow query, agent, frontend, provider) → 90d (error, auth, oauth, email, pool, beat) → 180d (findings) → 365d (migrations, deploys)
+- SQL uses `make_interval(days => :days)` for asyncpg compatibility (bug fix Session 133)
+
+**FR-28.12: Observability Integration Tests** ✅ IMPLEMENTED (KAN-500/501, Sessions 131-133)
+- 48 integration tests in `tests/integration/observability/` across 7 files
+- Validates real DB behavior: SDK pipeline, trace propagation, anomaly lifecycle, admin endpoints, MCP tools, retention
+- Key fixture: `_patch_session_factory` mutates session factory in-place (42 modules hold import-time bindings)
+- Found and fixed production bug: `INTERVAL :interval` asyncpg parameterization failure in retention tasks
+
 ### FR-29: Forecast Quality & Scale — DONE (KAN-424, Spec E)
 
 > Raises nightly new-model cap, switches Prophet retrain to weekly, and splits intraday refresh into fast/slow paths.

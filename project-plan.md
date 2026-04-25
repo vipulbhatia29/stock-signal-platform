@@ -286,7 +286,7 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 ---
 
-### Epic KAN-457: Platform Observability Infrastructure — In Progress (Session 113)
+### Epic KAN-457: Platform Observability Infrastructure — ✅ COMPLETE (Sessions 113-129)
 
 > Build the observability substrate every layer (HTTP/auth/DB/cache/external APIs/LLM/agent/Celery/frontend) emits through a single `ObservabilityClient` SDK. Isolated `observability.*` Postgres schema + `obs:*` Redis namespace make the module extractable to a standalone microservice with a single config change. Consumed by both human operators (admin dashboard) and LLM agents (MCP tools) from day one.
 
@@ -315,37 +315,37 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 | PR6-T5+T6 | Zone 3 enhancements (PATCH ack/suppress, kind filter) + Zone 4 trace explorer (waterfall) | ✅ #268 (S129, KAN-491+KAN-492) |
 | PR7 | JIRA draft integration (POST /jira-draft, observed HTTP client, ExternalProvider.JIRA) | ✅ #269 (S129) |
 
-### Epic KAN-493: Observability Suite Validation — In Progress (Session 130)
+### Epic KAN-493: Observability Suite Validation — ✅ COMPLETE (Sessions 130-133)
 
-> Validate that the 22 PRs of Epic KAN-457 integrate correctly as a system. Integration test suite (~29 tests across 6 files) + unit coverage audit + traceability matrix.
+> Validates that the 22 PRs of Epic KAN-457 integrate correctly as a system. 48 integration tests across 7 files + production bug fix (asyncpg INTERVAL parameterization) + 4 pre-existing test fixes.
 > **Spec:** `docs/superpowers/specs/2026-04-25-observability-integration-test-suite.md`
-> **Data strategy:** Real SDK + real DB + mocked externals (JIRA, yfinance/Finnhub).
-> **Review:** 5 personas (Backend Architect, Test Engineer, DB/SQL Expert, Reliability Engineer, Full-Stack/API Contract).
+> **Plan:** `docs/superpowers/plans/2026-04-25-observability-integration-test-suite.md` (v2)
 
 | Ticket | Summary | Status |
 |--------|---------|--------|
-| KAN-493 | Epic: Observability Suite Validation | In Progress |
-| KAN-494 | Refinement: Obs Integration Test Suite | In Progress |
+| KAN-493 | Epic: Observability Suite Validation | ✅ Done |
+| KAN-494 | Refinement: Obs Integration Test Suite | ✅ Done |
 | KAN-495 | Brainstorm obs integration test architecture | ✅ Done (S130) |
 | KAN-496 | Write spec: Obs integration test suite | ✅ Done (S130) |
 | KAN-497 | Review spec: Obs integration test suite | ✅ Done (S130) |
-| KAN-498 | Write plan: Obs integration test suite | ✅ Ready for Verification (S130) |
-| KAN-499 | Review plan: Obs integration test suite | To Do |
-| **KAN-500** | **PR1: Fixtures + SDK pipeline + trace propagation** | **To Do** |
-| **KAN-501** | **PR2: Anomaly lifecycle + admin endpoints** | **To Do** |
-| **KAN-502** | **PR3: MCP tools + retention** | **To Do** |
+| KAN-498 | Write plan: Obs integration test suite | ✅ Done (S130) |
+| KAN-499 | Review plan: Obs integration test suite | ✅ Done (S131) |
+| KAN-500 | PR1: Fixtures + SDK pipeline + trace propagation | ✅ Done (PR #272, S131) |
+| KAN-501 | PR2+PR3: Anomaly lifecycle + admin + MCP + retention | ✅ Done (PRs #273+#274, S132-133) |
+| KAN-503 | Bug: schema_versions seed data not visible in tests | To Do (Low) |
 
-**Plan:** `docs/superpowers/plans/2026-04-25-observability-integration-test-suite.md` (v2 — 5-persona reviewed, all 3C+9H fixes applied)
-
-**Test files (planned):**
+**Test files (shipped):**
 | File | Tests | What it proves |
 |---|---|---|
-| `test_sdk_pipeline.py` | 7 | emit → buffer → flush → DirectTarget → writer → DB |
-| `test_trace_propagation.py` | 4 | X-Trace-Id flows through HTTP → DB → external API events |
-| `test_anomaly_lifecycle.py` | 4 | Seed bad data → engine → finding → dedup → JIRA draft |
-| `test_admin_endpoints.py` | 6 | Admin query endpoints return correct shapes from real data |
-| `test_mcp_tools.py` | 5 | MCP tool functions return correct structures from real data |
-| `test_retention.py` | 3 | Hypertable drop_chunks + regular table DELETE + policy verification |
+| `conftest.py` | — | 6 factories, session factory patch, obs table cleanup, admin fixtures |
+| `test_sdk_pipeline.py` | 6 | emit → DirectTarget → DB for 5 event types + disabled no-op |
+| `test_trace_propagation.py` | 5 | trace ID generation/adoption, `_in_obs_write` guard, auth recursion guard |
+| `test_anomaly_lifecycle.py` | 5 | rule→finding→dedup→auto-close→JIRA draft |
+| `test_admin_endpoints.py` | 7 | auth enforcement, KPIs, error filtering, finding ack/suppress |
+| `test_mcp_tools.py` | 5 | MCP envelope structure for health, trace, anomalies, search, obs-health |
+| `test_retention.py` | 21 | regular table purge, allowlist rejection, 18 task existence checks |
+
+**Production bug found:** `INTERVAL :interval` in retention SQL — asyncpg can't parameterize it. Fixed to `make_interval(days => :days)`.
 
 ---
 
