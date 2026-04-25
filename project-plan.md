@@ -315,6 +315,40 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 | PR6-T5+T6 | Zone 3 enhancements (PATCH ack/suppress, kind filter) + Zone 4 trace explorer (waterfall) | ✅ #268 (S129, KAN-491+KAN-492) |
 | PR7 | JIRA draft integration (POST /jira-draft, observed HTTP client, ExternalProvider.JIRA) | ✅ #269 (S129) |
 
+### Epic KAN-493: Observability Suite Validation — In Progress (Session 130)
+
+> Validate that the 22 PRs of Epic KAN-457 integrate correctly as a system. Integration test suite (~29 tests across 6 files) + unit coverage audit + traceability matrix.
+> **Spec:** `docs/superpowers/specs/2026-04-25-observability-integration-test-suite.md`
+> **Data strategy:** Real SDK + real DB + mocked externals (JIRA, yfinance/Finnhub).
+> **Review:** 5 personas (Backend Architect, Test Engineer, DB/SQL Expert, Reliability Engineer, Full-Stack/API Contract).
+
+| Ticket | Summary | Status |
+|--------|---------|--------|
+| KAN-493 | Epic: Observability Suite Validation | In Progress |
+| KAN-494 | Refinement: Obs Integration Test Suite | In Progress |
+| KAN-495 | Brainstorm obs integration test architecture | ✅ Done (S130) |
+| KAN-496 | Write spec: Obs integration test suite | ✅ Done (S130) |
+| KAN-497 | Review spec: Obs integration test suite | ✅ Done (S130) |
+| KAN-498 | Write plan: Obs integration test suite | ✅ Ready for Verification (S130) |
+| KAN-499 | Review plan: Obs integration test suite | To Do |
+| **KAN-500** | **PR1: Fixtures + SDK pipeline + trace propagation** | **To Do** |
+| **KAN-501** | **PR2: Anomaly lifecycle + admin endpoints** | **To Do** |
+| **KAN-502** | **PR3: MCP tools + retention** | **To Do** |
+
+**Plan:** `docs/superpowers/plans/2026-04-25-observability-integration-test-suite.md` (v2 — 5-persona reviewed, all 3C+9H fixes applied)
+
+**Test files (planned):**
+| File | Tests | What it proves |
+|---|---|---|
+| `test_sdk_pipeline.py` | 7 | emit → buffer → flush → DirectTarget → writer → DB |
+| `test_trace_propagation.py` | 4 | X-Trace-Id flows through HTTP → DB → external API events |
+| `test_anomaly_lifecycle.py` | 4 | Seed bad data → engine → finding → dedup → JIRA draft |
+| `test_admin_endpoints.py` | 6 | Admin query endpoints return correct shapes from real data |
+| `test_mcp_tools.py` | 5 | MCP tool functions return correct structures from real data |
+| `test_retention.py` | 3 | Hypertable drop_chunks + regular table DELETE + policy verification |
+
+---
+
 ### Epic 2: Seed Universe (planned — blocked by Epic 1)
 
 > Rebuild + validate the 10y ticker universe with observability coverage in place. Design work still pending; start after 1a merges so seed runs emit structured events.
