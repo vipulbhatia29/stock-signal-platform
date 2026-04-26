@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useCallback, useMemo, useState } from "react";
+import { useBulkSentiment } from "@/hooks/use-sentiment";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { FilterIcon, AlignJustifyIcon, LayoutListIcon, LayoutGridIcon } from "lucide-react";
 import { useIndexes, useBulkSignals, useWatchlist } from "@/hooks/use-stocks";
@@ -175,6 +176,13 @@ function ScreenerContent() {
     return items;
   }, [data?.items, screenerTab, watchlistTickers]);
 
+  const screenerTickers = useMemo(() => displayItems.map((i) => i.ticker), [displayItems]);
+  const { data: sentimentData } = useBulkSentiment(screenerTickers);
+  const sentimentMap = useMemo(
+    () => new Map(sentimentData?.tickers?.map((t) => [t.ticker, t.stock_sentiment]) ?? []),
+    [sentimentData]
+  );
+
   const displayTotal =
     screenerTab === "watchlist" ? displayItems.length : (data?.total ?? 0);
 
@@ -250,6 +258,7 @@ function ScreenerContent() {
           isLoading={isLoading}
           activeTab={activeTab}
           onTabChange={setActiveTab}
+          sentimentMap={sentimentMap}
         />
       )}
       {displayTotal > PAGE_SIZE && (

@@ -7,9 +7,11 @@ import { HealthGradeBadge } from "@/components/health-grade-badge";
 import { SectorPerformanceBars } from "@/components/sector-performance-bars";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePortfolioSummary, usePortfolioHealth, useMarketBriefing, usePortfolioAnalytics } from "@/hooks/use-stocks";
+import { usePortfolioSummary, usePortfolioHealth, useMarketBriefing, usePortfolioAnalytics, usePortfolioHealthHistory } from "@/hooks/use-stocks";
 import { usePortfolioConvergence } from "@/hooks/use-convergence";
 import { usePortfolioForecastFull } from "@/hooks/use-forecasts";
+import { LineChart, Line, ResponsiveContainer } from "recharts";
+import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 
 /** Zone 3 — Portfolio KPIs + health grade + sector performance. */
@@ -18,6 +20,7 @@ export function PortfolioZone() {
   const { data: health, isLoading: healthLoading } = usePortfolioHealth();
   const { data: briefing } = useMarketBriefing();
   const { data: analytics } = usePortfolioAnalytics();
+  const { data: healthHistory } = usePortfolioHealthHistory(7);
   const portfolioId = summary?.portfolio_id ?? null;
   const { data: convergence } = usePortfolioConvergence(portfolioId, !!summary);
   const { data: forecast } = usePortfolioForecastFull(portfolioId);
@@ -63,6 +66,26 @@ export function PortfolioZone() {
         <div className="flex flex-col items-start gap-2">
           <PortfolioKPITile label="Health Grade" value={health?.grade ?? "—"} accent="neutral" />
           {health && <HealthGradeBadge grade={health.grade} score={health.health_score} />}
+          {health && healthHistory && healthHistory.length >= 2 && (
+            <div className={cn(
+              "h-8 w-full mt-1",
+              health?.grade && ["A", "B"].includes(health.grade) ? "text-gain" :
+              health?.grade === "C" ? "text-amber-400" : "text-loss"
+            )}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={healthHistory}>
+                  <Line
+                    type="monotone"
+                    dataKey="health_score"
+                    stroke="currentColor"
+                    strokeWidth={1.5}
+                    dot={false}
+                    isAnimationActive={false}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
         {/* Unrealized P&L */}

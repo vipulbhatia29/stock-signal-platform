@@ -150,3 +150,35 @@ Full Playwright-driven walkthrough. 13/15 render correctly. 3 bugs found and fix
 - Tests: 2633 unit (+4), 522 frontend (+10), 0 failures
 - 2 PRs opened (#279, #280), 8 new files created, 8 files modified
 - Resume: Merge PRs, implement Spec B (KAN-512 — dashboard/portfolio) or Spec C (KAN-513 — admin)
+
+---
+
+## Session 137 — KAN-512: Spec B + Plan B for Dashboard/Screener/Sectors Enrichment (2026-04-26)
+
+### Gap Investigation
+- Explored all dashboard, portfolio, screener, and sectors pages for orphaned hooks
+- Found **5 orphaned hooks** with working backend endpoints but 0 frontend consumers
+- Found **3 type bugs**: `usePortfolioHealthHistory` wrong type, `useBulkSentiment` wrong type + missing required `tickers` param (always 422), `NewsSentiment` missing 2 fields
+
+### Spec B Written + Reviewed
+`docs/superpowers/specs/2026-04-26-ui-overhaul-spec-b-dashboard-portfolio.md`
+- 5 changes: health sparkline, macro badge, sentiment column, sector convergence badge, dead hook cleanup
+- Self-review caught `NewsSentiment` missing fields + `screener-table.tsx` column location
+
+### Plan B Written + Reviewed (2 personas)
+`docs/superpowers/plans/2026-04-26-ui-overhaul-spec-b-dashboard-portfolio.md`
+- 7 tasks, ~200 line diff, single PR
+- Review found 3 HIGH issues (all fixed):
+  - `useBulkSentiment` doubly broken (type + missing required `tickers` param)
+  - ResponsiveContainer renders nothing in jsdom (needs mock)
+  - Missing `use-convergence` and `use-forecasts` mocks in dashboard test file
+
+### JIRA
+- KAN-512 updated with expanded scope (was just sparkline + dead hook, now 5 changes)
+- KAN-514 created: deferred forecast components endpoint wiring (placeholder backend)
+- KAN-515–520 created: 6 implementation subtasks under KAN-512
+
+### Session 137 Totals
+- Tests: 2633 unit (unchanged — planning only)
+- 2 new docs (spec + plan), 8 JIRA tickets created/updated
+- Resume: Implement KAN-512 (subagent-driven, Task 1 first → Tasks 2-6 → Task 7)

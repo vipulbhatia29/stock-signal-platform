@@ -361,13 +361,20 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 **JIRA:** KAN-400 (Epic), KAN-505 (Refinement, Done), KAN-511 (Spec A), KAN-512 (Spec B), KAN-513 (Spec C), KAN-504 (test follow-up)
 
-**Spec A — Stock Detail Enrichment** (KAN-511, ~3-4 days, 2 PRs):
-- ✅ Spec: `docs/superpowers/specs/2026-04-25-ui-overhaul-spec-a-stock-detail-enrichment.md`
-- ✅ Plan: `docs/superpowers/plans/2026-04-25-ui-overhaul-spec-a-stock-detail-enrichment.md`
-- ConvergenceCard + history chart, Forecast Track Record (new endpoint), SentimentCard + articles, section reorder
+**Spec A — Stock Detail Enrichment** ✅ (KAN-511, PRs #279+#280, Session 136):
+- ConvergenceCard + history chart, Forecast Track Record (new `GET /forecasts/{ticker}/track-record` endpoint), SentimentCard + articles, CollapsibleSection extraction, section reorder (13 sections)
+- Spec: `docs/superpowers/specs/2026-04-25-ui-overhaul-spec-a-stock-detail-enrichment.md`
+- Plan: `docs/superpowers/plans/2026-04-25-ui-overhaul-spec-a-stock-detail-enrichment.md`
 
-**Spec B — Dashboard & Portfolio Wiring** (KAN-512, ~1.5 days, 1 PR):
-- Portfolio health history sparkline, delete `usePortfolioForecast`, verify existing wiring
+**Spec B — Dashboard, Screener & Sectors Enrichment** (KAN-512, ~1.5 days, 1 PR) — **NEXT**:
+- ✅ Spec: `docs/superpowers/specs/2026-04-26-ui-overhaul-spec-b-dashboard-portfolio.md`
+- ✅ Plan: `docs/superpowers/plans/2026-04-26-ui-overhaul-spec-b-dashboard-portfolio.md`
+- 5 changes: portfolio health sparkline, macro sentiment badge, bulk sentiment screener column, sector convergence badges, delete dead `usePortfolioForecast`
+- 3 type bugs discovered and planned: `usePortfolioHealthHistory` wrong type, `useBulkSentiment` broken (type + missing param), `NewsSentiment` missing 2 fields
+- 6 subtasks: KAN-515 (type fixes), KAN-516 (sparkline), KAN-517 (macro badge), KAN-518 (screener column), KAN-519 (sector badges), KAN-520 (dead code cleanup)
+
+**KAN-514 — Forecast Components Endpoint** (deferred):
+- `GET /portfolio/{id}/forecast/components` is a placeholder (returns `components: []`). Needs Prophet per-ticker data populated before frontend can consume it. Tracked separately.
 
 **Spec C — Admin Enhancements** (KAN-513, ~2 days, 1 PR):
 - Backtest summary table (admin), command center drill-down fix, audit log viewer

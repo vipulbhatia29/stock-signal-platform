@@ -5,6 +5,7 @@ import { get } from "@/lib/api";
 import type {
   SentimentTimeseriesResponse,
   ArticleListResponse,
+  BulkSentimentResponse,
 } from "@/types/api";
 
 /** Fetch daily sentiment timeseries for a single ticker. */
@@ -20,13 +21,14 @@ export function useSentiment(ticker: string | null, days = 30) {
   });
 }
 
-/** Fetch bulk sentiment for all tracked tickers. */
-export function useBulkSentiment(enabled = true) {
+/** Fetch bulk sentiment for a list of tickers. */
+export function useBulkSentiment(tickers: string[], enabled = true) {
+  const tickerParam = tickers.join(",");
   return useQuery({
-    queryKey: ["sentiment", "bulk"],
-    queryFn: () => get<unknown[]>("/sentiment/bulk"),
+    queryKey: ["sentiment", "bulk", tickerParam],
+    queryFn: () => get<BulkSentimentResponse>(`/sentiment/bulk?tickers=${tickerParam}`),
     staleTime: 30 * 60 * 1000,
-    enabled,
+    enabled: enabled && tickers.length > 0,
   });
 }
 
