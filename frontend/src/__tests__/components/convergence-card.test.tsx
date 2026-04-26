@@ -82,7 +82,7 @@ describe("ConvergenceCard", () => {
   });
 
   it("shows divergence alert when divergent", () => {
-    mockConvergence.data.divergence = {
+    (mockConvergence.data.divergence as Record<string, unknown>) = {
       is_divergent: true,
       forecast_direction: "bullish",
       technical_majority: "bearish",
