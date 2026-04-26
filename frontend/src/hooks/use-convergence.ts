@@ -22,11 +22,11 @@ export const convergenceKeys = {
 };
 
 /** Fetch convergence for a single ticker (traffic lights + rationale). */
-export function useStockConvergence(ticker: string | null) {
+export function useStockConvergence(ticker: string | null, enabled = true) {
   return useQuery({
     queryKey: convergenceKeys.ticker(ticker ?? ""),
     queryFn: () => get<ConvergenceResponse>(`/convergence/${ticker}`),
-    enabled: !!ticker,
+    enabled: !!ticker && enabled,
     staleTime: 30 * 60 * 1000, // 30 min — convergence updates nightly
   });
 }

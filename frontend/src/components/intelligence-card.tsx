@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDownIcon, CalendarIcon, TrendingDownIcon } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
+import { CalendarIcon, TrendingDownIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SectionHeading } from "@/components/section-heading";
+import { CollapsibleSection } from "@/components/collapsible-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/error-state";
 import {
@@ -23,52 +22,6 @@ interface IntelligenceCardProps {
   isLoading: boolean;
   isError?: boolean;
   onRetry?: () => void;
-}
-
-function CollapsibleSection({
-  title,
-  count,
-  children,
-}: {
-  title: string;
-  count: number;
-  children: React.ReactNode;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <div className="rounded-lg border border-border bg-card overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex w-full items-center justify-between gap-4 px-4 py-2.5 text-left hover:bg-muted/30 transition-colors"
-      >
-        <span className="text-sm font-medium text-foreground">{title}</span>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-subtle tabular-nums">{count}</span>
-          <ChevronDownIcon
-            className={cn(
-              "size-4 text-subtle transition-transform duration-200",
-              isOpen && "rotate-180"
-            )}
-          />
-        </div>
-      </button>
-      <AnimatePresence initial={false}>
-        {isOpen && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: "easeInOut" }}
-            className="overflow-hidden"
-          >
-            <div className="border-t border-border px-4 py-3">{children}</div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
 }
 
 export function IntelligenceCard({
