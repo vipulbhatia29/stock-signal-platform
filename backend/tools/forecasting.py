@@ -83,7 +83,7 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
         )
 
     # Build Prophet DataFrame
-    df = pd.DataFrame(rows, columns=["ds", "y"])
+    df = pd.DataFrame(rows, columns=pd.Index(["ds", "y"]))
     df["ds"] = pd.to_datetime(df["ds"]).dt.tz_localize(None)
     df["y"] = df["y"].astype(float)
 
@@ -91,7 +91,9 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
     model = Prophet(**PROPHET_CONFIG)
 
     # ── Sentiment regressors (coverage-gated to avoid numerical instability) ──
-    sentiment_df = await fetch_sentiment_regressors(ticker, df["ds"].min(), df["ds"].max(), db)
+    ds_min = pd.Timestamp(df["ds"].min())
+    ds_max = pd.Timestamp(df["ds"].max())
+    sentiment_df = await fetch_sentiment_regressors(ticker, ds_min, ds_max, db)
     if sentiment_df is not None and not sentiment_df.empty:
         coverage = len(sentiment_df) / len(df)
         if coverage >= MIN_SENTIMENT_COVERAGE:
@@ -208,10 +210,9 @@ async def predict_forecast(
     # Prophet can extrapolate to negative values for volatile/declining stocks;
     # equities cannot trade below $0, so we clamp to 1% of last known price
     # (minimum $0.01) to prevent negative prices from poisoning downstream math.
+    history = getattr(model, "history", None)
     last_known_price = (
-        float(model.history["y"].iloc[-1])
-        if hasattr(model, "history") and len(model.history) > 0
-        else 0.0
+        float(history["y"].iloc[-1]) if history is not None and len(history) > 0 else 0.0
     )
     price_floor = max(0.01, last_known_price * 0.01)
 
@@ -251,18 +252,19 @@ async def predict_forecast(
     sentiment_projection: dict[str, float] = {}
     training_end: date | None = None
     if settings.PROPHET_REAL_SENTIMENT_ENABLED and has_sentiment_regressors:
-        if not hasattr(model, "history") or len(model.history) == 0:
+        _hist = getattr(model, "history", None)
+        if _hist is None or len(_hist) == 0:
             raise RuntimeError(
                 f"predict_forecast: model {model_version.ticker} "
                 f"v{model_version.version} has sentiment regressors but no "
                 "training history — artifact is corrupt or empty"
             )
 
-        training_end = model.history["ds"].max().date()
+        training_end = _hist["ds"].max().date()
 
         # Step 1 — historical rows straight from the serialized model.
         cols = ["ds", *sentiment_regressor_names]
-        history_sent_df: pd.DataFrame = model.history[cols].copy()  # type: ignore[assignment]
+        history_sent_df: pd.DataFrame = _hist[cols].copy()
 
         # Step 2 — post-training-window fresh fetch.
         if training_end < today:
@@ -272,7 +274,7 @@ async def predict_forecast(
                 model_version.ticker,
                 post_start,
                 post_end,
-                db,  # type: ignore[arg-type]
+                db,
             )
             if post_df is not None and not post_df.empty:
                 combined_sentiment_df = pd.concat([history_sent_df, post_df], ignore_index=True)
@@ -340,7 +342,7 @@ async def predict_forecast(
                 # Cast to float64 once rows are filled; asserts there are no
                 # lingering NaNs so a future bug can't silently zero the col.
                 future[col] = future[col].astype("float64")
-                if future[col].isna().any():  # type: ignore[reportGeneralTypeIssues]
+                if bool(future[col].isna().any()):
                     raise RuntimeError(
                         f"predict_forecast: {col} still has NaN after merge + "
                         f"projection for {model_version.ticker} — refusing to "

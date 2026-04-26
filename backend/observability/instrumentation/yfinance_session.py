@@ -54,7 +54,7 @@ try:
     from yfinance.data import YfData  # noqa: F401
 
     _USE_CURL_CFFI = True
-except Exception:  # nosemgrep: obs-warn-silent-except — import detection, not error suppression
+except ImportError:
     pass
 
 if _USE_CURL_CFFI:

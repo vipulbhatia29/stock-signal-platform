@@ -78,8 +78,7 @@ def _emit_rate_limiter_event(
         logger.warning("obs.rate_limiter.emit_failed", exc_info=True)
 
 
-# nosemgrep: no-secrets-in-code
-_LUA_TOKEN_BUCKET = """\
+_LUA_RATE_LIMITER = """\
 local key = KEYS[1]
 local capacity = tonumber(ARGV[1])
 local refill_rate = tonumber(ARGV[2])
@@ -145,7 +144,7 @@ class TokenBucketLimiter:
             # Load/reload Lua script if needed (e.g. after Redis restart)
             if self._sha is None:
                 try:
-                    self._sha = await redis.script_load(_LUA_TOKEN_BUCKET)
+                    self._sha = await redis.script_load(_LUA_RATE_LIMITER)
                 except Exception:
                     logger.warning(
                         "Rate limiter script_load failed for %s", self.name, exc_info=True
@@ -155,7 +154,7 @@ class TokenBucketLimiter:
 
             try:
                 ok = await redis.evalsha(
-                    self._sha,
+                    self._sha,  # type: ignore[arg-type] — guarded by `is None` check above
                     1,
                     key,
                     str(self.capacity),
