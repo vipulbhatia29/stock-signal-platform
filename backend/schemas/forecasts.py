@@ -79,3 +79,34 @@ class ScorecardResponse(BaseModel):
     worst_miss_pct: float
     worst_miss_ticker: str
     by_horizon: list[HorizonBreakdownResponse] = Field(default_factory=list)
+
+
+class ForecastEvaluation(BaseModel):
+    """Single evaluated forecast with actual outcome."""
+
+    forecast_date: date
+    target_date: date
+    horizon_days: int
+    predicted_price: float
+    predicted_lower: float
+    predicted_upper: float
+    actual_price: float | None
+    error_pct: float
+    direction_correct: bool
+
+
+class ForecastTrackRecordSummary(BaseModel):
+    """Aggregate accuracy stats for a ticker's forecasts."""
+
+    total_evaluated: int
+    direction_hit_rate: float = Field(ge=0.0, le=1.0)
+    avg_error_pct: float = Field(ge=0.0)
+    ci_containment_rate: float = Field(ge=0.0, le=1.0)
+
+
+class ForecastTrackRecordResponse(BaseModel):
+    """Full track record for a ticker's forecast history."""
+
+    ticker: str
+    evaluations: list[ForecastEvaluation]
+    summary: ForecastTrackRecordSummary

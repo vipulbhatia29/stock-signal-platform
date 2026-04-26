@@ -2,8 +2,10 @@
 
 import logging
 from collections import defaultdict
+from datetime import date, timedelta
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +18,11 @@ from backend.models.price import StockPrice
 from backend.models.stock import Stock
 from backend.models.user import User
 from backend.schemas.forecasts import (
+    ForecastEvaluation,
     ForecastHorizon,
     ForecastResponse,
+    ForecastTrackRecordResponse,
+    ForecastTrackRecordSummary,
     HorizonBreakdownResponse,
     PortfolioForecastHorizon,
     PortfolioForecastResponse,
@@ -170,6 +175,187 @@ async def get_portfolio_forecast(
         ticker_count=len(position_values),
         missing_tickers=missing_tickers,
     )
+
+
+async def _fetch_evaluated_forecasts(
+    ticker: str, since: date, session: AsyncSession
+) -> list[ForecastResult]:
+    """Fetch forecast results where evaluation has matured."""
+    stmt = (
+        select(ForecastResult)
+        .where(
+            ForecastResult.ticker == ticker,
+            ForecastResult.error_pct.is_not(None),
+            ForecastResult.forecast_date >= since,
+        )
+        .order_by(ForecastResult.target_date.asc())
+    )
+    result = await session.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def _fetch_forecast_date_prices(
+    ticker: str, forecast_dates: list[date], session: AsyncSession
+) -> dict[date, float]:
+    """Batch-fetch closing prices at each forecast date.
+
+    Fetches all prices in the date range and matches in Python.
+    Handles weekends/holidays by using the most recent prior trading day.
+    """
+    if not forecast_dates:
+        return {}
+
+    min_date = min(forecast_dates) - timedelta(days=5)  # buffer for weekends
+    max_date = max(forecast_dates)
+
+    stmt = (
+        select(func.date(StockPrice.time).label("price_date"), StockPrice.close)
+        .where(
+            StockPrice.ticker == ticker,
+            func.date(StockPrice.time) >= min_date,
+            func.date(StockPrice.time) <= max_date,
+        )
+        .order_by(StockPrice.time.asc())
+    )
+    result = await session.execute(stmt)
+    all_prices = [(row.price_date, float(row.close)) for row in result]
+
+    price_map: dict[date, float] = {}
+    for fd in forecast_dates:
+        best = None
+        for price_date, close in all_prices:
+            if price_date <= fd:
+                best = close
+            else:
+                break
+        if best is not None:
+            price_map[fd] = best
+
+    return price_map
+
+
+@router.get(
+    "/forecasts/{ticker}/track-record",
+    response_model=ForecastTrackRecordResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Forecast track record for a ticker",
+    description=(
+        "Returns evaluated forecasts with predicted vs actual prices, "
+        "direction accuracy, and aggregate summary statistics."
+    ),
+)
+async def get_forecast_track_record(
+    ticker: TickerPath,
+    request: Request,
+    days: Annotated[
+        int,
+        Query(ge=30, le=730, description="Look-back window in days (default 365)"),
+    ] = 365,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_async_session),
+) -> ForecastTrackRecordResponse:
+    """Get forecast track record showing predicted vs actual outcomes.
+
+    Args:
+        ticker: Stock ticker symbol.
+        request: FastAPI request (used for cache access).
+        days: Look-back window in calendar days.
+        current_user: Authenticated user (injected).
+        session: Async DB session (injected).
+
+    Returns:
+        ForecastTrackRecordResponse with evaluations and summary.
+    """
+    ticker_upper = ticker.upper()
+
+    # Check cache
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:forecast-track-record:{ticker_upper}:{days}"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return ForecastTrackRecordResponse.model_validate_json(cached)
+
+    since = date.today() - timedelta(days=days)
+
+    rows = await _fetch_evaluated_forecasts(ticker_upper, since, session)
+
+    if not rows:
+        return ForecastTrackRecordResponse(
+            ticker=ticker_upper,
+            evaluations=[],
+            summary=ForecastTrackRecordSummary(
+                total_evaluated=0,
+                direction_hit_rate=0.0,
+                avg_error_pct=0.0,
+                ci_containment_rate=0.0,
+            ),
+        )
+
+    # Batch-fetch prices at forecast dates for direction computation
+    forecast_dates = list({r.forecast_date for r in rows})
+    price_map = await _fetch_forecast_date_prices(ticker_upper, forecast_dates, session)
+
+    evaluations: list[ForecastEvaluation] = []
+    direction_correct_count = 0
+    ci_hits = 0
+    total_error = 0.0
+
+    for row in rows:
+        forecast_date_price = price_map.get(row.forecast_date)
+        if forecast_date_price is not None and row.actual_price is not None:
+            direction_correct = bool(
+                (row.predicted_price - forecast_date_price)
+                * (row.actual_price - forecast_date_price)
+                > 0
+            )
+        else:
+            direction_correct = False
+
+        ci_hit = (
+            row.actual_price is not None
+            and row.predicted_lower <= row.actual_price <= row.predicted_upper
+        )
+        if ci_hit:
+            ci_hits += 1
+        if direction_correct:
+            direction_correct_count += 1
+        total_error += abs(row.error_pct) if row.error_pct else 0.0
+
+        evaluations.append(
+            ForecastEvaluation(
+                forecast_date=row.forecast_date,
+                target_date=row.target_date,
+                horizon_days=row.horizon_days,
+                predicted_price=row.predicted_price,
+                predicted_lower=row.predicted_lower,
+                predicted_upper=row.predicted_upper,
+                actual_price=row.actual_price,
+                error_pct=abs(row.error_pct) if row.error_pct else 0.0,
+                direction_correct=direction_correct,
+            )
+        )
+
+    total = len(evaluations)
+    summary = ForecastTrackRecordSummary(
+        total_evaluated=total,
+        direction_hit_rate=round(direction_correct_count / total, 4) if total else 0.0,
+        avg_error_pct=round(total_error / total, 4) if total else 0.0,
+        ci_containment_rate=round(ci_hits / total, 4) if total else 0.0,
+    )
+
+    response = ForecastTrackRecordResponse(
+        ticker=ticker_upper,
+        evaluations=evaluations,
+        summary=summary,
+    )
+
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), tier=CacheTier.STANDARD)
+
+    return response
 
 
 @router.get(

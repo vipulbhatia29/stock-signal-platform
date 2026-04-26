@@ -122,3 +122,31 @@ Full Playwright-driven walkthrough. 13/15 render correctly. 3 bugs found and fix
 - Tests: 2629 unit (unchanged — planning only)
 - 2 new docs (spec + plan), 9 JIRA tickets created, KAN-400 reopened, KAN-502 closed
 - Resume: Implement Spec A (KAN-511) — subagent-driven, PR1 first (Convergence + section reorder)
+
+---
+
+## Session 136 — KAN-511: Stock Detail Page Enrichment Implementation (2026-04-25)
+
+### PR1: ConvergenceCard + CollapsibleSection + Section Reorder (#279)
+- **CollapsibleSection** extracted from `intelligence-card.tsx` to shared `collapsible-section.tsx`
+- **ConvergenceCard** — signal convergence label badge, signal direction arrows, divergence alert, 30-day history chart
+- `useStockConvergence` updated with `enabled` param for progressive loading
+- **SectionNav** updated with "Convergence" (after History) and "Sentiment" (after Intelligence)
+- Wired into stock detail page as section #4
+
+### PR2: Forecast Track Record + SentimentCard (#280)
+- **Backend:** `GET /forecasts/{ticker}/track-record` endpoint — batch price fetch for direction correctness, CI containment rate. Route placed before `/{ticker}` to prevent path shadowing.
+- **ForecastTrackRecord** — predicted vs actual ComposedChart, 4 KPI tiles (forecasts, direction hit, avg error, CI hit), color-coded thresholds
+- **SentimentCard** — 3-layer sentiment trend chart, 3 sentiment tiles, collapsible article list
+- **Hooks:** `useForecastTrackRecord`, `useTickerArticles` (new), `useSentiment` typing fixed
+- **Types:** 6 new TypeScript interfaces
+- Stock detail integration test mocks updated for 3 new components
+
+### Plan drift fixes
+- `ChartTooltip` must receive `active` prop from Recharts callback (plan omitted this)
+- Test assertions adjusted for multiple matching elements (duplicate 100% in KPI tiles)
+
+### Session 136 Totals
+- Tests: 2633 unit (+4), 522 frontend (+10), 0 failures
+- 2 PRs opened (#279, #280), 8 new files created, 8 files modified
+- Resume: Merge PRs, implement Spec B (KAN-512 — dashboard/portfolio) or Spec C (KAN-513 — admin)

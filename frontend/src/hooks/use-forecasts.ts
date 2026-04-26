@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { get } from "@/lib/api";
 import type {
   ForecastResponse,
+  ForecastTrackRecordResponse,
   PortfolioForecastFullResponse,
   PortfolioForecastResponse,
   ScorecardResponse,
@@ -38,6 +39,19 @@ export function usePortfolioForecastFull(portfolioId: string | null) {
         `/portfolio/${portfolioId}/forecast`,
       ),
     enabled: !!portfolioId,
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+/** Fetch forecast track record — predicted vs actual outcomes. */
+export function useForecastTrackRecord(ticker: string | null, days = 365) {
+  return useQuery({
+    queryKey: ["forecast-track-record", ticker, days],
+    queryFn: () =>
+      get<ForecastTrackRecordResponse>(
+        `/forecasts/${ticker}/track-record?days=${days}`,
+      ),
+    enabled: !!ticker,
     staleTime: 30 * 60 * 1000,
   });
 }
