@@ -90,7 +90,7 @@ class ForecastEvaluation(BaseModel):
     predicted_price: float
     predicted_lower: float
     predicted_upper: float
-    actual_price: float
+    actual_price: float | None
     error_pct: float
     direction_correct: bool
 

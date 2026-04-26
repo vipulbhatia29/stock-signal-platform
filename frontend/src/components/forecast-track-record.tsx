@@ -200,8 +200,8 @@ export function ForecastTrackRecord({ ticker, enabled = true }: ForecastTrackRec
         />
         <KpiTile
           label="Avg Error"
-          value={`${summary.avg_error_pct.toFixed(1)}%`}
-          accent={errorAccent(summary.avg_error_pct)}
+          value={`${(summary.avg_error_pct * 100).toFixed(1)}%`}
+          accent={errorAccent(summary.avg_error_pct * 100)}
         />
         <KpiTile
           label="CI Hit"

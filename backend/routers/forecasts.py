@@ -245,7 +245,8 @@ async def _fetch_forecast_date_prices(
     ),
 )
 async def get_forecast_track_record(
-    ticker: str,
+    ticker: TickerPath,
+    request: Request,
     days: Annotated[
         int,
         Query(ge=30, le=730, description="Look-back window in days (default 365)"),
@@ -257,6 +258,7 @@ async def get_forecast_track_record(
 
     Args:
         ticker: Stock ticker symbol.
+        request: FastAPI request (used for cache access).
         days: Look-back window in calendar days.
         current_user: Authenticated user (injected).
         session: Async DB session (injected).
@@ -265,6 +267,15 @@ async def get_forecast_track_record(
         ForecastTrackRecordResponse with evaluations and summary.
     """
     ticker_upper = ticker.upper()
+
+    # Check cache
+    cache = getattr(request.app.state, "cache", None)
+    cache_key = f"app:forecast-track-record:{ticker_upper}:{days}"
+    if cache:
+        cached = await cache.get(cache_key)
+        if cached:
+            return ForecastTrackRecordResponse.model_validate_json(cached)
+
     since = date.today() - timedelta(days=days)
 
     rows = await _fetch_evaluated_forecasts(ticker_upper, since, session)
@@ -333,11 +344,18 @@ async def get_forecast_track_record(
         ci_containment_rate=round(ci_hits / total, 4) if total else 0.0,
     )
 
-    return ForecastTrackRecordResponse(
+    response = ForecastTrackRecordResponse(
         ticker=ticker_upper,
         evaluations=evaluations,
         summary=summary,
     )
+
+    if cache:
+        from backend.services.cache import CacheTier
+
+        await cache.set(cache_key, response.model_dump_json(), tier=CacheTier.STANDARD)
+
+    return response
 
 
 @router.get(

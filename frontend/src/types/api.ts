@@ -1240,7 +1240,7 @@ export interface ForecastEvaluation {
   predicted_price: number;
   predicted_lower: number;
   predicted_upper: number;
-  actual_price: number;
+  actual_price: number | null;
   error_pct: number;
   direction_correct: boolean;
 }

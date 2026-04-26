@@ -44,12 +44,12 @@ export function usePortfolioForecastFull(portfolioId: string | null) {
 }
 
 /** Fetch forecast track record — predicted vs actual outcomes. */
-export function useForecastTrackRecord(ticker: string | null) {
+export function useForecastTrackRecord(ticker: string | null, days = 365) {
   return useQuery({
-    queryKey: ["forecast-track-record", ticker],
+    queryKey: ["forecast-track-record", ticker, days],
     queryFn: () =>
       get<ForecastTrackRecordResponse>(
-        `/forecasts/${ticker}/track-record`,
+        `/forecasts/${ticker}/track-record?days=${days}`,
       ),
     enabled: !!ticker,
     staleTime: 30 * 60 * 1000,
