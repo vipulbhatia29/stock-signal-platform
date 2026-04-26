@@ -6,11 +6,13 @@ export const SECTION_IDS = [
   { id: "sec-price", label: "Price" },
   { id: "sec-signals", label: "Signals" },
   { id: "sec-history", label: "History" },
+  { id: "sec-convergence", label: "Convergence" },
   { id: "sec-benchmark", label: "Benchmark" },
   { id: "sec-risk", label: "Risk" },
   { id: "sec-fundamentals", label: "Fundamentals" },
   { id: "sec-forecast", label: "Forecast" },
   { id: "sec-intelligence", label: "Intelligence" },
+  { id: "sec-sentiment", label: "Sentiment" },
   { id: "sec-news", label: "News" },
   { id: "sec-dividends", label: "Dividends" },
 ] as const;

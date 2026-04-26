@@ -29,6 +29,7 @@ import { FundamentalsCard } from "@/components/fundamentals-card";
 import { DividendCard } from "@/components/dividend-card";
 import { ForecastCard } from "@/components/forecast-card";
 import { IntelligenceCard } from "@/components/intelligence-card";
+import { ConvergenceCard } from "@/components/convergence-card";
 import { NewsCard } from "@/components/news-card";
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeading } from "@/components/section-heading";
@@ -171,6 +172,10 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
       <section id="sec-history">
         <SectionHeading>Signal History (90 days)</SectionHeading>
         <SignalHistoryChart ticker={ticker} />
+      </section>
+
+      <section id="sec-convergence">
+        <ConvergenceCard ticker={ticker} enabled={hasSignals} />
       </section>
 
       <section id="sec-benchmark">
