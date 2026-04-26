@@ -512,6 +512,47 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 
 ---
 
+### Phase E: UI Overhaul — Feature Completion (Session 139+, Epic KAN-400)
+
+> Session 139 interactive PM walkthrough identified 69 gaps across 8 pages. Decomposed into 18 full-stack tickets (each covers BE + FE together). 3 bugs fixed in-session. Execution order follows user journey.
+> **Superseded:** KAN-504 (E2E audit — decomposed), KAN-528/523 (CC drill-downs — into T10), KAN-524 (task polling — into T17), KAN-514 (forecast endpoint — into T8).
+
+| Sprint | Ticket | Summary | Backend Status | Status |
+|--------|--------|---------|---------------|--------|
+| **Sprint E1: Core User Flow** | | Dashboard → Search → Stock Detail → Screener | | |
+| 1 | KAN-530 | Dashboard Market Pulse — top_movers query fix, gainers/losers split, indexes, sector bars | Query fix + FE | To Do |
+| 2 | KAN-531 | Dashboard Signals zone — wire watchlist with signal data + recommendations | BE schema enhance + FE | To Do |
+| 3 | KAN-532 | Stock Detail header — current price, daily change%, market cap | New endpoint + FE | To Do |
+| 4 | KAN-533 | Screener decision view — price, change%, recommendation action in default tab | BE schema enhance + FE | To Do |
+| 5 | KAN-534 | Search → Ingest → Navigate — full pipeline, toast, auto-navigate | API ready, FE wiring | To Do |
+| **Sprint E2: Portfolio & Transactions** | | Portfolio page end-to-end | | |
+| 6 | KAN-535 | Portfolio Log Transaction — ticker selection, price binding, validation | API ready, FE only | To Do |
+| 7 | KAN-536 | Portfolio CSV upload — Fidelity format, template download, error messages | BE parser + FE | To Do |
+| 8 | KAN-537 | Portfolio display fixes — return %, pie colors, decimals, health grade, forecast trigger | API correct, FE only | To Do |
+| **Sprint E3: Sectors & Alerts** | | Sectors overhaul + alerts system | | |
+| 9 | KAN-538 | Sectors overhaul — correlation heatmap, tabs, name normalization, convergence | API ready, FE heavy | To Do |
+| 10 | KAN-545 | Alerts system — bell popover, /alerts page, alert generation, navigation | API ready, FE + validation | To Do |
+| **Sprint E4: Stock Detail Completions** | | Remaining stock detail sections | | |
+| 11 | KAN-540 | Stock Detail completions — dividends, earnings chart, news badges, risk, convergence | API mostly ready, FE wiring | To Do |
+| **Sprint E5: Admin & Observability** | | Command Center + Pipeline + Observability | | |
+| 12 | KAN-541 | Navigation & access — admin pages in sidebar, alerts popover, email banner | API ready, FE nav | To Do |
+| 13 | KAN-539 | Command Center — 8-zone vision parity with drill-downs (prototype HTML reference) | API ready, FE heavy | To Do |
+| 14 | KAN-544 | Pipeline Control — sidebar link, task polling (asyncio→Celery), audit log | BE significant + FE | To Do |
+| 15 | KAN-542 | User Observability polish — query traces, health thresholds, empty states | API ready, FE | To Do |
+| 16 | KAN-543 | Admin Observability — 8-zone layout, DQ findings, sidebar link | API ready, FE + validation | To Do |
+| **Sprint E6: Admin Pages** | | Backtesting + LLM Console | | |
+| 17 | KAN-521 | Backtesting Dashboard — walk-forward results, accuracy badges, forecast vs actual | API ready, FE new page | To Do |
+| 18 | KAN-522 | LLM Admin Console — model config, enable/disable, tier routing, cost tracking | API ready, FE new page | To Do |
+
+**Also created this session:** KAN-529 (Route sentiment scoring through LLM cascade — cost optimization, not Phase E).
+
+**Bugs fixed in Session 139 (committed, not yet merged):**
+- yfinance `curl_cffi` session incompatibility (`backend/observability/instrumentation/yfinance_session.py`)
+- Redis Lua rate limiter broken — `# nosemgrep` inside Lua string (`backend/services/rate_limiter.py`)
+- Prophet sentiment coverage gate — divide-by-zero with sparse regressors (`backend/tools/forecasting.py`)
+
+---
+
 ## Open Bugs (Session 95 — Data Reseed DQ Findings)
 
 | Ticket | Priority | Summary | Status |

@@ -5,6 +5,7 @@ import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 from prophet import Prophet
@@ -49,6 +50,11 @@ DEFAULT_HORIZONS = [90, 180, 270]
 # Minimum training data points
 MIN_DATA_POINTS = 200
 
+# Minimum sentiment coverage ratio to include regressors in Prophet.
+# Below this threshold, the sparse regressor matrix causes numerically
+# unstable coefficient estimates (divide-by-zero in prediction).
+MIN_SENTIMENT_COVERAGE = 0.3
+
 
 async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
     """Train a Prophet model for a ticker and store the versioned artifact.
@@ -78,25 +84,38 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
         )
 
     # Build Prophet DataFrame
-    df = pd.DataFrame(rows, columns=["ds", "y"])
+    df = pd.DataFrame(rows, columns=pd.Index(["ds", "y"]))
     df["ds"] = pd.to_datetime(df["ds"]).dt.tz_localize(None)
     df["y"] = df["y"].astype(float)
 
     # Configure and fit
     model = Prophet(**PROPHET_CONFIG)
 
-    # ── Sentiment regressors (feature-flagged: only if data exists) ──
-    sentiment_df = await fetch_sentiment_regressors(ticker, df["ds"].min(), df["ds"].max(), db)
+    # ── Sentiment regressors (coverage-gated to avoid numerical instability) ──
+    ds_min = cast(date, pd.Timestamp(str(df["ds"].min())).date())
+    ds_max = cast(date, pd.Timestamp(str(df["ds"].max())).date())
+    sentiment_df = await fetch_sentiment_regressors(ticker, ds_min, ds_max, db)
     if sentiment_df is not None and not sentiment_df.empty:
-        df = df.merge(sentiment_df, on="ds", how="left").fillna(0.0)
-        model.add_regressor("stock_sentiment")
-        model.add_regressor("sector_sentiment")
-        model.add_regressor("macro_sentiment")
-        logger.info(
-            "Added 3 sentiment regressors for %s (%d data points)",
-            ticker,
-            len(sentiment_df),
-        )
+        coverage = len(sentiment_df) / len(df)
+        if coverage >= MIN_SENTIMENT_COVERAGE:
+            df = df.merge(sentiment_df, on="ds", how="left").fillna(0.0)
+            model.add_regressor("stock_sentiment")
+            model.add_regressor("sector_sentiment")
+            model.add_regressor("macro_sentiment")
+            logger.info(
+                "Added 3 sentiment regressors for %s (coverage=%.0f%%, %d/%d days)",
+                ticker,
+                coverage * 100,
+                len(sentiment_df),
+                len(df),
+            )
+        else:
+            logger.info(
+                "Skipping sentiment regressors for %s (coverage=%.0f%%, need %.0f%%)",
+                ticker,
+                coverage * 100,
+                MIN_SENTIMENT_COVERAGE * 100,
+            )
 
     model.fit(df)
 
@@ -192,10 +211,9 @@ async def predict_forecast(
     # Prophet can extrapolate to negative values for volatile/declining stocks;
     # equities cannot trade below $0, so we clamp to 1% of last known price
     # (minimum $0.01) to prevent negative prices from poisoning downstream math.
+    history = getattr(model, "history", None)
     last_known_price = (
-        float(model.history["y"].iloc[-1])
-        if hasattr(model, "history") and len(model.history) > 0
-        else 0.0
+        float(history["y"].iloc[-1]) if history is not None and len(history) > 0 else 0.0
     )
     price_floor = max(0.01, last_known_price * 0.01)
 
@@ -235,25 +253,29 @@ async def predict_forecast(
     sentiment_projection: dict[str, float] = {}
     training_end: date | None = None
     if settings.PROPHET_REAL_SENTIMENT_ENABLED and has_sentiment_regressors:
-        if not hasattr(model, "history") or len(model.history) == 0:
+        _hist = getattr(model, "history", None)
+        if _hist is None or len(_hist) == 0:
             raise RuntimeError(
                 f"predict_forecast: model {model_version.ticker} "
                 f"v{model_version.version} has sentiment regressors but no "
                 "training history — artifact is corrupt or empty"
             )
 
-        training_end = model.history["ds"].max().date()
+        training_end = _hist["ds"].max().date()
+        assert isinstance(training_end, date)
 
         # Step 1 — historical rows straight from the serialized model.
         cols = ["ds", *sentiment_regressor_names]
-        history_sent_df: pd.DataFrame = model.history[cols].copy()  # type: ignore[assignment]
+        history_sent_df: pd.DataFrame = _hist[cols].copy()
 
         # Step 2 — post-training-window fresh fetch.
         if training_end < today:
-            post_start = pd.Timestamp(training_end) + pd.Timedelta(days=1)
-            post_end = pd.Timestamp(today)
+            post_start_date = training_end + timedelta(days=1)
             post_df = await fetch_sentiment_regressors(
-                model_version.ticker, post_start, post_end, db
+                model_version.ticker,
+                post_start_date,
+                today,
+                db,
             )
             if post_df is not None and not post_df.empty:
                 combined_sentiment_df = pd.concat([history_sent_df, post_df], ignore_index=True)
@@ -321,7 +343,7 @@ async def predict_forecast(
                 # Cast to float64 once rows are filled; asserts there are no
                 # lingering NaNs so a future bug can't silently zero the col.
                 future[col] = future[col].astype("float64")
-                if future[col].isna().any():
+                if bool(future[col].isna().any()):
                     raise RuntimeError(
                         f"predict_forecast: {col} still has NaN after merge + "
                         f"projection for {model_version.ticker} — refusing to "
@@ -468,7 +490,7 @@ async def compute_portfolio_correlation_matrix(
     if not rows:
         return pd.DataFrame()
 
-    df = pd.DataFrame(rows, columns=["ticker", "time", "close"])
+    df = pd.DataFrame(rows, columns=pd.Index(["ticker", "time", "close"]))
     df["time"] = pd.to_datetime(df["time"]).dt.date
     pivot = df.pivot_table(index="time", columns="ticker", values="close")
     pivot = pivot.dropna(axis=1, thresh=len(pivot) // 2)

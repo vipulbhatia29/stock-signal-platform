@@ -244,11 +244,30 @@ class TestYfinanceSessionEmitsEvent:
         assert event.error_reason is None
 
     def test_yfinance_session_emits_on_timeout(self) -> None:
-        """Timeout exception emits event with error_reason=timeout and re-raises."""
-        import requests
+        """Timeout exception emits event with error_reason=timeout and re-raises.
 
-        from backend.observability.instrumentation.yfinance_session import YfinanceObservedSession
+        The session dynamically subclasses either curl_cffi.requests.Session or
+        requests.Session depending on the yfinance version. This test uses the
+        correct exception type for the active backend so the error classification
+        logic is exercised faithfully.
+        """
+        from backend.observability.instrumentation.yfinance_session import (
+            _USE_CURL_CFFI,
+            YfinanceObservedSession,
+        )
         from backend.observability.schema.external_api_events import ExternalApiCallEvent
+
+        # Build the appropriate timeout exception for the active HTTP backend
+        if _USE_CURL_CFFI:
+            from curl_cffi.requests.errors import RequestsError
+
+            timeout_exc: Exception = RequestsError("Connection timeout", code=28)
+            expected_exc_type: type = RequestsError
+        else:
+            import requests
+
+            timeout_exc = requests.Timeout("Connection timeout")
+            expected_exc_type = requests.Timeout
 
         emitted: list[ExternalApiCallEvent] = []
 
@@ -264,10 +283,10 @@ class TestYfinanceSessionEmitsEvent:
             patch.object(
                 session.__class__.__bases__[0],
                 "request",
-                side_effect=requests.Timeout("timeout"),
+                side_effect=timeout_exc,
             ),
         ):
-            with pytest.raises(requests.Timeout):
+            with pytest.raises(expected_exc_type):
                 session.request("GET", "https://finance.yahoo.com/v1/whatever")
 
         assert len(emitted) == 1
