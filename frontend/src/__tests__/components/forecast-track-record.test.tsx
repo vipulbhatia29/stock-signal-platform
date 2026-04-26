@@ -32,7 +32,7 @@ const mockTrackRecord = {
     summary: {
       total_evaluated: 2,
       direction_hit_rate: 1.0,
-      avg_error_pct: 1.525,
+      avg_error_pct: 0.0154,  // decimal fraction — displayed as 1.5%
       ci_containment_rate: 1.0,
     },
   },
