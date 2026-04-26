@@ -46,7 +46,7 @@ beforeEach(() => {
     data: { total: 127, limit: 50, offset: 0, entries: MOCK_ENTRIES },
     isLoading: false,
     error: null,
-  } as ReturnType<typeof useAuditLog>);
+  } as unknown as ReturnType<typeof useAuditLog>);
 });
 
 test("renders table with audit entries", () => {
@@ -80,7 +80,7 @@ test("renders empty state when no entries", () => {
     data: { total: 0, limit: 50, offset: 0, entries: [] },
     isLoading: false,
     error: null,
-  } as ReturnType<typeof useAuditLog>);
+  } as unknown as ReturnType<typeof useAuditLog>);
   render(<AuditLogTable />, { wrapper: Wrapper });
   expect(screen.getByText(/no audit log entries/i)).toBeInTheDocument();
 });
