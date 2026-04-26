@@ -366,12 +366,12 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 - Spec: `docs/superpowers/specs/2026-04-25-ui-overhaul-spec-a-stock-detail-enrichment.md`
 - Plan: `docs/superpowers/plans/2026-04-25-ui-overhaul-spec-a-stock-detail-enrichment.md`
 
-**Spec B — Dashboard, Screener & Sectors Enrichment** (KAN-512, ~1.5 days, 1 PR) — **NEXT**:
-- ✅ Spec: `docs/superpowers/specs/2026-04-26-ui-overhaul-spec-b-dashboard-portfolio.md`
-- ✅ Plan: `docs/superpowers/plans/2026-04-26-ui-overhaul-spec-b-dashboard-portfolio.md`
-- 5 changes: portfolio health sparkline, macro sentiment badge, bulk sentiment screener column, sector convergence badges, delete dead `usePortfolioForecast`
-- 3 type bugs discovered and planned: `usePortfolioHealthHistory` wrong type, `useBulkSentiment` broken (type + missing param), `NewsSentiment` missing 2 fields
-- 6 subtasks: KAN-515 (type fixes), KAN-516 (sparkline), KAN-517 (macro badge), KAN-518 (screener column), KAN-519 (sector badges), KAN-520 (dead code cleanup)
+**Spec B — Dashboard, Screener & Sectors Enrichment** ✅ (KAN-512, PR #281, Session 137):
+- Portfolio health sparkline on dashboard, macro sentiment badge, bulk sentiment screener column, sector convergence badges, delete dead `usePortfolioForecast`
+- 3 type bugs fixed: `usePortfolioHealthHistory` wrong type, `useBulkSentiment` broken (type + missing param → always 422), `NewsSentiment` missing 2 fields
+- Spec: `docs/superpowers/specs/2026-04-26-ui-overhaul-spec-b-dashboard-portfolio.md`
+- Plan: `docs/superpowers/plans/2026-04-26-ui-overhaul-spec-b-dashboard-portfolio.md`
+- 6 subtasks (KAN-515–520) all Done. 12 new frontend tests (534 total).
 
 **KAN-514 — Forecast Components Endpoint** (deferred):
 - `GET /portfolio/{id}/forecast/components` is a placeholder (returns `components: []`). Needs Prophet per-ticker data populated before frontend can consume it. Tracked separately.
