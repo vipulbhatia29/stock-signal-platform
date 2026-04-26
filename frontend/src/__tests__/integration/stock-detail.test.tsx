@@ -106,6 +106,18 @@ jest.mock("@/components/fundamentals-card", () => ({
   FundamentalsCard: () => <div data-testid="fundamentals-card" />,
 }));
 
+jest.mock("@/components/convergence-card", () => ({
+  ConvergenceCard: () => <div data-testid="convergence-card" />,
+}));
+
+jest.mock("@/components/forecast-track-record", () => ({
+  ForecastTrackRecord: () => <div data-testid="forecast-track-record" />,
+}));
+
+jest.mock("@/components/sentiment-card", () => ({
+  SentimentCard: () => <div data-testid="sentiment-card" />,
+}));
+
 jest.mock("@/hooks/use-forecasts", () => ({
   useForecast: () => ({ data: undefined, isLoading: false }),
 }));

@@ -1230,3 +1230,57 @@ export interface IngestState {
   overall_status: "ready" | "ingesting" | "stale" | "missing";
   completion_pct: number;
 }
+
+// ── Forecast Track Record ─────────────────────────────────────────────────────
+
+export interface ForecastEvaluation {
+  forecast_date: string;
+  target_date: string;
+  horizon_days: number;
+  predicted_price: number;
+  predicted_lower: number;
+  predicted_upper: number;
+  actual_price: number;
+  error_pct: number;
+  direction_correct: boolean;
+}
+
+export interface ForecastTrackRecordSummary {
+  total_evaluated: number;
+  direction_hit_rate: number;
+  avg_error_pct: number;
+  ci_containment_rate: number;
+}
+
+export interface ForecastTrackRecordResponse {
+  ticker: string;
+  evaluations: ForecastEvaluation[];
+  summary: ForecastTrackRecordSummary;
+}
+
+// ── Sentiment Articles ────────────────────────────────────────────────────────
+
+export interface ArticleSummary {
+  headline: string;
+  source: string;
+  source_url: string | null;
+  ticker: string | null;
+  published_at: string;
+  event_type: string | null;
+  scored_at: string | null;
+}
+
+export interface ArticleListResponse {
+  ticker: string;
+  articles: ArticleSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+// ── Sentiment Timeseries (typed) ──────────────────────────────────────────────
+
+export interface SentimentTimeseriesResponse {
+  ticker: string;
+  data: NewsSentiment[];
+}

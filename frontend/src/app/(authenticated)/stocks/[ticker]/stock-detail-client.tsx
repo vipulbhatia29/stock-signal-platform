@@ -30,6 +30,8 @@ import { DividendCard } from "@/components/dividend-card";
 import { ForecastCard } from "@/components/forecast-card";
 import { IntelligenceCard } from "@/components/intelligence-card";
 import { ConvergenceCard } from "@/components/convergence-card";
+import { ForecastTrackRecord } from "@/components/forecast-track-record";
+import { SentimentCard } from "@/components/sentiment-card";
 import { NewsCard } from "@/components/news-card";
 import { EmptyState } from "@/components/empty-state";
 import { SectionHeading } from "@/components/section-heading";
@@ -208,6 +210,10 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
         />
       </section>
 
+      <section id="sec-track-record">
+        <ForecastTrackRecord ticker={ticker} enabled={hasSignals} />
+      </section>
+
       <section id="sec-intelligence">
         <IntelligenceCard
           intelligence={intelligence}
@@ -215,6 +221,10 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
           isError={intelError}
           onRetry={refetchIntel}
         />
+      </section>
+
+      <section id="sec-sentiment">
+        <SentimentCard ticker={ticker} enabled={hasSignals} />
       </section>
 
       <section id="sec-news">
