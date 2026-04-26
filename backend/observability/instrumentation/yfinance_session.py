@@ -54,7 +54,7 @@ try:
     from yfinance.data import YfData  # noqa: F401
 
     _USE_CURL_CFFI = True
-except Exception:
+except Exception:  # nosemgrep: obs-warn-silent-except — import detection, not error suppression
     pass
 
 if _USE_CURL_CFFI:
@@ -195,10 +195,15 @@ class YfinanceObservedSession(_BaseSession):  # type: ignore[misc]
             response = super().request(method, url, **kwargs)
             error_reason = _classify_status(response.status_code)
             return response
-        except Exception as exc:
-            # Classify known error types
+        except Exception as exc:  # noqa: BLE001 — classify then re-raise; emission in finally
+            # Classify known error types for observability tagging
             if _USE_CURL_CFFI:
-                error_reason = ErrorReason.CONNECTION_REFUSED.value
+                from curl_cffi.requests.errors import RequestsError  # type: ignore[import-untyped]
+
+                if isinstance(exc, RequestsError) and "timeout" in str(exc).lower():
+                    error_reason = ErrorReason.TIMEOUT.value
+                else:
+                    error_reason = ErrorReason.CONNECTION_REFUSED.value
             else:
                 import requests as _req
 

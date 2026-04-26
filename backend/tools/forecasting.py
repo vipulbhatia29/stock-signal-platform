@@ -269,7 +269,10 @@ async def predict_forecast(
             post_start = pd.Timestamp(training_end) + pd.Timedelta(days=1)
             post_end = pd.Timestamp(today)
             post_df = await fetch_sentiment_regressors(
-                model_version.ticker, post_start, post_end, db
+                model_version.ticker,
+                post_start,
+                post_end,
+                db,  # type: ignore[arg-type]
             )
             if post_df is not None and not post_df.empty:
                 combined_sentiment_df = pd.concat([history_sent_df, post_df], ignore_index=True)
@@ -337,7 +340,7 @@ async def predict_forecast(
                 # Cast to float64 once rows are filled; asserts there are no
                 # lingering NaNs so a future bug can't silently zero the col.
                 future[col] = future[col].astype("float64")
-                if future[col].isna().any():
+                if future[col].isna().any():  # type: ignore[reportGeneralTypeIssues]
                     raise RuntimeError(
                         f"predict_forecast: {col} still has NaN after merge + "
                         f"projection for {model_version.ticker} — refusing to "
@@ -484,7 +487,7 @@ async def compute_portfolio_correlation_matrix(
     if not rows:
         return pd.DataFrame()
 
-    df = pd.DataFrame(rows, columns=["ticker", "time", "close"])
+    df = pd.DataFrame(rows, columns=pd.Index(["ticker", "time", "close"]))
     df["time"] = pd.to_datetime(df["time"]).dt.date
     pivot = df.pivot_table(index="time", columns="ticker", values="close")
     pivot = pivot.dropna(axis=1, thresh=len(pivot) // 2)
