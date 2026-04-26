@@ -353,9 +353,26 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 
 > Rebuild + validate the 10y ticker universe with observability coverage in place. Design work still pending; start after 1a merges so seed runs emit structured events.
 
-### Phase E: UI Overhaul (Epic KAN-400) — NEXT (Session 134 gap analysis complete)
+### Phase E: UI Overhaul (Epic KAN-400) — IN PROGRESS (Session 135 refinement complete)
 
-> Surface all backend data that has no frontend representation. Session 134 UI walkthrough confirmed all existing pages render correctly with graceful empty states. 11 backend features identified with no frontend UI. Prerequisite for visual regression baseline (KAN-363) and Playwright E2E refresh (KAN-217).
+> Surface all backend data that has no frontend representation. Session 134 UI walkthrough confirmed all existing pages render correctly with graceful empty states. Session 135 brainstorming refined scope into 3 specs.
+
+**Session 135 corrections:** E-1 (Stock Intelligence) and candlestick toggle already shipped. `usePortfolioAnalytics`, `usePortfolioForecastFull`, `usePortfolioConvergence` already wired on dashboard. Backtesting → admin only (not user-facing). 3-spec split approved.
+
+**JIRA:** KAN-400 (Epic), KAN-505 (Refinement, Done), KAN-511 (Spec A), KAN-512 (Spec B), KAN-513 (Spec C), KAN-504 (test follow-up)
+
+**Spec A — Stock Detail Enrichment** (KAN-511, ~3-4 days, 2 PRs):
+- ✅ Spec: `docs/superpowers/specs/2026-04-25-ui-overhaul-spec-a-stock-detail-enrichment.md`
+- ✅ Plan: `docs/superpowers/plans/2026-04-25-ui-overhaul-spec-a-stock-detail-enrichment.md`
+- ConvergenceCard + history chart, Forecast Track Record (new endpoint), SentimentCard + articles, section reorder
+
+**Spec B — Dashboard & Portfolio Wiring** (KAN-512, ~1.5 days, 1 PR):
+- Portfolio health history sparkline, delete `usePortfolioForecast`, verify existing wiring
+
+**Spec C — Admin Enhancements** (KAN-513, ~2 days, 1 PR):
+- Backtest summary table (admin), command center drill-down fix, audit log viewer
+
+**KAN-504 — E2E/Integration/Playwright tests** (after A+B+C ship, ~2 days)
 
 **Session 134 UI Assessment:** 15 pages walked through with Playwright. 13/15 render correctly. 3 bugs fixed (pipeline_runs columns, nested button, breadcrumb). 6 new E2E test files added (~50 tests). Lighthouse expanded to 12 pages.
 
