@@ -87,7 +87,7 @@ test("renders empty state when no entries", () => {
 
 test("filter dropdown changes action filter", () => {
   render(<AuditLogTable />, { wrapper: Wrapper });
-  const select = screen.getByRole("combobox");
+  const select = screen.getByLabelText("Filter by action");
   fireEvent.change(select, { target: { value: "cache_clear" } });
   expect(mockUseAuditLog).toHaveBeenCalledWith("cache_clear", 50, 0);
 });

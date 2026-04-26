@@ -31,7 +31,7 @@ export function ForecastHealthPanel({ data }: ForecastHealthPanelProps) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <p className="text-xs text-subtle mb-1">Backtest Accuracy</p>
-          <p className={`text-2xl font-semibold font-mono ${healthColor(backtestPct)}`}>
+          <p className={`text-2xl font-semibold font-mono ${healthColor(data.backtest_health_pct)}`}>
             {backtestPct}%
           </p>
           <p className="text-xs text-subtle mt-1">
@@ -40,7 +40,7 @@ export function ForecastHealthPanel({ data }: ForecastHealthPanelProps) {
         </div>
         <div>
           <p className="text-xs text-subtle mb-1">Sentiment Coverage</p>
-          <p className={`text-2xl font-semibold font-mono ${healthColor(sentimentPct)}`}>
+          <p className={`text-2xl font-semibold font-mono ${healthColor(data.sentiment_coverage_pct)}`}>
             {sentimentPct}%
           </p>
           <p className="text-xs text-subtle mt-1">

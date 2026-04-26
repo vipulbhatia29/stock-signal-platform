@@ -45,7 +45,7 @@ export function AuditLogTable() {
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-medium">Audit Log</h3>
         <select
-          role="combobox"
+          aria-label="Filter by action"
           value={action ?? ""}
           onChange={(e) => {
             setAction(e.target.value || undefined);

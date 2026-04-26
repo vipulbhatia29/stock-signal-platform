@@ -78,5 +78,6 @@ test("shows red indicator for unhealthy service", () => {
   render(<SystemHealthPanel data={data} />);
   fireEvent.click(screen.getByRole("button", { name: /view details/i }));
   const dbSection = screen.getByTestId("drilldown-database");
-  expect(dbSection.querySelector("[data-status='down']")).toBeTruthy();
+  // StatusDot renders bg-red-500 for "down" status
+  expect(dbSection.querySelector(".bg-red-500")).toBeTruthy();
 });
