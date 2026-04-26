@@ -5,6 +5,7 @@ import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 from prophet import Prophet
@@ -91,8 +92,8 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
     model = Prophet(**PROPHET_CONFIG)
 
     # ── Sentiment regressors (coverage-gated to avoid numerical instability) ──
-    ds_min: date = pd.Timestamp(str(df["ds"].min())).date()
-    ds_max: date = pd.Timestamp(str(df["ds"].max())).date()
+    ds_min = cast(date, pd.Timestamp(str(df["ds"].min())).date())
+    ds_max = cast(date, pd.Timestamp(str(df["ds"].max())).date())
     sentiment_df = await fetch_sentiment_regressors(ticker, ds_min, ds_max, db)
     if sentiment_df is not None and not sentiment_df.empty:
         coverage = len(sentiment_df) / len(df)
