@@ -189,3 +189,41 @@ Full Playwright-driven walkthrough. 13/15 render correctly. 3 bugs found and fix
 - Tests: 2633 unit, 534 frontend (+12), 0 failures
 - 1 PR merged (#281), 2 new docs (spec + plan), 1 new test file, 9 JIRA tickets created/updated
 - **KAN-512 COMPLETE.** Resume: Write Spec C + Plan C for KAN-513 (admin enhancements)
+
+---
+
+## Session 138 — KAN-513: Spec C + Plan C for Admin Enhancements (2026-04-26)
+
+### Gap Validation
+- Re-validated all 10 admin gaps (E-2 through E-13) against current codebase
+- Confirmed: ForecastHealthZone type missing from frontend, backend already returns it
+- Confirmed: System Health panel has no drill-down (other 3 CC panels do)
+- Confirmed: Audit Log endpoint exists, zero frontend code
+
+### Scope Decision
+- **In scope (KAN-513):** 3 features — Forecast Health panel, System Health drill-down, Audit Log viewer
+- **Dropped:** Task Status Polling (E-5) — needs backend schema change (trigger responses don't return task_id, group triggers use asyncio not Celery)
+- **Deferred to new JIRA stories:** Backtesting Dashboard (KAN-521), LLM Admin Console (KAN-522), 4 CC panels (KAN-523), Task Status Polling (KAN-524)
+
+### Spec C Written + Reviewed
+`docs/superpowers/specs/2026-04-26-ui-overhaul-spec-c-admin-enhancements.md`
+- 2-persona self-review found 1 CRITICAL (Feature 4 unimplementable without backend changes → dropped), 2 HIGH (drill-down pattern deviation documented, SystemHealthZone fields completed), 2 MEDIUM (action filter values specified, line estimate corrected)
+
+### Plan C Written + Reviewed (2 personas)
+`docs/superpowers/plans/2026-04-26-ui-overhaul-plan-c-admin-enhancements.md`
+- 7 tasks across 3 features, ~320 line diff, single PR
+- 2-persona review found 1 CRITICAL (invalid `data-status` prop on StatusDot → fixed), 2 MEDIUM (replacement drift safeguard, combobox role)
+
+### JIRA
+- KAN-513 → In Progress
+- KAN-521 created: Backtesting Dashboard (E-2, deferred)
+- KAN-522 created: LLM Admin Console (E-3, deferred)
+- KAN-523 created: 4 CC missing panels (E-10/11/12/13, deferred)
+- KAN-524 created: Task Status Polling (E-5, deferred, needs backend change)
+- KAN-525/526/527 created: 3 implementation subtasks under KAN-513
+- project-plan.md updated with JIRA cross-refs for all deferred items
+
+### Session 138 Totals
+- Tests: 2633 unit (unchanged — planning only)
+- 2 new docs (spec + plan), 7 JIRA tickets created, 1 transitioned
+- Resume: Implement KAN-513 — subagent-driven, 3 subtasks (KAN-525→526→527), 1 PR

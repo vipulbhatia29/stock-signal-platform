@@ -1,17 +1,18 @@
-# Project State (updated Session 135, 2026-04-25)
+# Project State (updated Session 138, 2026-04-26)
 
 ## Current Phase
-**UI Overhaul (KAN-400) — Spec A + Spec B Done.** Session 137: Spec B written, implemented, merged (PR #281).
+**UI Overhaul (KAN-400) — Spec A + B Done, Spec C planned.** Session 138: Spec C + Plan C written, reviewed, subtasks created.
 
-## Last Shipped (Session 137)
-- **KAN-512 (Spec B)** — PR #281 merged. 4 orphaned hooks wired, 3 type bugs fixed, 1 dead hook deleted.
-- 12 new frontend tests (534 total). 3-persona review: 0 CRITICAL, 2 MEDIUM fixed.
-- **JIRA** — KAN-512 + KAN-515-520 all Done. KAN-514 created (deferred forecast components).
+## Last Session (Session 138)
+- **KAN-513 (Spec C)** — Spec + Plan written and reviewed. 3 features: Forecast Health panel, System Health drill-down, Audit Log viewer. Feature 4 (Task Status Polling) dropped — needs backend schema change.
+- Deferred items tracked in JIRA: KAN-521 (Backtesting Dashboard), KAN-522 (LLM Admin Console), KAN-523 (4 CC panels), KAN-524 (Task Status Polling).
+- 3 implementation subtasks: KAN-525, KAN-526, KAN-527.
+- project-plan.md updated with JIRA cross-refs for all deferred items.
 
 ## Epic Status
 - **KAN-457** (Observability Infrastructure) — **DONE.** 22 PRs.
 - **KAN-493** (Obs Suite Validation) — **DONE.** 48 integration tests.
-- **KAN-400** (UI Overhaul) — **IN PROGRESS.** Refinement done, Spec A ready for implementation.
+- **KAN-400** (UI Overhaul) — **IN PROGRESS.** KAN-511 Done, KAN-512 Done, KAN-513 In Progress (spec+plan done, implementation next).
 
 ## Test Counts
 - Unit: 2633 (0 failures)
@@ -25,12 +26,16 @@ Migration 040 (rev `e0f1a2b3c4d5`)
 
 ## Open Backlog
 - KAN-429 (High, Bug) — JIRA automation mass-closure
-- KAN-513 (Story) — Spec C: Admin Enhancements — **NEXT**
-- KAN-514 (Task) — Deferred: forecast components endpoint wiring (placeholder backend)
+- KAN-513 (Story, In Progress) — Spec C: Admin Enhancements — subtasks KAN-525/526/527
+- KAN-521 (Story) — Backtesting Dashboard frontend (E-2, deferred)
+- KAN-522 (Story) — LLM Admin Console frontend (E-3, deferred)
+- KAN-523 (Story) — 4 CC missing panels (E-10/11/12/13, deferred)
+- KAN-524 (Task) — Task Status Polling (E-5, needs backend change, deferred)
+- KAN-514 (Task) — Deferred: forecast components endpoint wiring
 - KAN-504 (Task) — E2E/Integration tests after A+B+C
 - KAN-503 (Low, Bug) — migration 030 seed data
 - KAN-456 (Low) — Langfuse task_tracer wiring
 
 ## Resume Point (next session)
-- Write Spec C + Plan C for KAN-513 (admin enhancements)
+- Implement KAN-513 (Spec C): subagent-driven, 3 subtasks (KAN-525→526→527), 1 PR
 - After KAN-513: KAN-504 (test follow-up for A+B+C)
