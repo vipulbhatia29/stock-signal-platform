@@ -49,6 +49,11 @@ DEFAULT_HORIZONS = [90, 180, 270]
 # Minimum training data points
 MIN_DATA_POINTS = 200
 
+# Minimum sentiment coverage ratio to include regressors in Prophet.
+# Below this threshold, the sparse regressor matrix causes numerically
+# unstable coefficient estimates (divide-by-zero in prediction).
+MIN_SENTIMENT_COVERAGE = 0.3
+
 
 async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
     """Train a Prophet model for a ticker and store the versioned artifact.
@@ -85,18 +90,29 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
     # Configure and fit
     model = Prophet(**PROPHET_CONFIG)
 
-    # ── Sentiment regressors (feature-flagged: only if data exists) ──
+    # ── Sentiment regressors (coverage-gated to avoid numerical instability) ──
     sentiment_df = await fetch_sentiment_regressors(ticker, df["ds"].min(), df["ds"].max(), db)
     if sentiment_df is not None and not sentiment_df.empty:
-        df = df.merge(sentiment_df, on="ds", how="left").fillna(0.0)
-        model.add_regressor("stock_sentiment")
-        model.add_regressor("sector_sentiment")
-        model.add_regressor("macro_sentiment")
-        logger.info(
-            "Added 3 sentiment regressors for %s (%d data points)",
-            ticker,
-            len(sentiment_df),
-        )
+        coverage = len(sentiment_df) / len(df)
+        if coverage >= MIN_SENTIMENT_COVERAGE:
+            df = df.merge(sentiment_df, on="ds", how="left").fillna(0.0)
+            model.add_regressor("stock_sentiment")
+            model.add_regressor("sector_sentiment")
+            model.add_regressor("macro_sentiment")
+            logger.info(
+                "Added 3 sentiment regressors for %s (coverage=%.0f%%, %d/%d days)",
+                ticker,
+                coverage * 100,
+                len(sentiment_df),
+                len(df),
+            )
+        else:
+            logger.info(
+                "Skipping sentiment regressors for %s (coverage=%.0f%%, need %.0f%%)",
+                ticker,
+                coverage * 100,
+                MIN_SENTIMENT_COVERAGE * 100,
+            )
 
     model.fit(df)
 

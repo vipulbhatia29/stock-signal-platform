@@ -78,7 +78,7 @@ def _emit_rate_limiter_event(
         logger.warning("obs.rate_limiter.emit_failed", exc_info=True)
 
 
-_LUA_TOKEN_BUCKET = """  # nosemgrep: no-secrets-in-code
+_LUA_TOKEN_BUCKET = """\
 local key = KEYS[1]
 local capacity = tonumber(ARGV[1])
 local refill_rate = tonumber(ARGV[2])

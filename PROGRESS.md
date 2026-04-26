@@ -223,6 +223,40 @@ Full Playwright-driven walkthrough. 13/15 render correctly. 3 bugs found and fix
 - KAN-525/526/527 created: 3 implementation subtasks under KAN-513
 - project-plan.md updated with JIRA cross-refs for all deferred items
 
+---
+
+## Session 139 — Interactive PM Walkthrough + Bug Fixes + Gap Decomposition (2026-04-26)
+
+### Seeding & Bug Fixes
+- Full data seed: 21 stocks (prices + signals + fundamentals + earnings), 12 ETFs, 60 forecasts, 1308 dividends, 1333 news articles, 500 sentiment-scored, 14 LLM model configs
+- **Bug fix 1:** yfinance `curl_cffi` session — `YfinanceObservedSession` now subclasses `curl_cffi.requests.Session` with `impersonate="chrome"` (was using `requests.Session`, rejected by yfinance 1.2.0)
+- **Bug fix 2:** Redis Lua rate limiter — `# nosemgrep` Python comment was inside the Lua string literal, causing every `script_load` to fail. All 5 rate limiters were silently permissive.
+- **Bug fix 3:** Prophet sentiment coverage gate — `MIN_SENTIMENT_COVERAGE = 0.3` prevents divide-by-zero when sentiment data covers < 30% of training window
+
+### PM Walkthrough (8 pages, 22 screenshots)
+Tested: Dashboard, Search, Stock Detail, Screener, Portfolio, Sectors, Observability, Command Center.
+**69 individual gaps** identified, consolidated into **18 tickets** under Epic KAN-400.
+
+### Key Findings
+- Dashboard Market Pulse shows only 1 ticker (computed_at exact-match bug)
+- Watchlist invisible — no UI surface anywhere
+- Stock Detail missing current price in header
+- Screener not decision-ready (no price, no recommendation action)
+- Portfolio Log Transaction ticker selection broken
+- Sectors page missing correlation heatmap (API exists, not wired)
+- Command Center at ~30% of vision (see `command-center-prototype.html`)
+
+### JIRA Actions
+- **Closed as superseded:** KAN-504, KAN-528, KAN-523, KAN-524, KAN-514
+- **Created:** KAN-529 (sentiment routing), KAN-530–545 (16 feature tickets)
+- **Reused:** KAN-521 (backtesting), KAN-522 (LLM admin)
+- **Total open under KAN-400:** 18 tickets in 6 sprints (E1–E6)
+
+### Session 139 Totals
+- Tests: 2633 unit + 454 API + 522 frontend (0 failures — no test changes this session)
+- 3 bugs fixed, 3 files modified, 18 JIRA tickets created, 5 superseded
+- Resume: Pick Sprint E1 (KAN-530 Dashboard Market Pulse) for refinement + implementation
+
 ### Session 138 Totals
 - Tests: 2633 unit (unchanged — planning only)
 - 2 new docs (spec + plan), 7 JIRA tickets created, 1 transitioned
