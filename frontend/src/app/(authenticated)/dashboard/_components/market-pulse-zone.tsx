@@ -5,6 +5,7 @@ import { SectionHeading } from "@/components/section-heading";
 import { MoverRow } from "@/components/mover-row";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMarketBriefing } from "@/hooks/use-stocks";
+import { useMacroSentiment } from "@/hooks/use-sentiment";
 import { isMarketOpen } from "@/lib/market-hours";
 import { cn } from "@/lib/utils";
 import { useRouter } from "next/navigation";
@@ -12,6 +13,8 @@ import { useRouter } from "next/navigation";
 /** Zone 1 — Market status + index cards + gainers/losers. */
 export function MarketPulseZone() {
   const { data: briefing, isLoading, isError } = useMarketBriefing();
+  const { data: macroData } = useMacroSentiment(7);
+  const latestMacro = macroData?.data?.[macroData.data.length - 1];
   const router = useRouter();
   const open = isMarketOpen();
 
@@ -28,15 +31,28 @@ export function MarketPulseZone() {
     <section aria-label="Market Pulse">
       <SectionHeading
         action={
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold",
-              open ? "bg-gain/10 text-gain" : "bg-muted text-muted-foreground",
+          <div className="flex items-center gap-2">
+            <span
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                open ? "bg-gain/10 text-gain" : "bg-muted text-muted-foreground",
+              )}
+            >
+              {open ? <Activity className="h-3 w-3 animate-pulse" /> : <Clock className="h-3 w-3" />}
+              {open ? "Market Open" : "Market Closed"}
+            </span>
+            {latestMacro && (
+              <span className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                latestMacro.macro_sentiment > 0.2 ? "bg-gain/10 text-gain" :
+                latestMacro.macro_sentiment < -0.2 ? "bg-loss/10 text-loss" :
+                "bg-muted text-muted-foreground"
+              )}>
+                {latestMacro.macro_sentiment > 0.2 ? "▲ Bullish" :
+                 latestMacro.macro_sentiment < -0.2 ? "▼ Bearish" : "— Neutral"}
+              </span>
             )}
-          >
-            {open ? <Activity className="h-3 w-3 animate-pulse" /> : <Clock className="h-3 w-3" />}
-            {open ? "Market Open" : "Market Closed"}
-          </span>
+          </div>
         }
       >
         Market Pulse

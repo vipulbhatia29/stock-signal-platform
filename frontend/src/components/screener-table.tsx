@@ -160,7 +160,7 @@ type TabKey = "overview" | "signals" | "performance";
 
 const TAB_COLUMNS: Record<TabKey, string[]> = {
   overview: ["ticker", "name", "sector", "score"],
-  signals: ["ticker", "rsi", "macd", "sma", "bb", "score", "meter"],
+  signals: ["ticker", "rsi", "macd", "sma", "bb", "score", "sentiment"],
   performance: ["ticker", "annualReturn", "volatility", "sharpe", "score"],
 };
 
@@ -181,6 +181,7 @@ interface ScreenerTableProps {
   activeTab: TabKey;
   onTabChange: (tab: TabKey) => void;
   heldTickers?: Set<string>;
+  sentimentMap?: Map<string, number>;
 }
 
 function SortIcon({
@@ -211,11 +212,27 @@ export function ScreenerTable({
   activeTab,
   onTabChange,
   heldTickers,
+  sentimentMap,
 }: ScreenerTableProps) {
   const router = useRouter();
   const { density } = useDensity();
 
-  const columns = TAB_COLUMNS[activeTab].map((k) => COL[k]);
+  const sentimentCol: Column = {
+    key: "sentiment",
+    label: "Sentiment",
+    sortable: false,
+    render: (item) => {
+      const score = sentimentMap?.get(item.ticker);
+      if (score == null) return <span className="text-subtle">—</span>;
+      const color = score > 0.2 ? "text-gain" : score < -0.2 ? "text-loss" : "text-subtle";
+      const arrow = score > 0.2 ? "▲" : score < -0.2 ? "▼" : "—";
+      return <span className={cn("tabular-nums text-sm", color)}>{arrow} {score.toFixed(2)}</span>;
+    },
+  };
+
+  const columns = TAB_COLUMNS[activeTab].map((k) =>
+    k === "sentiment" ? sentimentCol : COL[k]
+  );
   const rowPadding = density === "compact" ? "py-1.5" : "py-3";
   const textSize = density === "compact" ? "text-xs" : "text-sm";
 

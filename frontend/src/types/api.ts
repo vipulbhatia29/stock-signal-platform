@@ -1042,6 +1042,12 @@ export interface NewsSentiment {
   article_count: number;
   confidence: number;
   dominant_event_type: string | null;
+  rationale_summary: string | null;
+  quality_flag: string;
+}
+
+export interface BulkSentimentResponse {
+  tickers: NewsSentiment[];
 }
 
 // ── Portfolio Forecast (BL + Monte Carlo + CVaR) ───────────────────

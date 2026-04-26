@@ -29,6 +29,7 @@ import type {
   OHLCResponse,
   MarketBriefingResult,
   PortfolioHealthResult,
+  PortfolioHealthSnapshotResponse,
   DashboardNewsResponse,
   PortfolioAnalyticsResponse,
   StockAnalyticsResponse,
@@ -460,10 +461,10 @@ export function usePortfolioHealth() {
 }
 
 export function usePortfolioHealthHistory(days: number = 7) {
-  return useQuery<PortfolioHealthResult[]>({
+  return useQuery<PortfolioHealthSnapshotResponse[]>({
     queryKey: ["portfolio-health-history", days],
     queryFn: () =>
-      get<PortfolioHealthResult[]>(`/portfolio/health/history?days=${days}`),
+      get<PortfolioHealthSnapshotResponse[]>(`/portfolio/health/history?days=${days}`),
     staleTime: 5 * 60 * 1000,
   });
 }

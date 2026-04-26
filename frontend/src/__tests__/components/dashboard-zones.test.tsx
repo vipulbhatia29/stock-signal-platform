@@ -2,12 +2,21 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
+// ── Mock Recharts (ResponsiveContainer renders nothing in jsdom) ─────────────
+jest.mock("recharts", () => ({
+  ...jest.requireActual("recharts"),
+  ResponsiveContainer: ({ children }: { children: React.ReactNode }) => (
+    <div style={{ width: 100, height: 32 }}>{children}</div>
+  ),
+}));
+
 // ── Mock hooks ──────────────────────────────────────────────────────────────
 const mockUseMarketBriefing = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
 const mockUseRecommendations = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
 const mockUseBulkSignalsByTickers = jest.fn(() => ({ data: undefined, isLoading: false }));
 const mockUsePortfolioSummary = jest.fn(() => ({ data: undefined, isLoading: false }));
 const mockUsePortfolioHealth = jest.fn(() => ({ data: undefined, isLoading: false }));
+const mockUsePortfolioHealthHistory = jest.fn(() => ({ data: undefined, isLoading: false }));
 const mockUseUserDashboardNews = jest.fn(() => ({ data: undefined, isLoading: false }));
 
 jest.mock("@/hooks/use-stocks", () => ({
@@ -16,8 +25,23 @@ jest.mock("@/hooks/use-stocks", () => ({
   useBulkSignalsByTickers: () => mockUseBulkSignalsByTickers(),
   usePortfolioSummary: () => mockUsePortfolioSummary(),
   usePortfolioHealth: () => mockUsePortfolioHealth(),
+  usePortfolioHealthHistory: () => mockUsePortfolioHealthHistory(),
   usePortfolioAnalytics: () => ({ data: undefined, isLoading: false }),
   useUserDashboardNews: () => mockUseUserDashboardNews(),
+}));
+
+const mockUseMacroSentiment = jest.fn(() => ({ data: undefined, isLoading: false }));
+
+jest.mock("@/hooks/use-sentiment", () => ({
+  useMacroSentiment: () => mockUseMacroSentiment(),
+}));
+
+jest.mock("@/hooks/use-convergence", () => ({
+  usePortfolioConvergence: () => ({ data: undefined, isLoading: false }),
+}));
+
+jest.mock("@/hooks/use-forecasts", () => ({
+  usePortfolioForecastFull: () => ({ data: undefined, isLoading: false }),
 }));
 
 const mockUseAlerts = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
@@ -90,6 +114,46 @@ describe("MarketPulseZone", () => {
     renderWithQuery(<MarketPulseZone />);
     expect(screen.getByLabelText("Market Pulse")).toBeInTheDocument();
   });
+
+  it("renders bullish badge when macro_sentiment > 0.2", () => {
+    mockUseMarketBriefing.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    mockUseMacroSentiment.mockReturnValue({
+      data: { data: [{ macro_sentiment: 0.5, stock_sentiment: 0.3, sector_sentiment: 0.2, article_count: 5, confidence: 0.8, date: "2026-04-25", ticker: "MACRO", dominant_event_type: null, rationale_summary: null, quality_flag: "ok" }] },
+      isLoading: false,
+    } as never);
+    renderWithQuery(<MarketPulseZone />);
+    expect(screen.getByText("▲ Bullish")).toBeInTheDocument();
+  });
+
+  it("renders bearish badge when macro_sentiment < -0.2", () => {
+    mockUseMarketBriefing.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    mockUseMacroSentiment.mockReturnValue({
+      data: { data: [{ macro_sentiment: -0.5, stock_sentiment: -0.3, sector_sentiment: -0.2, article_count: 5, confidence: 0.8, date: "2026-04-25", ticker: "MACRO", dominant_event_type: null, rationale_summary: null, quality_flag: "ok" }] },
+      isLoading: false,
+    } as never);
+    renderWithQuery(<MarketPulseZone />);
+    expect(screen.getByText("▼ Bearish")).toBeInTheDocument();
+  });
+
+  it("renders neutral badge when macro_sentiment between -0.2 and 0.2", () => {
+    mockUseMarketBriefing.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    mockUseMacroSentiment.mockReturnValue({
+      data: { data: [{ macro_sentiment: 0.1, stock_sentiment: 0.1, sector_sentiment: 0.0, article_count: 5, confidence: 0.8, date: "2026-04-25", ticker: "MACRO", dominant_event_type: null, rationale_summary: null, quality_flag: "ok" }] },
+      isLoading: false,
+    } as never);
+    renderWithQuery(<MarketPulseZone />);
+    expect(screen.getByText("— Neutral")).toBeInTheDocument();
+  });
+
+  it("does not render macro badge when sentiment data is empty array", () => {
+    mockUseMarketBriefing.mockReturnValue({ data: undefined, isLoading: false, isError: false });
+    mockUseMacroSentiment.mockReturnValue({
+      data: { data: [] },
+      isLoading: false,
+    } as never);
+    renderWithQuery(<MarketPulseZone />);
+    expect(screen.queryByText(/Bullish|Bearish|Neutral/)).not.toBeInTheDocument();
+  });
 });
 
 // ── SignalsZone ─────────────────────────────────────────────────────────────
@@ -150,6 +214,49 @@ describe("PortfolioZone", () => {
   it("has aria-label on section", () => {
     renderWithQuery(<PortfolioZone />);
     expect(screen.getByLabelText("Portfolio Overview")).toBeInTheDocument();
+  });
+
+  it("renders health sparkline when history has >=2 data points", () => {
+    mockUsePortfolioSummary.mockReturnValue({
+      data: { position_count: 2, total_value: 10000, total_cost_basis: 9000, unrealized_pnl: 1000, unrealized_pnl_pct: 11.1, sectors: [], portfolio_id: "p1" },
+      isLoading: false,
+    } as never);
+    mockUsePortfolioHealth.mockReturnValue({
+      data: { grade: "A", health_score: 85, components: [], concerns: [], strengths: [] },
+      isLoading: false,
+    } as never);
+    mockUsePortfolioHealthHistory.mockReturnValue({
+      data: [
+        { snapshot_date: "2026-04-24", health_score: 82, grade: "A", diversification_score: 0.8, signal_quality_score: 0.9, risk_score: 0.7, income_score: 0.5, sector_balance_score: 0.8, hhi: 0.1, weighted_beta: null, weighted_sharpe: null, weighted_yield: null, position_count: 2 },
+        { snapshot_date: "2026-04-25", health_score: 85, grade: "A", diversification_score: 0.8, signal_quality_score: 0.9, risk_score: 0.7, income_score: 0.5, sector_balance_score: 0.8, hhi: 0.1, weighted_beta: null, weighted_sharpe: null, weighted_yield: null, position_count: 2 },
+      ],
+      isLoading: false,
+    } as never);
+    const { container } = renderWithQuery(<PortfolioZone />);
+    // The sparkline wrapper div has a fixed height of h-8 (32px) — our ResponsiveContainer mock renders a div with height:32
+    const sparklineWrapper = container.querySelector("div[style*='height: 32']");
+    expect(sparklineWrapper).toBeInTheDocument();
+  });
+
+  it("does not render sparkline when history has <2 data points", () => {
+    mockUsePortfolioSummary.mockReturnValue({
+      data: { position_count: 2, total_value: 10000, total_cost_basis: 9000, unrealized_pnl: 1000, unrealized_pnl_pct: 11.1, sectors: [], portfolio_id: "p1" },
+      isLoading: false,
+    } as never);
+    mockUsePortfolioHealth.mockReturnValue({
+      data: { grade: "A", health_score: 85, components: [], concerns: [], strengths: [] },
+      isLoading: false,
+    } as never);
+    mockUsePortfolioHealthHistory.mockReturnValue({
+      data: [
+        { snapshot_date: "2026-04-25", health_score: 85, grade: "A", diversification_score: 0.8, signal_quality_score: 0.9, risk_score: 0.7, income_score: 0.5, sector_balance_score: 0.8, hhi: 0.1, weighted_beta: null, weighted_sharpe: null, weighted_yield: null, position_count: 2 },
+      ],
+      isLoading: false,
+    } as never);
+    const { container } = renderWithQuery(<PortfolioZone />);
+    // With only 1 data point, no sparkline wrapper should render
+    const sparklineWrapper = container.querySelector("div[style*='height: 32']");
+    expect(sparklineWrapper).not.toBeInTheDocument();
   });
 });
 

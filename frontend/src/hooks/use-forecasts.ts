@@ -6,7 +6,6 @@ import type {
   ForecastResponse,
   ForecastTrackRecordResponse,
   PortfolioForecastFullResponse,
-  PortfolioForecastResponse,
   ScorecardResponse,
 } from "@/types/api";
 
@@ -17,16 +16,6 @@ export function useForecast(ticker: string | null) {
     queryFn: () => get<ForecastResponse>(`/forecasts/${ticker}`),
     enabled: !!ticker,
     staleTime: 30 * 60 * 1000, // 30 min — forecasts update nightly
-  });
-}
-
-/** Fetch aggregated portfolio forecast. Skipped when no positions exist. */
-export function usePortfolioForecast(enabled = true) {
-  return useQuery({
-    queryKey: ["portfolio-forecast"],
-    queryFn: () => get<PortfolioForecastResponse>("/forecasts/portfolio"),
-    staleTime: 30 * 60 * 1000,
-    enabled,
   });
 }
 

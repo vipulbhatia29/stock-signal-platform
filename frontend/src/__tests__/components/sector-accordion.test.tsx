@@ -78,3 +78,27 @@ test("shows children when isOpen is true", () => {
   );
   expect(screen.getByText("Expanded Content")).toBeInTheDocument();
 });
+
+test("renders badge when provided", () => {
+  render(
+    <SectorAccordion
+      sector={mockSector}
+      isOpen={true}
+      onToggle={() => {}}
+      badge={<span data-testid="convergence-badge">72% Bullish</span>}
+    >
+      <div>Content</div>
+    </SectorAccordion>
+  );
+  expect(screen.getByTestId("convergence-badge")).toBeInTheDocument();
+  expect(screen.getByText("72% Bullish")).toBeInTheDocument();
+});
+
+test("does not render badge when not provided", () => {
+  render(
+    <SectorAccordion sector={mockSector} isOpen={true} onToggle={() => {}}>
+      <div>Content</div>
+    </SectorAccordion>
+  );
+  expect(screen.queryByTestId("convergence-badge")).not.toBeInTheDocument();
+});

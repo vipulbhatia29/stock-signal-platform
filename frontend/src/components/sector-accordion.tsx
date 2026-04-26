@@ -12,6 +12,7 @@ interface SectorAccordionProps {
   isOpen: boolean;
   onToggle: () => void;
   children: React.ReactNode;
+  badge?: React.ReactNode;
 }
 
 export function SectorAccordion({
@@ -19,6 +20,7 @@ export function SectorAccordion({
   isOpen,
   onToggle,
   children,
+  badge,
 }: SectorAccordionProps) {
   return (
     <div className="rounded-lg border border-border bg-card overflow-hidden">
@@ -34,6 +36,7 @@ export function SectorAccordion({
           <span className="text-xs text-subtle tabular-nums">
             {sector.stock_count} stocks
           </span>
+          {badge}
         </div>
 
         <div className="flex items-center gap-4 shrink-0">

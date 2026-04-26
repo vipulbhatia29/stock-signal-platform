@@ -17,9 +17,11 @@ import {
   useSectorCorrelation,
 } from "@/hooks/use-sectors";
 import { usePortfolioSummary } from "@/hooks/use-stocks";
+import { useSectorConvergence } from "@/hooks/use-convergence";
 import { AllocationDonut, DONUT_COLORS } from "@/components/allocation-donut";
 import { SectionHeading } from "@/components/section-heading";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import type { SectorScope } from "@/types/api";
 
 export function SectorsClient() {
@@ -34,6 +36,8 @@ export function SectorsClient() {
     openSector,
     correlationTickers.length >= 2 ? correlationTickers : null
   );
+  const { data: sectorConvergence, isLoading: convergenceLoading } =
+    useSectorConvergence(openSector, !!openSector);
   const { data: portfolioSummary } = usePortfolioSummary();
 
   const sectors = sectorsData?.sectors ?? [];
@@ -105,12 +109,32 @@ export function SectorsClient() {
           </p>
         ) : (
           <StaggerGroup>
-            {sectors.map((sector) => (
+            {sectors.map((sector) => {
+              const isOpen = openSector === sector.sector;
+              const convergenceBadge = isOpen && sectorConvergence ? (
+                <span className={cn(
+                  "rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                  sectorConvergence.bullish_pct > 0.5 ? "bg-gain/10 text-gain" :
+                  sectorConvergence.bearish_pct > 0.5 ? "bg-loss/10 text-loss" :
+                  "bg-amber-500/10 text-amber-400"
+                )}>
+                  {sectorConvergence.bullish_pct > 0.5
+                    ? `${Math.round(sectorConvergence.bullish_pct * 100)}% Bullish`
+                    : sectorConvergence.bearish_pct > 0.5
+                    ? `${Math.round(sectorConvergence.bearish_pct * 100)}% Bearish`
+                    : `${Math.round(sectorConvergence.mixed_pct * 100)}% Mixed`}
+                </span>
+              ) : convergenceLoading && isOpen ? (
+                <Skeleton className="h-5 w-20 rounded-full" />
+              ) : null;
+
+              return (
               <StaggerItem key={sector.sector}>
                 <SectorAccordion
                   sector={sector}
-                  isOpen={openSector === sector.sector}
+                  isOpen={isOpen}
                   onToggle={() => handleToggle(sector.sector)}
+                  badge={isOpen ? convergenceBadge : undefined}
                 >
                   <SectorAccordionContent
                     stocks={stocksData?.stocks ?? []}
@@ -122,7 +146,8 @@ export function SectorsClient() {
                   />
                 </SectorAccordion>
               </StaggerItem>
-            ))}
+              );
+            })}
           </StaggerGroup>
         )}
       </div>
