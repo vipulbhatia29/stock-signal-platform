@@ -91,8 +91,8 @@ async def train_prophet_model(ticker: str, db: AsyncSession) -> ModelVersion:
     model = Prophet(**PROPHET_CONFIG)
 
     # ── Sentiment regressors (coverage-gated to avoid numerical instability) ──
-    ds_min = pd.Timestamp(str(df["ds"].min()))
-    ds_max = pd.Timestamp(str(df["ds"].max()))
+    ds_min: date = pd.Timestamp(str(df["ds"].min())).date()
+    ds_max: date = pd.Timestamp(str(df["ds"].max())).date()
     sentiment_df = await fetch_sentiment_regressors(ticker, ds_min, ds_max, db)
     if sentiment_df is not None and not sentiment_df.empty:
         coverage = len(sentiment_df) / len(df)
@@ -261,7 +261,7 @@ async def predict_forecast(
             )
 
         training_end = _hist["ds"].max().date()
-        assert isinstance(training_end, date)  # pyright: narrow from date | None
+        assert isinstance(training_end, date)
 
         # Step 1 — historical rows straight from the serialized model.
         cols = ["ds", *sentiment_regressor_names]
@@ -269,12 +269,11 @@ async def predict_forecast(
 
         # Step 2 — post-training-window fresh fetch.
         if training_end < today:
-            post_start = pd.Timestamp(str(training_end)) + pd.Timedelta(days=1)
-            post_end = pd.Timestamp(today)
+            post_start_date = training_end + timedelta(days=1)
             post_df = await fetch_sentiment_regressors(
                 model_version.ticker,
-                post_start.date(),
-                post_end.date(),
+                post_start_date,
+                today,
                 db,
             )
             if post_df is not None and not post_df.empty:
