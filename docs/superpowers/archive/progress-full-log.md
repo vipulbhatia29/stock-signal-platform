@@ -2914,3 +2914,11 @@ Full implementation of KAN-232 (BU-6). Brainstorm → spec → 3-expert spec rev
 ### Doc Audit + Overhaul
 - Audited TDD, FSD, PRD, README — found 20+ undocumented features
 - Fixed stale diagrams, missing tools/routers, contradictions
+
+---
+
+## Sessions 107-132 (archived from PROGRESS.md during Session 135 compaction)
+
+See PROGRESS.md git history for full detail. Compact summary below:
+
+**S107:** Spec E Forecast Quality (PR #225, tests 2037). **S108:** Spec C Entry Points — 4 PRs (#229-232, tests 2080). **S109:** TimescaleDB Compression + Spec B follow-ups (PR #233, tests 2096). **S110:** Gap Fixes + Spec G Frontend (PRs #234-235, tests 2115). **S111:** Worktree Rule + SPY Seed (PRs #237-238). **S113:** Obs Epic JIRA scaffolding (KAN-457-460) + 6 plans. **S114:** Obs 1a PR1 Schema Foundation (PR #242, tests 2121). **S115:** Obs 1a PR2a SDK Core (PR #243, tests 2134). **S118:** Obs 1a PR4 ObservedHttpClient (PR #246, tests 2233). **S119:** Obs 1a PR5 Strangler-Fig (PR #247, tests 2312, KAN-458 Done). **S120:** Obs 1b Refinement (7 plans). **S121:** Obs 1b PR1+PR2 HTTP+Auth (PRs #250-251, tests 2361). **S122:** Obs 1b PR3+PR4+PR5 DB+Cache+Celery+Agent (PRs #253-255, tests 2433). **S123:** Obs 1b PR6+PR7 Frontend+Semgrep (PRs #256-257, tests 2460, KAN-459 Done). **S124:** Pre-1c Audit + Anomaly Engine (PR #259 + anomaly PR, tests 2496). **S125:** Rules 7-12 + Auto-Close (tests 2519). **S126:** Obs 1c PR3 MCP tools (#262). **S127:** PR4-PR6 CLI+Admin+Dashboard (#263-266). **S128:** Dashboard Zones 2-8 (64 frontend tests). **S129:** Zone 3+4 + JIRA Draft (#268-269, tests 2625, KAN-457 complete). **S130:** Obs Validation spec + epic. **S131:** Test PR1 fixtures+SDK+trace (PR #272). **S132:** Test PR2 anomaly+admin (PR #273).
