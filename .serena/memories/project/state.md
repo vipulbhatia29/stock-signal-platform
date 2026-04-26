@@ -37,5 +37,5 @@ Migration 040 (rev `e0f1a2b3c4d5`)
 - KAN-456 (Low) — Langfuse task_tracer wiring
 
 ## Resume Point (next session)
-- Implement KAN-513 (Spec C): subagent-driven, 3 subtasks (KAN-525→526→527), 1 PR
+- Merge PR #283 (KAN-513 Spec C), then transition KAN-513 + subtasks to Done
 - After KAN-513: KAN-504 (test follow-up for A+B+C)

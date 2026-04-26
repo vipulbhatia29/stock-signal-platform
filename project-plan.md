@@ -453,6 +453,35 @@ The HTML prototype defined 8 panels but only 4 shipped + 1 partial. Each panel a
 **Blocks:** KAN-363 (Visual Regression), KAN-217 (Playwright E2E Refresh), KAN-216 (Frontend component tests)
 **Note:** AccuracyBadge + ForecastCard MAPE badge already wired in Session 94 (KAN-393/398). Security bugs + tech debt cleared.
 
+**Phase E.2: E2E Intent Audit & Wiring Gap Resolution (KAN-504, redefined Session 138)**
+
+Spec: `docs/superpowers/specs/2026-04-26-e2e-intent-audit-and-wiring-gaps.md`
+
+Playwright-driven audit of all 16 user journeys against PRD/FSD intent. Backend is complete — gaps are in frontend wiring. Discovery done with PM in the loop (click each button, compare actual vs expected).
+
+**Known wiring gaps (pre-audit, pending JIRA creation after plan finalization):**
+
+| # | Gap | Severity | Origin |
+|---|-----|----------|--------|
+| W-1 | **External stock add → 404** — frontend calls `addToWatchlist` without `ingest` first. External stocks fail. | CRITICAL | Session 138 visual verification |
+| W-2 | **No navigation after stock add** — user stays on current page after adding stock, should navigate to `/stocks/{ticker}` | HIGH | Session 138 |
+| W-3 | **Admin Pipelines not in sidebar** — page exists at `/admin/pipelines`, only accessible via URL | CRITICAL | Session 138 |
+| W-4 | **Admin Observability not in sidebar** — page exists at `/admin/observability`, only accessible via breadcrumb | CRITICAL | Session 138 |
+| W-5 | **CC API Traffic no error breakdown** — shows 13.5% error rate but no per-endpoint errors, no status codes, no failed request log | HIGH | Session 138 |
+| W-6 | **CC drill-downs not actionable** — no action buttons (clear cache, re-trigger, restart), no links to relevant admin pages | HIGH | Session 138 |
+| W-7 | **No dedicated recommendations page** — `useRecommendations()` hook exists, only rendered as 3-5 items on dashboard | HIGH | FSD FR-4 |
+| W-8 | **Scorecard only from dashboard tile** — `useScorecard()` hook exists, only accessible from one place | MEDIUM | PRD 5.11 |
+| W-9 | **No manual refresh on stock detail** — stale signals flagged but no "Refresh" button for user to trigger ingest | MEDIUM | FSD FR-3.3 |
+| W-10 | **Delta vs full ingest not indicated** — user sees "Adding AAPL" but doesn't know if it's 10Y fetch or delta refresh | LOW | FSD FR-2.5 |
+
+**Execution phases:**
+- Phase 1: PM-guided Playwright walkthrough — click every button, PM validates intent (1-2 sessions)
+- Phase 2: Fix CRITICAL + HIGH wiring gaps (1-2 sessions)
+- Phase 3: Fix MEDIUM gaps (1-2 sessions)
+- Phase 4: Playwright regression tests for all 16 journeys (1 session)
+
+**Existing JIRA for related gaps:** KAN-528 (CC actionable drill-downs), KAN-523 (4 missing CC panels), KAN-521 (Backtesting Dashboard), KAN-522 (LLM Admin Console), KAN-524 (Task Status Polling)
+
 ### Phase F: Subscriptions + Monetization (~5 days) — No JIRA tickets yet
 
 > Stripe integration, tier enforcement, pricing. **Depends on Phase C ✅ + Phase D ✅.**
