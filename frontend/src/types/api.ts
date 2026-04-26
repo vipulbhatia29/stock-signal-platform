@@ -1290,3 +1290,20 @@ export interface SentimentTimeseriesResponse {
   ticker: string;
   data: NewsSentiment[];
 }
+
+// Admin Audit Log
+export interface AuditLogEntry {
+  id: string;
+  user_id: string;
+  action: string;
+  target: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface AuditLogResponse {
+  total: number;
+  limit: number;
+  offset: number;
+  entries: AuditLogEntry[];
+}

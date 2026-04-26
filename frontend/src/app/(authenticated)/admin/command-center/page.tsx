@@ -12,11 +12,12 @@ import { SystemHealthPanel } from "@/components/command-center/system-health-pan
 import { ApiTrafficPanel } from "@/components/command-center/api-traffic-panel";
 import { LlmOperationsPanel } from "@/components/command-center/llm-operations-panel";
 import { PipelinePanel } from "@/components/command-center/pipeline-panel";
+import { ForecastHealthPanel } from "@/components/command-center/forecast-health-panel";
 
 function LoadingSkeleton() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      {Array.from({ length: 4 }).map((_, i) => (
+      {Array.from({ length: 5 }).map((_, i) => (
         <Skeleton key={i} className="h-[280px] w-full rounded-xl bg-card2" />
       ))}
     </div>
@@ -74,6 +75,7 @@ export default function CommandCenterPage() {
           <ApiTrafficPanel data={data?.api_traffic ?? null} />
           <LlmOperationsPanel data={data?.llm_operations ?? null} />
           <PipelinePanel data={data?.pipeline ?? null} />
+          <ForecastHealthPanel data={data?.forecast_health ?? null} />
         </div>
       )}
     </PageTransition>

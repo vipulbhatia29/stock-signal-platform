@@ -388,15 +388,15 @@ Category audit table + full plan reference: `feat/KAN-420-spec-d-pr1.5-tracked-t
 | # | Feature | Backend Endpoints | Effort Est. |
 |---|---------|-------------------|-------------|
 | E-1 | **Stock Intelligence Display** | `/stocks/{ticker}/intelligence` (hook exists, no component) | ~1 day |
-| E-2 | **Backtesting Dashboard** | `/backtests/run`, `/{ticker}`, `/{ticker}/history`, `/summary/all` | ~2-3 days |
-| E-3 | **LLM Admin Console** | 11 endpoints under `/observability/llm/*` (models, tiers, usage, chat sessions, costs) | ~2-3 days |
+| E-2 | **Backtesting Dashboard** | `/backtests/run`, `/{ticker}`, `/{ticker}/history`, `/summary/all` | ~2-3 days | **KAN-521** |
+| E-3 | **LLM Admin Console** | 11 endpoints under `/observability/llm/*` (models, tiers, usage, chat sessions, costs) | ~2-3 days | **KAN-522** |
 
 **Priority 2 — Partial implementations:**
 
 | # | Feature | Gap | Effort Est. |
 |---|---------|-----|-------------|
 | E-4 | Audit Log Viewer | `/admin/pipelines/audit-log` — no admin UI | ~0.5 day |
-| E-5 | Task Status Monitor | `/tasks/{task_id}/status` — no progress UI | ~0.5 day |
+| E-5 | Task Status Monitor | `/tasks/{task_id}/status` — no progress UI. Needs backend schema change (`task_id` in trigger responses). | ~0.5 day | **KAN-524** |
 | E-6 | Forecast Component Breakdown | `/portfolio/{id}/forecast/components` — no drill-down | ~1 day |
 | E-7 | Sentiment Article Browser | `/sentiment/articles` — no listing page | ~1 day |
 | E-8 | Command Center Forecast Health | `/admin/command-center/forecast-health` — no panel/hook | ~0.5 day |
@@ -408,10 +408,10 @@ The HTML prototype defined 8 panels but only 4 shipped + 1 partial. Each panel a
 
 | # | Panel | Backend Schema | Backend Collector | Backend Drill-down | Frontend Component | Frontend Types | Status |
 |---|-------|---------------|-------------------|-------------------|-------------------|---------------|--------|
-| E-10 | **Cache Performance** | **Missing** | **Missing** | **Missing** | **Missing** | **Missing** | Zero impl |
-| E-11 | **Chat & Agent** | **Missing** | **Missing** | **Missing** | **Missing** | **Missing** | Zero impl |
-| E-12 | **Auth & Security** | **Missing** | **Missing** | **Missing** | **Missing** | **Missing** | Zero impl |
-| E-13 | **Alerts & Forecasting** | `ForecastHealthZone` exists (partial) | `_get_forecast_health_safe()` exists (partial) | **Missing** | **Missing** | **Missing** | Backend partial |
+| E-10 | **Cache Performance** | **Missing** | **Missing** | **Missing** | **Missing** | **Missing** | Zero impl | **KAN-523** |
+| E-11 | **Chat & Agent** | **Missing** | **Missing** | **Missing** | **Missing** | **Missing** | Zero impl | **KAN-523** |
+| E-12 | **Auth & Security** | **Missing** | **Missing** | **Missing** | **Missing** | **Missing** | Zero impl | **KAN-523** |
+| E-13 | **Alerts & Forecasting** | `ForecastHealthZone` exists (partial) | `_get_forecast_health_safe()` exists (partial) | **Missing** | **Missing** | **Missing** | Backend partial | **KAN-523** |
 
 **Per-panel implementation requirements:**
 

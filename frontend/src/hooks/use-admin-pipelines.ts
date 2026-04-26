@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "@/lib/api";
+import type { AuditLogResponse } from "@/types/api";
 
 // Types
 export interface TaskDefinition {
@@ -66,6 +67,8 @@ export const pipelineKeys = {
   activeRun: (group: string) => ["admin-pipelines", "active-run", group] as const,
   run: (runId: string) => ["admin-pipelines", "run", runId] as const,
   history: (group: string) => ["admin-pipelines", "history", group] as const,
+  auditLog: (action: string | undefined, limit: number, offset: number) =>
+    ["admin-pipelines", "audit-log", action, limit, offset] as const,
 };
 
 // Hooks
@@ -120,5 +123,19 @@ export function useClearCache() {
 export function useClearAllCaches() {
   return useMutation<CacheClearResponse, Error, void>({
     mutationFn: () => post<CacheClearResponse>("/admin/pipelines/cache/clear-all", {}),
+  });
+}
+
+export function useAuditLog(action?: string, limit = 50, offset = 0) {
+  const params = new URLSearchParams();
+  if (action) params.set("action", action);
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+
+  return useQuery<AuditLogResponse>({
+    queryKey: pipelineKeys.auditLog(action, limit, offset),
+    queryFn: () =>
+      get<AuditLogResponse>(`/admin/pipelines/audit-log?${params.toString()}`),
+    staleTime: 30_000,
   });
 }

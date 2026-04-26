@@ -14,6 +14,7 @@ import type { PipelineGroup } from "@/hooks/use-admin-pipelines";
 import { PipelineGroupCard } from "@/components/admin/pipeline-group-card";
 import { PipelineRunHistory } from "@/components/admin/pipeline-run-history";
 import { CacheControls } from "@/components/admin/cache-controls";
+import { AuditLogTable } from "@/components/admin/audit-log-table";
 
 function LoadingSkeleton() {
   return (
@@ -116,6 +117,9 @@ export default function PipelinesPage() {
             </div>
             <CacheControls />
           </div>
+
+          {/* Audit Log */}
+          <AuditLogTable />
         </div>
       )}
     </PageTransition>
