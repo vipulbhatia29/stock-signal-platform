@@ -118,6 +118,15 @@ export interface CommandCenterMeta {
   degraded_zones: string[];
 }
 
+export interface ForecastHealthZone {
+  backtest_health_pct: number;
+  models_passing: number;
+  models_total: number;
+  sentiment_coverage_pct: number;
+  tickers_with_sentiment: number;
+  tickers_total: number;
+}
+
 export interface CommandCenterResponse {
   timestamp: string;
   meta: CommandCenterMeta;
@@ -125,4 +134,5 @@ export interface CommandCenterResponse {
   api_traffic: ApiTrafficZone | null;
   llm_operations: LlmOperationsZone | null;
   pipeline: PipelineZone | null;
+  forecast_health: ForecastHealthZone | null;
 }
