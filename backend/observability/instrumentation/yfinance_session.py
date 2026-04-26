@@ -55,7 +55,7 @@ try:
 
     _USE_CURL_CFFI = True
 except ImportError:
-    pass
+    logger.debug("curl_cffi not available — using requests.Session for yfinance")
 
 if _USE_CURL_CFFI:
     from curl_cffi.requests import Session as _BaseSession
