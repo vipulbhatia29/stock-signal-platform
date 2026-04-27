@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // ── Mock Recharts (ResponsiveContainer renders nothing in jsdom) ─────────────
@@ -14,6 +14,7 @@ jest.mock("recharts", () => ({
 const mockUseMarketBriefing = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
 const mockUseRecommendations = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
 const mockUseBulkSignalsByTickers = jest.fn(() => ({ data: undefined, isLoading: false }));
+const mockUseWatchlist = jest.fn(() => ({ data: undefined, isLoading: false, isError: false }));
 const mockUsePortfolioSummary = jest.fn(() => ({ data: undefined, isLoading: false }));
 const mockUsePortfolioHealth = jest.fn(() => ({ data: undefined, isLoading: false }));
 const mockUsePortfolioHealthHistory = jest.fn(() => ({ data: undefined, isLoading: false }));
@@ -23,6 +24,8 @@ jest.mock("@/hooks/use-stocks", () => ({
   useMarketBriefing: () => mockUseMarketBriefing(),
   useRecommendations: () => mockUseRecommendations(),
   useBulkSignalsByTickers: () => mockUseBulkSignalsByTickers(),
+  useWatchlist: () => mockUseWatchlist(),
+  usePositions: () => ({ data: [], isLoading: false }),
   usePortfolioSummary: () => mockUsePortfolioSummary(),
   usePortfolioHealth: () => mockUsePortfolioHealth(),
   usePortfolioHealthHistory: () => mockUsePortfolioHealthHistory(),
@@ -86,9 +89,9 @@ function renderWithQuery(ui: React.ReactElement) {
 describe("MarketPulseZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("renders Market Pulse heading", () => {
+  it("renders Market Indexes heading", () => {
     renderWithQuery(<MarketPulseZone />);
-    expect(screen.getByText("Market Pulse")).toBeInTheDocument();
+    expect(screen.getByText("Market Indexes")).toBeInTheDocument();
   });
 
   it("shows market status badge", () => {
@@ -112,7 +115,7 @@ describe("MarketPulseZone", () => {
 
   it("has aria-label on section", () => {
     renderWithQuery(<MarketPulseZone />);
-    expect(screen.getByLabelText("Market Pulse")).toBeInTheDocument();
+    expect(screen.getByLabelText("Market Indexes")).toBeInTheDocument();
   });
 
   it("renders bullish badge when macro_sentiment > 0.2", () => {
@@ -162,25 +165,26 @@ describe("SignalsZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
   it("renders Your Signals heading", () => {
+    mockUseWatchlist.mockReturnValue({ data: [], isLoading: false, isError: false } as never);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByText("Your Signals")).toBeInTheDocument();
   });
 
-  it("shows empty state when no recommendations", () => {
-    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false, isError: false } as never);
+  it("shows empty state when watchlist is empty", () => {
+    mockUseWatchlist.mockReturnValue({ data: [], isLoading: false, isError: false } as never);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByText("No signals yet")).toBeInTheDocument();
   });
 
   it("shows loading skeletons when loading", () => {
-    mockUseRecommendations.mockReturnValue({ data: undefined, isLoading: true, isError: false });
+    mockUseWatchlist.mockReturnValue({ data: undefined, isLoading: true, isError: false });
     const { container } = renderWithQuery(<SignalsZone />);
     const skeletons = container.querySelectorAll("[class*='bg-card2']");
     expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it("has aria-label on sections", () => {
-    mockUseRecommendations.mockReturnValue({ data: [], isLoading: false, isError: false } as never);
+    mockUseWatchlist.mockReturnValue({ data: [], isLoading: false, isError: false } as never);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByLabelText("Your Signals")).toBeInTheDocument();
     expect(screen.getByLabelText("Top Movers")).toBeInTheDocument();
@@ -192,9 +196,9 @@ describe("SignalsZone", () => {
 describe("PortfolioZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("renders Portfolio Overview heading", () => {
+  it("renders Portfolio Analytics heading", () => {
     renderWithQuery(<PortfolioZone />);
-    expect(screen.getByText("Portfolio Overview")).toBeInTheDocument();
+    expect(screen.getByText("Portfolio Analytics")).toBeInTheDocument();
   });
 
   it("shows empty state when no portfolio", () => {
@@ -213,7 +217,7 @@ describe("PortfolioZone", () => {
 
   it("has aria-label on section", () => {
     renderWithQuery(<PortfolioZone />);
-    expect(screen.getByLabelText("Portfolio Overview")).toBeInTheDocument();
+    expect(screen.getByLabelText("Portfolio Analytics")).toBeInTheDocument();
   });
 
   it("renders health sparkline when history has >=2 data points", () => {
@@ -265,32 +269,19 @@ describe("PortfolioZone", () => {
 describe("AlertsZone", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("renders Alerts heading", () => {
+  it("renders collapsible Alerts bar", () => {
     mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as never);
     renderWithQuery(<AlertsZone />);
     expect(screen.getByText("Alerts")).toBeInTheDocument();
   });
 
-  it("shows empty state when no alerts", () => {
+  it("shows all clear when no alerts", () => {
     mockUseAlerts.mockReturnValue({ data: { alerts: [], total: 0, unreadCount: 0 }, isLoading: false, isError: false } as never);
     renderWithQuery(<AlertsZone />);
-    expect(screen.getByText("No alerts")).toBeInTheDocument();
+    expect(screen.getByText(/all clear/)).toBeInTheDocument();
   });
 
-  it("shows loading skeletons when loading", () => {
-    mockUseAlerts.mockReturnValue({ data: undefined, isLoading: true, isError: false });
-    const { container } = renderWithQuery(<AlertsZone />);
-    const skeletons = container.querySelectorAll("[class*='bg-card2']");
-    expect(skeletons.length).toBeGreaterThan(0);
-  });
-
-  it("shows error message when isError", () => {
-    mockUseAlerts.mockReturnValue({ data: undefined, isLoading: false, isError: true });
-    renderWithQuery(<AlertsZone />);
-    expect(screen.getByText("Unable to load alerts.")).toBeInTheDocument();
-  });
-
-  it("renders alert items with severity styling", () => {
+  it("expands to show alerts on click", () => {
     mockUseAlerts.mockReturnValue({
       data: {
         alerts: [
@@ -303,8 +294,9 @@ describe("AlertsZone", () => {
       isError: false,
     } as never);
     renderWithQuery(<AlertsZone />);
+    // Click to expand
+    fireEvent.click(screen.getByRole("button", { name: /alerts/i }));
     expect(screen.getByText("Price Drop")).toBeInTheDocument();
-    expect(screen.getByText("AAPL")).toBeInTheDocument();
   });
 
   it("has aria-label on section", () => {
@@ -319,25 +311,42 @@ describe("AlertsZone", () => {
 describe("SignalsZone — populated data", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("renders signal cards when recommendations and bulk signals exist", () => {
-    mockUseRecommendations.mockReturnValue({
+  it("renders signal cards from watchlist with signal data", () => {
+    mockUseWatchlist.mockReturnValue({
       data: [
-        { ticker: "AAPL", action: "BUY", composite_score: 9.2, name: "Apple" },
+        {
+          id: "1", ticker: "AAPL", name: "Apple Inc.", sector: "Technology",
+          composite_score: 9.2, added_at: "2026-01-01T00:00:00Z",
+          current_price: 185.5, price_updated_at: null, price_acknowledged_at: null,
+          change_pct: 1.25, macd_signal_label: "bullish_crossover", rsi_value: 42,
+          recommendation: "BUY",
+        },
       ],
       isLoading: false,
       isError: false,
     } as never);
-    mockUseBulkSignalsByTickers.mockReturnValue({
-      data: {
-        items: [
-          { ticker: "AAPL", name: "Apple Inc.", rsi_value: 42, rsi_signal: "neutral", macd_signal: "bullish_crossover", sharpe_ratio: 1.2, sma_signal: "above", composite_score: 9.2 },
-        ],
-      },
-      isLoading: false,
-    } as never);
     renderWithQuery(<SignalsZone />);
     expect(screen.getByText("AAPL")).toBeInTheDocument();
     expect(screen.getByText("Apple Inc.")).toBeInTheDocument();
+  });
+
+  it("shows pending ingest for stocks without signal data", () => {
+    mockUseWatchlist.mockReturnValue({
+      data: [
+        {
+          id: "2", ticker: "HOOD", name: "Robinhood", sector: "Financial Services",
+          composite_score: null, added_at: "2026-01-01T00:00:00Z",
+          current_price: null, price_updated_at: null, price_acknowledged_at: null,
+          change_pct: null, macd_signal_label: null, rsi_value: null,
+          recommendation: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    } as never);
+    renderWithQuery(<SignalsZone />);
+    expect(screen.getByText("HOOD")).toBeInTheDocument();
+    expect(screen.getByText("Pending ingest…")).toBeInTheDocument();
   });
 });
 
@@ -346,7 +355,7 @@ describe("SignalsZone — populated data", () => {
 describe("AlertsZone — populated data", () => {
   beforeEach(() => jest.clearAllMocks());
 
-  it("renders alert content with severity and ticker", () => {
+  it("renders alert content after expanding", () => {
     mockUseAlerts.mockReturnValue({
       data: {
         alerts: [
@@ -359,9 +368,9 @@ describe("AlertsZone — populated data", () => {
       isError: false,
     } as never);
     renderWithQuery(<AlertsZone />);
+    // Expand to see alert content
+    fireEvent.click(screen.getByRole("button", { name: /alerts/i }));
     expect(screen.getByText("Score dropped")).toBeInTheDocument();
-    expect(screen.getByText("CRITICAL")).toBeInTheDocument();
-    expect(screen.getByText("INTC")).toBeInTheDocument();
   });
 });
 

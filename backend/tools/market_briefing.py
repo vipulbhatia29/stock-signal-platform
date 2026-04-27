@@ -13,7 +13,7 @@ from typing import Any
 
 import yfinance as yf
 from pydantic import BaseModel
-from sqlalchemy import asc, desc, func, select
+from sqlalchemy import asc, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.tools.base import BaseTool, ToolResult
@@ -48,32 +48,30 @@ SECTOR_ETFS = {
 
 
 def _fetch_index_performance(ticker: str, name: str) -> dict | None:
-    """Fetch 2-day price data for a single index and compute 1-day change.
+    """Fetch index price and 1-day change via Ticker.fast_info.
+
+    Uses the same approach as sector ETF fetching (fast_info) instead of
+    yf.download(), which is flaky for index tickers on weekends/holidays.
 
     Args:
-        ticker: Index ticker symbol.
+        ticker: Index ticker symbol (e.g. ^GSPC).
         name: Human-readable index name.
 
     Returns:
         Dict with name, ticker, price, change_pct, or None on failure.
     """
     try:
-        df = yf.download(ticker, period="2d", progress=False)
-        if df is None or df.empty or len(df) < 2:
-            return None
-        close_col = df["Close"]
-        if hasattr(close_col, "iloc"):
-            prev = float(close_col.iloc[-2])
-            curr = float(close_col.iloc[-1])
-        else:
-            return None
-        if prev == 0:
+        t = yf.Ticker(ticker)
+        info = t.fast_info
+        prev = getattr(info, "previous_close", None)
+        curr = getattr(info, "last_price", None)
+        if not prev or not curr or prev == 0:
             return None
         change_pct = ((curr - prev) / prev) * 100
         return {
             "name": name,
             "ticker": ticker,
-            "price": round(curr, 2),
+            "price": round(float(curr), 2),
             "change_pct": round(change_pct, 2),
         }
     except Exception:
@@ -84,6 +82,9 @@ def _fetch_index_performance(ticker: str, name: str) -> dict | None:
 async def _fetch_top_movers(db: AsyncSession, limit: int = 4) -> dict[str, list[dict]]:
     """Fetch top gainers and losers from latest signal snapshots.
 
+    Uses DISTINCT ON (ticker) to get the most recent snapshot per ticker,
+    avoiding the bug where exact computed_at match only returns the last ticker.
+
     Args:
         db: Async database session.
         limit: Number of gainers/losers to return.
@@ -93,20 +94,19 @@ async def _fetch_top_movers(db: AsyncSession, limit: int = 4) -> dict[str, list[
     """
     from backend.models.signal import SignalSnapshot
 
-    latest_ts_q = select(func.max(SignalSnapshot.computed_at))
-    latest_ts = (await db.execute(latest_ts_q)).scalar_one_or_none()
-    if not latest_ts:
-        return {"gainers": [], "losers": []}
-
-    base_q = select(
-        SignalSnapshot.ticker,
-        SignalSnapshot.current_price,
-        SignalSnapshot.change_pct,
-        SignalSnapshot.macd_signal_label,
-        SignalSnapshot.composite_score,
-    ).where(
-        SignalSnapshot.computed_at == latest_ts,
-        SignalSnapshot.change_pct.isnot(None),
+    # Subquery: latest snapshot per ticker via DISTINCT ON
+    latest_per_ticker = (
+        select(
+            SignalSnapshot.ticker,
+            SignalSnapshot.current_price,
+            SignalSnapshot.change_pct,
+            SignalSnapshot.macd_signal_label,
+            SignalSnapshot.composite_score,
+        )
+        .distinct(SignalSnapshot.ticker)
+        .where(SignalSnapshot.change_pct.isnot(None))
+        .order_by(SignalSnapshot.ticker, desc(SignalSnapshot.computed_at))
+        .subquery()
     )
 
     def _to_dict(row: Any) -> dict:
@@ -118,10 +118,20 @@ async def _fetch_top_movers(db: AsyncSession, limit: int = 4) -> dict[str, list[
             "composite_score": row.composite_score,
         }
 
-    gainers_q = base_q.order_by(desc(SignalSnapshot.change_pct)).limit(limit)
+    gainers_q = (
+        select(latest_per_ticker)
+        .where(latest_per_ticker.c.change_pct > 0)
+        .order_by(desc(latest_per_ticker.c.change_pct))
+        .limit(limit)
+    )
     gainers = [_to_dict(r) for r in (await db.execute(gainers_q)).all()]
 
-    losers_q = base_q.order_by(asc(SignalSnapshot.change_pct)).limit(limit)
+    losers_q = (
+        select(latest_per_ticker)
+        .where(latest_per_ticker.c.change_pct < 0)
+        .order_by(asc(latest_per_ticker.c.change_pct))
+        .limit(limit)
+    )
     losers = [_to_dict(r) for r in (await db.execute(losers_q)).all()]
 
     return {"gainers": gainers, "losers": losers}
@@ -243,7 +253,7 @@ class MarketBriefingTool(BaseTool):
                                     extra={"ticker": ticker, "error": str(result)},
                                 )
                                 continue
-                            for a in result[:2]:
+                            for a in result[:2]:  # type: ignore[index]
                                 a["portfolio_ticker"] = ticker
                                 portfolio_news.append(a)
 

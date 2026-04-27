@@ -290,7 +290,7 @@ def compute_rsi(closes: pd.Series, period: int = RSI_PERIOD) -> tuple[float | No
     if len(closes) < period + 1:
         return None, None
 
-    rsi_series = ta.rsi(closes, length=period)
+    rsi_series = ta.rsi(closes, length=period)  # type: ignore[attr-defined]
     if rsi_series is None or rsi_series.dropna().empty:
         return None, None
 
@@ -326,7 +326,7 @@ def compute_macd(
     if len(closes) < slow + signal_period:
         return None, None, None
 
-    macd_df = ta.macd(closes, fast=fast, slow=slow, signal=signal_period)
+    macd_df = ta.macd(closes, fast=fast, slow=slow, signal=signal_period)  # type: ignore[attr-defined]
     if macd_df is None or macd_df.dropna().empty:
         return None, None, None
 
@@ -356,8 +356,8 @@ def compute_sma(
     Returns:
         Tuple of (sma_50_value, sma_200_value, signal_label).
     """
-    sma_short = ta.sma(closes, length=short) if len(closes) >= short else None
-    sma_long = ta.sma(closes, length=long) if len(closes) >= long else None
+    sma_short = ta.sma(closes, length=short) if len(closes) >= short else None  # type: ignore[attr-defined]
+    sma_long = ta.sma(closes, length=long) if len(closes) >= long else None  # type: ignore[attr-defined]
 
     sma50_val = (
         round(float(sma_short.iloc[-1]), 4)
@@ -412,7 +412,7 @@ def compute_bollinger(
     if len(closes) < period:
         return None, None, None
 
-    bb_df = ta.bbands(closes, length=period, std=num_std)
+    bb_df = ta.bbands(closes, length=period, std=num_std)  # type: ignore[attr-defined]
     if bb_df is None or bb_df.dropna().empty:
         return None, None, None
 
@@ -885,6 +885,8 @@ async def get_bulk_signals(
     _ALLOWED_SORT = {
         "composite_score",
         "ticker",
+        "current_price",
+        "change_pct",
         "rsi_value",
         "macd_value",
         "sma_50",

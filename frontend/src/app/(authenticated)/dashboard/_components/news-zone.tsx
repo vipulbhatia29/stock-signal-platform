@@ -44,6 +44,8 @@ export function NewsZone() {
               published={article.published}
               link={article.link}
               ticker={article.portfolio_ticker}
+              sentimentLabel={article.sentiment_label}
+              category={article.category}
             />
           ))}
         </div>

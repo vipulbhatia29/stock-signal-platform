@@ -2,33 +2,30 @@
 
 import { Activity, Clock } from "lucide-react";
 import { SectionHeading } from "@/components/section-heading";
-import { MoverRow } from "@/components/mover-row";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMarketBriefing } from "@/hooks/use-stocks";
 import { useMacroSentiment } from "@/hooks/use-sentiment";
 import { isMarketOpen } from "@/lib/market-hours";
 import { cn } from "@/lib/utils";
-import { useRouter } from "next/navigation";
 
-/** Zone 1 — Market status + index cards + gainers/losers. */
+/** Market Indexes — 3-4 index cards with price + change. */
 export function MarketPulseZone() {
   const { data: briefing, isLoading, isError } = useMarketBriefing();
   const { data: macroData } = useMacroSentiment(7);
   const latestMacro = macroData?.data?.[macroData.data.length - 1];
-  const router = useRouter();
   const open = isMarketOpen();
 
   if (isError) {
     return (
-      <section aria-label="Market Pulse">
-        <SectionHeading>Market Pulse</SectionHeading>
+      <section aria-label="Market Indexes">
+        <SectionHeading>Market Indexes</SectionHeading>
         <p className="text-sm text-muted-foreground">Unable to load market data.</p>
       </section>
     );
   }
 
   return (
-    <section aria-label="Market Pulse">
+    <section aria-label="Market Indexes">
       <SectionHeading
         action={
           <div className="flex items-center gap-2">
@@ -55,7 +52,7 @@ export function MarketPulseZone() {
           </div>
         }
       >
-        Market Pulse
+        Market Indexes
       </SectionHeading>
 
       {isLoading ? (
@@ -65,48 +62,47 @@ export function MarketPulseZone() {
           ))}
         </div>
       ) : (
-        <>
-          {/* Index performance row */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-            {briefing?.indexes.map((idx) => (
-              <div
-                key={idx.ticker}
-                className="flex items-center justify-between rounded-lg border border-border/30 bg-[rgba(15,23,42,0.5)] p-3"
-              >
-                <div>
-                  <div className="text-[11px] text-muted-foreground">{idx.name}</div>
-                  <div className="text-sm font-bold">${idx.price.toLocaleString()}</div>
-                </div>
-                <span className={cn("text-sm font-bold", idx.change_pct >= 0 ? "text-[var(--gain)]" : "text-[var(--loss)]")}>
-                  {idx.change_pct >= 0 ? "+" : ""}{idx.change_pct.toFixed(2)}%
-                </span>
-              </div>
-            ))}
-          </div>
-
-          {/* Gainers / Losers split */}
-          {briefing?.top_movers && (
-            <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
-              <div>
-                <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-[var(--gain)]">Gainers</div>
-                <div className="space-y-1">
-                  {briefing.top_movers.gainers.slice(0, 4).map((m) => (
-                    <MoverRow key={m.ticker} ticker={m.ticker} price={m.current_price} changePct={m.change_pct} macdSignal={m.macd_signal_label} onClick={() => router.push(`/stocks/${m.ticker}`)} />
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div className="mb-1.5 text-[9px] font-semibold uppercase tracking-wider text-[var(--loss)]">Losers</div>
-                <div className="space-y-1">
-                  {briefing.top_movers.losers.slice(0, 4).map((m) => (
-                    <MoverRow key={m.ticker} ticker={m.ticker} price={m.current_price} changePct={m.change_pct} macdSignal={m.macd_signal_label} onClick={() => router.push(`/stocks/${m.ticker}`)} />
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
+        <IndexCards indexes={briefing?.indexes ?? []} />
       )}
     </section>
+  );
+}
+
+// Always render S&P 500, NASDAQ, Dow — fill from API data, fallback to "—"
+const REQUIRED_INDEXES = [
+  { ticker: "^GSPC", name: "S&P 500" },
+  { ticker: "^IXIC", name: "NASDAQ" },
+  { ticker: "^DJI", name: "Dow 30" },
+] as const;
+
+function IndexCards({ indexes }: { indexes: { ticker: string; name: string; price: number; change_pct: number }[] }) {
+  const indexMap = new Map(indexes.map((idx) => [idx.ticker, idx]));
+
+  return (
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+      {REQUIRED_INDEXES.map(({ ticker, name }) => {
+        const data = indexMap.get(ticker);
+        return (
+          <div
+            key={ticker}
+            className="flex items-center justify-between rounded-lg border border-border bg-card p-4 transition-colors hover:border-primary/30"
+          >
+            <div>
+              <div className="text-sm font-medium">{name}</div>
+              {data ? (
+                <div className="mt-0.5 flex items-center gap-2">
+                  <span className="font-mono text-xs">{data.price.toLocaleString()}</span>
+                  <span className={cn("text-[10px] font-semibold", data.change_pct >= 0 ? "text-gain" : "text-loss")}>
+                    {data.change_pct >= 0 ? "+" : ""}{data.change_pct.toFixed(2)}%
+                  </span>
+                </div>
+              ) : (
+                <div className="mt-0.5 text-xs text-muted-foreground">—</div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

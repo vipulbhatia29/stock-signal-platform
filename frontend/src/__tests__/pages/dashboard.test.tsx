@@ -11,6 +11,11 @@ jest.mock("@/hooks/use-stocks", () => ({
   useWatchlist: () => mockUseWatchlist(),
   usePositions: () => mockUsePositions(),
   useAddToWatchlist: () => mockUseAddToWatchlist(),
+  useMarketBriefing: () => ({ data: undefined, isLoading: false }),
+}));
+
+jest.mock("@/components/allocation-donut", () => ({
+  AllocationDonut: () => <div data-testid="allocation-donut" />,
 }));
 
 jest.mock("@/components/motion-primitives", () => ({
@@ -32,16 +37,24 @@ jest.mock("@/components/welcome-banner", () => ({
 }));
 
 jest.mock(
+  "@/app/(authenticated)/dashboard/_components/kpi-row",
+  () => ({ KPIRow: () => <div data-testid="kpi-row" /> })
+);
+jest.mock(
   "@/app/(authenticated)/dashboard/_components/market-pulse-zone",
   () => ({ MarketPulseZone: () => <div data-testid="market-pulse" /> })
 );
 jest.mock(
-  "@/app/(authenticated)/dashboard/_components/signals-zone",
-  () => ({ SignalsZone: () => <div data-testid="signals" /> })
+  "@/app/(authenticated)/dashboard/_components/action-required-zone",
+  () => ({ ActionRequiredZone: () => <div data-testid="action-required" /> })
 );
 jest.mock(
-  "@/app/(authenticated)/dashboard/_components/portfolio-zone",
-  () => ({ PortfolioZone: () => <div data-testid="portfolio" /> })
+  "@/app/(authenticated)/dashboard/_components/top-movers-zone",
+  () => ({ TopMoversZone: () => <div data-testid="top-movers" /> })
+);
+jest.mock(
+  "@/app/(authenticated)/dashboard/_components/bulletin-zone",
+  () => ({ BulletinZone: () => <div data-testid="bulletin" /> })
 );
 jest.mock(
   "@/app/(authenticated)/dashboard/_components/alerts-zone",

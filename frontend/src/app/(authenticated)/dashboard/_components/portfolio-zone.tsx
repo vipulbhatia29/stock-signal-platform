@@ -4,21 +4,19 @@ import { Briefcase } from "lucide-react";
 import { SectionHeading } from "@/components/section-heading";
 import { PortfolioKPITile } from "@/components/portfolio-kpi-tile";
 import { HealthGradeBadge } from "@/components/health-grade-badge";
-import { SectorPerformanceBars } from "@/components/sector-performance-bars";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { usePortfolioSummary, usePortfolioHealth, useMarketBriefing, usePortfolioAnalytics, usePortfolioHealthHistory } from "@/hooks/use-stocks";
+import { usePortfolioSummary, usePortfolioHealth, usePortfolioAnalytics, usePortfolioHealthHistory } from "@/hooks/use-stocks";
 import { usePortfolioConvergence } from "@/hooks/use-convergence";
 import { usePortfolioForecastFull } from "@/hooks/use-forecasts";
 import { LineChart, Line, ResponsiveContainer } from "recharts";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 
-/** Zone 3 — Portfolio KPIs + health grade + sector performance. */
+/** Portfolio deep-dive — health, analytics, convergence, forecast. KPIs are in KPIRow. */
 export function PortfolioZone() {
   const { data: summary, isLoading: summaryLoading } = usePortfolioSummary();
   const { data: health, isLoading: healthLoading } = usePortfolioHealth();
-  const { data: briefing } = useMarketBriefing();
   const { data: analytics } = usePortfolioAnalytics();
   const { data: healthHistory } = usePortfolioHealthHistory(7);
   const portfolioId = summary?.portfolio_id ?? null;
@@ -29,8 +27,8 @@ export function PortfolioZone() {
 
   if (isLoading) {
     return (
-      <section aria-label="Portfolio Overview">
-        <SectionHeading>Portfolio Overview</SectionHeading>
+      <section aria-label="Portfolio Analytics">
+        <SectionHeading>Portfolio Analytics</SectionHeading>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-20 rounded-lg bg-card2" />
@@ -42,24 +40,16 @@ export function PortfolioZone() {
 
   if (!summary || summary.position_count === 0) {
     return (
-      <section aria-label="Portfolio Overview">
-        <SectionHeading>Portfolio Overview</SectionHeading>
+      <section aria-label="Portfolio Analytics">
+        <SectionHeading>Portfolio Analytics</SectionHeading>
         <EmptyState icon={Briefcase} title="No portfolio yet" description="Log your first transaction to see portfolio analytics here" />
       </section>
     );
   }
 
-  const pnlAccent = summary.unrealized_pnl >= 0 ? "gain" as const : "loss" as const;
-  const pnlPctStr = summary.unrealized_pnl_pct != null ? `${summary.unrealized_pnl_pct >= 0 ? "+" : ""}${summary.unrealized_pnl_pct.toFixed(1)}%` : undefined;
-
-  const sectorBars = briefing?.sector_performance.map((s) => ({
-    sector: s.sector,
-    changePct: s.change_pct,
-  })) ?? [];
-
   return (
-    <section aria-label="Portfolio Overview">
-      <SectionHeading>Portfolio Overview</SectionHeading>
+    <section aria-label="Portfolio Analytics">
+      <SectionHeading>Portfolio Analytics</SectionHeading>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {/* Health Grade */}
@@ -88,14 +78,34 @@ export function PortfolioZone() {
           )}
         </div>
 
-        {/* Unrealized P&L */}
-        <PortfolioKPITile label="Unrealized P&L" value={formatCurrency(summary.unrealized_pnl)} subtext={pnlPctStr} accent={pnlAccent} />
-
-        {/* Total Value */}
-        <PortfolioKPITile label="Total Value" value={formatCurrency(summary.total_value)} subtext={`${summary.position_count} positions`} accent="neutral" />
-
         {/* Cost Basis */}
         <PortfolioKPITile label="Cost Basis" value={formatCurrency(summary.total_cost_basis)} accent="neutral" />
+
+        {/* Convergence */}
+        {convergence ? (
+          <PortfolioKPITile
+            label="Convergence"
+            value={`${Math.round(convergence.bullish_pct * 100)}% bullish`}
+            subtext={convergence.divergent_positions.length > 0
+              ? `${convergence.divergent_positions.length} divergent`
+              : undefined}
+            accent={convergence.bullish_pct >= 0.5 ? "gain" : convergence.bearish_pct >= 0.5 ? "loss" : "neutral"}
+          />
+        ) : (
+          <PortfolioKPITile label="Convergence" value="—" accent="neutral" />
+        )}
+
+        {/* BL Return */}
+        {forecast ? (
+          <PortfolioKPITile
+            label="BL Return"
+            value={`${forecast.bl.portfolio_expected_return >= 0 ? "+" : ""}${(forecast.bl.portfolio_expected_return * 100).toFixed(1)}%`}
+            subtext="annualized"
+            accent={forecast.bl.portfolio_expected_return >= 0 ? "gain" : "loss"}
+          />
+        ) : (
+          <PortfolioKPITile label="BL Return" value="—" accent="neutral" />
+        )}
       </div>
 
       {/* QuantStats Analytics Row */}
@@ -116,37 +126,6 @@ export function PortfolioZone() {
             value={analytics.alpha?.toFixed(2) ?? "—"}
             accent={analytics.alpha != null ? (analytics.alpha >= 0 ? "gain" : "loss") : "neutral"}
           />
-        </div>
-      )}
-
-      {sectorBars.length > 0 && (
-        <div className="mt-3">
-          <div className="mb-2 text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Sector Performance</div>
-          <SectorPerformanceBars sectors={sectorBars} />
-        </div>
-      )}
-
-      {/* Convergence indicator + BL return */}
-      {(convergence || forecast) && (
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          {convergence && (
-            <PortfolioKPITile
-              label="Convergence"
-              value={`${Math.round(convergence.bullish_pct * 100)}% bullish`}
-              subtext={convergence.divergent_positions.length > 0
-                ? `${convergence.divergent_positions.length} divergent`
-                : undefined}
-              accent={convergence.bullish_pct >= 0.5 ? "gain" : convergence.bearish_pct >= 0.5 ? "loss" : "neutral"}
-            />
-          )}
-          {forecast && (
-            <PortfolioKPITile
-              label="BL Return"
-              value={`${forecast.bl.portfolio_expected_return >= 0 ? "+" : ""}${(forecast.bl.portfolio_expected_return * 100).toFixed(1)}%`}
-              subtext="annualized"
-              accent={forecast.bl.portfolio_expected_return >= 0 ? "gain" : "loss"}
-            />
-          )}
         </div>
       )}
     </section>

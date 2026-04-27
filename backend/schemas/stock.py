@@ -192,6 +192,11 @@ class SignalResponse(BaseModel):
     # Overall composite score (0-10)
     composite_score: float | None = None
 
+    # Price snapshot
+    current_price: float | None = None
+    change_pct: float | None = None
+    market_cap: float | None = None
+
     # Whether the signals are stale (older than 24 hours)
     is_stale: bool = False
 
@@ -235,6 +240,10 @@ class WatchlistItemResponse(BaseModel):
     current_price: float | None = None
     price_updated_at: datetime | None = None
     price_acknowledged_at: datetime | None = None
+    change_pct: float | None = None
+    macd_signal_label: str | None = None
+    rsi_value: float | None = None
+    recommendation: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -298,6 +307,9 @@ class BulkSignalItem(BaseModel):
     name: str
     sector: str | None = None
     composite_score: float | None = None
+    current_price: float | None = None
+    change_pct: float | None = None
+    recommendation: str | None = None
     rsi_value: float | None = None
     rsi_signal: str | None = None
     macd_signal: str | None = None

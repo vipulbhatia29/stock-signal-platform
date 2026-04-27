@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request
@@ -30,6 +31,9 @@ class DashboardNewsArticle(BaseModel):
     published: str | None = None
     source: str = "google_news"
     portfolio_ticker: str | None = None
+    sentiment: float | None = None  # -1.0 (bearish) to 1.0 (bullish)
+    sentiment_label: str | None = None  # "bullish" | "bearish" | "neutral"
+    category: str | None = None  # "general" | "stock" | "sector" | "macro"
 
 
 class DashboardNewsResponse(BaseModel):
@@ -44,7 +48,7 @@ router = APIRouter(prefix="/news", tags=["news"])
 
 async def _get_portfolio_tickers(
     db: AsyncSession,
-    user_id: int,
+    user_id: uuid.UUID,
     limit: int = 3,
 ) -> list[str]:
     """Return top portfolio tickers ordered by share count (descending).
@@ -76,7 +80,7 @@ async def _get_portfolio_tickers(
 
 async def _get_recommendation_tickers(
     db: AsyncSession,
-    user_id: int,
+    user_id: uuid.UUID,
     limit: int = 3,
 ) -> list[str]:
     """Return top recent BUY/STRONG_BUY recommendation tickers.
@@ -159,8 +163,12 @@ async def get_dashboard_news(
     # Deduplicate + sort by date, limit to 15
     all_articles = merge_and_deduplicate(all_articles, max_results=15)
 
+    # --- Score sentiment via LLM (best effort) ---
+    articles = [DashboardNewsArticle(**a) for a in all_articles]
+    articles = await _score_article_sentiment(articles)
+
     response = DashboardNewsResponse(
-        articles=[DashboardNewsArticle(**a) for a in all_articles],
+        articles=articles,
         ticker_count=len(all_tickers),
     )
 
@@ -177,3 +185,87 @@ async def get_dashboard_news(
             )
 
     return response
+
+
+# ── Inline sentiment scoring ──────────────────────────────────────────────────
+
+_SENTIMENT_SYSTEM = (
+    "You are a financial news sentiment classifier. For each headline, return JSON.\n"
+    'Output: {"results": [{"index": 0, "sentiment": 0.5, "label": "bullish", '
+    '"category": "stock", "rationale": "Strong earnings"}, ...]}\n\n'
+    "Fields:\n"
+    "- sentiment: float -1.0 (very bearish) to 1.0 (very bullish), 0.0 = neutral\n"
+    "- label: one of [bullish, bearish, neutral]\n"
+    "- category: one of [stock, sector, macro, general]\n"
+    '  - "stock" = news about a specific company\n'
+    '  - "sector" = news about an industry/sector\n'
+    '  - "macro" = macro-economic (fed, CPI, employment, geopolitics)\n'
+    '  - "general" = market commentary, opinion, not actionable\n'
+    "- rationale: 1-sentence explanation (brief)\n"
+    "IMPORTANT: The headline's primary subject determines sentiment. "
+    '"Stock futures fall as oil rises" is BEARISH because the '
+    "main subject is stock futures falling."
+)
+
+
+async def _score_article_sentiment(
+    articles: list[DashboardNewsArticle],
+) -> list[DashboardNewsArticle]:
+    """Score a batch of articles using LLM. Best-effort — returns unscored on failure."""
+    if not articles:
+        return articles
+
+    from backend.config import settings
+
+    api_key = settings.OPENAI_API_KEY
+    if not api_key:
+        return articles
+
+    model = getattr(settings, "NEWS_SCORING_MODEL", "gpt-4o-mini")
+
+    lines = ["Score these news headlines:\n"]
+    for i, a in enumerate(articles):
+        ticker_label = f"[{a.portfolio_ticker}]" if a.portfolio_ticker else "[MARKET]"
+        lines.append(f"{i}. {ticker_label} {a.title}")
+    prompt = "\n".join(lines)
+
+    from backend.services.http_client import get_http_client
+
+    payload = {
+        "model": model,
+        "temperature": 0,
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": _SENTIMENT_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+    }
+
+    try:
+        client = get_http_client()
+        resp = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        import json
+
+        content = resp.json()["choices"][0]["message"]["content"]
+        parsed = json.loads(content)
+        results = parsed.get("results", [])
+
+        for item in results:
+            idx = item.get("index")
+            if idx is not None and 0 <= idx < len(articles):
+                articles[idx].sentiment = item.get("sentiment")
+                articles[idx].sentiment_label = item.get("label")
+                articles[idx].category = item.get("category")
+    except Exception:
+        logger.warning("Sentiment scoring failed — returning unscored", exc_info=True)
+
+    return articles

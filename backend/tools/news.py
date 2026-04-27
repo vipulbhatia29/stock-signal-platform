@@ -15,6 +15,55 @@ from backend.services.http_client import get_http_client
 
 logger = logging.getLogger(__name__)
 
+# Publishers whose articles are paywalled, clickbait, or otherwise
+# not useful without a paid subscription. Matched case-insensitively
+# against the publisher field from yfinance and Google News RSS.
+_BLOCKED_PUBLISHERS = frozenset(
+    p.lower()
+    for p in [
+        "Motley Fool",
+        "The Motley Fool",
+        "Seeking Alpha",
+        "Barron's",
+        "Barrons",
+        "Investor's Business Daily",
+        "IBD",
+        "Bloomberg",
+        "Financial Times",
+        "Wall Street Journal",
+        "WSJ",
+        "Zacks Investment Research",
+        "Zacks",
+        "24/7 Wall St.",
+        "24/7 Wall Street",
+        "InvestorPlace",
+    ]
+)
+
+# Domain fragments to block in article URLs
+_BLOCKED_DOMAINS = frozenset(
+    [
+        "fool.com",
+        "seekingalpha.com",
+        "barrons.com",
+        "investors.com",
+        "bloomberg.com",
+        "ft.com",
+        "wsj.com",
+        "zacks.com",
+        "247wallst.com",
+        "investorplace.com",
+    ]
+)
+
+
+def _is_blocked(publisher: str, link: str) -> bool:
+    """Check if an article should be filtered out."""
+    if publisher.lower() in _BLOCKED_PUBLISHERS:
+        return True
+    link_lower = link.lower()
+    return any(domain in link_lower for domain in _BLOCKED_DOMAINS)
+
 
 def fetch_yfinance_news(ticker: str) -> list[dict]:
     """Fetch recent news from yfinance (synchronous).
@@ -33,7 +82,12 @@ def fetch_yfinance_news(ticker: str) -> list[dict]:
         return []
 
     articles = []
-    for item in raw[:10]:
+    for item in raw[:15]:
+        publisher = item.get("publisher", "")
+        link = item.get("link", "")
+        if _is_blocked(publisher, link):
+            continue
+
         published = None
         ts = item.get("providerPublishTime")
         if ts:
@@ -45,13 +99,13 @@ def fetch_yfinance_news(ticker: str) -> list[dict]:
         articles.append(
             {
                 "title": item.get("title", ""),
-                "link": item.get("link", ""),
-                "publisher": item.get("publisher", ""),
+                "link": link,
+                "publisher": publisher,
                 "published": published,
                 "source": "yfinance",
             }
         )
-    return articles
+    return articles[:10]
 
 
 async def fetch_google_news_rss(ticker: str) -> list[dict]:
@@ -74,17 +128,21 @@ async def fetch_google_news_rss(ticker: str) -> list[dict]:
 
         root = ET.fromstring(resp.text)
         articles = []
-        for item in root.findall(".//item")[:10]:
+        for item in root.findall(".//item")[:15]:
+            publisher = item.findtext("source", "Google News")
+            link = item.findtext("link", "")
+            if _is_blocked(publisher, link):
+                continue
             articles.append(
                 {
                     "title": item.findtext("title", ""),
-                    "link": item.findtext("link", ""),
-                    "publisher": item.findtext("source", "Google News"),
+                    "link": link,
+                    "publisher": publisher,
                     "published": item.findtext("pubDate"),
                     "source": "google_news",
                 }
             )
-        return articles
+        return articles[:10]
     except Exception:
         logger.warning("Google News RSS fetch failed for %s", ticker)
         return []

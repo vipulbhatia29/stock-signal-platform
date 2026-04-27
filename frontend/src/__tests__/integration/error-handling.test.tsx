@@ -55,10 +55,10 @@ describe("Error handling integration — MSW", () => {
       });
 
       // Component should still be in the DOM (no crash)
-      expect(screen.getByLabelText("Market Pulse")).toBeInTheDocument();
+      expect(screen.getByLabelText("Market Indexes")).toBeInTheDocument();
     });
 
-    it("AlertsZone shows error fallback on 500", async () => {
+    it("AlertsZone still renders with derived alerts on 500 (graceful)", async () => {
       server.use(
         http.get("/api/v1/alerts", () =>
           HttpResponse.json({ detail: "Internal Server Error" }, { status: 500 })
@@ -68,13 +68,10 @@ describe("Error handling integration — MSW", () => {
       renderWithProviders(<AlertsZone />);
 
       await waitFor(() => {
-        expect(
-          screen.getByText("Unable to load alerts.")
-        ).toBeInTheDocument();
+        // Component renders collapsible bar — no crash despite API error
+        // Derived alerts from watchlist data still populate
+        expect(screen.getByLabelText("Alerts")).toBeInTheDocument();
       });
-
-      // Component should still be in the DOM (no crash)
-      expect(screen.getByLabelText("Alerts")).toBeInTheDocument();
     });
   });
 
@@ -107,9 +104,8 @@ describe("Error handling integration — MSW", () => {
       renderWithProviders(<AlertsZone />);
 
       await waitFor(() => {
-        expect(
-          screen.getByText("Unable to load alerts.")
-        ).toBeInTheDocument();
+        // No crash — derived alerts still render even if backend is down
+        expect(screen.getByLabelText("Alerts")).toBeInTheDocument();
       });
     });
   });

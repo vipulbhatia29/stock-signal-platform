@@ -39,7 +39,7 @@ MAX_WATCHLIST_SIZE = 100
 
 
 async def get_watchlist(user_id: uuid.UUID, db: AsyncSession) -> list[dict]:
-    """Fetch the user's watchlist with latest price and composite score.
+    """Fetch the user's watchlist with latest price, signal data, and recommendation.
 
     Joins Watchlist → Stock, plus the most recent SignalSnapshot and
     StockPrice per ticker (via row_number window subqueries).
@@ -51,11 +51,14 @@ async def get_watchlist(user_id: uuid.UUID, db: AsyncSession) -> list[dict]:
     Returns:
         List of dicts matching WatchlistItemResponse shape.
     """
-    # Subquery: latest composite_score per ticker
+    # Subquery: latest signal snapshot per ticker
     latest_signal = (
         select(
             SignalSnapshot.ticker.label("sig_ticker"),
             SignalSnapshot.composite_score.label("composite_score"),
+            SignalSnapshot.change_pct.label("change_pct"),
+            SignalSnapshot.macd_signal_label.label("macd_signal_label"),
+            SignalSnapshot.rsi_value.label("rsi_value"),
             func.row_number()
             .over(
                 partition_by=SignalSnapshot.ticker,
@@ -80,7 +83,7 @@ async def get_watchlist(user_id: uuid.UUID, db: AsyncSession) -> list[dict]:
         )
     ).subquery("latest_price")
 
-    # Join Watchlist + Stock + latest signal score + latest price
+    # Join Watchlist + Stock + latest signal + latest price
     result = await db.execute(
         select(
             Watchlist,
@@ -88,6 +91,9 @@ async def get_watchlist(user_id: uuid.UUID, db: AsyncSession) -> list[dict]:
             latest_signal.c.composite_score,
             latest_price.c.current_price,
             latest_price.c.price_updated_at,
+            latest_signal.c.change_pct,
+            latest_signal.c.macd_signal_label,
+            latest_signal.c.rsi_value,
         )
         .join(Stock, Watchlist.ticker == Stock.ticker)
         .outerjoin(
@@ -103,6 +109,16 @@ async def get_watchlist(user_id: uuid.UUID, db: AsyncSession) -> list[dict]:
     )
     rows = result.all()
 
+    def _derive_recommendation(score: float | None) -> str | None:
+        """Derive BUY/WATCH/AVOID from composite_score (0-10 scale)."""
+        if score is None:
+            return None
+        if score >= 8:
+            return "BUY"
+        if score >= 5:
+            return "WATCH"
+        return "AVOID"
+
     return [
         {
             "id": watchlist.id,
@@ -114,8 +130,21 @@ async def get_watchlist(user_id: uuid.UUID, db: AsyncSession) -> list[dict]:
             "current_price": float(current_price) if current_price is not None else None,
             "price_updated_at": price_updated_at,
             "price_acknowledged_at": watchlist.price_acknowledged_at,
+            "change_pct": float(change_pct) if change_pct is not None else None,
+            "macd_signal_label": macd_signal_label,
+            "rsi_value": float(rsi_value) if rsi_value is not None else None,
+            "recommendation": _derive_recommendation(composite_score),
         }
-        for watchlist, stock, composite_score, current_price, price_updated_at in rows
+        for (
+            watchlist,
+            stock,
+            composite_score,
+            current_price,
+            price_updated_at,
+            change_pct,
+            macd_signal_label,
+            rsi_value,
+        ) in rows
     ]
 
 

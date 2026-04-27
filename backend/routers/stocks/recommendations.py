@@ -181,12 +181,25 @@ async def get_bulk_signals(
     )
 
     stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+
+    def _recommend(score: float | None) -> str | None:
+        if score is None:
+            return None
+        if score >= 8:
+            return "BUY"
+        if score >= 5:
+            return "WATCH"
+        return "AVOID"
+
     items = [
         BulkSignalItem(
             ticker=row.ticker,
             name=row.name,
             sector=row.stock_sector,
             composite_score=row.composite_score,
+            current_price=row.current_price,
+            change_pct=row.change_pct,
+            recommendation=_recommend(row.composite_score),
             rsi_value=row.rsi_value,
             rsi_signal=row.rsi_signal,
             macd_signal=row.macd_signal_label,
