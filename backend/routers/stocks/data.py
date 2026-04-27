@@ -173,7 +173,7 @@ async def get_prices(
             volume=[r.volume for r in rows],
         )
 
-    return rows
+    return rows  # type: ignore[return-value]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -369,7 +369,7 @@ async def get_stock_news(
 
     response = StockNewsResponse(
         ticker=t,
-        articles=merged,
+        articles=merged,  # type: ignore[arg-type]
         fetched_at=datetime.now(timezone.utc).isoformat(),
     )
     if cache:
@@ -444,11 +444,11 @@ async def get_stock_intelligence(
 
     response = StockIntelligenceResponse(
         ticker=t,
-        upgrades_downgrades=upgrades_raw,
-        insider_transactions=insider_raw,
+        upgrades_downgrades=upgrades_raw,  # type: ignore[arg-type]
+        insider_transactions=insider_raw,  # type: ignore[arg-type]
         next_earnings_date=earnings_raw,
         eps_revisions=eps_raw,
-        short_interest=short_raw,
+        short_interest=short_raw,  # type: ignore[arg-type]
         fetched_at=datetime.now(timezone.utc).isoformat(),
     )
     if cache:

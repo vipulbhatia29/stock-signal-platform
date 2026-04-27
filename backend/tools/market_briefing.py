@@ -253,7 +253,7 @@ class MarketBriefingTool(BaseTool):
                                     extra={"ticker": ticker, "error": str(result)},
                                 )
                                 continue
-                            for a in result[:2]:
+                            for a in result[:2]:  # type: ignore[index]
                                 a["portfolio_ticker"] = ticker
                                 portfolio_news.append(a)
 

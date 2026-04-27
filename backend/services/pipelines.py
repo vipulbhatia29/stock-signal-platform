@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from typing import Any
 
 from sqlalchemy import select
@@ -21,7 +22,7 @@ from backend.services.recommendations import (
     generate_recommendation,
     store_recommendation,
 )
-from backend.services.signals import compute_signals, store_signal_snapshot
+from backend.services.signals import SignalResult, compute_signals, store_signal_snapshot
 from backend.services.stock_data import (
     ensure_stock_exists,
     fetch_analyst_data,
@@ -200,7 +201,7 @@ async def ingest_ticker(
 
 async def _generate_recommendation_with_context(
     ticker: str,
-    signal_result: object,
+    signal_result: SignalResult,
     user_id: str,
     db: AsyncSession,
 ) -> object | None:
@@ -225,7 +226,7 @@ async def _generate_recommendation_with_context(
     max_position_pct = 5.0
 
     try:
-        portfolio = await get_or_create_portfolio(user_id, db)
+        portfolio = await get_or_create_portfolio(uuid.UUID(user_id), db)
         positions = await get_positions_with_pnl(portfolio.id, db)
         pos_map = {p.ticker: p for p in positions}
         if ticker in pos_map:

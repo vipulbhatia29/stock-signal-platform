@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Request
@@ -47,7 +48,7 @@ router = APIRouter(prefix="/news", tags=["news"])
 
 async def _get_portfolio_tickers(
     db: AsyncSession,
-    user_id: int,
+    user_id: uuid.UUID,
     limit: int = 3,
 ) -> list[str]:
     """Return top portfolio tickers ordered by share count (descending).
@@ -79,7 +80,7 @@ async def _get_portfolio_tickers(
 
 async def _get_recommendation_tickers(
     db: AsyncSession,
-    user_id: int,
+    user_id: uuid.UUID,
     limit: int = 3,
 ) -> list[str]:
     """Return top recent BUY/STRONG_BUY recommendation tickers.
