@@ -118,6 +118,40 @@ const COL: Record<string, Column> = {
       </div>
     ),
   },
+  price: {
+    key: "current_price",
+    label: "Price",
+    sortable: true,
+    render: (item) => (
+      <span className="tabular-nums font-mono">
+        {item.current_price != null ? `$${item.current_price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+      </span>
+    ),
+  },
+  change: {
+    key: "change_pct",
+    label: "Change",
+    sortable: true,
+    render: (item) => <ChangeIndicator value={item.change_pct} format="percent" size="sm" />,
+  },
+  recommendation: {
+    key: "recommendation",
+    label: "Action",
+    sortable: false,
+    render: (item) => {
+      if (!item.recommendation) return <span className="text-subtle">—</span>;
+      const colors: Record<string, string> = {
+        BUY: "bg-gain/15 text-gain",
+        WATCH: "bg-warning/15 text-warning",
+        AVOID: "bg-loss/15 text-loss",
+      };
+      return (
+        <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold", colors[item.recommendation] ?? "bg-muted text-muted-foreground")}>
+          {item.recommendation}
+        </span>
+      );
+    },
+  },
   meter: {
     key: "composite_score_meter",
     label: "Signal Strength",
@@ -159,7 +193,7 @@ const COL: Record<string, Column> = {
 type TabKey = "overview" | "signals" | "performance";
 
 const TAB_COLUMNS: Record<TabKey, string[]> = {
-  overview: ["ticker", "name", "sector", "score"],
+  overview: ["ticker", "price", "change", "score", "rsi", "macd", "sentiment", "recommendation"],
   signals: ["ticker", "rsi", "macd", "sma", "bb", "score", "sentiment"],
   performance: ["ticker", "annualReturn", "volatility", "sharpe", "score"],
 };

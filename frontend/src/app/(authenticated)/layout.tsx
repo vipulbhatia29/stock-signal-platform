@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { SidebarNav } from "@/components/sidebar-nav";
 import { Topbar } from "@/components/topbar";
 import { ChatPanel } from "@/components/chat-panel";
 import { ArtifactBar } from "@/components/chat/artifact-bar";
 import { ChatProvider, useChat } from "@/contexts/chat-context";
-import { useAddToWatchlist, useWatchlist } from "@/hooks/use-stocks";
+import { useAddToWatchlist, useWatchlist, useIngestTicker } from "@/hooks/use-stocks";
 import { ApiRequestError } from "@/lib/api";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
 import { IngestProgressToast } from "@/components/ingest-progress-toast";
@@ -21,36 +22,49 @@ function AuthenticatedShell({ children }: { children: React.ReactNode }) {
   } | null>(null);
   const { data: watchlist } = useWatchlist();
   const addToWatchlist = useAddToWatchlist();
+  const ingestTicker = useIngestTicker();
+  const router = useRouter();
 
   const handleAddTicker = useCallback(
     async (ticker: string) => {
-      const isInWatchlist = watchlist?.some((w) => w.ticker === ticker);
-      if (isInWatchlist) {
-        toast.info(`${ticker} is already in your watchlist`);
+      const upperTicker = ticker.toUpperCase();
+      const existing = watchlist?.find((w) => w.ticker === upperTicker);
+      if (existing) {
+        // Already in watchlist — navigate to stock detail
+        router.push(`/stocks/${upperTicker}`);
         return;
       }
-      toast.loading(`Adding ${ticker} to watchlist…`, { id: `add-${ticker}` });
+      toast.loading(`Adding ${upperTicker} to watchlist…`, { id: `add-${ticker}` });
       try {
         await addToWatchlist.mutateAsync(ticker);
         toast.dismiss(`add-${ticker}`);
+        // Start ingest pipeline for new tickers
         toast.custom(
           (t) => (
             <IngestProgressToast
-              ticker={ticker.toUpperCase()}
-              onComplete={() => toast.dismiss(t)}
+              ticker={upperTicker}
+              onComplete={() => {
+                toast.dismiss(t);
+                router.push(`/stocks/${upperTicker}`);
+              }}
             />
           ),
           { duration: Infinity, id: `ingest-${ticker}` },
         );
+        // Fire ingest in background (toast tracks progress)
+        ingestTicker.mutate(upperTicker);
       } catch (err) {
         if (err instanceof ApiRequestError && err.status === 409) {
-          toast.info(err.detail, { id: `add-${ticker}` });
+          // Already exists (race condition) — navigate anyway
+          toast.dismiss(`add-${ticker}`);
+          toast.info(`${upperTicker} already in watchlist`);
+          router.push(`/stocks/${upperTicker}`);
         } else {
-          toast.error(`Failed to add ${ticker} to watchlist`, { id: `add-${ticker}` });
+          toast.error(`Failed to add ${upperTicker}`, { id: `add-${ticker}` });
         }
       }
     },
-    [watchlist, addToWatchlist]
+    [watchlist, addToWatchlist, ingestTicker, router]
   );
 
   return (

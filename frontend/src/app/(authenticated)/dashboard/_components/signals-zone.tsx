@@ -7,43 +7,53 @@ import { SignalStockCard } from "@/components/signal-stock-card";
 import { MoverRow } from "@/components/mover-row";
 import { EmptyState } from "@/components/empty-state";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useRecommendations, useBulkSignalsByTickers, useMarketBriefing } from "@/hooks/use-stocks";
-import { buildSignalReason } from "@/lib/signal-reason";
+import { useWatchlist, useMarketBriefing } from "@/hooks/use-stocks";
 import type { MetricChip } from "@/components/metrics-strip";
-import type { BulkSignalItem } from "@/types/api";
+import type { WatchlistItem } from "@/types/api";
 import { useRouter } from "next/navigation";
 
-function buildMetrics(s: BulkSignalItem): MetricChip[] {
+function buildWatchlistMetrics(item: WatchlistItem): MetricChip[] {
   const chips: MetricChip[] = [];
-  if (s.rsi_value != null) chips.push({ label: "RSI", value: Math.round(s.rsi_value).toString(), sentiment: s.rsi_signal === "oversold" ? "positive" : s.rsi_signal === "overbought" ? "negative" : "neutral" });
-  if (s.macd_signal) chips.push({ label: "MACD", value: s.macd_signal, sentiment: s.macd_signal.includes("bullish") ? "positive" : s.macd_signal.includes("bearish") ? "negative" : "neutral" });
-  if (s.sharpe_ratio != null) chips.push({ label: "Sharpe", value: s.sharpe_ratio.toFixed(2), sentiment: s.sharpe_ratio >= 1 ? "positive" : s.sharpe_ratio < 0 ? "negative" : "warning" });
-  if (s.sma_signal) chips.push({ label: "SMA", value: s.sma_signal, sentiment: s.sma_signal === "golden_cross" || s.sma_signal === "above" ? "positive" : "negative" });
+  if (item.rsi_value != null) {
+    const rsiRound = Math.round(item.rsi_value);
+    chips.push({
+      label: "RSI",
+      value: rsiRound.toString(),
+      sentiment: rsiRound < 30 ? "positive" : rsiRound > 70 ? "negative" : "neutral",
+    });
+  }
+  if (item.macd_signal_label) {
+    chips.push({
+      label: "MACD",
+      value: item.macd_signal_label,
+      sentiment: item.macd_signal_label.includes("bullish") ? "positive" : item.macd_signal_label.includes("bearish") ? "negative" : "neutral",
+    });
+  }
+  if (item.change_pct != null) {
+    chips.push({
+      label: "Chg",
+      value: `${item.change_pct >= 0 ? "+" : ""}${item.change_pct.toFixed(2)}%`,
+      sentiment: item.change_pct > 0 ? "positive" : item.change_pct < 0 ? "negative" : "neutral",
+    });
+  }
   return chips;
 }
 
-/** Zone 2 — Signal cards + top movers side panel. */
+/** Zone 2 — Signal cards from watchlist + top movers side panel. */
 export function SignalsZone() {
-  const { data: recs, isLoading: recsLoading } = useRecommendations();
+  const { data: watchlist, isLoading: watchlistLoading } = useWatchlist();
   const { data: briefing } = useMarketBriefing();
   const router = useRouter();
 
-  const recTickers = useMemo(() => {
-    if (!recs) return [];
-    return recs
-      .filter((r) => r.action === "BUY" || r.action === "STRONG_BUY")
-      .slice(0, 6)
-      .map((r) => r.ticker);
-  }, [recs]);
+  const watchlistWithSignals = useMemo(() => {
+    if (!watchlist) return [];
+    return watchlist.filter((item) => item.composite_score != null);
+  }, [watchlist]);
 
-  const { data: bulkSignals, isLoading: signalsLoading } = useBulkSignalsByTickers(recTickers, recTickers.length > 0);
-  const isLoading = recsLoading || signalsLoading;
-
-  const signalMap = useMemo(() => {
-    const m = new Map<string, BulkSignalItem>();
-    bulkSignals?.items.forEach((s) => m.set(s.ticker, s));
-    return m;
-  }, [bulkSignals]);
+  const watchlistPending = useMemo(() => {
+    if (!watchlist) return [];
+    return watchlist.filter((item) => item.composite_score == null);
+  }, [watchlist]);
 
   const movers = briefing?.top_movers;
 
@@ -57,33 +67,44 @@ export function SignalsZone() {
           </span>
         </SectionHeading>
 
-        {isLoading ? (
+        {watchlistLoading ? (
           <div className="space-y-2">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-24 w-full rounded-lg bg-card2" />
             ))}
           </div>
-        ) : !recTickers.length ? (
-          <EmptyState icon={Zap} title="No signals yet" description="Add stocks and we'll generate buy/sell/watch signals" />
+        ) : !watchlist?.length ? (
+          <EmptyState icon={Zap} title="No signals yet" description="Add stocks to your watchlist to see signals" />
         ) : (
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-            {recTickers.map((ticker) => {
-              const rec = recs?.find((r) => r.ticker === ticker);
-              const sig = signalMap.get(ticker);
-              return (
+          <>
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+              {watchlistWithSignals.map((item) => (
                 <SignalStockCard
-                  key={ticker}
-                  ticker={ticker}
-                  name={sig?.name}
-                  compositeScore={rec?.composite_score ?? 0}
-                  action={rec?.action ?? "WATCH"}
-                  metrics={sig ? buildMetrics(sig) : []}
-                  reason={sig ? buildSignalReason(sig) : undefined}
-                  onClick={() => router.push(`/stocks/${ticker}`)}
+                  key={item.ticker}
+                  ticker={item.ticker}
+                  name={item.name}
+                  compositeScore={item.composite_score ?? 0}
+                  action={item.recommendation ?? "—"}
+                  metrics={buildWatchlistMetrics(item)}
+                  onClick={() => router.push(`/stocks/${item.ticker}`)}
                 />
-              );
-            })}
-          </div>
+              ))}
+            </div>
+            {watchlistPending.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {watchlistPending.map((item) => (
+                  <div
+                    key={item.ticker}
+                    className="flex items-center justify-between rounded-lg border border-border/20 bg-muted/20 px-3 py-2 text-xs cursor-pointer hover:bg-muted/30 transition-colors"
+                    onClick={() => router.push(`/stocks/${item.ticker}`)}
+                  >
+                    <span className="font-medium">{item.ticker}</span>
+                    <span className="text-muted-foreground">Pending ingest…</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </section>
 

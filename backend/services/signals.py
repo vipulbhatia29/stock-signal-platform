@@ -885,6 +885,8 @@ async def get_bulk_signals(
     _ALLOWED_SORT = {
         "composite_score",
         "ticker",
+        "current_price",
+        "change_pct",
         "rsi_value",
         "macd_value",
         "sma_50",

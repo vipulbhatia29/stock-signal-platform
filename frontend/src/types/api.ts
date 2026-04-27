@@ -110,6 +110,9 @@ export interface SignalResponse {
   bollinger: BollingerSignal;
   returns: ReturnsMetrics;
   composite_score: number | null;
+  current_price: number | null;
+  change_pct: number | null;
+  market_cap: number | null;
   is_stale: boolean;
   is_refreshing: boolean;
 }
@@ -139,6 +142,10 @@ export interface WatchlistItem {
   current_price: number | null;
   price_updated_at: string | null;
   price_acknowledged_at: string | null;
+  change_pct: number | null;
+  macd_signal_label: string | null;
+  rsi_value: number | null;
+  recommendation: string | null;
 }
 
 // ── Recommendations ───────────────────────────────────────────────────────────
@@ -177,6 +184,9 @@ export interface BulkSignalItem {
   name: string;
   sector: string | null;
   composite_score: number | null;
+  current_price: number | null;
+  change_pct: number | null;
+  recommendation: string | null;
   rsi_value: number | null;
   rsi_signal: string | null;
   macd_signal: string | null;
@@ -659,6 +669,9 @@ export interface NewsArticle {
   published: string | null;
   source: string;
   portfolio_ticker?: string | null;
+  sentiment?: number | null;
+  sentiment_label?: string | null;
+  category?: string | null;
 }
 
 export interface MarketBriefingResult {

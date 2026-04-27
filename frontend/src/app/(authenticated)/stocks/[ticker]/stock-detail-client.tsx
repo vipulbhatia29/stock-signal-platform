@@ -153,6 +153,9 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
           name={name}
           sector={sector}
           score={signals?.composite_score ?? null}
+          currentPrice={signals?.current_price}
+          priceChangePct={signals?.change_pct}
+          marketCap={signals?.market_cap}
           isInWatchlist={isInWatchlist}
           onToggleWatchlist={handleToggleWatchlist}
           isRefreshing={signals?.is_refreshing}

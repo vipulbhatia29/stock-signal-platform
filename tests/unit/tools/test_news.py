@@ -65,7 +65,7 @@ class TestFetchGoogleNewsRss:
             <item>
                 <title>AAPL surges</title>
                 <link>https://news.google.com/1</link>
-                <source>Bloomberg</source>
+                <source>CNBC</source>
                 <pubDate>Mon, 25 Mar 2026 10:00:00 GMT</pubDate>
             </item>
         </channel></rss>"""

@@ -9,39 +9,41 @@ import pytest
 
 
 class TestFetchIndexPerformance:
-    """Tests for index data fetching."""
+    """Tests for index data fetching via Ticker.fast_info."""
 
     def test_returns_index_data(self) -> None:
-        """Should return formatted index performance."""
+        """Should return formatted index performance from fast_info."""
         from backend.tools.market_briefing import _fetch_index_performance
 
-        mock_data = pd.DataFrame(
-            {"Close": [5000.0, 5050.0]},
-            index=pd.date_range("2026-03-24", periods=2),
-        )
-        with patch("backend.tools.market_briefing.yf.download", return_value=mock_data):
+        mock_ticker = MagicMock()
+        mock_ticker.fast_info.previous_close = 5000.0
+        mock_ticker.fast_info.last_price = 5050.0
+        with patch("backend.tools.market_briefing.yf.Ticker", return_value=mock_ticker):
             result = _fetch_index_performance("^GSPC", "S&P 500")
         assert result is not None
         assert result["name"] == "S&P 500"
+        assert result["price"] == 5050.0
         assert result["change_pct"] == pytest.approx(1.0, abs=0.1)
 
-    def test_empty_data_returns_none(self) -> None:
-        """Empty yfinance data should return None."""
+    def test_missing_previous_close_returns_none(self) -> None:
+        """Missing previous_close should return None."""
         from backend.tools.market_briefing import _fetch_index_performance
 
-        with patch("backend.tools.market_briefing.yf.download", return_value=pd.DataFrame()):
+        mock_ticker = MagicMock()
+        mock_ticker.fast_info.previous_close = None
+        mock_ticker.fast_info.last_price = 5050.0
+        with patch("backend.tools.market_briefing.yf.Ticker", return_value=mock_ticker):
             result = _fetch_index_performance("^GSPC", "S&P 500")
         assert result is None
 
-    def test_single_day_returns_none(self) -> None:
-        """Only 1 day of data should return None (can't compute change)."""
+    def test_zero_previous_close_returns_none(self) -> None:
+        """Zero previous_close should return None (can't compute change)."""
         from backend.tools.market_briefing import _fetch_index_performance
 
-        mock_data = pd.DataFrame(
-            {"Close": [5000.0]},
-            index=pd.date_range("2026-03-25", periods=1),
-        )
-        with patch("backend.tools.market_briefing.yf.download", return_value=mock_data):
+        mock_ticker = MagicMock()
+        mock_ticker.fast_info.previous_close = 0
+        mock_ticker.fast_info.last_price = 5050.0
+        with patch("backend.tools.market_briefing.yf.Ticker", return_value=mock_ticker):
             result = _fetch_index_performance("^GSPC", "S&P 500")
         assert result is None
 
@@ -50,7 +52,7 @@ class TestFetchIndexPerformance:
         from backend.tools.market_briefing import _fetch_index_performance
 
         with patch(
-            "backend.tools.market_briefing.yf.download",
+            "backend.tools.market_briefing.yf.Ticker",
             side_effect=Exception("API down"),
         ):
             result = _fetch_index_performance("^GSPC", "S&P 500")
@@ -58,7 +60,7 @@ class TestFetchIndexPerformance:
 
 
 class TestFetchTopMovers:
-    """Tests for _fetch_top_movers signal snapshot queries."""
+    """Tests for _fetch_top_movers signal snapshot queries (DISTINCT ON pattern)."""
 
     @pytest.mark.asyncio
     async def test_empty_db_returns_empty_lists(self) -> None:
@@ -66,16 +68,19 @@ class TestFetchTopMovers:
         from backend.tools.market_briefing import _fetch_top_movers
 
         mock_session = AsyncMock()
-        mock_result = MagicMock()
-        mock_result.scalar_one_or_none.return_value = None
-        mock_session.execute.return_value = mock_result
+        # Gainers query returns empty, losers query returns empty
+        gainers_result = MagicMock()
+        gainers_result.all.return_value = []
+        losers_result = MagicMock()
+        losers_result.all.return_value = []
+        mock_session.execute.side_effect = [gainers_result, losers_result]
 
         result = await _fetch_top_movers(mock_session)
         assert result == {"gainers": [], "losers": []}
 
     @pytest.mark.asyncio
     async def test_returns_sorted_gainers_and_losers(self) -> None:
-        """Returns gainers sorted desc and losers sorted asc by change_pct."""
+        """Returns gainers (change_pct > 0) and losers (change_pct < 0)."""
         from backend.tools.market_briefing import _fetch_top_movers
 
         Row = namedtuple(
@@ -85,25 +90,21 @@ class TestFetchTopMovers:
 
         mock_session = AsyncMock()
 
-        # First call: max(computed_at)
-        ts_result = MagicMock()
-        ts_result.scalar_one_or_none.return_value = datetime.now(timezone.utc)
-
-        # Second call: gainers
+        # First call: gainers (only positive change_pct)
         gainers_result = MagicMock()
         gainers_result.all.return_value = [
             Row("AAPL", 180.0, 5.2, "bullish", 8.5),
             Row("MSFT", 420.0, 3.1, "bullish", 7.8),
         ]
 
-        # Third call: losers
+        # Second call: losers (only negative change_pct)
         losers_result = MagicMock()
         losers_result.all.return_value = [
             Row("INTC", 25.0, -4.5, "bearish", 3.2),
             Row("BA", 190.0, -2.1, "bearish", 4.1),
         ]
 
-        mock_session.execute.side_effect = [ts_result, gainers_result, losers_result]
+        mock_session.execute.side_effect = [gainers_result, losers_result]
 
         result = await _fetch_top_movers(mock_session)
         assert len(result["gainers"]) == 2
@@ -125,9 +126,6 @@ class TestFetchTopMovers:
 
         mock_session = AsyncMock()
 
-        ts_result = MagicMock()
-        ts_result.scalar_one_or_none.return_value = datetime.now(timezone.utc)
-
         gainers_result = MagicMock()
         gainers_result.all.return_value = [
             Row("AAPL", 180.0, 5.123456, "bullish", 8.5),
@@ -136,7 +134,7 @@ class TestFetchTopMovers:
         losers_result = MagicMock()
         losers_result.all.return_value = []
 
-        mock_session.execute.side_effect = [ts_result, gainers_result, losers_result]
+        mock_session.execute.side_effect = [gainers_result, losers_result]
 
         result = await _fetch_top_movers(mock_session)
         assert result["gainers"][0]["change_pct"] == 5.12

@@ -138,10 +138,11 @@ async def ingest_ticker(
         await mark_stage_updated(ticker, "prices", db=db)
         if composite_score is not None:
             await mark_stage_updated(ticker, "signals", db=db)
+        await mark_stage_updated(ticker, "fundamentals", db=db)
         await db.commit()
     except Exception:
         logger.warning(
-            "Failed to mark prices/signals stages for %s — continuing",
+            "Failed to mark ingestion stages for %s — continuing",
             ticker,
             exc_info=True,
         )

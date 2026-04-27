@@ -9,6 +9,13 @@ import { ChangeIndicator } from "@/components/change-indicator";
 import { StalenessBadge } from "@/components/staleness-badge";
 import { formatCurrency } from "@/lib/format";
 
+function formatMarketCap(value: number): string {
+  if (value >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
+  if (value >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+  if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
+  return `$${value.toLocaleString()}`;
+}
+
 interface StockHeaderProps {
   ticker: string;
   name: string | null;
@@ -17,6 +24,7 @@ interface StockHeaderProps {
   currentPrice?: number | null;
   priceChange?: number | null;
   priceChangePct?: number | null;
+  marketCap?: number | null;
   isInWatchlist: boolean;
   onToggleWatchlist: () => void;
   isRefreshing?: boolean;
@@ -31,6 +39,7 @@ export function StockHeader({
   currentPrice,
   priceChange,
   priceChangePct,
+  marketCap,
   isInWatchlist,
   onToggleWatchlist,
   isRefreshing,
@@ -93,6 +102,11 @@ export function StockHeader({
                   ({priceChange >= 0 ? "+" : ""}{formatCurrency(priceChange)})
                 </span>
               )}
+            </div>
+          )}
+          {marketCap != null && (
+            <div className="mt-1 text-xs text-muted-foreground">
+              Market Cap: {formatMarketCap(marketCap)}
             </div>
           )}
         </div>

@@ -47,15 +47,15 @@ export function AllocationDonut({ allocations, stockCount, showSectorLink = fals
   const remainder = allocations.length - 3;
 
   return (
-    <div className="flex items-center gap-2.5 mt-2">
+    <div className="flex flex-col items-center gap-3 mt-2">
       {/* Donut */}
       <div
-        className="w-[72px] h-[72px] rounded-full flex-shrink-0 flex items-center justify-center"
+        className="w-[100px] h-[100px] rounded-full flex-shrink-0 flex items-center justify-center"
         style={{ background: gradient }}
       >
-        <div className="w-[46px] h-[46px] rounded-full bg-card flex items-center justify-center">
+        <div className="w-[64px] h-[64px] rounded-full bg-card flex items-center justify-center">
           <div className="text-center leading-tight">
-            <div className="font-mono text-[12px] font-bold text-foreground">
+            <div className="font-mono text-[14px] font-bold text-foreground">
               {stockCount ?? allocations.length}
             </div>
             <div className="text-[8px] text-subtle">stocks</div>

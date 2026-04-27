@@ -64,16 +64,15 @@ async def test_get_watchlist_returns_data() -> None:
     user_id = uuid.uuid4()
     db = _make_session()
 
-    # Simulate joined row: (Watchlist, Stock, composite_score, current_price, price_updated_at)
+    # Simulate joined row: (Watchlist, Stock, composite_score, current_price,
+    #                        price_updated_at, change_pct, macd_signal_label, rsi_value)
     watchlist_entry = _make_watchlist_entry(ticker="AAPL", user_id=user_id)
     stock = _make_stock()
     now = datetime.now(timezone.utc)
-    mock_row = MagicMock()
-    mock_row.__iter__ = MagicMock(return_value=iter((watchlist_entry, stock, 8.5, 185.50, now)))
 
     mock_result = MagicMock()
     mock_result.all.return_value = [
-        (watchlist_entry, stock, 8.5, 185.50, now),
+        (watchlist_entry, stock, 8.5, 185.50, now, -0.87, "bullish_crossover", 45.2),
     ]
     db.execute.return_value = mock_result
 
@@ -85,6 +84,10 @@ async def test_get_watchlist_returns_data() -> None:
     assert items[0]["composite_score"] == 8.5
     assert items[0]["current_price"] == 185.50
     assert items[0]["price_updated_at"] == now
+    assert items[0]["change_pct"] == -0.87
+    assert items[0]["macd_signal_label"] == "bullish_crossover"
+    assert items[0]["rsi_value"] == 45.2
+    assert items[0]["recommendation"] == "BUY"
 
 
 @pytest.mark.asyncio

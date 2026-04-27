@@ -208,7 +208,7 @@ async def get_signals(
         if cached:
             return SignalResponse.model_validate_json(cached)
 
-    await require_stock(ticker, db)
+    stock = await require_stock(ticker, db)
 
     snapshot = await get_latest_signals_svc(ticker, db)
 
@@ -255,6 +255,9 @@ async def get_signals(
             sharpe=snapshot.sharpe_ratio,
         ),
         composite_score=snapshot.composite_score,
+        current_price=snapshot.current_price,
+        change_pct=snapshot.change_pct,
+        market_cap=stock.market_cap,
         is_stale=is_stale,
         is_refreshing=is_refreshing,
     )
