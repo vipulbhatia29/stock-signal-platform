@@ -294,7 +294,7 @@ async def test_mark_stage_updated_called_for_recommendation(mock_db, existing_st
             AsyncMock(return_value=[]),
         ),
     ):
-        await ingest_ticker("AAPL", mock_db, user_id="user-uuid")
+        await ingest_ticker("AAPL", mock_db, user_id="00000000-0000-0000-0000-000000000001")
 
     stage_calls = [call.args for call in mock_mark_stage.await_args_list]
     stages_called = [stage for _ticker, stage in stage_calls]
