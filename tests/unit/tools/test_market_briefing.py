@@ -1,10 +1,8 @@
 """Tests for market briefing tool."""
 
 from collections import namedtuple
-from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pandas as pd
 import pytest
 
 
