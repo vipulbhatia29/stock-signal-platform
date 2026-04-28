@@ -24,6 +24,7 @@ from backend.services.signals import (
 from backend.services.stock_data import fetch_prices_delta, load_prices_df
 from backend.services.ticker_state import mark_stage_updated
 from backend.tasks import celery_app
+from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import PipelineRunner, detect_gap, set_watermark_status, tracked_task
 
 logger = logging.getLogger(__name__)
@@ -182,7 +183,7 @@ def refresh_ticker_task(self, ticker: str) -> RefreshTickerResult:
     """
     try:
         logger.info("Refreshing ticker %s (attempt %d)", ticker, self.request.retries + 1)
-        return asyncio.run(_refresh_ticker_async(ticker))
+        return safe_asyncio_run(_refresh_ticker_async(ticker))
     except Exception:
         logger.exception(
             "refresh_ticker_task failed for %s (attempt %d/%d)",
@@ -378,7 +379,7 @@ def nightly_price_refresh_task() -> dict:
         Dict with pipeline run status.
     """
     logger.info("Starting nightly price refresh pipeline")
-    return asyncio.run(_nightly_price_refresh_async())
+    return safe_asyncio_run(_nightly_price_refresh_async())
 
 
 @celery_app.task(
@@ -467,7 +468,7 @@ def nightly_pipeline_chain_task() -> dict:
     # Runs before Phase 2 so downstream steps (QuantStats, fundamentals) see fresh data.
     logger.info("Nightly chain phase 1.5: slow path (yfinance info + dividends)")
     try:
-        results["slow_path"] = asyncio.run(_refresh_all_slow_async())
+        results["slow_path"] = safe_asyncio_run(_refresh_all_slow_async())
     except Exception:
         logger.exception("Phase 1.5 slow path failed")
         results["slow_path"] = {"status": "failed"}
@@ -566,7 +567,7 @@ def intraday_refresh_all_task() -> dict:
     Returns:
         A dict with the count of tasks dispatched.
     """
-    tickers = asyncio.run(_get_all_referenced_tickers())
+    tickers = safe_asyncio_run(_get_all_referenced_tickers())
     dispatched = 0
     for ticker in tickers:
         refresh_ticker_task.delay(ticker)

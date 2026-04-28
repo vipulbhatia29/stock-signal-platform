@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -19,6 +18,7 @@ from backend.services.backtesting import BacktestEngine
 from backend.services.ticker_state import mark_stages_updated
 from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
+from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import PipelineRunner, tracked_task
 from backend.tools.forecasting import MIN_DATA_POINTS
 
@@ -185,7 +185,8 @@ def model_retrain_all_task() -> dict:
         Dict with training status and counts.
     """
     logger.info("Starting weekly full model retrain")
-    return asyncio.run(_model_retrain_all_async())  # type: ignore[arg-type]  # wrapper is async def, pyright sees Awaitable not Coroutine
+
+    return safe_asyncio_run(_model_retrain_all_async())  # type: ignore[arg-type]  # wrapper is async def, pyright sees Awaitable not Coroutine
 
 
 @celery_app.task(
@@ -198,7 +199,8 @@ def forecast_refresh_task() -> dict:
         Dict with refresh status and counts.
     """
     logger.info("Starting nightly forecast refresh")
-    return asyncio.run(_forecast_refresh_async())  # type: ignore[arg-type]  # wrapper is async def, pyright sees Awaitable not Coroutine
+
+    return safe_asyncio_run(_forecast_refresh_async())  # type: ignore[arg-type]  # wrapper is async def, pyright sees Awaitable not Coroutine
 
 
 @tracked_task("single_ticker_retrain")
@@ -242,7 +244,8 @@ def retrain_single_ticker_task(ticker: str, priority: bool = False) -> dict:
         Dict with training result.
     """
     logger.info("Retraining %s (priority=%s)", ticker, priority)
-    return asyncio.run(_retrain_single_ticker_async(ticker))  # type: ignore[arg-type]
+
+    return safe_asyncio_run(_retrain_single_ticker_async(ticker))  # type: ignore[arg-type]
 
 
 @tracked_task("backtest")
@@ -395,4 +398,5 @@ def run_backtest_task(ticker: str | None = None, horizon_days: int = 90) -> dict
         Dict with backtest results summary.
     """
     logger.info("Backtest task started: ticker=%s, horizon=%d", ticker or "all", horizon_days)
-    return asyncio.run(_run_backtest_async(ticker, horizon_days))  # type: ignore[arg-type]
+
+    return safe_asyncio_run(_run_backtest_async(ticker, horizon_days))  # type: ignore[arg-type]

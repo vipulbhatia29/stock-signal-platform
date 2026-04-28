@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 
 from backend.tasks import celery_app
+from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,8 @@ def news_ingest_task(
         Dict with stock and macro ingestion stats.
     """
     self.update_state(state="PROGRESS", meta={"step": "ingesting_news"})
-    return asyncio.run(_ingest_news(lookback_days, tickers=tickers))  # type: ignore[arg-type]
+
+    return safe_asyncio_run(_ingest_news(lookback_days, tickers=tickers))  # type: ignore[arg-type]
 
 
 @tracked_task("news_ingest")
@@ -114,7 +115,8 @@ def news_sentiment_scoring_task(self, lookback_days: int = NEWS_LOOKBACK_DAYS) -
         Dict with scoring stats.
     """
     self.update_state(state="PROGRESS", meta={"step": "scoring_sentiment"})
-    return asyncio.run(_score_sentiment(lookback_days))  # type: ignore[arg-type]
+
+    return safe_asyncio_run(_score_sentiment(lookback_days))  # type: ignore[arg-type]
 
 
 @tracked_task("news_scoring")

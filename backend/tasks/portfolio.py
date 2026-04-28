@@ -1,6 +1,5 @@
 """Celery tasks for portfolio snapshot operations."""
 
-import asyncio
 import logging
 import uuid
 
@@ -12,6 +11,7 @@ from backend.services.portfolio import (
     snapshot_portfolio_value,
 )
 from backend.tasks import celery_app
+from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
@@ -89,7 +89,7 @@ def snapshot_all_portfolios_task(self) -> dict:
     """
     try:
         logger.info("Starting daily portfolio snapshots (attempt %d)", self.request.retries + 1)
-        return asyncio.run(_snapshot_all_portfolios_async())  # type: ignore[arg-type]
+        return safe_asyncio_run(_snapshot_all_portfolios_async())  # type: ignore[arg-type]
     except Exception:
         logger.exception(
             "snapshot_all_portfolios_task failed (attempt %d/%d)",
@@ -189,7 +189,7 @@ def snapshot_health_task(self) -> dict:
     Runs on Celery Beat schedule, 15 minutes after value snapshots.
     """
     logger.info("Starting health snapshots (attempt %d)", self.request.retries + 1)
-    return asyncio.run(_snapshot_health_async())  # type: ignore[arg-type]
+    return safe_asyncio_run(_snapshot_health_async())  # type: ignore[arg-type]
 
 
 @tracked_task("rebalancing")
@@ -234,4 +234,4 @@ def materialize_rebalancing_task(self) -> dict:
     Runs as part of the nightly pipeline Phase 4.
     """
     logger.info("Starting rebalancing materialization (attempt %d)", self.request.retries + 1)
-    return asyncio.run(_materialize_rebalancing_async())  # type: ignore[arg-type]
+    return safe_asyncio_run(_materialize_rebalancing_async())  # type: ignore[arg-type]

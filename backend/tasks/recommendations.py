@@ -1,11 +1,11 @@
 """Celery task for nightly recommendation generation."""
 
-import asyncio
 import logging
 import uuid
 
 from backend.database import async_session_factory
 from backend.tasks import celery_app
+from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
@@ -147,4 +147,5 @@ def generate_recommendations_task() -> dict:
         Dict with generation status and counts.
     """
     logger.info("Starting nightly recommendation generation")
-    return asyncio.run(_generate_recommendations_async())  # type: ignore[arg-type]
+
+    return safe_asyncio_run(_generate_recommendations_async())  # type: ignore[arg-type]

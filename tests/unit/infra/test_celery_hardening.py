@@ -131,9 +131,9 @@ class TestSnapshotTask:
 
     @pytest.mark.filterwarnings("ignore::RuntimeWarning")
     def test_snapshot_task_delegates_to_async(self):
-        """snapshot_all_portfolios_task calls asyncio.run."""
+        """snapshot_all_portfolios_task calls safe_asyncio_run."""
         with patch(
-            "backend.tasks.portfolio.asyncio.run",
+            "backend.tasks.portfolio.safe_asyncio_run",
             return_value={"snapshotted": 3, "skipped": 1},
         ) as mock_run:
             from backend.tasks.portfolio import snapshot_all_portfolios_task
