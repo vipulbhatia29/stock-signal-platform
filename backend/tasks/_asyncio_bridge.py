@@ -1,12 +1,12 @@
 """Bridge for running async code from synchronous Celery tasks.
 
-Celery prefork workers create the async SQLAlchemy engine at import time,
-binding its connection pool to an event loop that may become stale.
-When a task calls asyncio.run(), a new loop is created but the pool's
-futures reference the old one → "Future attached to a different loop".
+Celery prefork workers import the async SQLAlchemy engine at module load,
+creating an asyncpg connection pool bound to an event loop that may not
+match the loop created by asyncio.run(). This causes:
+  "Future attached to a different loop"
 
-Fix: dispose the engine's connection pool before each asyncio.run() call
-so fresh connections are created on the new loop.
+Fix: recreate the engine + session factory for each asyncio.run() call,
+ensuring all connections are created on the correct loop.
 """
 
 from __future__ import annotations
@@ -18,10 +18,38 @@ from typing import Any, Coroutine
 def safe_asyncio_run(coro: Coroutine[Any, Any, Any]) -> Any:
     """Run an async coroutine from a Celery task safely.
 
-    Disposes the engine's pooled connections before creating a new event
-    loop, ensuring no stale futures from a previous loop cause errors.
+    Recreates the async engine and rebinds the session factory so all
+    connections are created on the new event loop.
     """
-    from backend.database import engine
+    from sqlalchemy.ext.asyncio import (
+        AsyncSession,
+        async_sessionmaker,
+        create_async_engine,
+    )
 
-    engine.sync_engine.dispose()
-    return asyncio.run(coro)
+    import backend.database as db_module
+    from backend.config import settings
+
+    # Create a fresh engine for this run
+    fresh_engine = create_async_engine(
+        settings.DATABASE_URL,
+        echo=False,
+        pool_size=5,
+        max_overflow=2,
+        pool_recycle=300,
+    )
+
+    # Rebind the module-level session factory to the fresh engine
+    original_factory = db_module.async_session_factory
+    db_module.async_session_factory = async_sessionmaker(
+        fresh_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+    )
+
+    try:
+        return asyncio.run(coro)
+    finally:
+        # Dispose the fresh engine and restore the original factory
+        asyncio.run(fresh_engine.dispose())
+        db_module.async_session_factory = original_factory
