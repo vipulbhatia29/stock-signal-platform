@@ -70,7 +70,7 @@ class TestTrackedTaskLifecycleEvents:
         mock_cm = MagicMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
-        monkeypatch.setattr("backend.tasks.pipeline.async_session_factory", lambda: mock_cm)
+        monkeypatch.setattr("backend.database.async_session_factory", lambda: mock_cm)
 
         from backend.tasks.pipeline import tracked_task
 

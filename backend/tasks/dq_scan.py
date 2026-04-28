@@ -12,8 +12,8 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from uuid_utils import uuid7
 
+import backend.database as _db
 from backend.config import settings
-from backend.database import async_session_factory
 from backend.models.dq_check_history import DqCheckHistory
 from backend.observability.bootstrap import _maybe_get_obs_client
 from backend.observability.context import current_span_id, current_trace_id
@@ -43,7 +43,7 @@ async def _dq_scan_async() -> dict:
     """
     wrote_via_legacy = settings.OBS_LEGACY_DIRECT_WRITES  # snapshot NOW
     findings: list[dict] = []
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         findings += await _check_negative_prices(db)
         findings += await _check_rsi_out_of_range(db)
         findings += await _check_composite_score_out_of_range(db)
@@ -100,7 +100,7 @@ async def _dq_scan_async() -> dict:
     if critical:
         from backend.tasks.alerts import _create_alert
 
-        async with async_session_factory() as db:
+        async with _db.async_session_factory() as db:
             for f in critical:
                 await _create_alert(
                     db,

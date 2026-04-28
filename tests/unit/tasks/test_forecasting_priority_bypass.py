@@ -73,7 +73,7 @@ async def test_nightly_sweep_respects_cap_at_100() -> None:
 
     with (
         patch(
-            "backend.tasks.forecasting.async_session_factory",
+            "backend.database.async_session_factory",
             return_value=mock_session_ctx,
         ),
         patch(

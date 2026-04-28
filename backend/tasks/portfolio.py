@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from backend.database import async_session_factory
+import backend.database as _db
 from backend.services.portfolio import (
     compute_quantstats_portfolio,
     get_all_portfolio_ids,
@@ -24,13 +24,13 @@ async def _snapshot_all_portfolios_async(*, run_id: uuid.UUID) -> dict:
     Returns:
         A dict with count of snapshots created and skipped.
     """
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         portfolio_ids = await get_all_portfolio_ids(db)
 
     snapshotted = 0
     skipped = 0
     for pid in portfolio_ids:
-        async with async_session_factory() as db:
+        async with _db.async_session_factory() as db:
             result = await snapshot_portfolio_value(pid, db)
             if result:
                 snapshotted += 1
@@ -113,14 +113,14 @@ async def _snapshot_health_async(*, run_id: uuid.UUID) -> dict:
     from backend.models.portfolio_health import PortfolioHealthSnapshot
     from backend.tools.portfolio_health import compute_portfolio_health
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         portfolio_ids = await get_all_portfolio_ids(db)
 
     computed = 0
     skipped = 0
     for pid in portfolio_ids:
         try:
-            async with async_session_factory() as db:
+            async with _db.async_session_factory() as db:
                 health = await compute_portfolio_health(pid, db)
                 if health is None:
                     skipped += 1
@@ -199,14 +199,14 @@ async def _materialize_rebalancing_async(*, run_id: uuid.UUID) -> dict:
     Returns:
         Dict with computed and skipped counts.
     """
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         portfolio_ids = await get_all_portfolio_ids(db)
 
     computed = 0
     skipped = 0
     for pid in portfolio_ids:
         try:
-            async with async_session_factory() as db:
+            async with _db.async_session_factory() as db:
                 await materialize_rebalancing(pid, db)
                 computed += 1
         except Exception:

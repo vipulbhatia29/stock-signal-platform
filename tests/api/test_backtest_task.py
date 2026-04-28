@@ -127,7 +127,7 @@ async def test_single_ticker_inserts_one_row(db_session):
             new_callable=AsyncMock,
         ),
         patch(
-            "backend.tasks.forecasting.async_session_factory",
+            "backend.database.async_session_factory",
             return_value=_make_mock_factory(db_session),
         ),
     ):
@@ -172,7 +172,7 @@ async def test_universe_mode_three_tickers(db_session):
             return_value=tickers,
         ),
         patch(
-            "backend.tasks.forecasting.async_session_factory",
+            "backend.database.async_session_factory",
             return_value=_make_mock_factory(db_session),
         ),
     ):
@@ -220,7 +220,7 @@ async def test_per_ticker_failure_isolated(db_session):
             return_value=tickers,
         ),
         patch(
-            "backend.tasks.forecasting.async_session_factory",
+            "backend.database.async_session_factory",
             return_value=_make_mock_factory(db_session),
         ),
     ):
@@ -282,7 +282,7 @@ async def test_mark_stages_updated_called_with_successful_tickers_only(db_sessio
             return_value=tickers,
         ),
         patch(
-            "backend.tasks.forecasting.async_session_factory",
+            "backend.database.async_session_factory",
             return_value=_make_mock_factory(db_session),
         ),
     ):
@@ -351,7 +351,7 @@ async def test_session_acquisition_failure_for_one_ticker_does_not_kill_run(db_s
             return_value=tickers,
         ),
         patch(
-            "backend.tasks.forecasting.async_session_factory",
+            "backend.database.async_session_factory",
             side_effect=_factory,
         ),
     ):
@@ -404,7 +404,7 @@ async def test_per_ticker_session_isolation_against_pending_rollback(db_session)
             return_value=tickers,
         ),
         patch(
-            "backend.tasks.forecasting.async_session_factory",
+            "backend.database.async_session_factory",
             return_value=_make_mock_factory(db_session),
         ),
     ):
@@ -478,7 +478,7 @@ async def test_per_ticker_session_factory_called_once_per_iteration(db_session):
             return_value=tickers,
         ),
         patch(
-            "backend.tasks.forecasting.async_session_factory",
+            "backend.database.async_session_factory",
             side_effect=_counting_factory,
         ),
     ):
@@ -540,7 +540,7 @@ async def test_no_active_model_version_skips_row_and_marks_failed(db_session):
             mock_mark,
         ),
         patch(
-            "backend.tasks.forecasting.async_session_factory",
+            "backend.database.async_session_factory",
             return_value=_make_mock_factory(db_session),
         ),
     ):

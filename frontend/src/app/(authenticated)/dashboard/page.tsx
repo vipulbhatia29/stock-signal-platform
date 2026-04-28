@@ -89,7 +89,7 @@ export default function DashboardPage() {
               <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-4">Portfolio Allocation</p>
               <div className="flex-1 flex items-center justify-center">
                 {allocations.length > 0 ? (
-                  <AllocationDonut allocations={allocations} stockCount={positions.length} showSectorLink />
+                  <AllocationDonut allocations={allocations} stockCount={positions.length} />
                 ) : (
                   <p className="text-xs text-muted-foreground">Add stocks to see allocation</p>
                 )}

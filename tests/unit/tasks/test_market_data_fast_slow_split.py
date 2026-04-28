@@ -35,7 +35,7 @@ async def test_refresh_ticker_fast_does_not_call_yfinance() -> None:
             },
         ),
         patch.object(mod, "store_signal_snapshot", new=AsyncMock()),
-        patch.object(mod, "async_session_factory") as mock_factory,
+        patch("backend.database.async_session_factory") as mock_factory,
     ):
         mock_db = AsyncMock()
         mock_db.commit = AsyncMock()
@@ -59,7 +59,7 @@ async def test_refresh_ticker_slow_does_not_compute_signals() -> None:
     with (
         patch.object(mod, "compute_signals") as mock_sig,
         patch.object(mod, "store_signal_snapshot", new=AsyncMock()) as mock_store,
-        patch.object(mod, "async_session_factory") as mock_factory,
+        patch("backend.database.async_session_factory") as mock_factory,
         patch.object(mod, "yfinance_limiter", AsyncMock(acquire=AsyncMock(return_value=True))),
         patch.object(mod, "mark_stage_updated", new=AsyncMock()),
     ):

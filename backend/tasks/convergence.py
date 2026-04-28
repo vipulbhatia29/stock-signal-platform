@@ -25,8 +25,8 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import backend.database as _db_mod
 from backend.config import settings
-from backend.database import async_session_factory
 from backend.models.convergence import SignalConvergenceDaily
 from backend.models.price import StockPrice
 from backend.services.ticker_state import mark_stages_updated
@@ -186,7 +186,7 @@ async def _get_session(
     if _db is not None:
         yield _db
     else:
-        async with async_session_factory() as session:
+        async with _db_mod.async_session_factory() as session:
             yield session
 
 

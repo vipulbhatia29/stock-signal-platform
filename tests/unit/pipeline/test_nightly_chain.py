@@ -448,7 +448,7 @@ class TestGenerateRecommendationsAsync:
     """Tests for _generate_recommendations_async."""
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.recommendations.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_no_users_returns_early(self, mock_factory) -> None:
         """If no users exist, should return immediately."""
         from backend.tasks.recommendations import _generate_recommendations_async

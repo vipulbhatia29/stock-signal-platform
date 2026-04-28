@@ -61,7 +61,7 @@ export function BulletinZone() {
   const forecastQueries = useQueries({
     queries: allTickers.map((ticker) => ({
       queryKey: ["forecast", ticker],
-      queryFn: () => get<ForecastResponse>(`/stocks/${ticker}/forecast`),
+      queryFn: () => get<ForecastResponse>(`/forecasts/${ticker}`),
       staleTime: 5 * 60 * 1000,
       enabled: allTickers.length > 0,
     })),

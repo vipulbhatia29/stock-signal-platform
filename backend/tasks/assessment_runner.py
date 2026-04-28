@@ -24,7 +24,7 @@ from typing import Any
 
 from sqlalchemy import select
 
-from backend.database import async_session_factory
+import backend.database as _db
 from backend.models.assessment import AssessmentResult, AssessmentRun
 from backend.models.portfolio import Portfolio, Position
 from backend.models.stock import Stock
@@ -330,7 +330,7 @@ async def run_assessment(
         len(GOLDEN_DATASET),
     )
 
-    async with async_session_factory() as session:
+    async with _db.async_session_factory() as session:
         user = await _seed_test_user(session)
         await session.commit()
 

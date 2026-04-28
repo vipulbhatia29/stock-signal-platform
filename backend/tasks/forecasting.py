@@ -10,8 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import backend.database as _db
 from backend.config import settings
-from backend.database import async_session_factory
 from backend.models.backtest import BacktestRun
 from backend.models.forecast import ModelVersion
 from backend.services.backtesting import BacktestEngine
@@ -64,7 +64,7 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
     from backend.services.ticker_universe import get_all_referenced_tickers
     from backend.tools.forecasting import predict_forecast, train_prophet_model
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         tickers = await get_all_referenced_tickers(db)
     if not tickers:
         logger.info("No tickers to retrain")
@@ -72,7 +72,7 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
 
     trained = 0
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         for ticker in tickers:
             try:
                 model_version = await train_prophet_model(ticker, db)
@@ -103,7 +103,7 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
     from backend.models.forecast import ModelVersion
     from backend.tools.forecasting import predict_forecast
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             select(ModelVersion).where(
                 ModelVersion.is_active.is_(True),
@@ -216,7 +216,7 @@ async def _retrain_single_ticker_async(ticker: str, *, run_id: uuid.UUID) -> dic
     """
     from backend.tools.forecasting import predict_forecast, train_prophet_model
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         model_version = await train_prophet_model(ticker, db)
         forecasts = await predict_forecast(model_version, db)
         for fc in forecasts:
@@ -270,7 +270,7 @@ async def _run_backtest_async(ticker: str | None, horizon_days: int, *, run_id: 
 
     # Resolve the ticker universe in its own short-lived session so we never
     # hold a connection open while iterating below.
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         tickers = [ticker] if ticker else await get_all_referenced_tickers(db)
 
     for tkr in tickers:
@@ -283,7 +283,7 @@ async def _run_backtest_async(ticker: str | None, horizon_days: int, *, run_id: 
         # transient session-acquisition failures (asyncpg connection drop,
         # pool timeout) so one bad checkout cannot abort the weekly chain.
         try:
-            async with async_session_factory() as db:
+            async with _db.async_session_factory() as db:
                 try:
                     metrics = await engine.run_walk_forward(tkr, db, horizon_days=horizon_days)
 

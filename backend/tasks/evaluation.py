@@ -7,7 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.database import async_session_factory
+import backend.database as _db
 from backend.tasks import celery_app
 from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import tracked_task
@@ -83,7 +83,7 @@ async def _evaluate_forecasts_async(*, run_id: uuid.UUID) -> dict:
     evaluated = 0
     errors = 0
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         # Find forecasts where target_date has passed and actual_price not yet filled
         result = await db.execute(
             select(ForecastResult).where(
@@ -229,7 +229,7 @@ async def _check_drift_async(*, run_id: uuid.UUID) -> dict:
     degraded: list[str] = []
     experimental_demoted: list[str] = []
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         # Get all active Prophet models
         result = await db.execute(
             select(ModelVersion).where(
@@ -425,7 +425,7 @@ async def _evaluate_recommendations_async(*, run_id: uuid.UUID) -> dict:
     evaluated = 0
     errors = 0
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         # Get all users
         users = (await db.execute(select(User))).scalars().all()
 

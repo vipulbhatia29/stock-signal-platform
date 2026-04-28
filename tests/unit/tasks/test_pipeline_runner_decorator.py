@@ -101,7 +101,7 @@ async def test_tracked_task_marks_failed_on_exception() -> None:
     with (
         patch.object(pipeline.PipelineRunner, "start_run", new=AsyncMock(return_value=run_id)),
         patch.object(pipeline.PipelineRunner, "complete_run", new=AsyncMock()) as complete_mock,
-        patch.object(pipeline, "async_session_factory") as factory_mock,
+        patch("backend.database.async_session_factory") as factory_mock,
     ):
         factory_mock.return_value.__aenter__.return_value = fake_session
         factory_mock.return_value.__aexit__.return_value = None

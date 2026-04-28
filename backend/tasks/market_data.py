@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 from sqlalchemy import select
 
-from backend.database import async_session_factory
+import backend.database as _db
 from backend.services.rate_limiter import yfinance_limiter
 from backend.services.signals import (
     compute_quantstats_stock,
@@ -58,7 +58,7 @@ async def _refresh_ticker_fast(
     Returns:
         A dict with ticker and status.
     """
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         await fetch_prices_delta(ticker, db)
         full_df = await load_prices_df(ticker, db)
 
@@ -99,7 +99,7 @@ async def _refresh_ticker_slow(ticker: str) -> RefreshTickerResult:
     Returns:
         A dict with ticker and status.
     """
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         # Refresh beta/yield/forward_pe from yfinance info
         try:
             import yfinance as yf
@@ -205,7 +205,7 @@ async def _load_spy_closes() -> "pd.Series":
 
     from backend.models.price import StockPrice
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             select(StockPrice.time, StockPrice.adj_close)
             .where(StockPrice.ticker == "SPY")
@@ -232,7 +232,7 @@ async def _get_all_referenced_tickers() -> list[str]:
     """
     from backend.services.ticker_universe import get_all_referenced_tickers
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         return await get_all_referenced_tickers(db)
 
 
@@ -247,7 +247,7 @@ async def _nightly_price_refresh_work(
 
     Parallelized via asyncio.gather with a semaphore to bound DB connection
     pool usage (Spec E.3). Each ticker gets its own session via
-    _refresh_ticker_fast's internal async_session_factory() call.
+    _refresh_ticker_fast's internal _db.async_session_factory() call.
 
     Receives a pre-resolved ticker list so the no-work early-return path
     (handled by `_nightly_price_refresh_async`) never reaches this function.
