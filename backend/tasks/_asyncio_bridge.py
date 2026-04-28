@@ -19,7 +19,8 @@ def safe_asyncio_run(coro: Coroutine[Any, Any, Any]) -> Any:
     """Run an async coroutine from a Celery task safely.
 
     Recreates the async engine and rebinds the session factory so all
-    connections are created on the new event loop.
+    connections are created on the new event loop. The fresh engine is
+    disposed inside the same event loop that created it.
     """
     from sqlalchemy.ext.asyncio import (
         AsyncSession,
@@ -40,16 +41,16 @@ def safe_asyncio_run(coro: Coroutine[Any, Any, Any]) -> Any:
     )
 
     # Rebind the module-level session factory to the fresh engine
-    original_factory = db_module.async_session_factory
     db_module.async_session_factory = async_sessionmaker(
         fresh_engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )
 
-    try:
-        return asyncio.run(coro)
-    finally:
-        # Dispose the fresh engine and restore the original factory
-        asyncio.run(fresh_engine.dispose())
-        db_module.async_session_factory = original_factory
+    async def _run_and_cleanup() -> Any:
+        try:
+            return await coro
+        finally:
+            await fresh_engine.dispose()
+
+    return asyncio.run(_run_and_cleanup())
