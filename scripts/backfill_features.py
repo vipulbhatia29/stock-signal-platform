@@ -217,23 +217,23 @@ async def run_backfill(
     Returns:
         Dict with counts: tickers_processed, total_rows, skipped, errors.
     """
-    # Download VIX (once, outside DB session)
-    vix_closes = _download_vix_history()
-
     async with async_session_factory() as db:
         if tickers:
             ticker_list = [t.upper() for t in tickers]
         else:
             ticker_list = await _get_all_tickers(db)
 
-        # Load SPY (once)
-        spy_closes = await _load_spy_closes(db)
-
     logger.info("Backfill targets: %d tickers", len(ticker_list))
 
     if dry_run:
         logger.info("DRY RUN — no data will be written")
         return {"tickers": len(ticker_list), "dry_run": True}
+
+    # Download VIX + SPY after dry-run gate (avoid 30s download for dry runs)
+    vix_closes = _download_vix_history()
+
+    async with async_session_factory() as db:
+        spy_closes = await _load_spy_closes(db)
 
     stats: dict = {"tickers_processed": 0, "total_rows": 0, "skipped": 0, "errors": []}
     start = time.monotonic()

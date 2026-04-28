@@ -21,6 +21,10 @@ class HistoricalFeature(Base):
     IMPORTANT for PR1 training queries: rows where forward_return_60d or
     forward_return_90d is NULL must be filtered out before training. Use
     WHERE forward_return_Xd IS NOT NULL in the training data query.
+
+    No updated_at column: this table uses ON CONFLICT DO UPDATE upsert
+    semantics, so created_at reflects the last write time. A separate
+    updated_at would be redundant and is omitted intentionally.
     """
 
     __tablename__ = "historical_features"
