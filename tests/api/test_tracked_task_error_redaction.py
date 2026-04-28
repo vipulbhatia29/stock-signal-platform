@@ -42,7 +42,7 @@ async def test_tracked_task_error_summary_does_not_leak_exception_string(
         """Yield the shared db_session for every decorator call."""
         yield db_session
 
-    with patch.object(pipeline_mod, "async_session_factory", _shared_session_factory):
+    with patch("backend.database.async_session_factory", _shared_session_factory):
 
         @pipeline_mod.tracked_task("redaction_audit_spec_a")
         async def inner(*, run_id: uuid.UUID) -> None:
