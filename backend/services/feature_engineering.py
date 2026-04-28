@@ -84,7 +84,8 @@ def compute_macd_histogram_series(
     if macd_df is None:
         return pd.Series(np.nan, index=closes.index)
     hist_col = f"MACDh_{fast}_{slow}_{signal}"
-    return macd_df[hist_col]
+    result: pd.Series = macd_df[hist_col]  # type: ignore[assignment]
+    return result
 
 
 def compute_sma_cross_series(closes: pd.Series) -> pd.Series:

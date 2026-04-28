@@ -1,5 +1,7 @@
 """HistoricalFeature model — training dataset for forecast ensemble."""
 
+from __future__ import annotations
+
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, func
