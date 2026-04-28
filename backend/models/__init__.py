@@ -17,6 +17,7 @@ from backend.models.dividend import DividendPayment
 from backend.models.dq_check_history import DqCheckHistory  # noqa: F401
 from backend.models.earnings import EarningsSnapshot
 from backend.models.forecast import ForecastResult, ModelVersion, RecommendationOutcome
+from backend.models.historical_feature import HistoricalFeature  # noqa: F401
 from backend.models.index import StockIndex, StockIndexMembership
 from backend.models.llm_config import LLMModelConfig
 from backend.models.login_attempt import LoginAttempt
@@ -52,6 +53,7 @@ __all__ = [
     "SignalConvergenceDaily",
     "EarningsSnapshot",
     "ForecastResult",
+    "HistoricalFeature",
     "InAppAlert",
     "LLMCallLog",
     "LLMModelConfig",
