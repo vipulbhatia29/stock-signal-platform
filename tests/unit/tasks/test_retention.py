@@ -41,7 +41,7 @@ class TestPurgeOldForecasts:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_forecasts_async
 
             result = await _purge_old_forecasts_async()
@@ -65,7 +65,7 @@ class TestPurgeOldForecasts:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_forecasts_async
 
             result = await _purge_old_forecasts_async()
@@ -90,7 +90,7 @@ class TestPurgeOldNewsArticles:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_news_articles_async
 
             result = await _purge_old_news_articles_async()
@@ -121,7 +121,7 @@ class TestPurgeOldNewsArticles:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_news_articles_async
 
             await _purge_old_news_articles_async()
@@ -144,7 +144,7 @@ class TestPurgeOldNewsArticles:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_news_articles_async
 
             result = await _purge_old_news_articles_async()

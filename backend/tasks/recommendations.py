@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from backend.database import async_session_factory
+import backend.database as _db
 from backend.tasks import celery_app
 from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import tracked_task
@@ -31,7 +31,7 @@ async def _generate_recommendations_async(*, run_id: uuid.UUID) -> dict:
     from backend.services.signals import SignalResult
     from backend.services.stock_data import get_latest_price
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         # Get all users
         users_result = await db.execute(select(User))
         users = users_result.scalars().all()

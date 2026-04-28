@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, text
 
-from backend.database import async_session_factory
+import backend.database as _db
 from backend.models.forecast import ForecastResult
 from backend.tasks import celery_app
 from backend.tasks.pipeline import tracked_task
@@ -60,7 +60,7 @@ def purge_old_forecasts_task(run_id: uuid.UUID | None = None) -> dict:
 async def _purge_old_forecasts_async() -> dict:
     """Keep last 30 days of forecasts; hard delete older rows."""
     cutoff = datetime.now(timezone.utc) - timedelta(days=FORECAST_RETENTION_DAYS)
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(delete(ForecastResult).where(ForecastResult.created_at < cutoff))
         await db.commit()
         deleted = result.rowcount or 0  # type: ignore[union-attr]
@@ -83,7 +83,7 @@ async def _purge_old_news_articles_async() -> dict:
     and is significantly faster than row-level deletion on large tables.
     Daily aggregates (news_sentiment_daily) are retained forever.
     """
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             text("SELECT drop_chunks('news_articles', older_than => make_interval(days => :days))"),
             {"days": NEWS_RETENTION_DAYS},
@@ -112,7 +112,7 @@ async def _purge_old_llm_call_log_async() -> dict:
     Uses drop_chunks() because llm_call_log is a hypertable (created in migration 008).
     drop_chunks() handles both compressed and uncompressed chunks transparently.
     """
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             text("SELECT drop_chunks('llm_call_log', older_than => make_interval(days => :days))"),
             {"days": LLM_CALL_LOG_RETENTION_DAYS},
@@ -145,7 +145,7 @@ async def _purge_old_tool_execution_log_async() -> dict:
     Uses drop_chunks() because tool_execution_log is a hypertable (created in migration 008).
     drop_chunks() handles both compressed and uncompressed chunks transparently.
     """
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             text(
                 "SELECT drop_chunks('tool_execution_log',"
@@ -182,7 +182,7 @@ async def _purge_old_pipeline_runs_async() -> dict:
     and this avoids importing the PipelineRun model into the retention module.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=PIPELINE_RUNS_RETENTION_DAYS)
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             text("DELETE FROM pipeline_runs WHERE started_at < :cutoff"),
             {"cutoff": cutoff},
@@ -211,7 +211,7 @@ async def _purge_old_dq_check_history_async() -> dict:
     and this avoids importing the DqCheckHistory model into the retention module.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=DQ_CHECK_HISTORY_RETENTION_DAYS)
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             text("DELETE FROM dq_check_history WHERE detected_at < :cutoff"),
             {"cutoff": cutoff},
@@ -385,7 +385,7 @@ async def _purge_old_findings_async() -> dict:
     finding_log is a regular table — drop_chunks() does not apply.
     """
     cutoff = datetime.now(timezone.utc) - timedelta(days=FINDING_LOG_RETENTION_DAYS)
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             text(  # noqa: S608 — table name is a constant, not user input
                 "DELETE FROM observability.finding_log WHERE created_at < :cutoff"
@@ -430,7 +430,7 @@ async def _purge_obs_regular_table(table: str, retention_days: int) -> dict:
     if table not in _ALLOWED_TABLES:
         raise ValueError(f"Table {table!r} not in allowlist for regular-table retention")
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             text(  # noqa: S608 — table name is a constant, not user input
                 f"DELETE FROM observability.{table} WHERE ts < now() - make_interval(days => :days)"
@@ -458,7 +458,7 @@ async def _purge_obs_table(table: str, retention_days: int) -> dict:
     Returns:
         Dict with status, dropped_chunks count, and retention_days.
     """
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         result = await db.execute(
             text(f"SELECT drop_chunks('{table}', older_than => make_interval(days => :days))"),  # noqa: S608
             {"days": retention_days},

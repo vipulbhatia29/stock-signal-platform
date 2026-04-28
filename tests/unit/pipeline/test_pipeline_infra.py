@@ -64,7 +64,7 @@ class TestPipelineRunnerStartRun:
     """Tests for PipelineRunner.start_run."""
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_start_run_creates_row(self, mock_factory: MagicMock) -> None:
         """start_run should create a PipelineRun row and return its UUID."""
         mock_cm, mock_session = _mock_session_factory()
@@ -92,7 +92,7 @@ class TestPipelineRunnerRecordTicker:
     """Tests for record_ticker_success and record_ticker_failure."""
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_record_success_increments(self, mock_factory: MagicMock) -> None:
         """record_ticker_success should increment tickers_succeeded."""
         mock_cm, mock_session = _mock_session_factory()
@@ -110,7 +110,7 @@ class TestPipelineRunnerRecordTicker:
         mock_session.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_record_failure_increments_and_logs_error(self, mock_factory: MagicMock) -> None:
         """record_ticker_failure should increment tickers_failed and add to error_summary."""
         mock_cm, mock_session = _mock_session_factory()
@@ -129,7 +129,7 @@ class TestPipelineRunnerRecordTicker:
         assert run.error_summary["GME"] == "timeout"
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_record_failure_initializes_error_summary(self, mock_factory: MagicMock) -> None:
         """record_ticker_failure should initialize error_summary if None."""
         mock_cm, mock_session = _mock_session_factory()
@@ -155,7 +155,7 @@ class TestPipelineRunnerCompleteRun:
     """Tests for PipelineRunner.complete_run."""
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_all_success(self, mock_factory: MagicMock) -> None:
         """complete_run with 0 failures should set status to 'success'."""
         mock_cm, mock_session = _mock_session_factory()
@@ -173,7 +173,7 @@ class TestPipelineRunnerCompleteRun:
         assert run.completed_at is not None
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_partial_success(self, mock_factory: MagicMock) -> None:
         """complete_run with some failures should set status to 'partial'."""
         mock_cm, mock_session = _mock_session_factory()
@@ -190,7 +190,7 @@ class TestPipelineRunnerCompleteRun:
         assert status == "partial"
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_all_failed(self, mock_factory: MagicMock) -> None:
         """complete_run with 0 successes should set status to 'failed'."""
         mock_cm, mock_session = _mock_session_factory()
@@ -207,7 +207,7 @@ class TestPipelineRunnerCompleteRun:
         assert status == "failed"
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_zero_work_is_no_op(self, mock_factory: MagicMock) -> None:
         """complete_run with all counters zero should set status to 'no_op'.
 
@@ -231,7 +231,7 @@ class TestPipelineRunnerCompleteRun:
         assert run.completed_at is not None
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_nonzero_total_zero_processed_is_success(self, mock_factory: MagicMock) -> None:
         """complete_run with tickers_total > 0 but succeeded=0 and failed=0 → 'success'.
 
@@ -255,7 +255,7 @@ class TestPipelineRunnerCompleteRun:
         assert run.status == "success"
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_start_run_persists_celery_task_id(self, mock_factory: MagicMock) -> None:
         """start_run forwards celery_task_id to the PipelineRun row.
 
@@ -280,7 +280,7 @@ class TestPipelineRunnerCompleteRun:
         assert added_run.celery_task_id == "abc-123-celery-uuid"
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_start_run_celery_task_id_defaults_to_none(self, mock_factory: MagicMock) -> None:
         """start_run with no celery_task_id kwarg stores None (non-Celery context)."""
         mock_cm, mock_session = _mock_session_factory()
@@ -305,7 +305,7 @@ class TestTrackedTaskCeleryIdExtraction:
     """Tests for the celery_task_id extraction logic in @tracked_task."""
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_extracts_celery_task_id_from_current_task(self, mock_factory: MagicMock) -> None:
         """@tracked_task should read celery.current_task.request.id and pass to start_run."""
         from backend.tasks.pipeline import tracked_task
@@ -342,7 +342,7 @@ class TestTrackedTaskCeleryIdExtraction:
                 assert call_kwargs["celery_task_id"] == "celery-uuid-abc-123"
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_celery_task_id_none_when_no_task_context(self, mock_factory: MagicMock) -> None:
         """@tracked_task should pass celery_task_id=None when no Celery context exists."""
         from backend.tasks.pipeline import tracked_task
@@ -384,7 +384,7 @@ class TestPipelineRunnerWatermark:
     """Tests for PipelineRunner.update_watermark."""
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_creates_watermark_if_none(self, mock_factory: MagicMock) -> None:
         """update_watermark should create a new watermark if none exists."""
         mock_cm, mock_session = _mock_session_factory()
@@ -404,7 +404,7 @@ class TestPipelineRunnerWatermark:
         assert added.status == "ok"
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_updates_existing_watermark(self, mock_factory: MagicMock) -> None:
         """update_watermark should update an existing watermark."""
         mock_cm, mock_session = _mock_session_factory()
@@ -436,7 +436,7 @@ class TestPipelineRunnerStaleRuns:
     """Tests for PipelineRunner.detect_stale_runs."""
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_detects_stale_run(self, mock_factory: MagicMock) -> None:
         """detect_stale_runs should find runs stuck running for > 1 hour."""
         mock_cm, mock_session = _mock_session_factory()
@@ -459,7 +459,7 @@ class TestPipelineRunnerStaleRuns:
         assert stale_run.error_summary["_stale"] == "Run exceeded 1-hour threshold"
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_no_stale_runs(self, mock_factory: MagicMock) -> None:
         """detect_stale_runs should return empty list when no stale runs exist."""
         mock_cm, mock_session = _mock_session_factory()
@@ -484,7 +484,7 @@ class TestDetectGap:
     """Tests for detect_gap function."""
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_gap_detected_3_days(self, mock_factory: MagicMock) -> None:
         """detect_gap should return 3 missing business days."""
         mock_cm, mock_session = _mock_session_factory()
@@ -518,7 +518,7 @@ class TestDetectGap:
         assert missing[-1] == date(2026, 3, 19)  # Thursday
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_no_gap_when_current(self, mock_factory: MagicMock) -> None:
         """detect_gap should return empty list when watermark is current."""
         mock_cm, mock_session = _mock_session_factory()
@@ -548,7 +548,7 @@ class TestDetectGap:
         assert missing == []
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.pipeline.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_no_watermark_returns_empty(self, mock_factory: MagicMock) -> None:
         """detect_gap should return empty list when no watermark exists."""
         mock_cm, mock_session = _mock_session_factory()

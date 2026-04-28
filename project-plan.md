@@ -584,9 +584,25 @@ All prior tech debt resolved in Session 94 (PR #189). KAN-398 absorbed into KAN-
 | KAN-211 | Test Suite Hardening Epic (KAN-212–216) | 5 stories: tool orchestration, pipeline mocks, error paths, ReAct integration, frontend components |
 | KAN-217 | Playwright E2E Refresh | Blocked on KAN-400 (UI Overhaul) — POM selectors will change |
 
+### Epic KAN-548: Forecast System Redesign — LightGBM+XGBoost Ensemble (Session 141+)
+
+> Replace Prophet price forecasting with LightGBM+XGBoost ensemble that forecasts returns using existing signal features. Probabilistic output with confidence intervals and SHAP explainability.
+> **Spec:** `docs/superpowers/specs/2026-04-28-forecast-redesign.md`
+
+| Ticket | Summary | Depends | Status |
+|--------|---------|---------|--------|
+| KAN-548 | Epic: Forecast System Redesign | — | To Do |
+| KAN-549 | PR0: Historical technical signal backfill (250K rows from price data) | Nothing | To Do |
+| KAN-550 | PR1: ForecastEngine core + schema migration + model training | KAN-549 | To Do |
+| KAN-551 | PR2: API + router + convergence + portfolio_forecast wiring | KAN-550 | To Do |
+| KAN-552 | PR3: Frontend forecast card + bulletin column + track record redesign | KAN-551 | To Do |
+| KAN-553 | PR4: Backtest adaptation + champion/challenger + drift monitoring | KAN-550 | To Do |
+
+---
+
 ## Parking Lot
 
 - Schwab CSV import — parse "Positions" export, create BUY transactions
-- ForecastCard currentPrice display — signal schema doesn't expose it
-- Forecasts blended into composite score — deferred pending accuracy validation
+- ~~ForecastCard currentPrice display~~ — resolved in KAN-548 spec (current_price in API response)
+- ~~Forecasts blended into composite score~~ — superseded by KAN-548 (ensemble replaces Prophet)
 - Telegram alerts — deferred, in-app only for now

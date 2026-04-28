@@ -291,6 +291,22 @@ class MarketBriefingTool(BaseTool):
         except Exception:
             logger.warning("Failed to fetch general market news")
 
+        # Score sentiment for all news articles (best effort)
+        all_news = portfolio_news + general_news
+        if all_news:
+            try:
+                from backend.routers.news import DashboardNewsArticle, _score_article_sentiment
+
+                scoreable = [DashboardNewsArticle(**a) for a in all_news]
+                scored = await _score_article_sentiment(scoreable)
+                for i, article in enumerate(scored):
+                    d = all_news[i]
+                    d["sentiment"] = article.sentiment
+                    d["sentiment_label"] = article.sentiment_label
+                    d["category"] = article.category
+            except Exception:
+                logger.warning("Briefing news sentiment scoring failed", exc_info=True)
+
         # Fetch top movers from signal snapshots
         top_movers: dict[str, list[dict]] = {"gainers": [], "losers": []}
         try:

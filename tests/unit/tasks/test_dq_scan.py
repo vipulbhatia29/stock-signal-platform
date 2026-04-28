@@ -234,7 +234,7 @@ class TestDqScanPersistence:
         mock_factory = _make_session_factory(mock_db)
 
         with (
-            patch("backend.tasks.dq_scan.async_session_factory", return_value=mock_factory),
+            patch("backend.database.async_session_factory", return_value=mock_factory),
             patch("backend.tasks.alerts._create_alert", AsyncMock()),
         ):
             await _dq_scan_async()
@@ -257,7 +257,7 @@ class TestDqScanPersistence:
         mock_db = _make_mock_db([empty_result] * 10)
         mock_factory = _make_session_factory(mock_db)
 
-        with patch("backend.tasks.dq_scan.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             await _dq_scan_async()
 
         mock_db.commit.assert_called_once()
@@ -278,7 +278,7 @@ class TestDqScanPersistence:
         mock_factory = _make_session_factory(mock_db)
 
         with (
-            patch("backend.tasks.dq_scan.async_session_factory", return_value=mock_factory),
+            patch("backend.database.async_session_factory", return_value=mock_factory),
             patch("backend.tasks.alerts._create_alert", AsyncMock()),
         ):
             result = await _dq_scan_async()
@@ -322,7 +322,7 @@ class TestDqScanAlerts:
 
         with (
             patch(
-                "backend.tasks.dq_scan.async_session_factory",
+                "backend.database.async_session_factory",
                 side_effect=factory_side_effect,
             ),
             patch("backend.tasks.alerts._create_alert", mock_create_alert),
@@ -351,7 +351,7 @@ class TestDqScanAlerts:
         mock_create_alert = AsyncMock(return_value=True)
 
         with (
-            patch("backend.tasks.dq_scan.async_session_factory", return_value=mock_factory),
+            patch("backend.database.async_session_factory", return_value=mock_factory),
             patch("backend.tasks.alerts._create_alert", mock_create_alert),
         ):
             result = await _dq_scan_async()
@@ -387,7 +387,7 @@ class TestDqScanAlerts:
         mock_create_alert = AsyncMock(return_value=True)
 
         with (
-            patch("backend.tasks.dq_scan.async_session_factory", return_value=mock_factory),
+            patch("backend.database.async_session_factory", return_value=mock_factory),
             patch("backend.tasks.alerts._create_alert", mock_create_alert),
         ):
             result = await _dq_scan_async()

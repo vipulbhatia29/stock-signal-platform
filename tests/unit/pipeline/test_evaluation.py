@@ -25,7 +25,7 @@ class TestForecastEvaluation:
     """Tests for _evaluate_forecasts_async."""
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.evaluation.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_fills_actual_price(self, mock_factory) -> None:
         """Evaluation should fill actual_price on matured forecasts."""
         mock_session = AsyncMock()
@@ -70,7 +70,7 @@ class TestForecastEvaluation:
         assert result["evaluated"] == 1
 
     @pytest.mark.asyncio
-    @patch("backend.tasks.evaluation.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_no_pending_forecasts(self, mock_factory) -> None:
         """No pending forecasts should return early."""
         mock_session = AsyncMock()
@@ -114,7 +114,7 @@ class TestDriftDetection:
         new_callable=AsyncMock,
         return_value=False,
     )
-    @patch("backend.tasks.evaluation.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_triggers_retrain_when_mape_high(
         self, mock_factory, mock_vol, mock_vix, mock_retrain
     ) -> None:
@@ -165,7 +165,7 @@ class TestDriftDetection:
         new_callable=AsyncMock,
         return_value=False,
     )
-    @patch("backend.tasks.evaluation.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_no_retrain_when_mape_ok(
         self, mock_factory, mock_vol, mock_vix, mock_retrain
     ) -> None:

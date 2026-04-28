@@ -67,7 +67,7 @@ class TestPurgeOldLlmCallLog:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_llm_call_log_async
 
             result = await _purge_old_llm_call_log_async()
@@ -98,7 +98,7 @@ class TestPurgeOldLlmCallLog:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_llm_call_log_async
 
             await _purge_old_llm_call_log_async()
@@ -121,7 +121,7 @@ class TestPurgeOldLlmCallLog:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_llm_call_log_async
 
             result = await _purge_old_llm_call_log_async()
@@ -146,7 +146,7 @@ class TestPurgeOldToolExecutionLog:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_tool_execution_log_async
 
             result = await _purge_old_tool_execution_log_async()
@@ -177,7 +177,7 @@ class TestPurgeOldToolExecutionLog:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_tool_execution_log_async
 
             await _purge_old_tool_execution_log_async()
@@ -200,7 +200,7 @@ class TestPurgeOldToolExecutionLog:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_tool_execution_log_async
 
             result = await _purge_old_tool_execution_log_async()
@@ -225,7 +225,7 @@ class TestPurgeOldPipelineRuns:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_pipeline_runs_async
 
             result = await _purge_old_pipeline_runs_async()
@@ -256,7 +256,7 @@ class TestPurgeOldPipelineRuns:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_pipeline_runs_async
 
             await _purge_old_pipeline_runs_async()
@@ -279,7 +279,7 @@ class TestPurgeOldPipelineRuns:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_pipeline_runs_async
 
             result = await _purge_old_pipeline_runs_async()
@@ -300,7 +300,7 @@ class TestPurgeOldPipelineRuns:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_pipeline_runs_async
 
             result = await _purge_old_pipeline_runs_async()
@@ -325,7 +325,7 @@ class TestPurgeOldDqCheckHistory:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_dq_check_history_async
 
             result = await _purge_old_dq_check_history_async()
@@ -356,7 +356,7 @@ class TestPurgeOldDqCheckHistory:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_dq_check_history_async
 
             await _purge_old_dq_check_history_async()
@@ -379,7 +379,7 @@ class TestPurgeOldDqCheckHistory:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_dq_check_history_async
 
             result = await _purge_old_dq_check_history_async()
@@ -400,7 +400,7 @@ class TestPurgeOldDqCheckHistory:
         mock_factory.__aenter__ = AsyncMock(return_value=mock_session)
         mock_factory.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("backend.tasks.retention.async_session_factory", return_value=mock_factory):
+        with patch("backend.database.async_session_factory", return_value=mock_factory):
             from backend.tasks.retention import _purge_old_dq_check_history_async
 
             result = await _purge_old_dq_check_history_async()

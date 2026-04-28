@@ -255,9 +255,91 @@ Tested: Dashboard, Search, Stock Detail, Screener, Portfolio, Sectors, Observabi
 ### Session 139 Totals
 - Tests: 2633 unit + 454 API + 522 frontend (0 failures — no test changes this session)
 - 3 bugs fixed, 3 files modified, 18 JIRA tickets created, 5 superseded
+
+---
+
+## Session 140 — Sprint E1: Dashboard UX Overhaul (2026-04-26)
+
+**Branch:** `feat/KAN-530-market-pulse-fix` → develop | **PR #286**
+
+### Dashboard restructure (interactive PM session)
+Compared dashboard to Lovable template. Restructured zone order to tell a story:
+1. **KPI Row** — Portfolio Value (green/red glow for daily change), P&L, Signals count, Top Signal
+2. **Portfolio Allocation donut** — right column spanning 2 rows, uses actual positions
+3. **Market Indexes** — always shows S&P 500, NASDAQ, Dow 30 with fallback "—"
+4. **Action Required + Sector Performance** — Lovable-style rows with icon, badge, reasoning text, score
+5. **Top Movers** — Gainers | Losers horizontal full-width
+6. **Data Bulletin** — tabbed table (Watchlist/Portfolio) with 1D/1W/30D, Sharpe, RSI, MACD, SMA, Vol, Forecast 90D, "Held" badges
+7. **News & Intelligence** — LLM sentiment badges + category tags (Stock/Sector/Macro)
+8. **Alerts** — collapsible bar with derived alerts from watchlist data
+
+### New components (5)
+- `kpi-row.tsx`, `action-required-zone.tsx`, `top-movers-zone.tsx`, `bulletin-zone.tsx`, `watchlist-zone.tsx` (created then removed — redundant with bulletin)
+
+### Backend fixes (9)
+- `_fetch_top_movers()`: DISTINCT ON pattern (was only returning last ticker)
+- Gainers/losers: added `change_pct > 0` / `< 0` filters
+- `_fetch_index_performance()`: switched from flaky `yf.download` to `Ticker.fast_info`
+- Watchlist endpoint: added change_pct, macd_signal_label, rsi_value, recommendation
+- SignalResponse: added current_price, change_pct, market_cap
+- BulkSignalItem: added current_price, change_pct, recommendation + sort support
+- Ingest pipeline: added `mark_stage_updated("fundamentals")` — was missing, toast stuck at 67%
+- News: blocked paywalled publishers (Motley Fool, Seeking Alpha, Bloomberg, WSJ, Zacks, etc.)
+- News: LLM-based sentiment scoring via GPT-4o-mini replacing keyword classifier
+
+### Frontend fixes
+- Search → Ingest → Navigate flow: toast progress + auto-navigate to stock detail
+- Stock detail header: price, change%, market cap wired from signals endpoint
+- Screener overview: decision-ready columns (price, change, action badge)
+- Ingest toast: shows only real-time stages (prices/signals/fundamentals), not nightly-only
+- Alerts: client-side derived alerts (big movers >5%, low score on held, BUY signals)
+- Portfolio Value KPI: green/red glow shadow based on daily portfolio change
+
+### JIRA
+- **KAN-530** → Ready for Verification (query fix complete)
+- **KAN-531** → Ready for Verification (watchlist wiring complete)
+- **KAN-532** → In Progress (backend wired, page UX needs Lovable treatment)
+- **KAN-533** → In Progress (columns added, page UX needs treatment)
+- **KAN-534** → In Progress (flow wired, needs polish)
+- **KAN-546** → Created: LLM Round-Robin — Groq-first routing with idempotent failover
+
+### Session 140 Totals
+- Tests: 2633 unit + 551 frontend (0 failures)
+- 38 files changed, 1,824 lines added, 5 new components, 1 PR opened (#286)
+- Resume: Stock Detail + Screener + Search page UX (same interactive approach)
 - Resume: Pick Sprint E1 (KAN-530 Dashboard Market Pulse) for refinement + implementation
 
 ### Session 138 Totals
 - Tests: 2633 unit (unchanged — planning only)
 - 2 new docs (spec + plan), 7 JIRA tickets created, 1 transitioned
 - Resume: Implement KAN-513 — subagent-driven, 3 subtasks (KAN-525→526→527), 1 PR
+
+---
+
+## Session 141 — Celery asyncpg Fix + Forecast Redesign Spec (2026-04-28)
+
+**Branch:** `feat/KAN-530-market-pulse-fix` → develop
+
+### Bug Fixes (4)
+1. **asyncpg "Future attached to different loop" (KAN-547)** — Root cause: `from backend.database import async_session_factory` captured stale factory at import time. `safe_asyncio_run()` replaced the module attribute but 11 task files held the old reference. Fix: changed all to `import backend.database as _db` (late binding). Updated 14 test files with new mock paths. All Phase 2+ pipeline tasks now work (forecasts, recommendations, alerts, convergence, sentiment, evaluation). Full nightly chain completed end-to-end.
+2. **Nested `<a>` hydration error** — Dashboard `AllocationDonut` rendered `<Link>` inside outer `<Link>`. Removed `showSectorLink` prop from dashboard usage.
+3. **FCST 90D showing "—"** — Frontend called `/stocks/AAPL/forecast` instead of `/forecasts/AAPL`. Wrong URL path.
+4. **Market briefing news missing sentiment** — `/market/briefing` returned raw RSS articles without LLM scoring. Added `_score_article_sentiment()` call.
+
+### Forecast Redesign Spec (KAN-548)
+- **Problem:** Prophet predicts AAPL at $317 in 90 days (current: $141). Fundamental design flaw — Prophet extrapolates trend, no concept of valuation or market efficiency.
+- **Solution:** LightGBM + XGBoost ensemble forecasting returns (+3.2%), not prices ($317). 17 features from existing signal pipeline. Quantile regression for 80% confidence intervals. SHAP for explainability.
+- **Spec:** `docs/superpowers/specs/2026-04-28-forecast-redesign.md` (~1000 lines)
+- **4-persona expert review:** 13 findings (Q1: remove composite_score leakage, Q2: replace annual_return with momentum_126d, O1: champion/challenger gate, U1: missing UI states, + 9 more)
+- **3-phase feature rollout:** Day 1: 11 technical features backfilled from price data. Week 2+: sentiment accumulates naturally. Month 2+: lagged convergence added.
+
+### JIRA
+- **KAN-547** → Ready for Verification (asyncpg fix)
+- **KAN-548** (Epic) created: Forecast System Redesign
+- **KAN-549–553** created: 5 implementation stories (PR0–PR4)
+
+### Session 141 Totals
+- Tests: 2633 unit (0 failures), 551 frontend
+- 11 task files + 14 test files + 4 frontend files modified, 1 spec created
+- Nightly pipeline verified end-to-end (all phases pass)
+- Resume: Plan and implement KAN-549 (PR0: historical signal backfill)

@@ -62,7 +62,7 @@ class TestBacktestDegradedStatus:
         with (
             patch("backend.tasks.forecasting.settings") as mock_settings,
             patch("backend.tasks.forecasting.BacktestEngine", return_value=mock_engine),
-            patch("backend.tasks.forecasting.async_session_factory", return_value=mock_factory),
+            patch("backend.database.async_session_factory", return_value=mock_factory),
             patch(
                 "backend.tasks.forecasting.get_all_referenced_tickers",
                 new_callable=AsyncMock,
@@ -97,7 +97,7 @@ class TestBacktestDegradedStatus:
         with (
             patch("backend.tasks.forecasting.settings") as mock_settings,
             patch("backend.tasks.forecasting.BacktestEngine", return_value=mock_engine),
-            patch("backend.tasks.forecasting.async_session_factory", return_value=mock_factory),
+            patch("backend.database.async_session_factory", return_value=mock_factory),
             patch(
                 "backend.tasks.forecasting.get_all_referenced_tickers",
                 new_callable=AsyncMock,
@@ -132,7 +132,7 @@ class TestBacktestDegradedStatus:
         with (
             patch("backend.tasks.forecasting.settings") as mock_settings,
             patch("backend.tasks.forecasting.BacktestEngine", return_value=mock_engine),
-            patch("backend.tasks.forecasting.async_session_factory", return_value=mock_factory),
+            patch("backend.database.async_session_factory", return_value=mock_factory),
             patch(
                 "backend.tasks.forecasting.get_all_referenced_tickers",
                 new_callable=AsyncMock,

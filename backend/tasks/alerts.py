@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.database import async_session_factory
+import backend.database as _db
 from backend.models.alert import InAppAlert
 from backend.tasks import celery_app
 from backend.tasks._asyncio_bridge import safe_asyncio_run
@@ -125,7 +125,7 @@ async def _generate_alerts_async(
     ctx = pipeline_context or {}
     alerts_created = 0
 
-    async with async_session_factory() as db:
+    async with _db.async_session_factory() as db:
         alerts_created += await _alert_new_buy_recommendations(db)
         alerts_created += await _alert_signal_flips(db)
         alerts_created += await _alert_divestment_rules(db)
@@ -181,7 +181,7 @@ async def _generate_alerts_async(
         await db.commit()
 
     # Retention cleanup (separate session — after commit so new alerts aren't affected)
-    async with async_session_factory() as cleanup_db:
+    async with _db.async_session_factory() as cleanup_db:
         deleted = await _cleanup_old_read_alerts(cleanup_db)
         await cleanup_db.commit()
 

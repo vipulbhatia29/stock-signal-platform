@@ -131,7 +131,7 @@ async def test_drift_detection_uses_backtest_mapes_when_rows_exist(db_session):
             "backend.tasks.forecasting.retrain_single_ticker_task",
         ),
         patch(
-            "backend.tasks.evaluation.async_session_factory",
+            "backend.database.async_session_factory",
         ) as mock_factory,
         patch(
             "backend.tasks.evaluation.compute_calibrated_threshold",
@@ -211,7 +211,7 @@ async def test_drift_uses_fallback_when_no_backtest_rows_exist(db_session):
         ),
         patch("backend.tasks.forecasting.retrain_single_ticker_task"),
         patch(
-            "backend.tasks.evaluation.async_session_factory",
+            "backend.database.async_session_factory",
         ) as mock_factory,
         patch(
             "backend.tasks.evaluation.compute_calibrated_threshold",

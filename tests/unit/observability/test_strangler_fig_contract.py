@@ -558,7 +558,7 @@ class TestDqScanStranglerFig:
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
-        monkeypatch.setattr("backend.tasks.dq_scan.async_session_factory", lambda: mock_cm)
+        monkeypatch.setattr("backend.database.async_session_factory", lambda: mock_cm)
 
         from backend.observability.schema.legacy_events import DqFindingEvent
         from backend.tasks.dq_scan import _dq_scan_async
@@ -617,7 +617,7 @@ class TestDqScanStranglerFig:
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
-        monkeypatch.setattr("backend.tasks.dq_scan.async_session_factory", lambda: mock_cm)
+        monkeypatch.setattr("backend.database.async_session_factory", lambda: mock_cm)
 
         from backend.observability.schema.legacy_events import DqFindingEvent
         from backend.tasks.dq_scan import _dq_scan_async
@@ -662,7 +662,7 @@ class TestDqScanStranglerFig:
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
-        monkeypatch.setattr("backend.tasks.dq_scan.async_session_factory", lambda: mock_cm)
+        monkeypatch.setattr("backend.database.async_session_factory", lambda: mock_cm)
 
         from backend.tasks.dq_scan import _dq_scan_async
 
@@ -717,7 +717,7 @@ class TestDqScanStranglerFig:
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
         mock_cm.__aexit__ = AsyncMock(return_value=False)
-        monkeypatch.setattr("backend.tasks.dq_scan.async_session_factory", lambda: mock_cm)
+        monkeypatch.setattr("backend.database.async_session_factory", lambda: mock_cm)
 
         from backend.tasks.dq_scan import _dq_scan_async
 

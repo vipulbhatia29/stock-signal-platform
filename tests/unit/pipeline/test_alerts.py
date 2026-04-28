@@ -34,7 +34,7 @@ class TestAlertGeneration:
         new_callable=AsyncMock,
         return_value=2,
     )
-    @patch("backend.tasks.alerts.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_creates_alerts_for_buys(
         self, mock_factory, mock_buys, mock_flips, mock_divest, mock_cleanup
     ) -> None:
@@ -59,7 +59,7 @@ class TestAlertGeneration:
         new_callable=AsyncMock,
         return_value=0,
     )
-    @patch("backend.tasks.alerts.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_drift_alerts_from_context(
         self, mock_factory, mock_buys, mock_flips, mock_divest, mock_cleanup
     ) -> None:
@@ -86,7 +86,7 @@ class TestAlertGeneration:
         new_callable=AsyncMock,
         return_value=0,
     )
-    @patch("backend.tasks.alerts.async_session_factory")
+    @patch("backend.database.async_session_factory")
     async def test_pipeline_failure_alert(
         self, mock_factory, mock_buys, mock_flips, mock_divest, mock_cleanup
     ) -> None:

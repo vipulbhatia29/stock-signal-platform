@@ -16,8 +16,8 @@ import pandas as pd
 from sqlalchemy import select, update
 from uuid_utils import uuid7
 
+import backend.database as _db
 from backend.config import settings
-from backend.database import async_session_factory
 from backend.models.pipeline import PipelineRun, PipelineWatermark
 from backend.observability.bootstrap import _maybe_get_obs_client
 from backend.observability.context import current_span_id, current_trace_id
@@ -75,7 +75,7 @@ class PipelineRunner:
             UUID of the new PipelineRun row.
         """
         run_id = uuid.uuid4()
-        async with async_session_factory() as session:
+        async with _db.async_session_factory() as session:
             run = PipelineRun(
                 id=run_id,
                 pipeline_name=pipeline_name,
@@ -106,7 +106,7 @@ class PipelineRunner:
             run_id: The PipelineRun UUID.
             ticker: Ticker symbol that succeeded.
         """
-        async with async_session_factory() as session:
+        async with _db.async_session_factory() as session:
             result = await session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
             run = result.scalar_one()
             run.tickers_succeeded += 1
@@ -128,7 +128,7 @@ class PipelineRunner:
             ticker: Ticker symbol that failed.
             error: Static error code from :data:`TickerFailureReason`.
         """
-        async with async_session_factory() as session:
+        async with _db.async_session_factory() as session:
             result = await session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
             run = result.scalar_one()
             run.tickers_failed += 1
@@ -154,7 +154,7 @@ class PipelineRunner:
 
         try:
             step_json = json_mod.dumps({step_name: round(duration_seconds, 1)})
-            async with async_session_factory() as session:
+            async with _db.async_session_factory() as session:
                 await session.execute(
                     text("""
                         UPDATE pipeline_runs
@@ -194,7 +194,7 @@ class PipelineRunner:
         Returns:
             Final status string ("no_op", "success", "partial", or "failed").
         """
-        async with async_session_factory() as session:
+        async with _db.async_session_factory() as session:
             result = await session.execute(select(PipelineRun).where(PipelineRun.id == run_id))
             run = result.scalar_one()
             completed = datetime.now(timezone.utc)
@@ -234,7 +234,7 @@ class PipelineRunner:
             completed_date: The date that was just completed.
         """
         now = datetime.now(timezone.utc)
-        async with async_session_factory() as session:
+        async with _db.async_session_factory() as session:
             result = await session.execute(
                 select(PipelineWatermark).where(PipelineWatermark.pipeline_name == pipeline_name)
             )
@@ -269,7 +269,7 @@ class PipelineRunner:
         cutoff = datetime.now(timezone.utc) - STALE_RUN_THRESHOLD
         stale_ids: list[uuid.UUID] = []
 
-        async with async_session_factory() as session:
+        async with _db.async_session_factory() as session:
             result = await session.execute(
                 select(PipelineRun).where(
                     PipelineRun.status == "running",
@@ -311,7 +311,7 @@ async def detect_gap(pipeline_name: str) -> list[date]:
         List of missing trading dates in chronological order.
         Empty list if no gap or no watermark exists.
     """
-    async with async_session_factory() as session:
+    async with _db.async_session_factory() as session:
         result = await session.execute(
             select(PipelineWatermark).where(PipelineWatermark.pipeline_name == pipeline_name)
         )
@@ -356,7 +356,7 @@ async def set_watermark_status(pipeline_name: str, status: str) -> None:
         pipeline_name: Name of the pipeline.
         status: New status string.
     """
-    async with async_session_factory() as session:
+    async with _db.async_session_factory() as session:
         await session.execute(
             update(PipelineWatermark)
             .where(PipelineWatermark.pipeline_name == pipeline_name)
@@ -600,7 +600,7 @@ def tracked_task(
                     run_id,
                 )
                 try:
-                    async with async_session_factory() as session:
+                    async with _db.async_session_factory() as session:
                         stmt = (
                             update(PipelineRun)
                             .where(PipelineRun.id == run_id)
