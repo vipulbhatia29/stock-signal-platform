@@ -520,11 +520,13 @@ Parallel multi-ticker analysis with concurrency control. Data-driven activation 
 | Sprint | Ticket | Summary | Backend Status | Status |
 |--------|--------|---------|---------------|--------|
 | **Sprint E1: Core User Flow** | | Dashboard → Search → Stock Detail → Screener | | |
-| 1 | KAN-530 | Dashboard Market Pulse — top_movers query fix, gainers/losers split, indexes, sector bars | Query fix + FE | To Do |
-| 2 | KAN-531 | Dashboard Signals zone — wire watchlist with signal data + recommendations | BE schema enhance + FE | To Do |
-| 3 | KAN-532 | Stock Detail header — current price, daily change%, market cap | New endpoint + FE | To Do |
-| 4 | KAN-533 | Screener decision view — price, change%, recommendation action in default tab | BE schema enhance + FE | To Do |
-| 5 | KAN-534 | Search → Ingest → Navigate — full pipeline, toast, auto-navigate | API ready, FE wiring | To Do |
+| 1 | KAN-530 | Dashboard Market Pulse — top_movers query fix, gainers/losers split, indexes, sector bars | Query fix + FE | ✅ S140 PR#286 |
+| 2 | KAN-531 | Dashboard Signals zone — wire watchlist with signal data + recommendations | BE schema enhance + FE | ✅ S140 PR#286 |
+| 3 | KAN-532 | Stock Detail header — current price, daily change%, market cap | Wired in S140 | 🔄 Page UX pending |
+| 4 | KAN-533 | Screener decision view — price, change%, recommendation action in default tab | Columns added S140 | 🔄 Page UX pending |
+| 5 | KAN-534 | Search → Ingest → Navigate — full pipeline, toast, auto-navigate | Flow wired S140 | 🔄 Polish pending |
+| — | KAN-546 | LLM Round-Robin — Groq-first routing with idempotent failover | Design complete | To Do |
+| — | KAN-547 | Nightly pipeline asyncpg concurrency — per-task engine isolation | Interim: sequential (S140). Proper: Option A engine-per-task | HIGH priority |
 | **Sprint E2: Portfolio & Transactions** | | Portfolio page end-to-end | | |
 | 6 | KAN-535 | Portfolio Log Transaction — ticker selection, price binding, validation | API ready, FE only | To Do |
 | 7 | KAN-536 | Portfolio CSV upload — Fidelity format, template download, error messages | BE parser + FE | To Do |

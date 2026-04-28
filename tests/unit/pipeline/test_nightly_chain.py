@@ -198,6 +198,8 @@ class TestNightlyPriceRefreshWork:
 class TestNightlyPipelineChain:
     """Tests for the nightly_pipeline_chain_task."""
 
+    @patch("backend.tasks.market_data.safe_asyncio_run", return_value={"status": "ok"})
+    @patch("backend.tasks.portfolio.materialize_rebalancing_task")
     @patch("backend.tasks.portfolio.snapshot_health_task")
     @patch("backend.tasks.alerts.generate_alerts_task")
     @patch("backend.tasks.evaluation.check_drift_task")
@@ -220,6 +222,8 @@ class TestNightlyPipelineChain:
         mock_drift,
         mock_alerts,
         mock_health_snapshot,
+        mock_rebalancing,
+        mock_safe_run,
     ) -> None:
         """Chain should call all 10 pipeline steps in order (including convergence phase 3)."""
         from backend.tasks.market_data import nightly_pipeline_chain_task
@@ -258,6 +262,8 @@ class TestNightlyPipelineChain:
         mock_snapshot.assert_called_once()
         mock_health_snapshot.assert_called_once()
 
+    @patch("backend.tasks.market_data.safe_asyncio_run", return_value={"status": "ok"})
+    @patch("backend.tasks.portfolio.materialize_rebalancing_task")
     @patch("backend.tasks.portfolio.snapshot_health_task")
     @patch("backend.tasks.alerts.generate_alerts_task")
     @patch("backend.tasks.evaluation.check_drift_task")
@@ -280,6 +286,8 @@ class TestNightlyPipelineChain:
         mock_drift,
         mock_alerts,
         mock_health_snapshot,
+        mock_rebalancing,
+        mock_safe_run,
     ) -> None:
         """Drift detection (phase 4) must run after convergence + forecast eval.
 
@@ -330,6 +338,8 @@ class TestNightlyPipelineChain:
         alerts_idx = call_order.index("alerts")
         assert alerts_idx > drift_idx, f"alerts ({alerts_idx}) should run after drift ({drift_idx})"
 
+    @patch("backend.tasks.market_data.safe_asyncio_run", return_value={"status": "ok"})
+    @patch("backend.tasks.portfolio.materialize_rebalancing_task")
     @patch("backend.tasks.portfolio.snapshot_health_task")
     @patch("backend.tasks.alerts.generate_alerts_task")
     @patch("backend.tasks.evaluation.check_drift_task")
@@ -352,6 +362,8 @@ class TestNightlyPipelineChain:
         mock_drift,
         mock_alerts,
         mock_health_snapshot,
+        mock_rebalancing,
+        mock_safe_run,
     ) -> None:
         """A failing step in phase 2 should not crash the entire pipeline.
 
@@ -380,6 +392,8 @@ class TestNightlyPipelineChain:
         assert result["drift"]["degraded"] == []
         assert result["health_snapshots"]["computed"] == 3
 
+    @patch("backend.tasks.market_data.safe_asyncio_run", return_value={"status": "ok"})
+    @patch("backend.tasks.portfolio.materialize_rebalancing_task")
     @patch("backend.tasks.portfolio.snapshot_health_task")
     @patch("backend.tasks.alerts.generate_alerts_task")
     @patch("backend.tasks.evaluation.check_drift_task")
@@ -402,6 +416,8 @@ class TestNightlyPipelineChain:
         mock_drift,
         mock_alerts,
         mock_health_snapshot,
+        mock_rebalancing,
+        mock_safe_run,
     ) -> None:
         """Alert generation should receive drift detection results as context."""
         from backend.tasks.market_data import nightly_pipeline_chain_task

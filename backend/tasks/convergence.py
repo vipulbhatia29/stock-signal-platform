@@ -15,7 +15,6 @@ async implementation to avoid a circular import at module load time.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import uuid
 from contextlib import asynccontextmanager
@@ -33,6 +32,7 @@ from backend.models.price import StockPrice
 from backend.services.ticker_state import mark_stages_updated
 from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
+from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
@@ -464,4 +464,5 @@ def compute_convergence_snapshot_task(ticker: str | None = None) -> dict:
     Returns:
         Status dict with computed/backfilled counts.
     """
-    return asyncio.run(_compute_convergence_snapshot_async(ticker=ticker))  # type: ignore[arg-type]
+
+    return safe_asyncio_run(_compute_convergence_snapshot_async(ticker=ticker))  # type: ignore[arg-type]

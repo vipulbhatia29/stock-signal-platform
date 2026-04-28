@@ -24,6 +24,7 @@ from backend.services.signals import (
 from backend.services.stock_data import fetch_prices_delta, load_prices_df
 from backend.services.ticker_state import mark_stage_updated
 from backend.tasks import celery_app
+from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import PipelineRunner, detect_gap, set_watermark_status, tracked_task
 
 logger = logging.getLogger(__name__)
@@ -182,7 +183,7 @@ def refresh_ticker_task(self, ticker: str) -> RefreshTickerResult:
     """
     try:
         logger.info("Refreshing ticker %s (attempt %d)", ticker, self.request.retries + 1)
-        return asyncio.run(_refresh_ticker_async(ticker))
+        return safe_asyncio_run(_refresh_ticker_async(ticker))
     except Exception:
         logger.exception(
             "refresh_ticker_task failed for %s (attempt %d/%d)",
@@ -378,7 +379,7 @@ def nightly_price_refresh_task() -> dict:
         Dict with pipeline run status.
     """
     logger.info("Starting nightly price refresh pipeline")
-    return asyncio.run(_nightly_price_refresh_async())
+    return safe_asyncio_run(_nightly_price_refresh_async())
 
 
 @celery_app.task(
@@ -416,8 +417,6 @@ def nightly_pipeline_chain_task() -> dict:
     Returns:
         Dict with results from each step.
     """
-    from concurrent.futures import ThreadPoolExecutor, as_completed
-
     from backend.tasks.alerts import generate_alerts_task
     from backend.tasks.convergence import compute_convergence_snapshot_task
     from backend.tasks.evaluation import (
@@ -469,53 +468,60 @@ def nightly_pipeline_chain_task() -> dict:
     # Runs before Phase 2 so downstream steps (QuantStats, fundamentals) see fresh data.
     logger.info("Nightly chain phase 1.5: slow path (yfinance info + dividends)")
     try:
-        results["slow_path"] = asyncio.run(_refresh_all_slow_async())
+        results["slow_path"] = safe_asyncio_run(_refresh_all_slow_async())
     except Exception:
         logger.exception("Phase 1.5 slow path failed")
         results["slow_path"] = {"status": "failed"}
 
-    # Phase 2: Five independent steps run in parallel threads.
-    # Each task calls asyncio.run() internally, so each thread gets its own event loop.
-    phase2_tasks = {
-        "forecast_refresh": forecast_refresh_task,
-        "recommendations": generate_recommendations_task,
-        "forecast_evaluation": evaluate_forecasts_task,
-        "recommendation_evaluation": evaluate_recommendations_task,
-        "portfolio_snapshots": snapshot_all_portfolios_task,
-    }
-    logger.info("Nightly chain phase 2: running %d steps in parallel", len(phase2_tasks))
-    results.update(_run_tasks_parallel(phase2_tasks))
+    # Phase 2: Five independent steps run SEQUENTIALLY.
+    # These were previously parallel via ThreadPoolExecutor, but asyncpg's
+    # connection pool is not thread-safe — concurrent asyncio.run() calls
+    # sharing the same engine cause "another operation is in progress" errors.
+    # Sequential execution adds ~2-3 min to nightly pipeline but is reliable.
+    phase2_steps = [
+        ("forecast_refresh", forecast_refresh_task),
+        ("recommendations", generate_recommendations_task),
+        ("forecast_evaluation", evaluate_forecasts_task),
+        ("recommendation_evaluation", evaluate_recommendations_task),
+        ("portfolio_snapshots", snapshot_all_portfolios_task),
+    ]
+    logger.info("Nightly chain phase 2: running %d steps sequentially", len(phase2_steps))
+    for name, fn in phase2_steps:
+        try:
+            results[name] = fn()
+        except Exception:
+            logger.exception("Phase 2 step '%s' failed", name)
+            results[name] = {"status": "failed"}
 
     # Phase 3: Convergence snapshot (depends on signals + forecasts from phase 2)
     logger.info("Nightly chain phase 3: convergence snapshot")
-    results["convergence"] = compute_convergence_snapshot_task()
+    try:
+        results["convergence"] = compute_convergence_snapshot_task()
+    except Exception:
+        logger.exception("Phase 3 convergence failed")
+        results["convergence"] = {"status": "failed"}
 
     # Phase 4: Drift detection (depends on forecast evaluation updating model MAPEs)
     logger.info("Nightly chain phase 4: drift detection")
-    results["drift"] = check_drift_task()
+    try:
+        results["drift"] = check_drift_task()
+    except Exception:
+        logger.exception("Phase 4 drift detection failed")
+        results["drift"] = {"status": "failed"}
 
-    # Phase 5: Alerts + health snapshots run in parallel.
-    # Alerts needs drift context + new recs (both complete).
-    # Health snapshots needs portfolio snapshots (complete from phase 2).
-    phase5_tasks: dict[str, tuple] = {
-        "alerts": (generate_alerts_task, {"pipeline_context": results.get("drift")}),
-        "health_snapshots": (snapshot_health_task, {}),
-        "rebalancing": (materialize_rebalancing_task, {}),
-    }
-    logger.info("Nightly chain phase 5: running %d steps in parallel", len(phase5_tasks))
-
-    with ThreadPoolExecutor(max_workers=len(phase5_tasks)) as executor:
-        futures = {}
-        for name, (fn, kwargs) in phase5_tasks.items():
-            futures[executor.submit(fn, **kwargs)] = name
-
-        for future in as_completed(futures):
-            name = futures[future]
-            try:
-                results[name] = future.result()
-            except Exception:
-                logger.exception("Phase 5 step '%s' failed", name)
-                results[name] = {"status": "failed"}
+    # Phase 5: Alerts + health + rebalancing (sequential for same reason)
+    phase5_steps = [
+        ("alerts", generate_alerts_task, {"pipeline_context": results.get("drift")}),
+        ("health_snapshots", snapshot_health_task, {}),
+        ("rebalancing", materialize_rebalancing_task, {}),
+    ]
+    logger.info("Nightly chain phase 5: running %d steps sequentially", len(phase5_steps))
+    for name, fn, kwargs in phase5_steps:
+        try:
+            results[name] = fn(**kwargs)
+        except Exception:
+            logger.exception("Phase 5 step '%s' failed", name)
+            results[name] = {"status": "failed"}
 
     logger.info("Nightly pipeline chain complete: %s", results)
     return results
@@ -561,7 +567,7 @@ def intraday_refresh_all_task() -> dict:
     Returns:
         A dict with the count of tasks dispatched.
     """
-    tickers = asyncio.run(_get_all_referenced_tickers())
+    tickers = safe_asyncio_run(_get_all_referenced_tickers())
     dispatched = 0
     for ticker in tickers:
         refresh_ticker_task.delay(ticker)

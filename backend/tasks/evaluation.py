@@ -1,6 +1,5 @@
 """Celery tasks for forecast evaluation, recommendation evaluation, and drift detection."""
 
-import asyncio
 import logging
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -10,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import async_session_factory
 from backend.tasks import celery_app
+from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import tracked_task
 
 logger = logging.getLogger(__name__)
@@ -563,7 +563,8 @@ def evaluate_forecasts_task() -> dict:
         Dict with evaluation status.
     """
     logger.info("Starting forecast evaluation")
-    return asyncio.run(_evaluate_forecasts_async())  # type: ignore[arg-type]
+
+    return safe_asyncio_run(_evaluate_forecasts_async())  # type: ignore[arg-type]
 
 
 @celery_app.task(name="backend.tasks.evaluation.check_drift_task")
@@ -574,7 +575,8 @@ def check_drift_task() -> dict:
         Dict with drift detection results.
     """
     logger.info("Starting drift detection")
-    return asyncio.run(_check_drift_async())  # type: ignore[arg-type]
+
+    return safe_asyncio_run(_check_drift_async())  # type: ignore[arg-type]
 
 
 @celery_app.task(name="backend.tasks.evaluation.evaluate_recommendations_task")
@@ -585,4 +587,5 @@ def evaluate_recommendations_task() -> dict:
         Dict with evaluation status.
     """
     logger.info("Starting recommendation evaluation")
-    return asyncio.run(_evaluate_recommendations_async())  # type: ignore[arg-type]
+
+    return safe_asyncio_run(_evaluate_recommendations_async())  # type: ignore[arg-type]
