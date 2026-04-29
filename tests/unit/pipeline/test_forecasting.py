@@ -182,12 +182,6 @@ class TestPredictForecast:
     """Tests for predict_forecast."""
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason=(
-            "predict_forecast (Prophet) not yet updated to return-based ForecastResult. "
-            "KAN-550 migrates schema; Prophet path will be updated or removed in a follow-up."
-        )
-    )
     @patch("backend.tools.forecasting.model_from_json")
     @patch("backend.tools.forecasting.settings")
     async def test_returns_3_forecast_results(self, mock_settings, mock_from_json) -> None:
@@ -205,18 +199,12 @@ class TestPredictForecast:
             with patch.object(Path, "exists", return_value=True):
                 results = await predict_forecast(mv, AsyncMock())
 
-        assert len(results) == 3
+        assert len(results) == len(DEFAULT_HORIZONS)
         assert all(isinstance(r, ForecastResult) for r in results)
         horizons = [r.horizon_days for r in results]
-        assert horizons == [90, 180, 270]
+        assert horizons == DEFAULT_HORIZONS
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(
-        reason=(
-            "predict_forecast (Prophet) not yet updated to return-based ForecastResult. "
-            "KAN-550 migrates schema; Prophet path will be updated or removed in a follow-up."
-        )
-    )
     @freeze_time("2026-04-13 23:59:00", tz_offset=0)
     @patch("backend.tools.forecasting.model_from_json")
     @patch("backend.tools.forecasting.settings")

@@ -116,11 +116,14 @@ class GetForecastTool(BaseTool):
                 {
                     "horizon_days": f.horizon_days,
                     "target_date": f.target_date.isoformat(),
-                    "predicted_price": f.predicted_price,
-                    "predicted_lower": f.predicted_lower,
-                    "predicted_upper": f.predicted_upper,
+                    "expected_return_pct": f.expected_return_pct,
+                    "return_lower_pct": f.return_lower_pct,
+                    "return_upper_pct": f.return_upper_pct,
                     "confidence_range_pct": round(
-                        (f.predicted_upper - f.predicted_lower) / f.predicted_price * 100, 1
+                        (f.return_upper_pct - f.return_lower_pct)
+                        / max(abs(f.expected_return_pct), 0.01)
+                        * 100,
+                        1,
                     ),
                 }
             )
