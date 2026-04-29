@@ -343,3 +343,28 @@ Compared dashboard to Lovable template. Restructured zone order to tell a story:
 - 11 task files + 14 test files + 4 frontend files modified, 1 spec created
 - Nightly pipeline verified end-to-end (all phases pass)
 - Resume: Plan and implement KAN-549 (PR0: historical signal backfill)
+
+---
+
+## Session 142 — KAN-549: Historical Technical Signal Backfill (PR0) (2026-04-28)
+
+**Branch:** `feat/KAN-549-historical-feature-backfill` → develop | **PR #289 merged**
+
+### What was built
+- **`historical_features` table** (migration 041, TimescaleDB hypertable) — composite PK `(date, ticker)`, FK to stocks, 11 technical feature columns, 4 sentiment placeholders (NaN), 2 convergence placeholders (NaN), 2 forward-return targets, `created_at`
+- **`feature_engineering.py`** — 9 pure functions: momentum (21/63/126d), RSI, MACD histogram, SMA cross (3-state ordinal), BB position (3-state ordinal), volatility (30d annualized), Sharpe (rfr=0, inf→0), forward log returns
+- **`backfill_features.py`** — CLI batch script: loads price history from DB, downloads VIX from yfinance, computes features per ticker, bulk upserts with ON CONFLICT DO UPDATE. Supports `--tickers`, `--max-days`, `--dry-run`.
+
+### Process
+1. **Plan written** (`docs/superpowers/plans/2026-04-28-historical-feature-backfill.md`) — 5 tasks, fact-sheet verified
+2. **2-persona plan review** (Backend Architect + ML/Data Engineer) — 5 HIGH + 4 MEDIUM findings, all fixed before implementation:
+   - H1: added `created_at`, H2: added FK, H3: fixed `sma_cross` encoding, H4: `max_days` warmup guard, H5: NULL target docstring
+   - M1: Sharpe rfr=0, M2: inf→0, M4: flat-price edge tests, M5: convergence columns
+3. **Subagent-driven development** — 4 Sonnet implementation tasks + Opus orchestration/review
+4. **Spec compliance review** ✅ + **Code quality review** ✅ (1 important finding fixed: `updated_at` exception documented, dry-run VIX download deferred)
+5. **CI:** pyright fixed (`__future__ annotations` for date shadow, cast macd return). All 13 checks green.
+
+### Session 142 Totals
+- Tests: 2662 unit (+29), 0 failures
+- 1 PR merged (#289), 8 files created, Alembic head: `1b3ee39cadd1`
+- **KAN-549 DONE.** Resume: run backfill, then plan KAN-550 (PR1: LightGBM+XGBoost training engine)
