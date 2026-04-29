@@ -409,12 +409,15 @@ async def get_ticker_forecast(
     )
     forecasts = result.scalars().all()
 
-    # Get model info
+    # Get model info (may have multiple active versions — one per horizon)
     model_result = await db.execute(
-        select(ModelVersion).where(
+        select(ModelVersion)
+        .where(
             ModelVersion.ticker == ticker,
             ModelVersion.is_active.is_(True),
         )
+        .order_by(ModelVersion.created_at.desc())
+        .limit(1)
     )
     model = model_result.scalar_one_or_none()
 
