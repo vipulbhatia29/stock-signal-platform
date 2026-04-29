@@ -290,7 +290,7 @@ class BacktestEngine:
             # Purge buffer: exclude rows where the target would be unknown
             # (date must be <= train_end - horizon_days for the target to be realised)
             train_cutoff = window.train_end - timedelta(days=horizon_days)
-            train_slice = features_df[features_df["date"] <= train_cutoff]
+            train_slice: pd.DataFrame = features_df[features_df["date"] <= train_cutoff]  # type: ignore[assignment]
             if len(train_slice) < 10:
                 continue
 
