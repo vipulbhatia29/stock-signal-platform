@@ -588,21 +588,41 @@ export interface CorrelationData {
 
 // ── Forecast Types ────────────────────────────────────────────
 
+export interface ForecastDriver {
+  feature: string;
+  label: string;
+  direction: string; // "bullish" | "bearish"
+  importance: number; // 0.0-1.0
+}
+
+export interface ModelAccuracy {
+  direction_hit_rate: number; // 0.0-1.0
+  avg_error_pct: number;
+  ci_containment_rate: number; // 0.0-1.0
+  evaluated_count: number;
+}
+
 export interface ForecastHorizon {
   horizon_days: number;
-  predicted_price: number;
-  predicted_lower: number;
-  predicted_upper: number;
+  expected_return_pct: number;
+  return_lower_pct: number;
+  return_upper_pct: number;
   target_date: string;
-  confidence_level: string;
-  sharpe_direction: string;
+  direction: string; // "bullish" | "bearish" | "neutral"
+  confidence: number; // 0.0-1.0
+  confidence_level: string; // "high" | "medium" | "low"
+  drivers: ForecastDriver[] | null;
+  implied_target_price: number | null;
+  forecast_signal: string | null;
 }
 
 export interface ForecastResponse {
   ticker: string;
+  current_price: number;
   horizons: ForecastHorizon[];
-  model_mape: number | null;
-  model_status: string;
+  model_type: string;
+  model_accuracy: ModelAccuracy | null;
+  model_status: string; // "active" | "training" | "pending" | "degraded"
 }
 
 export interface PortfolioForecastHorizon {
@@ -1256,10 +1276,10 @@ export interface ForecastEvaluation {
   forecast_date: string;
   target_date: string;
   horizon_days: number;
-  predicted_price: number;
-  predicted_lower: number;
-  predicted_upper: number;
-  actual_price: number | null;
+  expected_return_pct: number;
+  return_lower_pct: number;
+  return_upper_pct: number;
+  actual_return_pct: number | null;
   error_pct: number;
   direction_correct: boolean;
 }
