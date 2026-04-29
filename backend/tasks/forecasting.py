@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import uuid
 from datetime import datetime, timezone
 
+import pandas as pd
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +18,7 @@ from backend.config import settings
 from backend.models.backtest import BacktestRun
 from backend.models.forecast import ModelVersion
 from backend.services.backtesting import BacktestEngine
+from backend.services.feature_engineering import build_feature_dataframe
 from backend.services.ticker_state import mark_stages_updated
 from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
@@ -28,6 +31,240 @@ logger = logging.getLogger(__name__)
 _runner = PipelineRunner()
 
 MAX_NEW_MODELS_PER_NIGHT = 100
+
+
+async def _fetch_ticker_prices(ticker: str, db: AsyncSession) -> pd.Series:
+    """Fetch closing prices for a ticker from stock_prices.
+
+    Args:
+        ticker: Stock ticker symbol.
+        db: Async database session.
+
+    Returns:
+        Series of adj_close prices with UTC DatetimeIndex, ordered by time.
+
+    Raises:
+        ValueError: If no price data exists for the ticker.
+    """
+    from backend.models.price import StockPrice
+
+    result = await db.execute(
+        select(StockPrice.time, StockPrice.adj_close)
+        .where(StockPrice.ticker == ticker)
+        .order_by(StockPrice.time.asc())
+    )
+    rows = result.all()
+    if not rows:
+        raise ValueError(f"No price data found for ticker {ticker!r}")
+
+    df = pd.DataFrame(rows, columns=["time", "adj_close"])
+    df["time"] = pd.to_datetime(df["time"], utc=True)
+    df = df.set_index("time")
+    return df["adj_close"].astype(float)
+
+
+async def _fetch_vix_and_spy(db: AsyncSession) -> tuple[pd.Series, pd.Series]:
+    """Fetch VIX (yfinance) and SPY (DB first, then yfinance fallback) close series.
+
+    VIX is always sourced from yfinance since we don't store it in stock_prices.
+    SPY is fetched from the DB stock_prices table and falls back to yfinance if
+    not present.
+
+    Args:
+        db: Async database session.
+
+    Returns:
+        Tuple of (vix_closes, spy_closes), both with UTC DatetimeIndex.
+
+    Raises:
+        RuntimeError: If VIX data cannot be downloaded from yfinance.
+    """
+    import yfinance as yf
+
+    from backend.models.price import StockPrice
+
+    # ── VIX — always from yfinance ─────────────────────────────────────────
+    vix = await asyncio.to_thread(yf.download, "^VIX", period="1y", progress=False)
+    if vix.empty:
+        raise RuntimeError("Failed to download VIX data from yfinance")
+    if isinstance(vix.columns, pd.MultiIndex):
+        vix.columns = vix.columns.get_level_values(0)
+    vix_closes = vix["Close"].copy()
+    if vix_closes.index.tz is None:
+        vix_closes.index = vix_closes.index.tz_localize("UTC")
+
+    # ── SPY — DB first, yfinance fallback ─────────────────────────────────
+    spy_result = await db.execute(
+        select(StockPrice.time, StockPrice.adj_close)
+        .where(StockPrice.ticker == "SPY")
+        .order_by(StockPrice.time.asc())
+    )
+    spy_rows = spy_result.all()
+
+    if spy_rows:
+        spy_df = pd.DataFrame(spy_rows, columns=["time", "adj_close"])
+        spy_df["time"] = pd.to_datetime(spy_df["time"], utc=True)
+        spy_df = spy_df.set_index("time")
+        spy_closes = spy_df["adj_close"].astype(float)
+    else:
+        logger.warning("No SPY data in DB — falling back to yfinance")
+        spy_raw = await asyncio.to_thread(yf.download, "SPY", period="1y", progress=False)
+        if spy_raw.empty:
+            raise RuntimeError("Failed to download SPY data from yfinance")
+        if isinstance(spy_raw.columns, pd.MultiIndex):
+            spy_raw.columns = spy_raw.columns.get_level_values(0)
+        spy_closes = spy_raw["Close"].copy()
+        if spy_closes.index.tz is None:
+            spy_closes.index = spy_closes.index.tz_localize("UTC")
+
+    return vix_closes, spy_closes
+
+
+async def _upsert_daily_feature_row(
+    ticker: str, features_df: pd.DataFrame, db: AsyncSession
+) -> None:
+    """Upsert the latest (today's) feature row into historical_features.
+
+    Takes the last row from features_df — forward return targets are set to
+    None since future prices are unknown. Uses ON CONFLICT DO UPDATE on
+    (date, ticker) so re-runs are idempotent.
+
+    Args:
+        ticker: Stock ticker symbol.
+        features_df: DataFrame returned by build_feature_dataframe(); must be
+            non-empty.
+        db: Async database session.
+    """
+    from backend.models.historical_feature import HistoricalFeature
+
+    last = features_df.iloc[-1]
+    idx = features_df.index[-1]
+    dt = idx.date() if hasattr(idx, "date") else idx
+
+    values: dict = {
+        "date": dt,
+        "ticker": ticker,
+        "momentum_21d": round(float(last["momentum_21d"]), 6),
+        "momentum_63d": round(float(last["momentum_63d"]), 6),
+        "momentum_126d": round(float(last["momentum_126d"]), 6),
+        "rsi_value": round(float(last["rsi_value"]), 2),
+        "macd_histogram": round(float(last["macd_histogram"]), 6),
+        "sma_cross": int(last["sma_cross"]),
+        "bb_position": int(last["bb_position"]),
+        "volatility": round(float(last["volatility"]), 6),
+        "sharpe_ratio": round(float(last["sharpe_ratio"]), 6),
+        "vix_level": round(float(last["vix_level"]), 2),
+        "spy_momentum_21d": round(float(last["spy_momentum_21d"]), 6),
+        "stock_sentiment": None,
+        "sector_sentiment": None,
+        "macro_sentiment": None,
+        "sentiment_confidence": None,
+        "signals_aligned": None,
+        "convergence_label": None,
+        "forward_return_60d": None,
+        "forward_return_90d": None,
+    }
+
+    stmt = pg_insert(HistoricalFeature).values(values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["date", "ticker"],
+        set_={k: stmt.excluded[k] for k in values if k not in ("date", "ticker")},
+    )
+    await db.execute(stmt)
+    await db.commit()
+
+
+@tracked_task("daily_features", trigger="scheduled")
+async def _populate_daily_features_async(*, run_id: uuid.UUID) -> dict:
+    """Compute and upsert today's feature row for every referenced ticker.
+
+    Fetches VIX + SPY once, then for each ticker fetches close prices from
+    the DB, runs build_feature_dataframe() in a thread (CPU-bound), and
+    upserts only the latest row into historical_features. Tickers that fail
+    are logged and skipped — the task continues for the remaining universe.
+
+    Args:
+        run_id: Pipeline run UUID injected by @tracked_task.
+
+    Returns:
+        Dict with status ("ok" | "disabled" | "degraded"), populated count,
+        failed count, and list of failed tickers.
+    """
+    if not settings.DAILY_FEATURES_ENABLED:
+        logger.info("DAILY_FEATURES_ENABLED=False — skipping")
+        return {"status": "disabled"}
+
+    async with _db.async_session_factory() as db:
+        tickers = await get_all_referenced_tickers(db)
+        if not tickers:
+            logger.info("No tickers found — skipping daily feature population")
+            return {"status": "ok", "populated": 0, "failed": 0, "failed_tickers": []}
+
+        vix_closes, spy_closes = await _fetch_vix_and_spy(db)
+
+    populated = 0
+    failed: list[str] = []
+
+    for ticker in tickers:
+        try:
+            async with _db.async_session_factory() as db:
+                closes = await _fetch_ticker_prices(ticker, db)
+
+            if len(closes) < 250:
+                logger.debug(
+                    "Skipping %s: only %d price rows (need 250+ for SMA warmup)",
+                    ticker,
+                    len(closes),
+                )
+                failed.append(ticker)
+                continue
+
+            features_df = await asyncio.to_thread(
+                build_feature_dataframe,
+                closes,
+                vix_closes=vix_closes,
+                spy_closes=spy_closes,
+            )
+
+            if features_df.empty:
+                logger.warning("Empty feature DataFrame for %s — skipping", ticker)
+                failed.append(ticker)
+                continue
+
+            async with _db.async_session_factory() as db:
+                await _upsert_daily_feature_row(ticker, features_df, db)
+
+            populated += 1
+            logger.debug("Daily feature upserted for %s", ticker)
+
+        except Exception:
+            logger.exception("Daily feature population failed for %s", ticker)
+            failed.append(ticker)
+
+    status = "degraded" if failed else "ok"
+    logger.info(
+        "Daily feature population complete: populated=%d failed=%d status=%s",
+        populated,
+        len(failed),
+        status,
+    )
+    return {
+        "status": status,
+        "populated": populated,
+        "failed": len(failed),
+        "failed_tickers": failed,
+    }
+
+
+@celery_app.task(name="backend.tasks.forecasting.populate_daily_features_task")
+def populate_daily_features_task() -> dict:
+    """Nightly task: compute today's feature row for every ticker (10:30 PM ET).
+
+    Returns:
+        Dict with status, populated count, failed count, and failed_tickers list.
+    """
+    logger.info("Starting daily feature population task")
+    return safe_asyncio_run(_populate_daily_features_async())  # type: ignore[arg-type]
 
 
 async def _get_price_data_counts(tickers: list[str], db: AsyncSession) -> dict[str, int]:

@@ -94,6 +94,10 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.forecasting.model_retrain_all_task",
         "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET
     },
+    "daily-feature-population": {
+        "task": "backend.tasks.forecasting.populate_daily_features_task",
+        "schedule": crontab(hour=22, minute=30),  # 10:30 PM ET — after nightly pipeline
+    },
     # ── News sentiment pipeline (4x daily during market hours) ──
     "news-ingest": {
         "task": "backend.tasks.news_sentiment.news_ingest_task",
