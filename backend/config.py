@@ -142,6 +142,15 @@ class Settings(BaseSettings):
     # --- Feature Flags (rollback kill-switches for Spec B pipeline stages) ---
     CONVERGENCE_SNAPSHOT_ENABLED: bool = True
     BACKTEST_ENABLED: bool = True
+    # --- Daily Feature Population ---
+    DAILY_FEATURES_ENABLED: bool = True
+    # --- Champion/Challenger ---
+    CHAMPION_CHALLENGER_ENABLED: bool = True
+    CHAMPION_DIRECTION_THRESHOLD: float = 0.01  # challenger must beat by ≥1%
+    CHAMPION_CI_THRESHOLD: float = 0.05  # challenger CI width must improve by ≥5%
+    # --- Feature Drift ---
+    FEATURE_DRIFT_ENABLED: bool = True
+    FEATURE_DRIFT_SIGMA_THRESHOLD: float = 2.0  # flag if mean shifts >2σ
     # --- Forecast Engine ---
     DEFAULT_FORECAST_HORIZONS: list[int] = [60, 90]
     FORECAST_ENSEMBLE_WEIGHTS: dict = {"lightgbm": 0.5, "xgboost": 0.5}
