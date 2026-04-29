@@ -292,6 +292,60 @@ async def _get_price_data_counts(tickers: list[str], db: AsyncSession) -> dict[s
     return {row.ticker: row.cnt for row in result.all()}
 
 
+def _should_promote_challenger(
+    champion_metrics: dict | None,
+    challenger_metrics: dict,
+) -> dict:
+    """Decide whether a challenger model should replace the current champion.
+
+    Promotion criteria (spec review O1):
+    - Direction accuracy improves by ≥ CHAMPION_DIRECTION_THRESHOLD (default 1%)
+    - OR CI containment improves by ≥ CHAMPION_CI_THRESHOLD (default 5%)
+    - If no existing champion, always promote.
+    - If CHAMPION_CHALLENGER_ENABLED=False, always promote.
+
+    Args:
+        champion_metrics: Current champion's metrics dict, or None if no champion.
+        challenger_metrics: New challenger's metrics dict from training.
+
+    Returns:
+        Dict with "promote" (bool) and "reason" (str).
+    """
+    if not settings.CHAMPION_CHALLENGER_ENABLED:
+        return {"promote": True, "reason": "champion/challenger disabled"}
+
+    if champion_metrics is None:
+        return {"promote": True, "reason": "no existing champion"}
+
+    champ_dir = champion_metrics.get("direction_accuracy", 0.0)
+    chall_dir = challenger_metrics.get("direction_accuracy", 0.0)
+    dir_delta = chall_dir - champ_dir
+
+    champ_ci = champion_metrics.get("ci_containment", 0.0)
+    chall_ci = challenger_metrics.get("ci_containment", 0.0)
+    ci_delta = chall_ci - champ_ci
+
+    improved_metrics: list[str] = []
+    dir_threshold = settings.CHAMPION_DIRECTION_THRESHOLD
+    ci_threshold = settings.CHAMPION_CI_THRESHOLD
+
+    if dir_delta >= dir_threshold:
+        improved_metrics.append(f"direction_accuracy improved {dir_delta:+.4f} (≥{dir_threshold})")
+    if ci_delta >= ci_threshold:
+        improved_metrics.append(f"ci_containment improved {ci_delta:+.4f} (≥{ci_threshold})")
+
+    if improved_metrics:
+        return {"promote": True, "reason": "; ".join(improved_metrics)}
+
+    return {
+        "promote": False,
+        "reason": (
+            f"direction_accuracy delta={dir_delta:+.4f} (threshold={dir_threshold}), "
+            f"ci_containment delta={ci_delta:+.4f} (threshold={ci_threshold})"
+        ),
+    }
+
+
 @tracked_task("model_retrain", trigger="scheduled")
 async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
     """Retrain forecast models for all tickers and generate forecasts.
@@ -381,6 +435,41 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
 
         for horizon, (artifact_bytes, metrics) in trained_models.items():
             model_type = f"lightgbm_{horizon}d"
+
+            # ── Champion/challenger gate ───────────────────────────────────
+            champ_result = await db.execute(
+                select(ModelVersion).where(
+                    ModelVersion.model_type == model_type,
+                    ModelVersion.is_active.is_(True),
+                )
+            )
+            champion = champ_result.scalar_one_or_none()
+            champion_metrics = champion.metrics if champion else None
+
+            promotion = _should_promote_challenger(champion_metrics, metrics)
+
+            if not promotion["promote"]:
+                logger.info(
+                    "Champion/challenger: keeping champion for %s — %s",
+                    model_type,
+                    promotion["reason"],
+                )
+                if champion:
+                    updated = dict(champion.metrics or {})
+                    updated["last_challenger_comparison"] = {
+                        "challenger_metrics": metrics,
+                        "decision": "kept_champion",
+                        "reason": promotion["reason"],
+                        "compared_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    champion.metrics = updated
+                continue
+
+            logger.info(
+                "Champion/challenger: promoting challenger for %s — %s",
+                model_type,
+                promotion["reason"],
+            )
 
             # Bump version number
             max_ver_result = await db.execute(
