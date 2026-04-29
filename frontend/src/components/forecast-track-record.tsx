@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState } from "@/components/error-state";
 import { ChartTooltip } from "@/components/chart-tooltip";
 import { useChartColors, CHART_STYLE } from "@/lib/chart-theme";
-import { formatCurrency, formatChartDate } from "@/lib/format";
+import { formatChartDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 interface ForecastTrackRecordProps {
@@ -107,11 +107,11 @@ export function ForecastTrackRecord({ ticker, enabled = true }: ForecastTrackRec
 
   const chartData = evaluations.map((e) => ({
     date: e.target_date,
-    predicted: e.predicted_price,
-    actual: e.actual_price,
-    lower: e.predicted_lower,
-    upper: e.predicted_upper,
-    bandWidth: e.predicted_upper - e.predicted_lower,
+    predicted: e.expected_return_pct,
+    actual: e.actual_return_pct,
+    lower: e.return_lower_pct,
+    upper: e.return_upper_pct,
+    bandWidth: e.return_upper_pct - e.return_lower_pct,
   }));
 
   return (
@@ -131,9 +131,9 @@ export function ForecastTrackRecord({ ticker, enabled = true }: ForecastTrackRec
           />
           <YAxis
             domain={["auto", "auto"]}
-            tickFormatter={(v: number) => `$${v.toFixed(0)}`}
+            tickFormatter={(v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
             {...CHART_STYLE.axis}
-            width={50}
+            width={58}
           />
           <Tooltip
             content={({ active, payload }) => {
@@ -144,9 +144,9 @@ export function ForecastTrackRecord({ ticker, enabled = true }: ForecastTrackRec
                   active={active}
                   label={d.date}
                   items={[
-                    { name: "Predicted", value: formatCurrency(d.predicted), color: colors.chart1 },
-                    { name: "Actual", value: formatCurrency(d.actual), color: colors.price },
-                    { name: "CI Band", value: `${formatCurrency(d.lower)} – ${formatCurrency(d.upper)}`, color: "#6b7280" },
+                    { name: "Predicted", value: `${d.predicted > 0 ? "+" : ""}${d.predicted.toFixed(1)}%`, color: colors.chart1 },
+                    { name: "Actual", value: d.actual != null ? `${d.actual > 0 ? "+" : ""}${d.actual.toFixed(1)}%` : "Pending", color: colors.price },
+                    { name: "CI Band", value: `${d.lower.toFixed(1)}% to ${d.upper.toFixed(1)}%`, color: "#6b7280" },
                   ]}
                 />
               );

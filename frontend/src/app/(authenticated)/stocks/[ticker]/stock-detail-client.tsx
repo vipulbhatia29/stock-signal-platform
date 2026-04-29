@@ -208,8 +208,9 @@ export function StockDetailClient({ ticker }: StockDetailClientProps) {
         <ForecastCard
           horizons={forecast?.horizons}
           isLoading={forecastLoading}
-          currentPrice={undefined}
-          modelMape={forecast?.model_mape}
+          currentPrice={forecast?.current_price}
+          modelAccuracy={forecast?.model_accuracy}
+          modelStatus={forecast?.model_status}
         />
       </section>
 

@@ -109,8 +109,8 @@ export function BulletinZone() {
 
 // ── Column header helper ──────────────────────────────────────────────────────
 
-function TH({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <TableHead className={cn("text-[9px] uppercase tracking-wider whitespace-nowrap", className)}>{children}</TableHead>;
+function TH({ children, className, title }: { children: React.ReactNode; className?: string; title?: string }) {
+  return <TableHead className={cn("text-[9px] uppercase tracking-wider whitespace-nowrap", className)} title={title}>{children}</TableHead>;
 }
 
 // ── Watchlist Table ───────────────────────────────────────────────────────────
@@ -149,7 +149,7 @@ function WatchlistTable({
             <TH>SMA</TH>
             <TH className="text-right">Sharpe</TH>
             <TH className="text-right">Vol</TH>
-            <TH className="text-right">Fcst 90D</TH>
+            <TH className="text-right" title="Expected return over the next 90 days based on signal analysis">90D Outlook</TH>
             <TH className="text-center">Action</TH>
           </TableRow>
         </TableHeader>
@@ -200,7 +200,19 @@ function WatchlistTable({
                   {sig?.volatility != null ? `${(sig.volatility * 100).toFixed(1)}%` : "—"}
                 </TableCell>
                 <TableCell className="py-1.5 text-right font-mono text-xs">
-                  {fc90 ? `$${fc90.predicted_price.toFixed(0)}` : "—"}
+                  {fc90 ? (
+                    <span className={cn(
+                      fc90.expected_return_pct > 0 && "text-gain",
+                      fc90.expected_return_pct < 0 && "text-loss",
+                      !(fc90.expected_return_pct > 0) && !(fc90.expected_return_pct < 0) && "text-muted-foreground",
+                      fc90.confidence_level === "low" && "opacity-50",
+                    )}
+                      title={fc90.confidence_level === "low" ? "Low confidence forecast" : undefined}
+                    >
+                      {fc90.expected_return_pct > 0 ? "+" : ""}
+                      {fc90.expected_return_pct.toFixed(1)}%
+                    </span>
+                  ) : "—"}
                 </TableCell>
                 <TableCell className="py-1.5 text-center">
                   {item.recommendation ? <ActionBadge action={item.recommendation} /> : "—"}
@@ -249,7 +261,7 @@ function PortfolioTable({
             <TH className="text-right">P&L</TH>
             <TH className="text-right">P&L %</TH>
             <TH className="text-center">Score</TH>
-            <TH className="text-right">Fcst 90D</TH>
+            <TH className="text-right" title="Expected return over the next 90 days based on signal analysis">90D Outlook</TH>
             <TH className="text-center">Action</TH>
           </TableRow>
         </TableHeader>
@@ -292,7 +304,19 @@ function PortfolioTable({
                   <ScoreBadge score={w?.composite_score ?? null} size="xs" />
                 </TableCell>
                 <TableCell className="py-1.5 text-right font-mono text-xs">
-                  {fc90 ? `$${fc90.predicted_price.toFixed(0)}` : "—"}
+                  {fc90 ? (
+                    <span className={cn(
+                      fc90.expected_return_pct > 0 && "text-gain",
+                      fc90.expected_return_pct < 0 && "text-loss",
+                      !(fc90.expected_return_pct > 0) && !(fc90.expected_return_pct < 0) && "text-muted-foreground",
+                      fc90.confidence_level === "low" && "opacity-50",
+                    )}
+                      title={fc90.confidence_level === "low" ? "Low confidence forecast" : undefined}
+                    >
+                      {fc90.expected_return_pct > 0 ? "+" : ""}
+                      {fc90.expected_return_pct.toFixed(1)}%
+                    </span>
+                  ) : "—"}
                 </TableCell>
                 <TableCell className="py-1.5 text-center">
                   {w?.recommendation ? <ActionBadge action={w.recommendation} /> : "—"}
