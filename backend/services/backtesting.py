@@ -244,9 +244,9 @@ class BacktestEngine:
             logger.warning("run_walk_forward: no rows with %s for any ticker", target_col)
             return self._empty_metrics()
 
-        # Get date range for the target ticker
-        ticker_dates = sorted(features_df.loc[features_df["ticker"] == ticker, "date"].unique())
-        if not ticker_dates:
+        # Verify target ticker exists in the data
+        ticker_mask = features_df["ticker"] == ticker
+        if not ticker_mask.any():
             logger.warning("run_walk_forward: ticker %s not found in historical features", ticker)
             return self._empty_metrics()
 
@@ -343,9 +343,15 @@ class BacktestEngine:
 
             # pred returns percentages; actual_return is log return
             # Convert predicted return from percentage to log return for comparison
-            pred_return = math.log(1.0 + pred["expected_return_pct"] / 100.0)
-            pred_lower = math.log(1.0 + pred["return_lower_pct"] / 100.0)
-            pred_upper = math.log(1.0 + pred["return_upper_pct"] / 100.0)
+            # Clamp predicted returns to prevent math.log(<=0) — a -100%+
+            # return is economically impossible for long equity positions.
+            pred_pct = max(pred["expected_return_pct"], -99.9)
+            lower_pct = max(pred["return_lower_pct"], -99.9)
+            upper_pct = max(pred["return_upper_pct"], -99.9)
+
+            pred_return = math.log(1.0 + pred_pct / 100.0)
+            pred_lower = math.log(1.0 + lower_pct / 100.0)
+            pred_upper = math.log(1.0 + upper_pct / 100.0)
 
             actuals.append(float(actual_return))
             predicted.append(pred_return)
