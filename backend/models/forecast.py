@@ -20,7 +20,7 @@ from backend.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
 class ModelVersion(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Tracks every trained Prophet model for versioning, rollback, and accuracy."""
+    """Tracks every trained forecast model for versioning, rollback, and accuracy."""
 
     __tablename__ = "model_versions"
 
@@ -62,12 +62,17 @@ class ForecastResult(Base):
         ForeignKey("model_versions.id", ondelete="CASCADE"),
         nullable=False,
     )
-    predicted_price: Mapped[float] = mapped_column(Float, nullable=False)
-    predicted_lower: Mapped[float] = mapped_column(Float, nullable=False)
-    predicted_upper: Mapped[float] = mapped_column(Float, nullable=False)
+    expected_return_pct: Mapped[float] = mapped_column(Float, nullable=False)
+    return_lower_pct: Mapped[float] = mapped_column(Float, nullable=False)
+    return_upper_pct: Mapped[float] = mapped_column(Float, nullable=False)
     target_date: Mapped[date] = mapped_column(Date, nullable=False)
-    actual_price: Mapped[float | None] = mapped_column(Float, nullable=True)
+    actual_return_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
     error_pct: Mapped[float | None] = mapped_column(Float, nullable=True)
+    confidence_score: Mapped[float] = mapped_column(Float, nullable=False)
+    direction: Mapped[str] = mapped_column(String(10), nullable=False)
+    drivers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    base_price: Mapped[float] = mapped_column(Float, nullable=False)
+    forecast_signal: Mapped[str | None] = mapped_column(String(30), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
