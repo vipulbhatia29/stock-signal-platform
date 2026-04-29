@@ -264,8 +264,8 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
                 try:
                     h = int(parts[-1][:-1])
                     model_by_horizon[h] = mv
-                except ValueError:
-                    pass
+                except ValueError:  # nosemgrep: semgrep.obs-warn-silent-except
+                    logger.debug("Unparseable model_type horizon: %s", mv.model_type)
 
         if not model_by_horizon:
             logger.info("No models with parseable horizons — skipping")

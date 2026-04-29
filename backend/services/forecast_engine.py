@@ -135,7 +135,7 @@ def _features_to_array(features: dict) -> pd.DataFrame:
             row.append(float("nan"))
         else:
             row.append(float(val))
-    return pd.DataFrame([row], columns=FEATURE_NAMES)
+    return pd.DataFrame([row], columns=list(FEATURE_NAMES))  # type: ignore[arg-type]  # pandas stubs
 
 
 def _prepare_feature_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -236,7 +236,7 @@ class ForecastEngine:
         if len(clean) < 10:
             raise ValueError(f"Insufficient training rows after purging NaN targets: {len(clean)}")
 
-        X = _prepare_feature_df(clean[FEATURE_NAMES])
+        X = _prepare_feature_df(clean[list(FEATURE_NAMES)])  # type: ignore[arg-type]  # pandas indexing returns DataFrame
         y = clean[target_col].astype(float).values
 
         w_lgb = (weights or {}).get("lgb", 0.5)
@@ -281,7 +281,7 @@ class ForecastEngine:
             oof_preds_q01.append(fold_preds_q01)
             oof_preds_q50.append(fold_preds_q50)
             oof_preds_q09.append(fold_preds_q09)
-            oof_actuals.append(val_y)
+            oof_actuals.append(val_y)  # type: ignore[arg-type]  # numpy array append
 
         # Compute OOF metrics
         if oof_actuals:

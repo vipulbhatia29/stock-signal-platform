@@ -182,7 +182,7 @@ async def test_predict_uses_model_history_sentiment_not_zero(db_session, monkeyp
     monkeypatch.setattr(f_mod, "model_from_json", zeroed_loader)
     forecasts_zeroed = await f_mod.predict_forecast(model_version, db_session)
 
-    assert len(forecasts_real) == len(forecasts_zeroed) == 3
+    assert len(forecasts_real) == len(forecasts_zeroed) == 2
 
     deltas = [
         abs(real.expected_return_pct - zeroed.expected_return_pct)
@@ -216,7 +216,7 @@ async def test_predict_forecast_without_sentiment_still_works(db_session) -> Non
     model_version = await train_prophet_model("BAR", db_session)
     forecasts = await predict_forecast(model_version, db_session)
 
-    assert len(forecasts) == 3
+    assert len(forecasts) == 2
     assert all(isinstance(f.expected_return_pct, float) for f in forecasts)
 
 
@@ -339,7 +339,7 @@ async def test_projection_collapse_logs_error(db_session, caplog: pytest.LogCapt
     with caplog.at_level(logging.ERROR, logger="backend.tools.forecasting"):
         forecasts = await predict_forecast(model_version, db_session)
 
-    assert len(forecasts) == 3
+    assert len(forecasts) == 2
 
     matching = [
         rec

@@ -70,9 +70,7 @@ async def test_nightly_sweep_respects_cap_at_100() -> None:
     mock_price_result.all.return_value = []  # no prices
 
     mock_db = AsyncMock()
-    mock_db.execute = AsyncMock(
-        side_effect=[mock_mv_result, mock_feat_result, mock_price_result]
-    )
+    mock_db.execute = AsyncMock(side_effect=[mock_mv_result, mock_feat_result, mock_price_result])
     mock_db.add = MagicMock()
     mock_db.commit = AsyncMock()
 
