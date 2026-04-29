@@ -43,6 +43,10 @@ dependencies = [
     "quantstats>=0.0.81",
     "pyportfolioopt>=1.6.0",
     "resend>=2.27.0",
+    "lightgbm>=4.6.0",
+    "xgboost>=3.2.0",
+    "shap>=0.51.0",
+    "joblib>=1.5.3",
 ]
 
 [dependency-groups]

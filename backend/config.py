@@ -142,7 +142,9 @@ class Settings(BaseSettings):
     # --- Feature Flags (rollback kill-switches for Spec B pipeline stages) ---
     CONVERGENCE_SNAPSHOT_ENABLED: bool = True
     BACKTEST_ENABLED: bool = True
-    PROPHET_REAL_SENTIMENT_ENABLED: bool = True
+    # --- Forecast Engine ---
+    DEFAULT_FORECAST_HORIZONS: list[int] = [60, 90]
+    FORECAST_ENSEMBLE_WEIGHTS: dict = {"lightgbm": 0.5, "xgboost": 0.5}
     # Spec C.6 — auto-ingest on watchlist add (kill-switch: set False to revert to 404 behaviour)
     WATCHLIST_AUTO_INGEST: bool = True
     # NEWS_SCORING_MAX_CONCURRENCY controls concurrency (added in B4.2, see above)

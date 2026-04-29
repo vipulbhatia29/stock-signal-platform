@@ -45,7 +45,7 @@ PROPHET_CONFIG = {
 }
 
 # Default forecast horizons (spec §4.3)
-DEFAULT_HORIZONS = [90, 180, 270]
+DEFAULT_HORIZONS = [60, 90]
 
 # Minimum training data points
 MIN_DATA_POINTS = 200

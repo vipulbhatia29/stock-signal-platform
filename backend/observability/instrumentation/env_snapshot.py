@@ -34,7 +34,7 @@ def collect_env_snapshot() -> dict[str, Any] | None:
         "flags": {
             "CONVERGENCE_SNAPSHOT_ENABLED": settings.CONVERGENCE_SNAPSHOT_ENABLED,
             "BACKTEST_ENABLED": settings.BACKTEST_ENABLED,
-            "PROPHET_REAL_SENTIMENT_ENABLED": settings.PROPHET_REAL_SENTIMENT_ENABLED,
+            "DEFAULT_FORECAST_HORIZONS": settings.DEFAULT_FORECAST_HORIZONS,
             "WATCHLIST_AUTO_INGEST": settings.WATCHLIST_AUTO_INGEST,
             "OBS_LEGACY_DIRECT_WRITES": settings.OBS_LEGACY_DIRECT_WRITES,
         },
