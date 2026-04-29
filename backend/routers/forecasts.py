@@ -18,12 +18,14 @@ from backend.models.price import StockPrice
 from backend.models.stock import Stock
 from backend.models.user import User
 from backend.schemas.forecasts import (
+    ForecastDriver,
     ForecastEvaluation,
     ForecastHorizon,
     ForecastResponse,
     ForecastTrackRecordResponse,
     ForecastTrackRecordSummary,
     HorizonBreakdownResponse,
+    ModelAccuracy,
     PortfolioForecastHorizon,
     PortfolioForecastResponse,
     ScorecardResponse,
@@ -150,9 +152,9 @@ async def get_portfolio_forecast(
                     "lower_sum": 0.0,
                     "upper_sum": 0.0,
                 }
-            expected_return = (fc.predicted_price - current_price) / current_price
-            lower_return = (fc.predicted_lower - current_price) / current_price
-            upper_return = (fc.predicted_upper - current_price) / current_price
+            expected_return = fc.expected_return_pct / 100.0
+            lower_return = fc.return_lower_pct / 100.0
+            upper_return = fc.return_upper_pct / 100.0
 
             horizon_agg[fc.horizon_days]["return_sum"] += weight * expected_return
             horizon_agg[fc.horizon_days]["lower_sum"] += weight * lower_return
@@ -292,9 +294,9 @@ async def get_forecast_track_record(
             ),
         )
 
-    # Batch-fetch prices at forecast dates for direction computation
+    # Keep price_map available for future use; direction now uses return fields directly
     forecast_dates = list({r.forecast_date for r in rows})
-    price_map = await _fetch_forecast_date_prices(ticker_upper, forecast_dates, session)
+    _ = await _fetch_forecast_date_prices(ticker_upper, forecast_dates, session)
 
     evaluations: list[ForecastEvaluation] = []
     direction_correct_count = 0
@@ -302,19 +304,15 @@ async def get_forecast_track_record(
     total_error = 0.0
 
     for row in rows:
-        forecast_date_price = price_map.get(row.forecast_date)
-        if forecast_date_price is not None and row.actual_price is not None:
-            direction_correct = bool(
-                (row.predicted_price - forecast_date_price)
-                * (row.actual_price - forecast_date_price)
-                > 0
-            )
-        else:
-            direction_correct = False
+        direction_correct = bool(
+            row.actual_return_pct is not None
+            and row.expected_return_pct != 0
+            and (row.expected_return_pct > 0) == (row.actual_return_pct > 0)
+        )
 
         ci_hit = (
-            row.actual_price is not None
-            and row.predicted_lower <= row.actual_price <= row.predicted_upper
+            row.actual_return_pct is not None
+            and row.return_lower_pct <= row.actual_return_pct <= row.return_upper_pct
         )
         if ci_hit:
             ci_hits += 1
@@ -327,10 +325,10 @@ async def get_forecast_track_record(
                 forecast_date=row.forecast_date,
                 target_date=row.target_date,
                 horizon_days=row.horizon_days,
-                predicted_price=row.predicted_price,
-                predicted_lower=row.predicted_lower,
-                predicted_upper=row.predicted_upper,
-                actual_price=row.actual_price,
+                expected_return_pct=row.expected_return_pct,
+                return_lower_pct=row.return_lower_pct,
+                return_upper_pct=row.return_upper_pct,
+                actual_return_pct=row.actual_return_pct,
                 error_pct=abs(row.error_pct) if row.error_pct else 0.0,
                 direction_correct=direction_correct,
             )
@@ -420,33 +418,67 @@ async def get_ticker_forecast(
     )
     model = model_result.scalar_one_or_none()
 
-    # Get Sharpe direction
-    from backend.tools.forecasting import compute_sharpe_direction
+    from backend.services.forecast_engine import ForecastEngine
 
-    sharpe_dir = await compute_sharpe_direction(ticker, db)
+    # Fetch current price for implied_target_price calculation
+    price_result = await db.execute(
+        select(StockPrice.close)
+        .where(StockPrice.ticker == ticker)
+        .order_by(StockPrice.time.desc())
+        .limit(1)
+    )
+    current_price_scalar = price_result.scalar_one_or_none()
+    if current_price_scalar is None:
+        current_price = 0.0
+    else:
+        current_price = float(current_price_scalar)
 
     horizons = []
     for fc in forecasts:
-        mape = (model.metrics or {}).get("rolling_mape") if model else None
-        confidence = _mape_to_confidence(mape)
+        drivers = None
+        if fc.drivers:
+            drivers = [ForecastDriver(**d) for d in fc.drivers]
+
+        implied_price = None
+        if current_price > 0:
+            implied_price = round(current_price * (1 + fc.expected_return_pct / 100), 2)
+
         horizons.append(
             ForecastHorizon(
                 horizon_days=fc.horizon_days,
-                predicted_price=fc.predicted_price,
-                predicted_lower=fc.predicted_lower,
-                predicted_upper=fc.predicted_upper,
+                expected_return_pct=fc.expected_return_pct,
+                return_lower_pct=fc.return_lower_pct,
+                return_upper_pct=fc.return_upper_pct,
                 target_date=fc.target_date,
-                confidence_level=confidence,
-                sharpe_direction=sharpe_dir,
+                direction=fc.direction,
+                confidence=fc.confidence_score,
+                confidence_level=ForecastEngine.confidence_level(fc.confidence_score),
+                drivers=drivers,
+                implied_target_price=implied_price,
+                forecast_signal=fc.forecast_signal,
             )
         )
 
     horizons.sort(key=lambda h: h.horizon_days)
 
+    # Build model_accuracy from model metrics
+    model_accuracy = None
+    if model and model.metrics:
+        metrics = model.metrics
+        if "direction_accuracy" in metrics:
+            model_accuracy = ModelAccuracy(
+                direction_hit_rate=metrics.get("direction_accuracy", 0.0),
+                avg_error_pct=metrics.get("mean_absolute_error", 0.0),
+                ci_containment_rate=metrics.get("ci_containment", 0.0),
+                evaluated_count=metrics.get("evaluated_count", 0),
+            )
+
     response = ForecastResponse(
         ticker=ticker,
+        current_price=current_price,
         horizons=horizons,
-        model_mape=(model.metrics or {}).get("rolling_mape") if model else None,
+        model_type=model.model_type if model else "none",
+        model_accuracy=model_accuracy,
         model_status=model.status if model else "none",
     )
     if cache:
@@ -507,14 +539,23 @@ async def get_sector_forecast(
         )
         forecasts = fc_result.scalars().all()
 
+        from backend.services.forecast_engine import ForecastEngine
+
         for fc in forecasts:
+            drivers = None
+            if fc.drivers:
+                drivers = [ForecastDriver(**d) for d in fc.drivers]
             horizons.append(
                 ForecastHorizon(
                     horizon_days=fc.horizon_days,
-                    predicted_price=fc.predicted_price,
-                    predicted_lower=fc.predicted_lower,
-                    predicted_upper=fc.predicted_upper,
+                    expected_return_pct=fc.expected_return_pct,
+                    return_lower_pct=fc.return_lower_pct,
+                    return_upper_pct=fc.return_upper_pct,
                     target_date=fc.target_date,
+                    direction=fc.direction,
+                    confidence=fc.confidence_score,
+                    confidence_level=ForecastEngine.confidence_level(fc.confidence_score),
+                    drivers=drivers,
                 )
             )
         horizons.sort(key=lambda h: h.horizon_days)
@@ -599,21 +640,3 @@ async def get_scorecard(
             for h in scorecard.horizons
         ],
     )
-
-
-def _mape_to_confidence(mape: float | None) -> str:
-    """Convert MAPE to a confidence level string.
-
-    Args:
-        mape: Mean Absolute Percentage Error.
-
-    Returns:
-        "high", "medium", or "low".
-    """
-    if mape is None:
-        return "medium"
-    if mape < 0.10:
-        return "high"
-    if mape < 0.20:
-        return "medium"
-    return "low"
