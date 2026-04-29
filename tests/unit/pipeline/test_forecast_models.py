@@ -84,18 +84,23 @@ class TestForecastResult:
             ticker="AAPL",
             horizon_days=90,
             model_version_id=uuid.uuid4(),
-            predicted_price=195.50,
-            predicted_lower=180.00,
-            predicted_upper=210.00,
+            expected_return_pct=3.33,
+            return_lower_pct=-6.67,
+            return_upper_pct=13.33,
+            confidence_score=0.65,
+            direction="bullish",
+            base_price=150.0,
+            drivers=None,
+            forecast_signal=None,
             target_date=date(2026, 6, 20),
-            actual_price=None,
+            actual_return_pct=None,
             error_pct=None,
             created_at=datetime.now(timezone.utc),
         )
         assert fr.ticker == "AAPL"
         assert fr.horizon_days == 90
-        assert fr.predicted_price == 195.50
-        assert fr.actual_price is None
+        assert fr.expected_return_pct == 3.33
+        assert fr.actual_return_pct is None
 
     def test_repr(self) -> None:
         """ForecastResult __repr__ should include ticker, date, and horizon."""
@@ -104,9 +109,12 @@ class TestForecastResult:
             ticker="TSLA",
             horizon_days=180,
             model_version_id=uuid.uuid4(),
-            predicted_price=300.0,
-            predicted_lower=250.0,
-            predicted_upper=350.0,
+            expected_return_pct=5.0,
+            return_lower_pct=-3.33,
+            return_upper_pct=13.33,
+            confidence_score=0.70,
+            direction="bullish",
+            base_price=200.0,
             target_date=date(2026, 9, 18),
             created_at=datetime.now(timezone.utc),
         )

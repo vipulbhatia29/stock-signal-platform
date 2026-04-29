@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 
-from backend.routers.forecasts import SECTOR_ETF_MAP, _mape_to_confidence
+from backend.constants import SECTOR_ETF_MAP
 from backend.schemas.forecasts import (
     ForecastHorizon,
     ForecastResponse,
@@ -13,30 +13,31 @@ from backend.schemas.forecasts import (
     ScorecardResponse,
     SectorForecastResponse,
 )
+from backend.services.forecast_engine import ForecastEngine
 
 # ---------------------------------------------------------------------------
-# MAPE to confidence helper
+# Confidence level helper
 # ---------------------------------------------------------------------------
 
 
-class TestMapeToConfidence:
-    """Tests for _mape_to_confidence."""
+class TestConfidenceLevel:
+    """Tests for ForecastEngine.confidence_level."""
 
     def test_high_confidence(self) -> None:
-        """MAPE < 10% should be high confidence."""
-        assert _mape_to_confidence(0.05) == "high"
+        """Score >= 0.70 should be high confidence."""
+        assert ForecastEngine.confidence_level(0.75) == "high"
 
     def test_medium_confidence(self) -> None:
-        """MAPE 10-20% should be medium confidence."""
-        assert _mape_to_confidence(0.15) == "medium"
+        """Score 0.45-0.70 should be medium confidence."""
+        assert ForecastEngine.confidence_level(0.55) == "medium"
 
     def test_low_confidence(self) -> None:
-        """MAPE > 20% should be low confidence."""
-        assert _mape_to_confidence(0.25) == "low"
+        """Score < 0.45 should be low confidence."""
+        assert ForecastEngine.confidence_level(0.30) == "low"
 
-    def test_none_defaults_medium(self) -> None:
-        """None MAPE should default to medium confidence."""
-        assert _mape_to_confidence(None) == "medium"
+    def test_boundary_high(self) -> None:
+        """Score exactly 0.70 should be high confidence."""
+        assert ForecastEngine.confidence_level(0.70) == "high"
 
 
 # ---------------------------------------------------------------------------
@@ -72,29 +73,34 @@ class TestForecastSchemas:
         """ForecastHorizon should accept all required fields."""
         h = ForecastHorizon(
             horizon_days=90,
-            predicted_price=200.0,
-            predicted_lower=180.0,
-            predicted_upper=220.0,
+            expected_return_pct=3.33,
+            return_lower_pct=-6.67,
+            return_upper_pct=13.33,
             target_date=date(2026, 6, 20),
+            direction="bullish",
+            confidence=0.65,
         )
         assert h.horizon_days == 90
         assert h.confidence_level == "medium"
-        assert h.sharpe_direction == "flat"
+        assert h.direction == "bullish"
 
     def test_forecast_response_schema(self) -> None:
         """ForecastResponse should serialize correctly."""
         resp = ForecastResponse(
             ticker="AAPL",
+            current_price=150.0,
             horizons=[
                 ForecastHorizon(
                     horizon_days=90,
-                    predicted_price=200.0,
-                    predicted_lower=180.0,
-                    predicted_upper=220.0,
+                    expected_return_pct=3.33,
+                    return_lower_pct=-6.67,
+                    return_upper_pct=13.33,
                     target_date=date(2026, 6, 20),
+                    direction="bullish",
+                    confidence=0.65,
                 )
             ],
-            model_mape=0.08,
+            model_accuracy=None,
             model_status="active",
         )
         assert resp.ticker == "AAPL"

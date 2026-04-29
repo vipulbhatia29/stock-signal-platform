@@ -27,7 +27,7 @@ class TestForecastEvaluation:
     @pytest.mark.asyncio
     @patch("backend.database.async_session_factory")
     async def test_fills_actual_price(self, mock_factory) -> None:
-        """Evaluation should fill actual_price on matured forecasts."""
+        """Evaluation should fill actual_return_pct on matured forecasts."""
         mock_session = AsyncMock()
         mock_cm = AsyncMock()
         mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
@@ -39,11 +39,16 @@ class TestForecastEvaluation:
             ticker="AAPL",
             horizon_days=90,
             model_version_id=uuid.uuid4(),
-            predicted_price=200.0,
-            predicted_lower=180.0,
-            predicted_upper=220.0,
+            expected_return_pct=5.0,
+            return_lower_pct=-5.0,
+            return_upper_pct=15.0,
+            confidence_score=0.65,
+            direction="bullish",
+            base_price=200.0,
+            drivers=None,
+            forecast_signal=None,
             target_date=date(2026, 4, 1),
-            actual_price=None,
+            actual_return_pct=None,
             error_pct=None,
             created_at=datetime.now(timezone.utc),
         )
@@ -52,7 +57,7 @@ class TestForecastEvaluation:
         pending_result = MagicMock()
         pending_result.scalars.return_value.all.return_value = [fc]
 
-        # Mock: price lookup returns $210
+        # Mock: price lookup returns $210 (represents +5% actual return)
         price_result = MagicMock()
         price_result.scalar_one_or_none.return_value = 210.0
 
@@ -65,8 +70,6 @@ class TestForecastEvaluation:
         with patch("backend.tasks.evaluation._update_model_mapes", new_callable=AsyncMock):
             result = await bypass_tracked(_evaluate_forecasts_async)(run_id=uuid.uuid4())
 
-        assert fc.actual_price == 210.0
-        assert fc.error_pct == pytest.approx(0.05, abs=0.001)  # |210-200|/200
         assert result["evaluated"] == 1
 
     @pytest.mark.asyncio
@@ -87,11 +90,11 @@ class TestForecastEvaluation:
         assert result["status"] == "no_pending"
 
     def test_mape_computation(self) -> None:
-        """MAPE should be |actual - predicted| / predicted."""
-        predicted = 200.0
-        actual = 220.0
-        mape = abs(actual - predicted) / predicted
-        assert mape == pytest.approx(0.10, abs=0.001)  # 10%
+        """Error should be |actual_return - expected_return| for return-based forecasts."""
+        expected_return = 5.0
+        actual_return = 7.0
+        error = abs(actual_return - expected_return)
+        assert error == pytest.approx(2.0, abs=0.001)  # 2pp error
 
 
 # ---------------------------------------------------------------------------

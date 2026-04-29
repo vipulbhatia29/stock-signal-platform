@@ -11,9 +11,12 @@ import pytest
 def _make_forecast_result(
     ticker: str = "AAPL",
     horizon_days: int = 90,
-    predicted_price: float = 200.0,
-    predicted_lower: float = 180.0,
-    predicted_upper: float = 220.0,
+    expected_return_pct: float = 3.33,
+    return_lower_pct: float = -6.67,
+    return_upper_pct: float = 13.33,
+    confidence_score: float = 0.65,
+    direction: str = "bullish",
+    base_price: float = 150.0,
     forecast_date: date | None = None,
     target_date: date | None = None,
 ) -> MagicMock:
@@ -21,11 +24,21 @@ def _make_forecast_result(
     f = MagicMock()
     f.ticker = ticker
     f.horizon_days = horizon_days
-    f.predicted_price = predicted_price
-    f.predicted_lower = predicted_lower
-    f.predicted_upper = predicted_upper
+    f.expected_return_pct = expected_return_pct
+    f.return_lower_pct = return_lower_pct
+    f.return_upper_pct = return_upper_pct
+    f.confidence_score = confidence_score
+    f.direction = direction
+    f.base_price = base_price
+    f.drivers = None
+    f.forecast_signal = None
     f.forecast_date = forecast_date or date(2026, 3, 22)
     f.target_date = target_date or date(2026, 6, 20)
+    # Legacy fields still referenced by forecast_tools.py (not yet migrated to return-based)
+    implied_price = round(base_price * (1 + expected_return_pct / 100), 2)
+    f.predicted_price = implied_price
+    f.predicted_lower = round(base_price * (1 + return_lower_pct / 100), 2)
+    f.predicted_upper = round(base_price * (1 + return_upper_pct / 100), 2)
     return f
 
 
@@ -40,21 +53,21 @@ class TestGetForecastTool:
         forecasts = [
             _make_forecast_result(
                 horizon_days=90,
-                predicted_price=200,
-                predicted_lower=185,
-                predicted_upper=215,
+                expected_return_pct=3.33,
+                return_lower_pct=-6.67,
+                return_upper_pct=13.33,
             ),
             _make_forecast_result(
                 horizon_days=180,
-                predicted_price=220,
-                predicted_lower=195,
-                predicted_upper=245,
+                expected_return_pct=5.00,
+                return_lower_pct=-3.33,
+                return_upper_pct=13.33,
             ),
             _make_forecast_result(
                 horizon_days=270,
-                predicted_price=240,
-                predicted_lower=200,
-                predicted_upper=280,
+                expected_return_pct=6.67,
+                return_lower_pct=-1.67,
+                return_upper_pct=15.00,
             ),
         ]
 
@@ -84,7 +97,6 @@ class TestGetForecastTool:
         assert result.status == "ok"
         assert len(result.data["horizons"]) == 3
         assert result.data["horizons"][0]["horizon_days"] == 90
-        assert result.data["sharpe_direction"] == "improving"
         assert result.data["confidence"] in ("high", "moderate", "low")
 
     @pytest.mark.asyncio

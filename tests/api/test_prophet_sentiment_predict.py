@@ -185,7 +185,7 @@ async def test_predict_uses_model_history_sentiment_not_zero(db_session, monkeyp
     assert len(forecasts_real) == len(forecasts_zeroed) == 3
 
     deltas = [
-        abs(real.predicted_price - zeroed.predicted_price)
+        abs(real.expected_return_pct - zeroed.expected_return_pct)
         for real, zeroed in zip(forecasts_real, forecasts_zeroed, strict=True)
     ]
     assert max(deltas) > 0.5, (
@@ -217,7 +217,7 @@ async def test_predict_forecast_without_sentiment_still_works(db_session) -> Non
     forecasts = await predict_forecast(model_version, db_session)
 
     assert len(forecasts) == 3
-    assert all(f.predicted_price > 0 for f in forecasts)
+    assert all(isinstance(f.expected_return_pct, float) for f in forecasts)
 
 
 @pytest.mark.asyncio
@@ -297,10 +297,10 @@ async def test_stale_model_fetches_post_training_sentiment(db_session) -> None:
             forecasts_without_post = await predict_forecast(model_version, db_session)
 
     deltas = [
-        abs(a.predicted_price - b.predicted_price)
+        abs(a.expected_return_pct - b.expected_return_pct)
         for a, b in zip(forecasts_with_post, forecasts_without_post, strict=True)
     ]
-    # beta=10 × sentiment delta of ~0.9 gives a clear price impact.
+    # beta=10 × sentiment delta of ~0.9 gives a clear return impact.
     assert max(deltas) > 0.3, (
         f"Post-training sentiment should meaningfully change forecasts "
         f"(max delta={max(deltas):.4f}). If this is near zero, the fix is "

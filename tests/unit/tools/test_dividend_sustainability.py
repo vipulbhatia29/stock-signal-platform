@@ -217,9 +217,15 @@ class TestRiskNarrativeTool:
         mock_signal.rsi_14 = 60.0
 
         mock_forecast = MagicMock()
+        mock_forecast.expected_return_pct = 3.33
+        mock_forecast.return_lower_pct = -6.67
+        mock_forecast.return_upper_pct = 13.33
+        mock_forecast.confidence_score = 0.65
+        mock_forecast.direction = "bullish"
+        mock_forecast.base_price = 145.0
         mock_forecast.predicted_price = 150.0
-        mock_forecast.predicted_lower = 120.0
         mock_forecast.predicted_upper = 180.0
+        mock_forecast.predicted_lower = 120.0
         mock_forecast.target_date = date(2026, 6, 20)
 
         stock_r = MagicMock()
