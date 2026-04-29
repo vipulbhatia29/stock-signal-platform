@@ -223,9 +223,9 @@ class TestRiskNarrativeTool:
         mock_forecast.confidence_score = 0.65
         mock_forecast.direction = "bullish"
         mock_forecast.base_price = 145.0
-        mock_forecast.predicted_price = 150.0
-        mock_forecast.predicted_upper = 180.0
-        mock_forecast.predicted_lower = 120.0
+        mock_forecast.actual_return_pct = None
+        mock_forecast.forecast_signal = None
+        mock_forecast.drivers = None
         mock_forecast.target_date = date(2026, 6, 20)
 
         stock_r = MagicMock()
@@ -252,7 +252,7 @@ class TestRiskNarrativeTool:
 
         assert result.status == "ok"
         assert result.data["forecast_context"] is not None
-        assert result.data["forecast_context"]["predicted_price"] == 150.0
+        assert result.data["forecast_context"]["expected_return_pct"] == 3.33
         # 40% spread is > 30% threshold → should add risk factor
         wide_fc = [f for f in result.data["risk_factors"] if "forecast" in f["factor"].lower()]
         assert len(wide_fc) == 1
