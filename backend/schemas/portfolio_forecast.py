@@ -70,7 +70,7 @@ class TickerComponent(BaseModel):
     """Prophet forecast component breakdown for a ticker."""
 
     ticker: str
-    trend_pct: float
+    expected_return_pct: float
     stock_sentiment_pct: float | None = None
     sector_sentiment_pct: float | None = None
     macro_sentiment_pct: float | None = None

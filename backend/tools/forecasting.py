@@ -45,7 +45,7 @@ PROPHET_CONFIG = {
 }
 
 # Default forecast horizons (spec §4.3)
-DEFAULT_HORIZONS = [90, 180, 270]
+DEFAULT_HORIZONS = [60, 90]
 
 # Minimum training data points
 MIN_DATA_POINTS = 200
@@ -396,9 +396,12 @@ async def predict_forecast(
                 ticker=model_version.ticker,
                 horizon_days=horizon,
                 model_version_id=model_version.id,
-                predicted_price=round(max(raw_price, price_floor), 2),
-                predicted_lower=round(max(raw_lower, price_floor), 2),
-                predicted_upper=round(max(raw_upper, price_floor), 2),
+                expected_return_pct=round(max(raw_price, price_floor), 2),
+                return_lower_pct=round(max(raw_lower, price_floor), 2),
+                return_upper_pct=round(max(raw_upper, price_floor), 2),
+                confidence_score=0.5,
+                direction="neutral",
+                base_price=last_known_price,
                 target_date=target_date,
                 created_at=now,
             )

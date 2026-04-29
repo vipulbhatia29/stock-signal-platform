@@ -390,17 +390,24 @@ class TestServiceComputeConvergence:
 
     @staticmethod
     def _make_forecast(
-        predicted_price: float,
+        expected_return_pct: float,
     ) -> SimpleNamespace:
         """Create a fake ForecastResult-like object.
 
         Args:
-            predicted_price: Predicted price from Prophet.
+            expected_return_pct: Expected return percentage (e.g. 5.0 for +5%).
 
         Returns:
             SimpleNamespace mimicking ForecastResult.
         """
-        return SimpleNamespace(predicted_price=predicted_price)
+        return SimpleNamespace(
+            expected_return_pct=expected_return_pct,
+            confidence_score=0.65,
+            direction="bullish" if expected_return_pct > 0 else "bearish",
+            base_price=100.0,
+            drivers=None,
+            forecast_signal=None,
+        )
 
     def test_all_bullish_signals(self) -> None:
         """All signals bullish → strong_bull with 6 aligned."""
@@ -411,8 +418,8 @@ class TestServiceComputeConvergence:
             sma_200=100.0,
             piotroski_score=8,  # bullish (>=6)
         )
-        # Forecast: predicted_price=120, current=110 → +9% → bullish
-        forecast = self._make_forecast(120.0)
+        # Forecast: expected_return_pct=9.0 → +9% → bullish
+        forecast = self._make_forecast(9.0)
         service = SignalConvergenceService()
         # prev_macd=0.02 makes histogram rising (0.05 > 0.02) → bullish
         result = service._compute_convergence(
@@ -440,8 +447,8 @@ class TestServiceComputeConvergence:
             sma_200=100.0,
             piotroski_score=5,
         )
-        # Forecast: predicted_price=101, current=100 → +1% → neutral
-        forecast = self._make_forecast(101.0)
+        # Forecast: expected_return_pct=1.0 → +1% → neutral
+        forecast = self._make_forecast(1.0)
         service = SignalConvergenceService()
         result = service._compute_convergence("AAPL", signal, 0.0, forecast)
 
@@ -457,8 +464,8 @@ class TestServiceComputeConvergence:
             sma_200=100.0,
             piotroski_score=8,  # bullish
         )
-        # Forecast: predicted_price=100, current=110 → -9% → bearish
-        forecast = self._make_forecast(100.0)
+        # Forecast: expected_return_pct=-9.0 → -9% → bearish
+        forecast = self._make_forecast(-9.0)
         service = SignalConvergenceService()
         result = service._compute_convergence("AAPL", signal, None, forecast)
 
@@ -474,8 +481,8 @@ class TestServiceComputeConvergence:
             sma_200=100.0,
             piotroski_score=8,
         )
-        # Forecast: predicted_price=111, current=110 → +0.9% → neutral
-        forecast = self._make_forecast(111.0)
+        # Forecast: expected_return_pct=0.9 → +0.9% → neutral
+        forecast = self._make_forecast(0.9)
         service = SignalConvergenceService()
         result = service._compute_convergence("AAPL", signal, None, forecast)
 

@@ -84,11 +84,11 @@ async def _evaluate_forecasts_async(*, run_id: uuid.UUID) -> dict:
     errors = 0
 
     async with _db.async_session_factory() as db:
-        # Find forecasts where target_date has passed and actual_price not yet filled
+        # Find forecasts where target_date has passed and actual_return_pct not yet filled
         result = await db.execute(
             select(ForecastResult).where(
                 ForecastResult.target_date <= today,
-                ForecastResult.actual_price.is_(None),
+                ForecastResult.actual_return_pct.is_(None),
             )
         )
         pending = result.scalars().all()
@@ -148,12 +148,11 @@ async def _evaluate_forecasts_async(*, run_id: uuid.UUID) -> dict:
                 if actual is None:
                     continue
 
-                # Fill actual price and compute error
-                fc.actual_price = float(actual)
-                if fc.predicted_price != 0:
-                    fc.error_pct = abs(fc.actual_price - fc.predicted_price) / fc.predicted_price
-                else:
-                    fc.error_pct = 0.0
+                # Compute actual return from base_price stored at forecast time
+                base = float(fc.base_price)
+                actual_return = (float(actual) - base) / base * 100.0
+                fc.actual_return_pct = actual_return
+                fc.error_pct = abs(actual_return - fc.expected_return_pct)
 
                 evaluated += 1
 
@@ -177,7 +176,6 @@ async def _update_model_mapes(db: AsyncSession) -> None:
     result = await db.execute(
         select(ModelVersion).where(
             ModelVersion.is_active.is_(True),
-            ModelVersion.model_type == "prophet",
         )
     )
     active_models = result.scalars().all()

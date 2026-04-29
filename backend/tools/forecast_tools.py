@@ -116,11 +116,14 @@ class GetForecastTool(BaseTool):
                 {
                     "horizon_days": f.horizon_days,
                     "target_date": f.target_date.isoformat(),
-                    "predicted_price": f.predicted_price,
-                    "predicted_lower": f.predicted_lower,
-                    "predicted_upper": f.predicted_upper,
+                    "expected_return_pct": f.expected_return_pct,
+                    "return_lower_pct": f.return_lower_pct,
+                    "return_upper_pct": f.return_upper_pct,
                     "confidence_range_pct": round(
-                        (f.predicted_upper - f.predicted_lower) / f.predicted_price * 100, 1
+                        (f.return_upper_pct - f.return_lower_pct)
+                        / max(abs(f.expected_return_pct), 0.01)
+                        * 100,
+                        1,
                     ),
                 }
             )
@@ -240,9 +243,9 @@ class GetSectorForecastTool(BaseTool):
                 {
                     "horizon_days": f.horizon_days,
                     "target_date": f.target_date.isoformat(),
-                    "predicted_price": f.predicted_price,
-                    "predicted_lower": f.predicted_lower,
-                    "predicted_upper": f.predicted_upper,
+                    "expected_return_pct": f.expected_return_pct,
+                    "return_lower_pct": f.return_lower_pct,
+                    "return_upper_pct": f.return_upper_pct,
                 }
             )
 
@@ -359,9 +362,9 @@ class GetPortfolioForecastTool(BaseTool):
                 forecast_by_ticker.setdefault(f.ticker, []).append(
                     {
                         "horizon_days": f.horizon_days,
-                        "predicted_price": f.predicted_price,
-                        "predicted_lower": f.predicted_lower,
-                        "predicted_upper": f.predicted_upper,
+                        "expected_return_pct": f.expected_return_pct,
+                        "return_lower_pct": f.return_lower_pct,
+                        "return_upper_pct": f.return_upper_pct,
                     }
                 )
 
@@ -379,9 +382,8 @@ class GetPortfolioForecastTool(BaseTool):
 
             for fc in fc_list:
                 h = fc["horizon_days"]
-                # Predicted return from current cost basis
-                cost = pos.avg_cost_basis or 1
-                predicted_return = (fc["predicted_price"] - cost) / cost
+                # Return is stored directly as a percentage
+                predicted_return = fc["expected_return_pct"] / 100.0
                 agg = horizon_agg.setdefault(h, {"weighted_return": 0.0, "coverage_pct": 0.0})
                 agg["weighted_return"] += weight * predicted_return
                 agg["coverage_pct"] += weight * 100
@@ -518,7 +520,7 @@ class CompareStocksTool(BaseTool):
                 fc_by_ticker.setdefault(f.ticker, []).append(
                     {
                         "horizon_days": f.horizon_days,
-                        "predicted_price": f.predicted_price,
+                        "expected_return_pct": f.expected_return_pct,
                     }
                 )
 

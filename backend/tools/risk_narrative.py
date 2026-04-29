@@ -192,12 +192,12 @@ class RiskNarrativeTool(BaseTool):
         forecast_context = None
         if forecast:
             spread_pct = (
-                (forecast.predicted_upper - forecast.predicted_lower)
-                / forecast.predicted_price
+                (forecast.return_upper_pct - forecast.return_lower_pct)
+                / max(abs(forecast.expected_return_pct), 0.01)
                 * 100
             )
             forecast_context = {
-                "predicted_price": forecast.predicted_price,
+                "expected_return_pct": forecast.expected_return_pct,
                 "confidence_range_pct": round(spread_pct, 1),
                 "target_date": forecast.target_date.isoformat(),
             }
@@ -215,7 +215,7 @@ class RiskNarrativeTool(BaseTool):
         if sector_fc:
             sector_context = {
                 "etf_ticker": sector_fc.ticker,
-                "predicted_price": sector_fc.predicted_price,
+                "expected_return_pct": sector_fc.expected_return_pct,
                 "target_date": sector_fc.target_date.isoformat(),
             }
 

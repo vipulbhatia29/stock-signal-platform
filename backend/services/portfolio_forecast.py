@@ -106,7 +106,7 @@ class PortfolioForecastService:
         prices_df = await self._fetch_prices(tickers, db)
 
         # 3. Get Prophet views + backtest MAPE for confidence
-        views, view_confidences = await self._fetch_prophet_views(tickers, db)
+        views, view_confidences = await self._fetch_model_views(tickers, db)
 
         # 4. Get risk-free rate
         risk_free_rate = await self._fetch_risk_free_rate(db)
@@ -420,13 +420,14 @@ class PortfolioForecastService:
 
         return pivot
 
-    async def _fetch_prophet_views(
+    async def _fetch_model_views(
         self, tickers: list[str], db: AsyncSession
     ) -> tuple[dict[str, float], dict[str, float]]:
-        """Fetch Prophet predicted returns and backtest MAPE for view confidence.
+        """Fetch model predicted returns and backtest MAPE for view confidence.
 
-        Converts predicted_price to annualized return using the most recent
-        adj_close as the base price. Confidence = min(0.95, max(0.1, 1 - mape)).
+        Reads expected_return_pct directly from ForecastResult (return-based schema).
+        Accepts any active model type (lightgbm, xgboost, prophet, etc.).
+        Confidence = min(0.95, max(0.1, 1 - mape)).
 
         Args:
             tickers: List of ticker symbols.
@@ -438,15 +439,13 @@ class PortfolioForecastService:
         """
         from backend.models.backtest import BacktestRun
         from backend.models.forecast import ForecastResult, ModelVersion
-        from backend.models.price import StockPrice
 
-        # 1. Bulk fetch active Prophet model versions
+        # 1. Bulk fetch active model versions (any model type)
         mv_result = await db.execute(
             select(ModelVersion)
             .distinct(ModelVersion.ticker)
             .where(
                 ModelVersion.ticker.in_(tickers),
-                ModelVersion.model_type == "prophet",
                 ModelVersion.is_active.is_(True),
             )
             .order_by(ModelVersion.ticker, ModelVersion.trained_at.desc())
@@ -469,20 +468,7 @@ class PortfolioForecastService:
         )
         fc_by_ticker = {fc.ticker: fc for fc in fr_result.scalars().all()}
 
-        # 3. Bulk fetch latest prices
-        price_result = await db.execute(
-            select(StockPrice.ticker, StockPrice.adj_close)
-            .distinct(StockPrice.ticker)
-            .where(StockPrice.ticker.in_(tickers))
-            .order_by(StockPrice.ticker, StockPrice.time.desc())
-        )
-        price_by_ticker = {
-            row.ticker: float(row.adj_close)
-            for row in price_result.all()
-            if row.adj_close and float(row.adj_close) > 0
-        }
-
-        # 4. Bulk fetch latest backtest MAPE
+        # 3. Bulk fetch latest backtest MAPE
         bt_result = await db.execute(
             select(BacktestRun.ticker, BacktestRun.mape)
             .distinct(BacktestRun.ticker)
@@ -493,17 +479,16 @@ class PortfolioForecastService:
             row.ticker: float(row.mape) for row in bt_result.all() if row.mape is not None
         }
 
-        # 5. Compute views and confidences in Python
+        # 4. Compute views and confidences in Python
         views: dict[str, float] = {}
         confidences: dict[str, float] = {}
 
         for ticker in tickers:
             forecast = fc_by_ticker.get(ticker)
-            current_price = price_by_ticker.get(ticker)
-            if forecast is None or current_price is None:
+            if forecast is None:
                 continue
 
-            predicted_return = (float(forecast.predicted_price) - current_price) / current_price
+            predicted_return = float(forecast.expected_return_pct) / 100.0
             annualized = (1 + predicted_return) ** (TRADING_DAYS / 90) - 1
             views[ticker] = annualized
 

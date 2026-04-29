@@ -1,12 +1,13 @@
-"""Celery tasks for Prophet model training and forecast refresh."""
+"""Celery tasks for forecast model training and forecast refresh."""
 
 from __future__ import annotations
 
+import base64
 import logging
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -56,89 +57,296 @@ async def _get_price_data_counts(tickers: list[str], db: AsyncSession) -> dict[s
 
 @tracked_task("model_retrain", trigger="scheduled")
 async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
-    """Retrain Prophet models for all tickers and generate forecasts.
+    """Retrain forecast models for all tickers and generate forecasts.
+
+    Loads all historical_features rows, trains a cross-ticker LightGBM+XGBoost
+    ensemble for each horizon (60d, 90d), stores the serialised artifact as
+    base64 in ModelVersion.hyperparameters, then predicts for every ticker.
 
     Returns:
-        Dict with training counts. Pipeline status lives in pipeline_runs row.
+        Dict with trained count, total tickers, and horizons trained.
     """
-    from backend.services.ticker_universe import get_all_referenced_tickers
-    from backend.tools.forecasting import predict_forecast, train_prophet_model
+    import asyncio
+    from datetime import timedelta
 
+    import pandas as pd
+
+    from backend.models.forecast import ForecastResult
+    from backend.models.historical_feature import HistoricalFeature
+    from backend.services.forecast_engine import FEATURE_NAMES, ForecastEngine
+
+    engine = ForecastEngine()
+    today = datetime.now(timezone.utc).date()
+
+    # ── 1. Load training data ─────────────────────────────────────────────
     async with _db.async_session_factory() as db:
         tickers = await get_all_referenced_tickers(db)
-    if not tickers:
-        logger.info("No tickers to retrain")
+        if not tickers:
+            logger.info("No tickers to retrain")
+            return {"trained": 0, "total": 0}
+
+        result = await db.execute(
+            select(HistoricalFeature)
+            .where(HistoricalFeature.ticker.in_(tickers))
+            .order_by(HistoricalFeature.date)
+        )
+        rows = result.scalars().all()
+
+    if not rows:
+        logger.warning("No historical features found — cannot train")
         return {"trained": 0, "total": 0}
 
+    records = []
+    for row in rows:
+        record: dict = {"date": row.date, "ticker": row.ticker}
+        for name in FEATURE_NAMES:
+            record[name] = getattr(row, name, None)
+        record["forward_return_60d"] = row.forward_return_60d
+        record["forward_return_90d"] = row.forward_return_90d
+        records.append(record)
+    features_df = pd.DataFrame(records)
+
+    # ── 2. Train one model bundle per horizon ────────────────────────────
+    trained_models: dict[int, tuple[bytes, dict]] = {}
+    for horizon in settings.DEFAULT_FORECAST_HORIZONS:
+        try:
+            artifact_bytes, metrics = await asyncio.to_thread(engine.train, features_df, horizon)
+            trained_models[horizon] = (artifact_bytes, metrics)
+            logger.info("Trained %dd model: %s", horizon, metrics)
+        except Exception:
+            logger.exception("Failed to train %dd model", horizon)
+
+    if not trained_models:
+        return {"trained": 0, "total": len(tickers)}
+
+    # ── 3. Persist ModelVersion rows + predict for each ticker ───────────
     trained = 0
-
     async with _db.async_session_factory() as db:
-        for ticker in tickers:
-            try:
-                model_version = await train_prophet_model(ticker, db)
-                forecasts = await predict_forecast(model_version, db)
+        # Latest feature row per ticker (DISTINCT ON)
+        latest_result = await db.execute(
+            select(HistoricalFeature)
+            .distinct(HistoricalFeature.ticker)
+            .where(HistoricalFeature.ticker.in_(tickers))
+            .order_by(HistoricalFeature.ticker, HistoricalFeature.date.desc())
+        )
+        latest_features = {row.ticker: row for row in latest_result.scalars().all()}
 
-                for fc in forecasts:
+        # Latest close price per ticker
+        from backend.models.price import StockPrice
+
+        price_result = await db.execute(
+            select(StockPrice.ticker, StockPrice.close)
+            .distinct(StockPrice.ticker)
+            .where(StockPrice.ticker.in_(tickers))
+            .order_by(StockPrice.ticker, StockPrice.time.desc())
+        )
+        prices = {row.ticker: float(row.close) for row in price_result.all()}
+
+        for horizon, (artifact_bytes, metrics) in trained_models.items():
+            model_type = f"lightgbm_{horizon}d"
+
+            # Bump version number
+            max_ver_result = await db.execute(
+                select(func.max(ModelVersion.version)).where(
+                    ModelVersion.model_type == model_type,
+                )
+            )
+            max_ver = max_ver_result.scalar() or 0
+
+            # Retire all previously active models of this type
+            await db.execute(
+                update(ModelVersion)
+                .where(
+                    ModelVersion.model_type == model_type,
+                    ModelVersion.is_active.is_(True),
+                )
+                .values(is_active=False)
+            )
+
+            mv = ModelVersion(
+                ticker="__universe__",
+                model_type=model_type,
+                version=max_ver + 1,
+                is_active=True,
+                trained_at=datetime.now(timezone.utc),
+                training_data_start=features_df["date"].min(),
+                training_data_end=features_df["date"].max(),
+                data_points=len(features_df),
+                hyperparameters={
+                    "ensemble_weight_lgb": 0.5,
+                    "ensemble_weight_xgb": 0.5,
+                    "artifact_b64": base64.b64encode(artifact_bytes).decode("ascii"),
+                },
+                metrics=metrics,
+                status="active",
+                artifact_path=None,
+            )
+            db.add(mv)
+            await db.flush()  # obtain mv.id before FK reference
+
+            for ticker in tickers:
+                feat_row = latest_features.get(ticker)
+                base_price = prices.get(ticker)
+                if feat_row is None or base_price is None:
+                    continue
+
+                feature_dict = {name: getattr(feat_row, name, None) for name in FEATURE_NAMES}
+                try:
+                    pred = await asyncio.to_thread(
+                        engine.predict, feature_dict, artifact_bytes, None, False
+                    )
+                    fc = ForecastResult(
+                        forecast_date=today,
+                        ticker=ticker,
+                        horizon_days=horizon,
+                        model_version_id=mv.id,
+                        expected_return_pct=round(pred["expected_return_pct"], 2),
+                        return_lower_pct=round(pred["return_lower_pct"], 2),
+                        return_upper_pct=round(pred["return_upper_pct"], 2),
+                        target_date=today + timedelta(days=horizon),
+                        confidence_score=round(pred["confidence"], 4),
+                        direction=pred["direction"],
+                        drivers=pred.get("drivers"),
+                        base_price=base_price,
+                        forecast_signal=pred.get("forecast_signal"),
+                        created_at=datetime.now(timezone.utc),
+                    )
                     db.add(fc)
+                except Exception:
+                    logger.exception("Failed to predict %s %dd", ticker, horizon)
+                    continue
 
-                await db.commit()
-                await _runner.record_ticker_success(run_id, ticker)
-                trained += 1
+            await db.commit()
+            trained += 1
 
-            except Exception:
-                await db.rollback()
-                await _runner.record_ticker_failure(run_id, ticker, "retrain failed")
-                logger.exception("Failed to retrain %s", ticker)
+    await mark_stages_updated(tickers, "forecast")
+    await _runner.record_ticker_success(run_id, "__universe__")
 
-    return {"trained": trained, "total": len(tickers)}
+    return {"trained": trained, "total": len(tickers), "horizons": list(trained_models.keys())}
 
 
 @tracked_task("forecast_refresh", trigger="scheduled")
 async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
     """Refresh forecasts using existing active models (no retraining).
 
+    Loads each active ModelVersion's serialised artifact from
+    ``hyperparameters["artifact_b64"]`` and runs predictions for all tickers
+    that have a recent feature row.
+
     Returns:
-        Dict with refresh counts. Pipeline status lives in pipeline_runs row.
+        Dict with refreshed count and total tickers.
     """
-    from backend.models.forecast import ModelVersion
-    from backend.tools.forecasting import predict_forecast
+    import asyncio
+    from datetime import timedelta
+
+    from backend.models.forecast import ForecastResult
+    from backend.models.historical_feature import HistoricalFeature
+    from backend.models.price import StockPrice
+    from backend.services.forecast_engine import FEATURE_NAMES, ForecastEngine
+
+    engine = ForecastEngine()
+    today = datetime.now(timezone.utc).date()
 
     async with _db.async_session_factory() as db:
-        result = await db.execute(
-            select(ModelVersion).where(
-                ModelVersion.is_active.is_(True),
-                ModelVersion.model_type == "prophet",
-            )
-        )
+        # Active models (one per model_type)
+        result = await db.execute(select(ModelVersion).where(ModelVersion.is_active.is_(True)))
         active_models = result.scalars().all()
 
         if not active_models:
             logger.info("No active models — skipping forecast refresh")
             return {"refreshed": 0, "total": 0}
 
+        # Map horizon → ModelVersion for parseable model_types (e.g. "lightgbm_60d")
+        model_by_horizon: dict[int, ModelVersion] = {}
+        for mv in active_models:
+            parts = mv.model_type.split("_")
+            if len(parts) >= 2 and parts[-1].endswith("d"):
+                try:
+                    h = int(parts[-1][:-1])
+                    model_by_horizon[h] = mv
+                except ValueError:  # nosemgrep: semgrep.obs-warn-silent-except
+                    logger.debug("Unparseable model_type horizon: %s", mv.model_type)
+
+        if not model_by_horizon:
+            logger.info("No models with parseable horizons — skipping")
+            return {"refreshed": 0, "total": 0}
+
+        all_tickers = await get_all_referenced_tickers(db)
+
+        # Latest feature row per ticker (DISTINCT ON)
+        latest_result = await db.execute(
+            select(HistoricalFeature)
+            .distinct(HistoricalFeature.ticker)
+            .where(HistoricalFeature.ticker.in_(all_tickers))
+            .order_by(HistoricalFeature.ticker, HistoricalFeature.date.desc())
+        )
+        latest_features = {row.ticker: row for row in latest_result.scalars().all()}
+
+        # Latest close price per ticker
+        price_result = await db.execute(
+            select(StockPrice.ticker, StockPrice.close)
+            .distinct(StockPrice.ticker)
+            .where(StockPrice.ticker.in_(all_tickers))
+            .order_by(StockPrice.ticker, StockPrice.time.desc())
+        )
+        prices = {row.ticker: float(row.close) for row in price_result.all()}
+
         refreshed = 0
         refreshed_tickers: list[str] = []
 
-        for model_version in active_models:
-            try:
-                forecasts = await predict_forecast(model_version, db)
-                for fc in forecasts:
+        for ticker in all_tickers:
+            feat_row = latest_features.get(ticker)
+            base_price = prices.get(ticker)
+            if feat_row is None or base_price is None:
+                continue
+
+            feature_dict = {name: getattr(feat_row, name, None) for name in FEATURE_NAMES}
+
+            for horizon, mv in model_by_horizon.items():
+                artifact_b64: str | None = (mv.hyperparameters or {}).get("artifact_b64")
+                if not artifact_b64:
+                    logger.debug(
+                        "No artifact stored for model %s (%s) — skipping %s",
+                        mv.id,
+                        mv.model_type,
+                        ticker,
+                    )
+                    continue
+
+                artifact_bytes = base64.b64decode(artifact_b64)
+                try:
+                    pred = await asyncio.to_thread(
+                        engine.predict, feature_dict, artifact_bytes, None, False
+                    )
+                    fc = ForecastResult(
+                        forecast_date=today,
+                        ticker=ticker,
+                        horizon_days=horizon,
+                        model_version_id=mv.id,
+                        expected_return_pct=round(pred["expected_return_pct"], 2),
+                        return_lower_pct=round(pred["return_lower_pct"], 2),
+                        return_upper_pct=round(pred["return_upper_pct"], 2),
+                        target_date=today + timedelta(days=horizon),
+                        confidence_score=round(pred["confidence"], 4),
+                        direction=pred["direction"],
+                        drivers=pred.get("drivers"),
+                        base_price=base_price,
+                        forecast_signal=pred.get("forecast_signal"),
+                        created_at=datetime.now(timezone.utc),
+                    )
                     db.add(fc)
-                await db.commit()
-                await _runner.record_ticker_success(run_id, model_version.ticker)
-                refreshed_tickers.append(model_version.ticker)
-                refreshed += 1
-            except Exception:
-                await db.rollback()
-                await _runner.record_ticker_failure(run_id, model_version.ticker, "refresh failed")
-                logger.exception("Failed to refresh forecast for %s", model_version.ticker)
+                except Exception:
+                    logger.exception("Failed to refresh %s %dd", ticker, horizon)
+                    continue
 
-        # ── Phase 2: Dispatch training for new tickers without models ──
+            refreshed_tickers.append(ticker)
+            refreshed += 1
+
+        await db.commit()
+
+        # ── Dispatch training for new tickers without features ────────────
         try:
-            from backend.services.ticker_universe import get_all_referenced_tickers
-
-            all_tickers = await get_all_referenced_tickers(db)
-            modeled_tickers = {mv.ticker for mv in active_models}
+            modeled_tickers = set(latest_features.keys())
             new_tickers = [t for t in all_tickers if t not in modeled_tickers]
 
             if new_tickers:
@@ -168,18 +376,17 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
         except Exception:
             logger.warning("Failed to dispatch new-ticker training", exc_info=True)
 
-        # Mark forecast stage freshness for all successfully refreshed tickers
         if refreshed_tickers:
             await mark_stages_updated(refreshed_tickers, "forecast")
 
-        return {"refreshed": refreshed, "total": len(active_models)}
+    return {"refreshed": refreshed, "total": len(all_tickers)}
 
 
 @celery_app.task(
     name="backend.tasks.forecasting.model_retrain_all_task",
 )
 def model_retrain_all_task() -> dict:
-    """Weekly full retrain of all Prophet models (Sunday 02:00 ET).
+    """Weekly full retrain of all forecast models (Sunday 02:00 ET).
 
     Returns:
         Dict with training status and counts.
@@ -193,7 +400,7 @@ def model_retrain_all_task() -> dict:
     name="backend.tasks.forecasting.forecast_refresh_task",
 )
 def forecast_refresh_task() -> dict:
-    """Nightly forecast refresh using existing active models (no retrain).
+    """Nightly forecast refresh using existing active forecast models (no retrain).
 
     Returns:
         Dict with refresh status and counts.
@@ -205,35 +412,33 @@ def forecast_refresh_task() -> dict:
 
 @tracked_task("single_ticker_retrain")
 async def _retrain_single_ticker_async(ticker: str, *, run_id: uuid.UUID) -> dict:
-    """Async implementation: retrain a single ticker's Prophet model.
+    """Single-ticker retrain — delegates to full retrain since LightGBM is cross-ticker.
+
+    LightGBM/XGBoost models are trained on the entire ticker universe so a
+    single-ticker retrain makes no sense in isolation.  We dispatch a full
+    retrain instead and return immediately.
 
     Args:
-        ticker: Stock ticker to retrain.
+        ticker: Stock ticker that triggered the retrain request.
         run_id: Pipeline run ID injected by @tracked_task.
 
     Returns:
-        Dict with training result.
+        Dict indicating that a full retrain was dispatched.
     """
-    from backend.tools.forecasting import predict_forecast, train_prophet_model
-
-    async with _db.async_session_factory() as db:
-        model_version = await train_prophet_model(ticker, db)
-        forecasts = await predict_forecast(model_version, db)
-        for fc in forecasts:
-            db.add(fc)
-        await db.commit()
-        return {
-            "ticker": ticker,
-            "version": model_version.version,
-            "forecasts": len(forecasts),
-        }
+    logger.info(
+        "Single ticker retrain requested for %s — LightGBM is cross-ticker, "
+        "triggering full retrain",
+        ticker,
+    )
+    model_retrain_all_task.delay()
+    return {"ticker": ticker, "status": "full_retrain_dispatched"}
 
 
 @celery_app.task(
     name="backend.tasks.forecasting.retrain_single_ticker_task",
 )
 def retrain_single_ticker_task(ticker: str, priority: bool = False) -> dict:
-    """Retrain a single ticker's Prophet model.
+    """Retrain a single ticker's forecast model.
 
     Args:
         ticker: Stock ticker to retrain.
@@ -287,12 +492,12 @@ async def _run_backtest_async(ticker: str | None, horizon_days: int, *, run_id: 
                 try:
                     metrics = await engine.run_walk_forward(tkr, db, horizon_days=horizon_days)
 
-                    # Look up the active model version for this ticker — required FK
+                    # Look up the active model version for this ticker — required FK.
+                    # Accept any active model type (no longer restricted to "prophet").
                     mv_result = await db.execute(
                         select(ModelVersion)
                         .where(
                             ModelVersion.ticker == tkr,
-                            ModelVersion.model_type == "prophet",
                             ModelVersion.is_active.is_(True),
                         )
                         .limit(1)

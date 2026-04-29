@@ -7,24 +7,48 @@ from datetime import date
 from pydantic import BaseModel, Field
 
 
+class ForecastDriver(BaseModel):
+    """Single feature driving a forecast."""
+
+    feature: str
+    label: str
+    direction: str  # "bullish" | "bearish"
+    importance: float = Field(ge=0.0, le=1.0)
+
+
 class ForecastHorizon(BaseModel):
-    """Forecast at a single horizon."""
+    """Forecast at a single horizon — return-based."""
 
     horizon_days: int
-    predicted_price: float = Field(ge=0.01)
-    predicted_lower: float = Field(ge=0.01)
-    predicted_upper: float = Field(ge=0.01)
+    expected_return_pct: float
+    return_lower_pct: float
+    return_upper_pct: float
     target_date: date
+    direction: str  # "bullish" | "bearish" | "neutral"
+    confidence: float = Field(ge=0.0, le=1.0)
     confidence_level: str = "medium"
-    sharpe_direction: str = "flat"
+    drivers: list[ForecastDriver] | None = None
+    implied_target_price: float | None = None
+    forecast_signal: str | None = None
+
+
+class ModelAccuracy(BaseModel):
+    """Model performance metrics."""
+
+    direction_hit_rate: float = Field(ge=0.0, le=1.0)
+    avg_error_pct: float = Field(ge=0.0)
+    ci_containment_rate: float = Field(ge=0.0, le=1.0)
+    evaluated_count: int
 
 
 class ForecastResponse(BaseModel):
     """Forecast data for a single ticker."""
 
     ticker: str
+    current_price: float
     horizons: list[ForecastHorizon]
-    model_mape: float | None = None
+    model_type: str = "lightgbm"
+    model_accuracy: ModelAccuracy | None = None
     model_status: str = "active"
 
 
@@ -87,10 +111,10 @@ class ForecastEvaluation(BaseModel):
     forecast_date: date
     target_date: date
     horizon_days: int
-    predicted_price: float
-    predicted_lower: float
-    predicted_upper: float
-    actual_price: float | None
+    expected_return_pct: float
+    return_lower_pct: float
+    return_upper_pct: float
+    actual_return_pct: float | None
     error_pct: float
     direction_correct: bool
 

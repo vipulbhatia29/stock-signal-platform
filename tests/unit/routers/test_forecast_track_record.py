@@ -38,23 +38,29 @@ def mock_forecast_rows():
             forecast_date=date(2026, 1, 1),
             ticker="AAPL",
             horizon_days=90,
-            predicted_price=195.0,
-            predicted_lower=185.0,
-            predicted_upper=205.0,
+            expected_return_pct=3.17,
+            return_lower_pct=-2.65,
+            return_upper_pct=8.47,
+            confidence_score=0.65,
+            direction="bullish",
+            base_price=189.0,
             target_date=date(2026, 4, 1),
-            actual_price=192.0,
-            error_pct=0.0156,  # decimal fraction: (195-192)/195
+            actual_return_pct=1.59,
+            error_pct=0.0156,
         ),
         Row(
             forecast_date=date(2026, 1, 15),
             ticker="AAPL",
             horizon_days=90,
-            predicted_price=198.0,
-            predicted_lower=188.0,
-            predicted_upper=208.0,
+            expected_return_pct=4.21,
+            return_lower_pct=-1.05,
+            return_upper_pct=9.47,
+            confidence_score=0.70,
+            direction="bullish",
+            base_price=190.0,
             target_date=date(2026, 4, 15),
-            actual_price=201.0,
-            error_pct=0.0152,  # decimal fraction: (201-198)/198
+            actual_return_pct=5.79,
+            error_pct=0.0152,
         ),
     ]
 
@@ -174,9 +180,9 @@ class TestForecastTrackRecord:
                 session=mock_db,
             )
 
-        # Row 1: forecast_date_price=189, predicted=195 (up), actual=192 (up) → correct
+        # Row 1: expected_return_pct=3.17 (>0 → bullish), actual_return_pct=1.59 (>0) → correct
         assert result.evaluations[0].direction_correct is True
-        # Row 2: forecast_date_price=190, predicted=198 (up), actual=201 (up) → correct
+        # Row 2: expected_return_pct=4.21 (>0 → bullish), actual_return_pct=5.79 (>0) → correct
         assert result.evaluations[1].direction_correct is True
 
     @pytest.mark.asyncio
@@ -208,6 +214,6 @@ class TestForecastTrackRecord:
                 session=mock_db,
             )
 
-        # Row 1: actual=192.0, band=[185, 205] → inside
-        # Row 2: actual=201.0, band=[188, 208] → inside
+        # Row 1: actual_return=1.59, band=[-2.65, 8.47] → inside
+        # Row 2: actual_return=5.79, band=[-1.05, 9.47] → inside
         assert result.summary.ci_containment_rate == 1.0

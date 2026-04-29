@@ -183,8 +183,10 @@ class TestPredictForecast:
 
     @pytest.mark.asyncio
     @patch("backend.tools.forecasting.model_from_json")
-    async def test_returns_3_forecast_results(self, mock_from_json) -> None:
+    @patch("backend.tools.forecasting.settings")
+    async def test_returns_3_forecast_results(self, mock_settings, mock_from_json) -> None:
         """predict_forecast should return one ForecastResult per horizon."""
+        mock_settings.PROPHET_REAL_SENTIMENT_ENABLED = False
         mock_model = MagicMock()
         mock_model.extra_regressors = {}
         mock_model.make_future_dataframe.return_value = pd.DataFrame({"ds": []})
@@ -197,16 +199,18 @@ class TestPredictForecast:
             with patch.object(Path, "exists", return_value=True):
                 results = await predict_forecast(mv, AsyncMock())
 
-        assert len(results) == 3
+        assert len(results) == len(DEFAULT_HORIZONS)
         assert all(isinstance(r, ForecastResult) for r in results)
         horizons = [r.horizon_days for r in results]
-        assert horizons == [90, 180, 270]
+        assert horizons == DEFAULT_HORIZONS
 
     @pytest.mark.asyncio
     @freeze_time("2026-04-13 23:59:00", tz_offset=0)
     @patch("backend.tools.forecasting.model_from_json")
-    async def test_forecast_has_correct_fields(self, mock_from_json) -> None:
-        """Each ForecastResult should have predicted price, lower, upper, target date."""
+    @patch("backend.tools.forecasting.settings")
+    async def test_forecast_has_correct_fields(self, mock_settings, mock_from_json) -> None:
+        """Each ForecastResult should have expected_return_pct, bounds, target date."""
+        mock_settings.PROPHET_REAL_SENTIMENT_ENABLED = False
         mock_model = MagicMock()
         mock_model.extra_regressors = {}
         mock_model.make_future_dataframe.return_value = pd.DataFrame({"ds": []})
@@ -221,10 +225,9 @@ class TestPredictForecast:
 
         fc = results[0]
         assert fc.ticker == "AAPL"
-        assert fc.predicted_price > 0
-        assert fc.predicted_lower < fc.predicted_upper
+        assert fc.return_lower_pct < fc.return_upper_pct
         assert fc.target_date == date(2026, 7, 12)  # 2026-04-13 + 90d
-        assert fc.actual_price is None
+        assert fc.actual_return_pct is None
         assert fc.model_version_id == mv.id
 
     @pytest.mark.asyncio
