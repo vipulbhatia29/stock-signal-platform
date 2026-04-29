@@ -199,7 +199,7 @@ class BacktestEngine:
             has_sentiment: Whether sentiment regressor columns are present.
 
         Returns:
-            Tuple of (predicted_price, predicted_lower, predicted_upper).
+            Tuple of (expected_return_pct, return_lower_pct, return_upper_pct).
         """
         from prophet import Prophet  # lazy import — Prophet is heavy
 
