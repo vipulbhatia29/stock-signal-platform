@@ -4,7 +4,7 @@ import asyncio
 import logging
 import math
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
 from sqlalchemy import select
@@ -220,7 +220,13 @@ class BacktestEngine:
         target_col = f"forward_return_{horizon_days}d"
 
         # ── 1. Load all historical features (cross-ticker) ──────────────
-        result = await db.execute(select(HistoricalFeature).order_by(HistoricalFeature.date))
+        # Only load last 3 years of data (sufficient for walk-forward with 365-day min train)
+        date_cutoff = (datetime.now(timezone.utc) - timedelta(days=1095)).date()
+        result = await db.execute(
+            select(HistoricalFeature)
+            .where(HistoricalFeature.date >= date_cutoff)
+            .order_by(HistoricalFeature.date)
+        )
         all_rows = result.scalars().all()
 
         if not all_rows:

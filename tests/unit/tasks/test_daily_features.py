@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pandas as pd
@@ -43,30 +44,73 @@ def _make_features_df() -> pd.DataFrame:
     )
 
 
-def _noop_session():
-    """Return a fresh async context manager that yields a dummy session."""
+def _make_price_rows(ticker: str, n: int = 300) -> list:
+    """Return synthetic price rows as named tuples matching (ticker, time, close)."""
+    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    rows = []
+    for i in range(n):
+        row = MagicMock()
+        row.ticker = ticker
+        row.time = base.replace(day=1) if i == 0 else base
+        # Use pandas Timestamp-compatible objects
+        from datetime import timedelta
+
+        row.time = datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(days=i)
+        row.close = 100.0 + i * 0.1
+        rows.append(row)
+    return rows
+
+
+def _noop_session(price_rows: list | None = None):
+    """Return a fresh async context manager that yields a mock session.
+
+    If price_rows is provided, the session's execute() returns a result
+    whose .all() returns those rows (for the batch price fetch).
+    """
 
     @asynccontextmanager
     async def _cm():
-        yield MagicMock()
+        session = MagicMock()
+        if price_rows is not None:
+            mock_result = MagicMock()
+            mock_result.all.return_value = price_rows
+            session.execute = AsyncMock(return_value=mock_result)
+        yield session
 
     return _cm()
 
 
 @pytest.mark.asyncio
 async def test_populates_features_for_all_tickers():
-    """When enabled, the task upserts a feature row for each ticker in the universe.
+    """Batch-fetches prices once, then upserts a feature row for each ticker in the universe.
 
-    Mocks: DB session factory, get_all_referenced_tickers, _fetch_ticker_prices,
-    _fetch_vix_and_spy, build_feature_dataframe, _upsert_daily_feature_row.
-    Verifies that _upsert_daily_feature_row is called once per ticker.
+    The batch DB query returns price rows for both tickers. Verifies that
+    _upsert_daily_feature_row is called once per ticker.
     """
     from backend.tasks.forecasting import _populate_daily_features_async
 
-    closes = _make_closes()
     features = _make_features_df()
     vix = _make_closes(252)
     spy = _make_closes(252)
+
+    # Build batch price rows for both tickers (300 rows each)
+    aapl_rows = _make_price_rows("AAPL", 300)
+    msft_rows = _make_price_rows("MSFT", 300)
+    all_price_rows = aapl_rows + msft_rows
+
+    call_count = {"n": 0}
+
+    def _session_factory_side_effect():
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            # First call: fetch tickers + VIX/SPY (no price mock needed)
+            return _noop_session()
+        elif call_count["n"] == 2:
+            # Second call: batch price fetch — returns all price rows
+            return _noop_session(price_rows=all_price_rows)
+        else:
+            # Subsequent calls: upsert sessions
+            return _noop_session()
 
     with (
         patch("backend.tasks.forecasting.settings") as mock_settings,
@@ -82,11 +126,6 @@ async def test_populates_features_for_all_tickers():
             return_value=(vix, spy),
         ),
         patch(
-            "backend.tasks.forecasting._fetch_ticker_prices",
-            new_callable=AsyncMock,
-            return_value=closes,
-        ),
-        patch(
             "backend.tasks.forecasting.build_feature_dataframe",
             return_value=features,
         ),
@@ -96,7 +135,7 @@ async def test_populates_features_for_all_tickers():
         ) as mock_upsert,
     ):
         mock_settings.DAILY_FEATURES_ENABLED = True
-        mock_db.async_session_factory.side_effect = lambda: _noop_session()
+        mock_db.async_session_factory.side_effect = _session_factory_side_effect
 
         result = await bypass_tracked(_populate_daily_features_async)(run_id=uuid.uuid4())
 
@@ -124,27 +163,37 @@ async def test_disabled_via_config():
 
 
 @pytest.mark.asyncio
-async def test_handles_ticker_failure_gracefully():
-    """When one ticker raises during _fetch_ticker_prices, others still succeed.
+async def test_handles_ticker_with_insufficient_data():
+    """When one ticker has fewer than 250 price rows, it is skipped; others still succeed.
 
     The failing ticker appears in failed_tickers and status is 'degraded'.
     The succeeding ticker is still upserted.
     """
     from backend.tasks.forecasting import _populate_daily_features_async
 
-    closes = _make_closes()
     features = _make_features_df()
     vix = _make_closes(252)
     spy = _make_closes(252)
 
+    # FAIL ticker: only 10 rows (below 250 threshold)
+    fail_rows = _make_price_rows("FAIL", 10)
+    # MSFT: 300 rows (sufficient)
+    msft_rows = _make_price_rows("MSFT", 300)
+    all_price_rows = fail_rows + msft_rows
+
     call_count = {"n": 0}
 
-    async def _prices_side_effect(ticker: str, db: object) -> pd.Series:
-        """Raise for the first ticker; succeed for the second."""
+    def _session_factory_side_effect():
         call_count["n"] += 1
         if call_count["n"] == 1:
-            raise ValueError(f"No price data for {ticker}")
-        return closes
+            # First call: fetch tickers + VIX/SPY
+            return _noop_session()
+        elif call_count["n"] == 2:
+            # Second call: batch price fetch
+            return _noop_session(price_rows=all_price_rows)
+        else:
+            # Upsert sessions
+            return _noop_session()
 
     with (
         patch("backend.tasks.forecasting.settings") as mock_settings,
@@ -160,10 +209,6 @@ async def test_handles_ticker_failure_gracefully():
             return_value=(vix, spy),
         ),
         patch(
-            "backend.tasks.forecasting._fetch_ticker_prices",
-            side_effect=_prices_side_effect,
-        ),
-        patch(
             "backend.tasks.forecasting.build_feature_dataframe",
             return_value=features,
         ),
@@ -173,7 +218,7 @@ async def test_handles_ticker_failure_gracefully():
         ) as mock_upsert,
     ):
         mock_settings.DAILY_FEATURES_ENABLED = True
-        mock_db.async_session_factory.side_effect = lambda: _noop_session()
+        mock_db.async_session_factory.side_effect = _session_factory_side_effect
 
         result = await bypass_tracked(_populate_daily_features_async)(run_id=uuid.uuid4())
 

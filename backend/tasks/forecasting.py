@@ -205,19 +205,39 @@ async def _populate_daily_features_async(*, run_id: uuid.UUID) -> dict:
     populated = 0
     failed: list[str] = []
 
-    for ticker in tickers:
-        try:
-            async with _db.async_session_factory() as db:
-                closes = await _fetch_ticker_prices(ticker, db)
+    # Batch-fetch all prices (avoid N+1 query pattern)
+    async with _db.async_session_factory() as db:
+        from backend.models.price import StockPrice
 
-            if len(closes) < 250:
-                logger.debug(
-                    "Skipping %s: only %d price rows (need 250+ for SMA warmup)",
-                    ticker,
-                    len(closes),
+        price_result = await db.execute(
+            select(StockPrice.ticker, StockPrice.time, StockPrice.close)
+            .where(StockPrice.ticker.in_(tickers))
+            .order_by(StockPrice.ticker, StockPrice.time)
+        )
+        all_prices = price_result.all()
+
+    # Group prices by ticker
+    from collections import defaultdict
+
+    prices_by_ticker: dict[str, list] = defaultdict(list)
+    for row in all_prices:
+        prices_by_ticker[row.ticker].append((row.time, float(row.close)))
+
+    # Process each ticker with in-memory price data
+    for tkr in tickers:
+        try:
+            price_rows = prices_by_ticker.get(tkr, [])
+            if len(price_rows) < 250:
+                logger.warning(
+                    "Insufficient price data for %s (%d rows, need 250+)",
+                    tkr,
+                    len(price_rows),
                 )
-                failed.append(ticker)
+                failed.append(tkr)
                 continue
+
+            dates_idx = pd.DatetimeIndex([r[0] for r in price_rows], tz="UTC")
+            closes = pd.Series([r[1] for r in price_rows], index=dates_idx, name="close")
 
             features_df = await asyncio.to_thread(
                 build_feature_dataframe,
@@ -227,19 +247,16 @@ async def _populate_daily_features_async(*, run_id: uuid.UUID) -> dict:
             )
 
             if features_df.empty:
-                logger.warning("Empty feature DataFrame for %s — skipping", ticker)
-                failed.append(ticker)
+                logger.warning("Empty feature DataFrame for %s", tkr)
+                failed.append(tkr)
                 continue
 
             async with _db.async_session_factory() as db:
-                await _upsert_daily_feature_row(ticker, features_df, db)
-
+                await _upsert_daily_feature_row(tkr, features_df, db)
             populated += 1
-            logger.debug("Daily feature upserted for %s", ticker)
-
         except Exception:
-            logger.exception("Daily feature population failed for %s", ticker)
-            failed.append(ticker)
+            logger.exception("Daily feature population failed for %s", tkr)
+            failed.append(tkr)
 
     status = "degraded" if failed else "ok"
     logger.info(
