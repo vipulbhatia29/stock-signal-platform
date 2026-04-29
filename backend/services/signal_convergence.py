@@ -330,10 +330,10 @@ class SignalConvergenceService:
         raw_pio = weights.get("piotroski")
         piotroski_score: int | None = int(raw_pio) if raw_pio is not None else None
 
-        # Compute forecast predicted return from ForecastResult
+        # Compute forecast predicted return from ForecastResult (return stored directly)
         predicted_return: float | None = None
-        if forecast and signal.current_price and signal.current_price > 0:
-            predicted_return = (forecast.predicted_price / signal.current_price) - 1.0
+        if forecast and forecast.expected_return_pct is not None:
+            predicted_return = forecast.expected_return_pct / 100.0
 
         # Classify each signal
         rsi_dir = _classify_rsi(signal.rsi_value)

@@ -1,4 +1,4 @@
-"""Celery tasks for Prophet model training and forecast refresh."""
+"""Celery tasks for forecast model training and forecast refresh."""
 
 from __future__ import annotations
 
@@ -56,12 +56,14 @@ async def _get_price_data_counts(tickers: list[str], db: AsyncSession) -> dict[s
 
 @tracked_task("model_retrain", trigger="scheduled")
 async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
-    """Retrain Prophet models for all tickers and generate forecasts.
+    """Retrain forecast models for all tickers and generate forecasts.
 
     Returns:
         Dict with training counts. Pipeline status lives in pipeline_runs row.
     """
     from backend.services.ticker_universe import get_all_referenced_tickers
+
+    # TODO(KAN-550): Replace with ForecastEngine in PR1b integration
     from backend.tools.forecasting import predict_forecast, train_prophet_model
 
     async with _db.async_session_factory() as db:
@@ -101,13 +103,14 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
         Dict with refresh counts. Pipeline status lives in pipeline_runs row.
     """
     from backend.models.forecast import ModelVersion
+
+    # TODO(KAN-550): Replace with ForecastEngine in PR1b integration
     from backend.tools.forecasting import predict_forecast
 
     async with _db.async_session_factory() as db:
         result = await db.execute(
             select(ModelVersion).where(
                 ModelVersion.is_active.is_(True),
-                ModelVersion.model_type == "prophet",
             )
         )
         active_models = result.scalars().all()
@@ -179,7 +182,7 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
     name="backend.tasks.forecasting.model_retrain_all_task",
 )
 def model_retrain_all_task() -> dict:
-    """Weekly full retrain of all Prophet models (Sunday 02:00 ET).
+    """Weekly full retrain of all forecast models (Sunday 02:00 ET).
 
     Returns:
         Dict with training status and counts.
@@ -193,7 +196,7 @@ def model_retrain_all_task() -> dict:
     name="backend.tasks.forecasting.forecast_refresh_task",
 )
 def forecast_refresh_task() -> dict:
-    """Nightly forecast refresh using existing active models (no retrain).
+    """Nightly forecast refresh using existing active forecast models (no retrain).
 
     Returns:
         Dict with refresh status and counts.
@@ -205,7 +208,7 @@ def forecast_refresh_task() -> dict:
 
 @tracked_task("single_ticker_retrain")
 async def _retrain_single_ticker_async(ticker: str, *, run_id: uuid.UUID) -> dict:
-    """Async implementation: retrain a single ticker's Prophet model.
+    """Async implementation: retrain a single ticker's forecast model.
 
     Args:
         ticker: Stock ticker to retrain.
@@ -214,6 +217,7 @@ async def _retrain_single_ticker_async(ticker: str, *, run_id: uuid.UUID) -> dic
     Returns:
         Dict with training result.
     """
+    # TODO(KAN-550): Replace with ForecastEngine in PR1b integration
     from backend.tools.forecasting import predict_forecast, train_prophet_model
 
     async with _db.async_session_factory() as db:
@@ -233,7 +237,7 @@ async def _retrain_single_ticker_async(ticker: str, *, run_id: uuid.UUID) -> dic
     name="backend.tasks.forecasting.retrain_single_ticker_task",
 )
 def retrain_single_ticker_task(ticker: str, priority: bool = False) -> dict:
-    """Retrain a single ticker's Prophet model.
+    """Retrain a single ticker's forecast model.
 
     Args:
         ticker: Stock ticker to retrain.
