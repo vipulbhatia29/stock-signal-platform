@@ -1,13 +1,17 @@
 """Celery tasks for forecast evaluation, recommendation evaluation, and drift detection."""
 
 import logging
+import math
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
+import numpy as np
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.database as _db
+from backend.config import settings
+from backend.services.forecast_engine import FEATURE_NAMES
 from backend.tasks import celery_app
 from backend.tasks._asyncio_bridge import safe_asyncio_run
 from backend.tasks.pipeline import tracked_task
@@ -549,6 +553,156 @@ async def _get_price_near_date(ticker: str, target: date, db: AsyncSession) -> f
 
 
 # ---------------------------------------------------------------------------
+# Task 17: Feature distribution drift monitoring
+# ---------------------------------------------------------------------------
+
+
+async def _load_current_feature_stats(db: AsyncSession) -> dict[str, dict[str, float]]:
+    """Compute mean and std of each numeric feature over the last 30 days.
+
+    Args:
+        db: Async database session.
+
+    Returns:
+        Mapping of feature_name → {"mean": float, "std": float} for features
+        with ≥10 non-null, finite values in the last 30 days.
+    """
+    from backend.models.historical_feature import HistoricalFeature
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=30)
+    result = await db.execute(
+        select(HistoricalFeature).where(HistoricalFeature.date >= cutoff.date())
+    )
+    rows = result.scalars().all()
+
+    numeric_features = [f for f in FEATURE_NAMES if f != "convergence_label"]
+    stats: dict[str, dict[str, float]] = {}
+
+    for feat in numeric_features:
+        values = []
+        for row in rows:
+            val = getattr(row, feat, None)
+            if val is not None and math.isfinite(float(val)):
+                values.append(float(val))
+        if len(values) >= 10:
+            arr = np.array(values, dtype=float)
+            stats[feat] = {
+                "mean": round(float(arr.mean()), 6),
+                "std": round(float(arr.std()), 6),
+            }
+
+    return stats
+
+
+async def _load_training_feature_stats(db: AsyncSession) -> dict[str, dict[str, float]]:
+    """Load training-time feature stats from the latest active LightGBM ModelVersion.
+
+    Args:
+        db: Async database session.
+
+    Returns:
+        Mapping of feature_name → {"mean": float, "std": float} from the model's
+        metrics["training_feature_stats"], or empty dict if unavailable.
+    """
+    from backend.models.forecast import ModelVersion
+
+    result = await db.execute(
+        select(ModelVersion).where(
+            ModelVersion.is_active.is_(True),
+            ModelVersion.model_type.like("lightgbm_%"),
+        )
+    )
+    mv = result.scalars().first()
+
+    if mv is None or mv.metrics is None:
+        return {}
+
+    return mv.metrics.get("training_feature_stats") or {}
+
+
+@tracked_task("feature_drift_check")
+async def _check_feature_drift_async(*, run_id: uuid.UUID) -> dict:
+    """Check for feature distribution drift versus training-time baseline.
+
+    Compares current 30-day feature statistics against the baseline stored in
+    the active LightGBM ModelVersion at training time. Features whose mean
+    has shifted by more than FEATURE_DRIFT_SIGMA_THRESHOLD standard deviations
+    are flagged, and the model's metrics are updated with the drift report.
+
+    Returns:
+        Dict with status and list of drifted feature names.
+    """
+    if not settings.FEATURE_DRIFT_ENABLED:
+        return {"status": "disabled"}
+
+    from backend.models.forecast import ModelVersion
+
+    async with _db.async_session_factory() as db:
+        training_stats = await _load_training_feature_stats(db)
+        if not training_stats:
+            logger.info("Feature drift check: no training baseline available")
+            return {"status": "no_baseline", "drifted_features": []}
+
+        current_stats = await _load_current_feature_stats(db)
+        if not current_stats:
+            logger.info("Feature drift check: no current feature data (last 30 days)")
+            return {"status": "no_data", "drifted_features": []}
+
+        drifted: list[str] = []
+        for feat, train in training_stats.items():
+            train_std = train.get("std", 0.0)
+            if train_std == 0.0:
+                continue  # skip constant features — avoid division by zero
+
+            current = current_stats.get(feat)
+            if current is None:
+                continue
+
+            train_mean = train["mean"]
+            current_mean = current["mean"]
+            z_score = abs(current_mean - train_mean) / train_std
+
+            if z_score > settings.FEATURE_DRIFT_SIGMA_THRESHOLD:
+                drifted.append(feat)
+                logger.warning(
+                    "Feature drift detected for %s: z_score=%.2f (mean %.4f → %.4f, std %.4f)",
+                    feat,
+                    z_score,
+                    train_mean,
+                    current_mean,
+                    train_std,
+                )
+
+        if drifted:
+            # Flag active LightGBM models with drift report
+            result = await db.execute(
+                select(ModelVersion).where(
+                    ModelVersion.is_active.is_(True),
+                    ModelVersion.model_type.like("lightgbm_%"),
+                )
+            )
+            flagged_models = result.scalars().all()
+            now_iso = datetime.now(timezone.utc).isoformat()
+            for mv in flagged_models:
+                metrics = dict(mv.metrics or {})
+                metrics["feature_drift_detected"] = {
+                    "features": drifted,
+                    "checked_at": now_iso,
+                }
+                mv.metrics = metrics
+
+            await db.commit()
+
+        status = "drift_detected" if drifted else "ok"
+        logger.info(
+            "Feature drift check complete: status=%s, drifted=%d features",
+            status,
+            len(drifted),
+        )
+        return {"status": status, "drifted_features": drifted}
+
+
+# ---------------------------------------------------------------------------
 # Celery task wrappers
 # ---------------------------------------------------------------------------
 
@@ -587,3 +741,17 @@ def evaluate_recommendations_task() -> dict:
     logger.info("Starting recommendation evaluation")
 
     return safe_asyncio_run(_evaluate_recommendations_async())  # type: ignore[arg-type]
+
+
+@celery_app.task(name="backend.tasks.evaluation.check_feature_drift_task")
+def check_feature_drift_task() -> dict:
+    """Check for feature distribution drift versus training-time baseline.
+
+    Runs nightly after daily feature population (11 PM ET).
+
+    Returns:
+        Dict with status and list of drifted feature names.
+    """
+    logger.info("Starting feature drift check")
+
+    return safe_asyncio_run(_check_feature_drift_async())  # type: ignore[arg-type]

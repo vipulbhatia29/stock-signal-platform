@@ -237,6 +237,11 @@ celery_app.conf.beat_schedule = {
         # Saturday 03:30 ET — avoids 03:00 collision with purge-login-attempts-daily
         "schedule": crontab(hour=3, minute=30, day_of_week=6),
     },
+    # ── Feature drift monitoring (11 PM ET — after daily feature population) ──
+    "feature-drift-check-daily": {
+        "task": "backend.tasks.evaluation.check_feature_drift_task",
+        "schedule": crontab(hour=23, minute=0),  # 11 PM ET — after daily features
+    },
 }
 
 # ── Observability SDK — worker lifecycle signals (PR2a) ─────────────────────

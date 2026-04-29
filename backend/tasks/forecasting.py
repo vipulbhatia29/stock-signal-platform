@@ -410,6 +410,18 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
     if not trained_models:
         return {"trained": 0, "total": len(tickers)}
 
+    # ── 2b. Compute training-time feature stats for drift monitoring ──────
+    numeric_features = [f for f in FEATURE_NAMES if f != "convergence_label"]
+    training_feature_stats: dict[str, dict[str, float]] = {}
+    for feat in numeric_features:
+        if feat in features_df.columns:
+            values = features_df[feat].dropna()
+            if len(values) >= 10:
+                training_feature_stats[feat] = {
+                    "mean": round(float(values.mean()), 6),
+                    "std": round(float(values.std()), 6),
+                }
+
     # ── 3. Persist ModelVersion rows + predict for each ticker ───────────
     trained = 0
     async with _db.async_session_factory() as db:
@@ -489,6 +501,11 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
                 .values(is_active=False)
             )
 
+            metrics_with_stats = {
+                **metrics,
+                "training_feature_stats": training_feature_stats,
+            }
+
             mv = ModelVersion(
                 ticker="__universe__",
                 model_type=model_type,
@@ -503,7 +520,7 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
                     "ensemble_weight_xgb": 0.5,
                     "artifact_b64": base64.b64encode(artifact_bytes).decode("ascii"),
                 },
-                metrics=metrics,
+                metrics=metrics_with_stats,
                 status="active",
                 artifact_path=None,
             )
