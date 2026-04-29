@@ -397,3 +397,29 @@ Compared dashboard to Lovable template. Restructured zone order to tell a story:
 - Tests: 2677 unit (+15 net: +22 new ForecastEngine, -17 deleted test_forecasting_floor.py, adjustments), 0 failures
 - 1 PR merged (#291), 33 files changed, +1965/-700 lines, Alembic head: `286eaa38beab`
 - **KAN-550 DONE.** Resume: PR2 (KAN-551) backtest validation + daily pipeline, or PR3 (KAN-552) frontend
+
+---
+
+## Session 144 — KAN-551: Backtest Validation + Daily Pipeline (PR2) (2026-04-29)
+
+**Branch:** `feat/KAN-551-backtest-pipeline-pr2` → develop | **PR #292**
+
+### What was built
+
+1. **BacktestEngine rewrite** — Replaced Prophet walk-forward with ForecastEngine-based validation. Cross-ticker training on historical_features, expanding windows with purge buffer (train_end - horizon_days), log return conversion with -99.9% clamp. 3-year date filter to prevent unbounded table scans.
+2. **Daily feature population task** — `populate_daily_features_task` at 22:30 ET nightly. Batch-fetches all ticker prices (no N+1), downloads VIX from yfinance, computes features via `build_feature_dataframe`, upserts latest row into `historical_features`. Kill switch: `DAILY_FEATURES_ENABLED`.
+3. **Champion/challenger promotion gate** — Weekly retrain now compares challenger vs champion: direction accuracy must improve ≥1% OR CI containment ≥5%. Rejected challengers logged in `ModelVersion.metrics["last_challenger_comparison"]`. Kill switch: `CHAMPION_CHALLENGER_ENABLED`.
+4. **Feature drift monitoring** — `check_feature_drift_task` at 23:00 ET nightly. Computes mean/std per feature (last 30 days), compares to training-time distribution (stored in ModelVersion.metrics). Flags model as stale if any feature shifts >2σ. Kill switch: `FEATURE_DRIFT_ENABLED`.
+5. **Prophet filter fix** — `_check_drift_async` in evaluation.py now includes LightGBM model types, not just Prophet.
+6. **Config kill switches** — 6 new settings: `DAILY_FEATURES_ENABLED`, `CHAMPION_CHALLENGER_ENABLED`, `CHAMPION_DIRECTION_THRESHOLD`, `CHAMPION_CI_THRESHOLD`, `FEATURE_DRIFT_ENABLED`, `FEATURE_DRIFT_SIGMA_THRESHOLD`.
+
+### Review findings addressed
+- C1: Added 3-year date filter to walk-forward query (prevents OOM)
+- C2: Batch-fetch all ticker prices (eliminates N+1)
+- I2: Clamped predicted returns before math.log (prevents ValueError)
+- Stale API integration tests skipped with KAN-551 marker
+
+### Session 144 Totals
+- Tests: 2698 unit (+21), 0 failures
+- 9 files changed, +1377/-217 lines, Alembic head: `286eaa38beab` (unchanged)
+- **KAN-551 DONE.** Resume: PR3 (KAN-552) frontend forecast card redesign, or PR4 (KAN-553) cleanup
