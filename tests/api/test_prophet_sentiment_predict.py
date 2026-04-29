@@ -141,6 +141,7 @@ async def test_predict_forecast_is_async() -> None:
 @pytest.mark.asyncio
 @pytest.mark.regression
 @pytest.mark.timeout(180)
+@pytest.mark.xfail(reason="KAN-550: PROPHET_REAL_SENTIMENT_ENABLED=False (deprecated)")
 async def test_predict_uses_model_history_sentiment_not_zero(db_session, monkeypatch) -> None:
     """Predict-time sentiment must come from ``model.history``, not hard-coded zero.
 
@@ -223,6 +224,7 @@ async def test_predict_forecast_without_sentiment_still_works(db_session) -> Non
 @pytest.mark.asyncio
 @pytest.mark.regression
 @pytest.mark.timeout(240)
+@pytest.mark.xfail(reason="KAN-550: PROPHET_REAL_SENTIMENT_ENABLED=False (deprecated)")
 async def test_stale_model_fetches_post_training_sentiment(db_session) -> None:
     """A model older than ``today`` must pull fresh post-training sentiment.
 
@@ -311,6 +313,7 @@ async def test_stale_model_fetches_post_training_sentiment(db_session) -> None:
 @pytest.mark.asyncio
 @pytest.mark.regression
 @pytest.mark.timeout(180)
+@pytest.mark.xfail(reason="KAN-550: PROPHET_REAL_SENTIMENT_ENABLED=False (deprecated)")
 async def test_projection_collapse_logs_error(db_session, caplog: pytest.LogCaptureFixture) -> None:
     """All-zero sentiment projection must log ERROR so operators see it.
 
