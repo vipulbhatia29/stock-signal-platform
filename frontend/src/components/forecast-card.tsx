@@ -64,7 +64,7 @@ function DriverChip({ label, direction }: { label: string; direction: string }) 
   );
 }
 
-function HorizonPill({ horizon }: { horizon: ForecastHorizon }) {
+function HorizonPill({ horizon, currentPrice }: { horizon: ForecastHorizon; currentPrice?: number }) {
   const ret = horizon.expected_return_pct;
   const isPositive = ret > 0;
   const isNegative = ret < 0;
@@ -105,12 +105,15 @@ function HorizonPill({ horizon }: { horizon: ForecastHorizon }) {
         {ret.toFixed(1)}%
       </div>
 
-      {/* Implied target price — secondary */}
-      {horizon.implied_target_price != null && (
-        <div className="mt-0.5 text-[10px] text-subtle font-mono">
-          ~${horizon.implied_target_price.toFixed(2)}
-        </div>
-      )}
+      {/* Implied target price — secondary (backend-provided or fallback from currentPrice) */}
+      {(() => {
+        const target = horizon.implied_target_price ?? (currentPrice ? currentPrice * (1 + ret / 100) : null);
+        return target != null ? (
+          <div className="mt-0.5 text-[10px] text-subtle font-mono">
+            ~${target.toFixed(2)}
+          </div>
+        ) : null;
+      })()}
 
       {/* Return range */}
       <div className="mt-1.5 text-[9px] text-subtle">
@@ -140,9 +143,6 @@ export function ForecastCard({
   modelStatus,
 }: ForecastCardProps) {
   const [drillOpen, setDrillOpen] = useState(false);
-
-  // currentPrice is kept for backward compatibility (used by parent — Task 6)
-  void currentPrice;
 
   if (isLoading) {
     return (
@@ -238,7 +238,7 @@ export function ForecastCard({
       {/* Horizon pills — 2 columns */}
       <div className="grid grid-cols-2 gap-3">
         {horizons.map((h) => (
-          <HorizonPill key={h.horizon_days} horizon={h} />
+          <HorizonPill key={h.horizon_days} horizon={h} currentPrice={currentPrice} />
         ))}
       </div>
 

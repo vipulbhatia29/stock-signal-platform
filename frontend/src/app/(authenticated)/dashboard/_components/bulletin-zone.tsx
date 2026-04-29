@@ -204,7 +204,7 @@ function WatchlistTable({
                     <span className={cn(
                       fc90.expected_return_pct > 0 && "text-gain",
                       fc90.expected_return_pct < 0 && "text-loss",
-                      fc90.expected_return_pct === 0 && "text-muted-foreground",
+                      !(fc90.expected_return_pct > 0) && !(fc90.expected_return_pct < 0) && "text-muted-foreground",
                     )}>
                       {fc90.expected_return_pct > 0 ? "+" : ""}
                       {fc90.expected_return_pct.toFixed(1)}%
@@ -305,7 +305,7 @@ function PortfolioTable({
                     <span className={cn(
                       fc90.expected_return_pct > 0 && "text-gain",
                       fc90.expected_return_pct < 0 && "text-loss",
-                      fc90.expected_return_pct === 0 && "text-muted-foreground",
+                      !(fc90.expected_return_pct > 0) && !(fc90.expected_return_pct < 0) && "text-muted-foreground",
                     )}>
                       {fc90.expected_return_pct > 0 ? "+" : ""}
                       {fc90.expected_return_pct.toFixed(1)}%
