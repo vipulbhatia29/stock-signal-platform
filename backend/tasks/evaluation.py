@@ -236,9 +236,7 @@ async def _check_drift_async(*, run_id: uuid.UUID) -> dict:
         result = await db.execute(
             select(ModelVersion).where(
                 ModelVersion.is_active.is_(True),
-                ModelVersion.model_type.in_(
-                    ["prophet", "lightgbm_60d", "lightgbm_90d"]
-                ),
+                ModelVersion.model_type.in_(["prophet", "lightgbm_60d", "lightgbm_90d"]),
             )
         )
         active_models = result.scalars().all()
