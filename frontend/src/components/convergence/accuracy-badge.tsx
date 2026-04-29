@@ -1,23 +1,23 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import type { ModelAccuracy } from "@/types/api";
 
 interface AccuracyBadgeProps {
-  /** MAPE percentage (e.g. 8.5 means 8.5% error). */
-  mape: number | null;
+  accuracy: ModelAccuracy | null;
   className?: string;
-  /** Optional click handler — typically opens a DrillDownSheet. */
   onClick?: () => void;
 }
 
-function getAccuracyTier(mape: number): {
+function getAccuracyTier(accuracy: ModelAccuracy): {
   label: string;
   classes: string;
 } {
-  if (mape <= 5) {
+  const hitRate = accuracy.direction_hit_rate;
+  if (hitRate >= 0.70) {
     return { label: "High", classes: "bg-gain/15 text-gain border-gain/25" };
   }
-  if (mape <= 15) {
+  if (hitRate >= 0.55) {
     return {
       label: "Medium",
       classes: "bg-warning/15 text-warning border-warning/25",
@@ -26,11 +26,11 @@ function getAccuracyTier(mape: number): {
   return { label: "Low", classes: "bg-loss/15 text-loss border-loss/25" };
 }
 
-/** Compact badge showing forecast accuracy (MAPE%). Clickable for drill-down. */
-export function AccuracyBadge({ mape, className, onClick }: AccuracyBadgeProps) {
-  if (mape === null) return null;
+export function AccuracyBadge({ accuracy, className, onClick }: AccuracyBadgeProps) {
+  if (accuracy === null) return null;
 
-  const tier = getAccuracyTier(mape);
+  const tier = getAccuracyTier(accuracy);
+  const hitPct = Math.round(accuracy.direction_hit_rate * 100);
   const Tag = onClick ? "button" : "span";
 
   return (
@@ -44,10 +44,10 @@ export function AccuracyBadge({ mape, className, onClick }: AccuracyBadgeProps) 
         onClick && "cursor-pointer hover:opacity-80 transition-opacity",
         className,
       )}
-      aria-label={`Forecast accuracy: ${tier.label} (${mape.toFixed(1)}% error)`}
+      aria-label={`Forecast accuracy: ${tier.label} (${hitPct}% direction hit rate, ${accuracy.avg_error_pct.toFixed(1)}% avg error)`}
     >
-      {tier.label} accuracy
-      <span className="font-mono">{mape.toFixed(1)}%</span>
+      {tier.label}
+      <span className="font-mono">{hitPct}%</span>
     </Tag>
   );
 }
