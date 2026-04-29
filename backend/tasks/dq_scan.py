@@ -236,15 +236,10 @@ async def _check_forecast_extreme_ratios(db: AsyncSession) -> list[dict]:
     """
     result = await db.execute(
         text(
-            "SELECT fr.ticker, fr.predicted_price, sp.close "
-            "FROM forecast_results fr "
-            "JOIN LATERAL ("
-            "  SELECT close FROM stock_prices WHERE ticker = fr.ticker "
-            "  ORDER BY time DESC LIMIT 1"
-            ") sp ON true "
-            "WHERE sp.close > 0 AND ("
-            "  fr.predicted_price > 10 * sp.close OR fr.predicted_price < 0.1 * sp.close"
-            ") LIMIT 50"
+            "SELECT ticker, expected_return_pct "
+            "FROM forecast_results "
+            "WHERE abs(expected_return_pct) > 100 "
+            "LIMIT 50"
         )
     )
     rows = result.all()
@@ -253,7 +248,7 @@ async def _check_forecast_extreme_ratios(db: AsyncSession) -> list[dict]:
             "check": "forecast_extreme_ratio",
             "severity": "high",
             "ticker": r[0],
-            "message": f"Extreme forecast for {r[0]}: predicted={r[1]:.2f}, current={r[2]:.2f}",
+            "message": f"Extreme forecast for {r[0]}: expected_return={r[1]:.1f}%",
         }
         for r in rows
     ]

@@ -34,11 +34,7 @@ def _make_forecast_result(
     f.forecast_signal = None
     f.forecast_date = forecast_date or date(2026, 3, 22)
     f.target_date = target_date or date(2026, 6, 20)
-    # Legacy fields still referenced by forecast_tools.py (not yet migrated to return-based)
-    implied_price = round(base_price * (1 + expected_return_pct / 100), 2)
-    f.predicted_price = implied_price
-    f.predicted_lower = round(base_price * (1 + return_lower_pct / 100), 2)
-    f.predicted_upper = round(base_price * (1 + return_upper_pct / 100), 2)
+    f.actual_return_pct = None
     return f
 
 
