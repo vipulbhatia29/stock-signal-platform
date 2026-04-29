@@ -232,11 +232,13 @@ async def _check_drift_async(*, run_id: uuid.UUID) -> dict:
     experimental_demoted: list[str] = []
 
     async with _db.async_session_factory() as db:
-        # Get all active Prophet models
+        # Get all active forecast models (Prophet + LightGBM)
         result = await db.execute(
             select(ModelVersion).where(
                 ModelVersion.is_active.is_(True),
-                ModelVersion.model_type == "prophet",
+                ModelVersion.model_type.in_(
+                    ["prophet", "lightgbm_60d", "lightgbm_90d"]
+                ),
             )
         )
         active_models = result.scalars().all()
