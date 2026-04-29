@@ -53,17 +53,26 @@ async def test_nightly_sweep_respects_cap_at_100() -> None:
     existing_mv.id = uuid.uuid4()
     existing_mv.ticker = "AAPL"
     existing_mv.is_active = True
-    existing_mv.model_type = "prophet"
+    existing_mv.model_type = "lightgbm_60d"
+    existing_mv.hyperparameters = None  # no artifact → Phase 1 skips prediction
 
     # 120 new tickers — only 100 should be dispatched
     new_tickers = [f"TICK{i:03d}" for i in range(120)]
     all_tickers = ["AAPL"] + new_tickers
 
-    mock_db_result = MagicMock()
-    mock_db_result.scalars.return_value.all.return_value = [existing_mv]
+    # Mock DB: 3 sequential execute() calls in Phase 1
+    # 1. ModelVersion query  2. HistoricalFeature DISTINCT ON  3. StockPrice DISTINCT ON
+    mock_mv_result = MagicMock()
+    mock_mv_result.scalars.return_value.all.return_value = [existing_mv]
+    mock_feat_result = MagicMock()
+    mock_feat_result.scalars.return_value.all.return_value = []  # no features
+    mock_price_result = MagicMock()
+    mock_price_result.all.return_value = []  # no prices
 
     mock_db = AsyncMock()
-    mock_db.execute = AsyncMock(return_value=mock_db_result)
+    mock_db.execute = AsyncMock(
+        side_effect=[mock_mv_result, mock_feat_result, mock_price_result]
+    )
     mock_db.add = MagicMock()
     mock_db.commit = AsyncMock()
 
@@ -80,9 +89,8 @@ async def test_nightly_sweep_respects_cap_at_100() -> None:
             "backend.tasks.forecasting._runner.record_ticker_success",
             new_callable=AsyncMock,
         ),
-        patch("backend.tools.forecasting.predict_forecast", new=AsyncMock(return_value=[])),
         patch(
-            "backend.services.ticker_universe.get_all_referenced_tickers",
+            "backend.tasks.forecasting.get_all_referenced_tickers",
             new_callable=AsyncMock,
             return_value=all_tickers,
         ),
@@ -92,11 +100,13 @@ async def test_nightly_sweep_respects_cap_at_100() -> None:
             return_value={t: 300 for t in new_tickers},
         ),
         patch("backend.tasks.forecasting.retrain_single_ticker_task") as mock_retrain_task,
+        patch("backend.tasks.forecasting.mark_stages_updated", new_callable=AsyncMock),
     ):
         result = await bypass_tracked(_forecast_refresh_async)(run_id=uuid.uuid4())
 
     assert mock_retrain_task.delay.call_count == MAX_NEW_MODELS_PER_NIGHT
-    assert result["refreshed"] == 1
+    # No features/prices → 0 tickers refreshed in Phase 1
+    assert result["refreshed"] == 0
 
 
 # ── Spec E.2: Weekly retrain ──────────────────────────────────────────────────
