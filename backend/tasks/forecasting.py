@@ -57,10 +57,11 @@ async def _fetch_ticker_prices(ticker: str, db: AsyncSession) -> pd.Series:
     if not rows:
         raise ValueError(f"No price data found for ticker {ticker!r}")
 
-    df = pd.DataFrame(rows, columns=["time", "adj_close"])
+    df = pd.DataFrame(rows, columns=["time", "adj_close"])  # type: ignore[arg-type]
     df["time"] = pd.to_datetime(df["time"], utc=True)
     df = df.set_index("time")
-    return df["adj_close"].astype(float)
+    closes: pd.Series = df["adj_close"].astype(float)  # type: ignore[assignment]
+    return closes
 
 
 async def _fetch_vix_and_spy(db: AsyncSession) -> tuple[pd.Series, pd.Series]:
@@ -85,13 +86,13 @@ async def _fetch_vix_and_spy(db: AsyncSession) -> tuple[pd.Series, pd.Series]:
 
     # ── VIX — always from yfinance ─────────────────────────────────────────
     vix = await asyncio.to_thread(yf.download, "^VIX", period="1y", progress=False)
-    if vix.empty:
+    if vix is None or vix.empty:  # type: ignore[union-attr]
         raise RuntimeError("Failed to download VIX data from yfinance")
     if isinstance(vix.columns, pd.MultiIndex):
         vix.columns = vix.columns.get_level_values(0)
-    vix_closes = vix["Close"].copy()
-    if vix_closes.index.tz is None:
-        vix_closes.index = vix_closes.index.tz_localize("UTC")
+    vix_closes: pd.Series = vix["Close"].copy()  # type: ignore[assignment]
+    if vix_closes.index.tz is None:  # type: ignore[union-attr]
+        vix_closes.index = vix_closes.index.tz_localize("UTC")  # type: ignore[union-attr]
 
     # ── SPY — DB first, yfinance fallback ─────────────────────────────────
     spy_result = await db.execute(
@@ -102,20 +103,20 @@ async def _fetch_vix_and_spy(db: AsyncSession) -> tuple[pd.Series, pd.Series]:
     spy_rows = spy_result.all()
 
     if spy_rows:
-        spy_df = pd.DataFrame(spy_rows, columns=["time", "adj_close"])
+        spy_df = pd.DataFrame(spy_rows, columns=["time", "adj_close"])  # type: ignore[arg-type]
         spy_df["time"] = pd.to_datetime(spy_df["time"], utc=True)
         spy_df = spy_df.set_index("time")
-        spy_closes = spy_df["adj_close"].astype(float)
+        spy_closes: pd.Series = spy_df["adj_close"].astype(float)  # type: ignore[assignment]
     else:
         logger.warning("No SPY data in DB — falling back to yfinance")
         spy_raw = await asyncio.to_thread(yf.download, "SPY", period="1y", progress=False)
-        if spy_raw.empty:
+        if spy_raw is None or spy_raw.empty:  # type: ignore[union-attr]
             raise RuntimeError("Failed to download SPY data from yfinance")
         if isinstance(spy_raw.columns, pd.MultiIndex):
             spy_raw.columns = spy_raw.columns.get_level_values(0)
-        spy_closes = spy_raw["Close"].copy()
-        if spy_closes.index.tz is None:
-            spy_closes.index = spy_closes.index.tz_localize("UTC")
+        spy_closes: pd.Series = spy_raw["Close"].copy()  # type: ignore[assignment]
+        if spy_closes.index.tz is None:  # type: ignore[union-attr]
+            spy_closes.index = spy_closes.index.tz_localize("UTC")  # type: ignore[union-attr]
 
     return vix_closes, spy_closes
 
@@ -139,7 +140,7 @@ async def _upsert_daily_feature_row(
 
     last = features_df.iloc[-1]
     idx = features_df.index[-1]
-    dt = idx.date() if hasattr(idx, "date") else idx
+    dt = idx.date() if hasattr(idx, "date") else idx  # type: ignore[union-attr]
 
     values: dict = {
         "date": dt,

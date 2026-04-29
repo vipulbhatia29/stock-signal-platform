@@ -256,8 +256,8 @@ class BacktestEngine:
             logger.warning("run_walk_forward: ticker %s not found in historical features", ticker)
             return self._empty_metrics()
 
-        data_start = features_df["date"].min()
-        data_end = features_df["date"].max()
+        data_start: date = features_df["date"].min()  # type: ignore[assignment]
+        data_end: date = features_df["date"].max()  # type: ignore[assignment]
 
         # ── 2. Generate windows ─────────────────────────────────────────
         windows = self._generate_expanding_windows(
@@ -323,7 +323,9 @@ class BacktestEngine:
             # Train model on the training slice
             try:
                 artifact_bytes, _train_metrics = await asyncio.to_thread(
-                    engine.train, train_slice, horizon_days
+                    engine.train,
+                    train_slice,
+                    horizon_days,  # type: ignore[arg-type]
                 )
             except Exception:
                 logger.exception(
