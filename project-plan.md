@@ -593,8 +593,8 @@ All prior tech debt resolved in Session 94 (PR #189). KAN-398 absorbed into KAN-
 |--------|---------|---------|--------|
 | KAN-548 | Epic: Forecast System Redesign | — | In Progress |
 | KAN-549 | PR0: Historical technical signal backfill (250K rows from price data) | Nothing | ✅ Done (PR #289, S142) |
-| KAN-550 | PR1: ForecastEngine core + schema migration + model training | KAN-549 | To Do |
-| KAN-551 | PR2: API + router + convergence + portfolio_forecast wiring | KAN-550 | To Do |
+| KAN-550 | PR1: ForecastEngine core + schema migration + Celery wiring | KAN-549 | ✅ Done (PR #291, S143) |
+| KAN-551 | PR2: Backtest validation + daily pipeline + champion/challenger | KAN-550 | To Do |
 | KAN-552 | PR3: Frontend forecast card + bulletin column + track record redesign | KAN-551 | To Do |
 | KAN-553 | PR4: Backtest adaptation + champion/challenger + drift monitoring | KAN-550 | To Do |
 

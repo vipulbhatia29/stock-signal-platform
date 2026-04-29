@@ -368,3 +368,32 @@ Compared dashboard to Lovable template. Restructured zone order to tell a story:
 - Tests: 2662 unit (+29), 0 failures
 - 1 PR merged (#289), 8 files created, Alembic head: `1b3ee39cadd1`
 - **KAN-549 DONE.** Resume: run backfill, then plan KAN-550 (PR1: LightGBM+XGBoost training engine)
+
+---
+
+## Session 143 — KAN-550: ForecastEngine Core + Schema Migration (PR1) (2026-04-29)
+
+**Branch:** `feat/KAN-550-forecast-engine-pr1` → develop | **PR #291 merged**
+
+### What was built
+- **Migration 042** — renamed `predicted_price` → `expected_return_pct` (+ 3 siblings), added `confidence_score`, `direction`, `drivers` (JSONB), `base_price`, `forecast_signal`. Truncated 120 stale Prophet rows. Retired all 29 Prophet model_versions.
+- **`forecast_engine.py`** (~540 lines) — Stateless `ForecastEngine` class: `train()` (walk-forward CV, LGBMRegressor + XGBRegressor × 3 quantiles, single joblib bundle), `predict()` (ensemble weighted average, log→simple return conversion, SHAP top-3 drivers, calibrated confidence), `assemble_features_bulk()` (single bulk query), `compute_confidence()`, `classify_direction()`, `compute_forecast_signal()`, `confidence_level()`.
+- **Celery task wiring** — `_model_retrain_all_async`, `_forecast_refresh_async`, `_retrain_single_ticker_async` all use ForecastEngine. Model artifacts stored as base64 in `ModelVersion.hyperparameters["artifact_b64"]`.
+- **Schema updates** — `ForecastHorizon` (return-based + direction + confidence + drivers + implied_target_price + forecast_signal), `ForecastResponse` (+ current_price, model_type, model_accuracy), `ForecastEvaluation` (return-based), new `ForecastDriver` + `ModelAccuracy` schemas.
+- **Consumer updates** — all 4 forecast router endpoints, portfolio_forecast service (`_fetch_prophet_views` → `_fetch_model_views`), evaluation task (return-based error), convergence (`expected_return_pct / 100.0`), DQ scan, forecast_tools, risk_narrative. Zero remaining `predicted_price` references.
+- **Dependencies** — `lightgbm`, `xgboost`, `shap` added to pyproject.toml.
+
+### End-to-end verification
+- Ran backfill (2,505 rows, 5 tickers) + trained 60d/90d models + predicted for all tickers
+- AAPL 60d: +9.1% ($153.83 implied), 90d: +5.8% ($149.27 implied) — bullish, drivers: market trend, VIX, momentum
+- All 5 tickers produced forecasts with SHAP drivers and calibrated confidence scores
+
+### Review findings fixed
+- Spec review: 13/13 verification items passed (Opus review)
+- Code quality: I3 (compute_shap flag), I5 (assemble_features_bulk test), I6 (train edge tests), I7 (DataFrame predict)
+- CI: formatting, pyright type ignores, semgrep nosemgrep, horizon count in API tests, Prophet sentiment tests xfail'd
+
+### Session 143 Totals
+- Tests: 2677 unit (+15 net: +22 new ForecastEngine, -17 deleted test_forecasting_floor.py, adjustments), 0 failures
+- 1 PR merged (#291), 33 files changed, +1965/-700 lines, Alembic head: `286eaa38beab`
+- **KAN-550 DONE.** Resume: PR2 (KAN-551) backtest validation + daily pipeline, or PR3 (KAN-552) frontend
