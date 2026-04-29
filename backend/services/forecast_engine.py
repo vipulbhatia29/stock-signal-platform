@@ -112,17 +112,19 @@ def _encode_convergence_label(val: str | None) -> float:
     return _CONVERGENCE_LABEL_MAP.get(val, 0.0)  # type: ignore[arg-type]
 
 
-def _features_to_array(features: dict) -> np.ndarray:
-    """Convert a feature dict to a 1×N numpy array for prediction.
+def _features_to_array(features: dict) -> pd.DataFrame:
+    """Convert a feature dict to a single-row DataFrame for prediction.
 
     Encodes ``convergence_label`` to numeric and fills missing values with NaN
-    so that LightGBM / XGBoost handle them natively.
+    so that LightGBM / XGBoost handle them natively.  Returning a DataFrame
+    (rather than a bare numpy array) preserves feature names and eliminates
+    the "X does not have valid feature names" sklearn warning.
 
     Args:
         features: Mapping of feature name → value.
 
     Returns:
-        2-D array of shape (1, len(FEATURE_NAMES)).
+        Single-row DataFrame with columns matching ``FEATURE_NAMES``.
     """
     row = []
     for name in FEATURE_NAMES:
@@ -133,7 +135,7 @@ def _features_to_array(features: dict) -> np.ndarray:
             row.append(float("nan"))
         else:
             row.append(float(val))
-    return np.array([row], dtype=np.float64)
+    return pd.DataFrame([row], columns=FEATURE_NAMES)
 
 
 def _prepare_feature_df(df: pd.DataFrame) -> pd.DataFrame:
@@ -328,6 +330,7 @@ class ForecastEngine:
         features: dict,
         model_artifact: bytes,
         weights: dict | None = None,
+        compute_shap: bool = True,
     ) -> dict:
         """Run ensemble prediction for a single ticker feature vector.
 
@@ -335,6 +338,9 @@ class ForecastEngine:
             features: Dict mapping feature name → value (may contain NaN).
             model_artifact: Bytes produced by :meth:`train`.
             weights: Optional ``{"lgb": float, "xgb": float}`` for weighting.
+            compute_shap: When ``False``, skip SHAP driver computation and
+                return ``drivers=None``.  Use for non-priority tickers where
+                SHAP overhead is not warranted (spec finding O2).
 
         Returns:
             Dict with keys: ``expected_return_pct``, ``return_lower_pct``,
@@ -376,9 +382,13 @@ class ForecastEngine:
         conf_level = self.confidence_level(confidence)
         forecast_signal = self.compute_forecast_signal(direction, confidence, signals_aligned)
 
-        # Use q=0.5 LGB model for SHAP drivers (median, interpretable)
-        median_lgb_model = bundle["lgb_q0.5"]
-        drivers = self.explain_top_drivers(features, median_lgb_model)
+        # Use q=0.5 LGB model for SHAP drivers (median, interpretable).
+        # Skip when compute_shap=False for non-priority tickers (spec O2).
+        if compute_shap:
+            median_lgb_model = bundle["lgb_q0.5"]
+            drivers: list[dict] | None = self.explain_top_drivers(features, median_lgb_model)
+        else:
+            drivers = None
 
         return {
             "expected_return_pct": expected_return_pct,

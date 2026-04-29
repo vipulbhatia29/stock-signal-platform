@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -258,3 +261,66 @@ def test_explain_top_drivers_returns_list() -> None:
         assert d["label"] == FEATURE_LABELS[d["feature"]]
         assert d["direction"] in {"bullish", "bearish"}
         assert 0.0 <= d["importance"] <= 1.0
+
+
+# ---------------------------------------------------------------------------
+# assemble_features_bulk — bulk query (no N+1)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_assemble_features_bulk_single_query() -> None:
+    """assemble_features_bulk must issue exactly one DB query for N tickers."""
+    engine = ForecastEngine()
+
+    # Build fake HistoricalFeature-like rows for AAPL and MSFT.
+    def _make_row(ticker: str) -> MagicMock:
+        row = MagicMock()
+        row.ticker = ticker
+        for name in FEATURE_NAMES:
+            setattr(row, name, 0.0)
+        return row
+
+    fake_rows = [_make_row("AAPL"), _make_row("MSFT")]
+
+    # Mock the scalars().all() chain.
+    scalars_mock = MagicMock()
+    scalars_mock.all.return_value = fake_rows
+
+    result_mock = MagicMock()
+    result_mock.scalars.return_value = scalars_mock
+
+    mock_db = AsyncMock()
+    mock_db.execute = AsyncMock(return_value=result_mock)
+
+    output = await engine.assemble_features_bulk(["AAPL", "MSFT"], date(2025, 6, 1), mock_db)
+
+    # Exactly one DB round-trip regardless of ticker count.
+    mock_db.execute.assert_called_once()
+
+    assert set(output.keys()) == {"AAPL", "MSFT"}
+    for ticker_features in output.values():
+        assert set(ticker_features.keys()) == set(FEATURE_NAMES)
+
+
+# ---------------------------------------------------------------------------
+# train — edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_train_insufficient_data_raises() -> None:
+    """train() must raise ValueError when the DataFrame has fewer than 10 rows."""
+    engine = ForecastEngine()
+    df = _make_synthetic_df(n=5)
+    with pytest.raises(ValueError, match="Insufficient"):
+        engine.train(df, horizon_days=60)
+
+
+def test_train_missing_target_column_raises() -> None:
+    """train() must raise ValueError when the target column is absent."""
+    engine = ForecastEngine()
+    df = _make_synthetic_df(n=100)
+    # Remove the expected target column.
+    df = df.drop(columns=["forward_return_60d"])
+    with pytest.raises(ValueError, match="Target column"):
+        engine.train(df, horizon_days=60)
