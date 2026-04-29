@@ -110,13 +110,14 @@ function HorizonPill({ horizon, currentPrice }: { horizon: ForecastHorizon; curr
         const target = horizon.implied_target_price ?? (currentPrice ? currentPrice * (1 + ret / 100) : null);
         return target != null ? (
           <div className="mt-0.5 text-[10px] text-subtle font-mono">
-            ~${target.toFixed(2)}
+            ~${Math.round(target)}
           </div>
         ) : null;
       })()}
 
-      {/* Return range */}
-      <div className="mt-1.5 text-[9px] text-subtle">
+      {/* Return range (80% confidence interval) */}
+      <div className="mt-1.5 text-[9px] text-subtle" title="80% of outcomes are expected to fall within this range">
+        <span className="text-muted-foreground">80% range: </span>
         {horizon.return_lower_pct > 0 ? "+" : ""}
         {horizon.return_lower_pct.toFixed(1)}% to{" "}
         {horizon.return_upper_pct > 0 ? "+" : ""}
@@ -165,7 +166,7 @@ export function ForecastCard({
     return (
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle mb-2">
-          Return Forecast
+          Forecast
         </div>
         <div className="text-sm text-subtle">
           {modelStatus === "training"
@@ -180,7 +181,7 @@ export function ForecastCard({
     return (
       <div className="rounded-lg border border-border bg-card p-4">
         <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle mb-2">
-          Return Forecast
+          Forecast
         </div>
         <div className="text-sm text-subtle">
           No forecast available. Data is computed nightly.
@@ -201,20 +202,12 @@ export function ForecastCard({
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-subtle">
-          Return Forecast
+          Forecast
         </div>
         <div className="flex items-center gap-2">
           {modelAccuracy != null && (
             <AccuracyBadge accuracy={modelAccuracy} onClick={() => setDrillOpen(true)} />
           )}
-          <span
-            className={cn(
-              "inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase",
-              confidenceColor,
-            )}
-          >
-            {confidence} conf
-          </span>
           {modelStatus === "degraded" && (
             <span
               className="inline-flex items-center rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase bg-warning/15 text-warning border-warning/25"
@@ -276,8 +269,10 @@ export function ForecastCard({
             </div>
             <p className="text-subtle text-[13px] leading-relaxed">
               Direction accuracy shows how often the model correctly predicted
-              whether the stock would go up or down. CI containment measures how
-              often the actual return fell within the predicted range.
+              whether the stock would go up or down. Avg return error is the
+              average difference between predicted and actual returns. CI
+              containment measures how often the actual return fell within the
+              predicted range.
             </p>
           </div>
         </DrillDownSheet>

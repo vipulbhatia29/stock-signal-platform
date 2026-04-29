@@ -205,7 +205,10 @@ function WatchlistTable({
                       fc90.expected_return_pct > 0 && "text-gain",
                       fc90.expected_return_pct < 0 && "text-loss",
                       !(fc90.expected_return_pct > 0) && !(fc90.expected_return_pct < 0) && "text-muted-foreground",
-                    )}>
+                      fc90.confidence_level === "low" && "opacity-50",
+                    )}
+                      title={fc90.confidence_level === "low" ? "Low confidence forecast" : undefined}
+                    >
                       {fc90.expected_return_pct > 0 ? "+" : ""}
                       {fc90.expected_return_pct.toFixed(1)}%
                     </span>
@@ -306,7 +309,10 @@ function PortfolioTable({
                       fc90.expected_return_pct > 0 && "text-gain",
                       fc90.expected_return_pct < 0 && "text-loss",
                       !(fc90.expected_return_pct > 0) && !(fc90.expected_return_pct < 0) && "text-muted-foreground",
-                    )}>
+                      fc90.confidence_level === "low" && "opacity-50",
+                    )}
+                      title={fc90.confidence_level === "low" ? "Low confidence forecast" : undefined}
+                    >
                       {fc90.expected_return_pct > 0 ? "+" : ""}
                       {fc90.expected_return_pct.toFixed(1)}%
                     </span>

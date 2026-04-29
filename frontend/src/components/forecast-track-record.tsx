@@ -133,7 +133,7 @@ export function ForecastTrackRecord({ ticker, enabled = true }: ForecastTrackRec
             domain={["auto", "auto"]}
             tickFormatter={(v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`}
             {...CHART_STYLE.axis}
-            width={50}
+            width={58}
           />
           <Tooltip
             content={({ active, payload }) => {
