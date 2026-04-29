@@ -1,4 +1,4 @@
-"""Walk-forward backtesting engine for Prophet model validation."""
+"""Walk-forward backtesting engine for ForecastEngine model validation."""
 
 import asyncio
 import logging
@@ -10,8 +10,8 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.price import StockPrice
-from backend.services.sentiment_regressors import fetch_sentiment_regressors
+from backend.models.historical_feature import HistoricalFeature
+from backend.services.forecast_engine import FEATURE_NAMES, ForecastEngine
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class BacktestMetrics:
 
 
 class BacktestEngine:
-    """Walk-forward validation for Prophet models.
+    """Walk-forward validation for ForecastEngine models.
 
     Uses expanding window: training set grows with each step.
     Test point is always one step ahead of training data.
@@ -179,123 +179,81 @@ class BacktestEngine:
             return "below"
         return "balanced"
 
-    @staticmethod
-    def _fit_and_predict_sync(
-        train_df: pd.DataFrame,
-        test_date: date,
-        horizon_days: int,
-        has_sentiment: bool,
-    ) -> tuple[float, float, float]:
-        """Fit a throwaway Prophet model and predict for test_date.
-
-        This is a pure-sync function designed to run inside
-        ``asyncio.to_thread`` — Prophet's Stan backend is CPU-bound.
-
-        Args:
-            train_df: Training DataFrame with columns [ds, y] and optionally
-                [stock_sentiment, sector_sentiment, macro_sentiment].
-            test_date: The date we want a prediction for.
-            horizon_days: Number of days from last train date to test_date.
-            has_sentiment: Whether sentiment regressor columns are present.
-
-        Returns:
-            Tuple of (expected_return_pct, return_lower_pct, return_upper_pct).
-        """
-        from prophet import Prophet  # lazy import — Prophet is heavy
-
-        from backend.tools.forecasting import PROPHET_CONFIG
-
-        model = Prophet(**PROPHET_CONFIG)
-        if has_sentiment:
-            model.add_regressor("stock_sentiment")
-            model.add_regressor("sector_sentiment")
-            model.add_regressor("macro_sentiment")
-
-        model.fit(train_df)
-
-        # Make a future dataframe extending to test_date
-        future = model.make_future_dataframe(periods=horizon_days, freq="D")
-
-        # Fill sentiment for future rows with the trailing 7-day mean if available
-        if has_sentiment:
-            for col in ("stock_sentiment", "sector_sentiment", "macro_sentiment"):
-                mean_val = float(train_df[col].tail(7).mean()) if col in train_df.columns else 0.0
-                if col not in future.columns:
-                    future[col] = 0.0
-                future[col] = future[col].fillna(mean_val)
-
-        forecast = model.predict(future)
-
-        # Find the row closest to test_date
-        test_ts = pd.Timestamp(test_date)
-        target_row = forecast[forecast["ds"].dt.date == test_date]
-        if target_row.empty:
-            # Fallback: closest row by absolute distance
-            idx = (forecast["ds"] - test_ts).abs().idxmin()
-            target_row = forecast.loc[[idx]]
-
-        row = target_row.iloc[0]
-        return float(row["yhat"]), float(row["yhat_lower"]), float(row["yhat_upper"])
+    def _empty_metrics(self) -> "BacktestMetrics":
+        """Return zeroed BacktestMetrics for no-data cases."""
+        return BacktestMetrics(
+            mape=0.0,
+            mae=0.0,
+            rmse=0.0,
+            direction_accuracy=0.0,
+            ci_containment=0.0,
+            ci_bias="balanced",
+            avg_interval_width=0.0,
+            num_windows=0,
+        )
 
     async def run_walk_forward(
         self,
         ticker: str,
         db: AsyncSession,
-        horizon_days: int = 90,
+        horizon_days: int = 60,
         min_train_days: int = 365,
         step_days: int = 30,
     ) -> "BacktestMetrics":
-        """Run walk-forward validation for a ticker using Prophet.
+        """Run walk-forward validation for a ticker using ForecastEngine.
 
-        Expands the training window in ``step_days`` increments, fits a
-        throwaway Prophet model for each window, and compares predictions
-        against held-out actuals at ``horizon_days`` out.
+        Loads historical_features for ALL tickers (cross-ticker training),
+        generates expanding windows by date, trains a ForecastEngine per
+        window, and predicts the target ticker's forward return at each
+        test_date.
 
         Args:
-            ticker: Stock ticker symbol.
+            ticker: Stock ticker to evaluate predictions for.
             db: Async database session.
-            horizon_days: Days ahead to forecast at each window.
+            horizon_days: Days ahead to forecast (60 or 90).
             min_train_days: Minimum training period in days.
             step_days: Days to advance between walk-forward windows.
 
         Returns:
             BacktestMetrics aggregating all windows.
         """
-        # ── 1. Load all prices for the ticker ──────────────────────────────
-        result = await db.execute(
-            select(StockPrice.time, StockPrice.close)
-            .where(StockPrice.ticker == ticker)
-            .order_by(StockPrice.time)
-        )
-        rows = result.all()
+        target_col = f"forward_return_{horizon_days}d"
 
-        if not rows:
-            logger.warning("run_walk_forward: no price data for %s", ticker)
-            return BacktestMetrics(
-                mape=0.0,
-                mae=0.0,
-                rmse=0.0,
-                direction_accuracy=0.0,
-                ci_containment=0.0,
-                ci_bias="balanced",
-                avg_interval_width=0.0,
-                num_windows=0,
-            )
+        # ── 1. Load all historical features (cross-ticker) ──────────────
+        result = await db.execute(select(HistoricalFeature).order_by(HistoricalFeature.date))
+        all_rows = result.scalars().all()
 
-        # Build a {date: close} lookup and sorted date list
-        price_by_date: dict[date, float] = {}
-        for time_val, close in rows:
-            if hasattr(time_val, "date"):
-                d = time_val.date()
-            else:
-                d = time_val
-            price_by_date[d] = float(close)
+        if not all_rows:
+            logger.warning("run_walk_forward: no historical features found")
+            return self._empty_metrics()
 
-        sorted_dates = sorted(price_by_date.keys())
-        data_start = sorted_dates[0]
-        data_end = sorted_dates[-1]
+        # Build DataFrame from ORM rows
+        records = []
+        for row in all_rows:
+            record: dict = {"date": row.date, "ticker": row.ticker}
+            for name in FEATURE_NAMES:
+                record[name] = getattr(row, name, None)
+            record["forward_return_60d"] = row.forward_return_60d
+            record["forward_return_90d"] = row.forward_return_90d
+            records.append(record)
+        features_df = pd.DataFrame(records)
 
-        # ── 2. Generate windows ────────────────────────────────────────────
+        # Filter to rows that have the target return
+        features_df = features_df.dropna(subset=[target_col])
+        if features_df.empty:
+            logger.warning("run_walk_forward: no rows with %s for any ticker", target_col)
+            return self._empty_metrics()
+
+        # Get date range for the target ticker
+        ticker_dates = sorted(features_df.loc[features_df["ticker"] == ticker, "date"].unique())
+        if not ticker_dates:
+            logger.warning("run_walk_forward: ticker %s not found in historical features", ticker)
+            return self._empty_metrics()
+
+        data_start = features_df["date"].min()
+        data_end = features_df["date"].max()
+
+        # ── 2. Generate windows ─────────────────────────────────────────
         windows = self._generate_expanding_windows(
             data_start=data_start,
             data_end=data_end,
@@ -312,147 +270,94 @@ class BacktestEngine:
                 min_train_days,
                 horizon_days,
             )
-            return BacktestMetrics(
-                mape=0.0,
-                mae=0.0,
-                rmse=0.0,
-                direction_accuracy=0.0,
-                ci_containment=0.0,
-                ci_bias="balanced",
-                avg_interval_width=0.0,
-                num_windows=0,
-            )
+            return self._empty_metrics()
 
-        # ── 3a. Pre-load sentiment ONCE for the full data range ────────────
-        # Previously this was fetched per-window inside the loop, which issued
-        # ~110 redundant queries per ticker against news_sentiment_daily.
-        # Now: one bounded-range query, then in-memory slice per window.
-        #
-        # Wrapped in try/except so a transient DB blip on the bulk fetch
-        # gracefully degrades to "no sentiment for this run" instead of
-        # killing all ~110 windows for the ticker (the per-window pattern
-        # would have only lost one window).
-        sentiment_df: pd.DataFrame | None
-        try:
-            sentiment_df = await fetch_sentiment_regressors(
-                ticker,
-                data_start,
-                data_end,
-                db,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to pre-load sentiment for %s backtest — "
-                "falling back to no sentiment regressors",
-                ticker,
-                exc_info=True,
-            )
-            sentiment_df = None
-
-        sentiment_indexed: pd.DataFrame | None = None
-        if sentiment_df is not None and not sentiment_df.empty:
-            sentiment_indexed = sentiment_df.set_index("ds").sort_index()
-
-        # ── 3. Walk through windows ────────────────────────────────────────
+        # ── 3. Walk through windows ─────────────────────────────────────
+        engine = ForecastEngine()
         actuals: list[float] = []
         predicted: list[float] = []
-        base_prices: list[float] = []
         lowers: list[float] = []
         uppers: list[float] = []
 
         for window in windows:
-            # Slice training prices for this window
-            train_dates = [d for d in sorted_dates if window.train_start <= d <= window.train_end]
-            if len(train_dates) < 30:  # need at least 30 observations
+            # Training slice: all tickers, dates up to train_end
+            # Purge buffer: exclude rows where the target would be unknown
+            # (date must be <= train_end - horizon_days for the target to be realised)
+            train_cutoff = window.train_end - timedelta(days=horizon_days)
+            train_slice = features_df[features_df["date"] <= train_cutoff]
+            if len(train_slice) < 10:
                 continue
 
-            actual_price = price_by_date.get(window.test_date)
-            if actual_price is None:
-                # Look for the nearest available date within ±5 days
+            # Test: get target ticker's feature row at test_date
+            test_rows = features_df[
+                (features_df["ticker"] == ticker) & (features_df["date"] == window.test_date)
+            ]
+            if test_rows.empty:
+                # Try nearest date within ±5 days
                 for offset in range(1, 6):
-                    actual_price = price_by_date.get(window.test_date + timedelta(days=offset))
-                    if actual_price is not None:
+                    for delta in [timedelta(days=offset), timedelta(days=-offset)]:
+                        candidate = window.test_date + delta
+                        test_rows = features_df[
+                            (features_df["ticker"] == ticker) & (features_df["date"] == candidate)
+                        ]
+                        if not test_rows.empty:
+                            break
+                    if not test_rows.empty:
                         break
-                    actual_price = price_by_date.get(window.test_date - timedelta(days=offset))
-                    if actual_price is not None:
-                        break
-            if actual_price is None:
+            if test_rows.empty:
                 continue
 
-            # Base price = last training price (for direction accuracy)
-            base_price = price_by_date.get(window.train_end) or price_by_date.get(train_dates[-1])
-            if base_price is None:
+            test_row = test_rows.iloc[0]
+            actual_return = test_row[target_col]
+            if actual_return is None or (
+                isinstance(actual_return, float) and math.isnan(actual_return)
+            ):
                 continue
 
-            # Build training DataFrame
-            train_closes = [price_by_date[d] for d in train_dates]
-            train_df = pd.DataFrame(
-                {
-                    "ds": pd.to_datetime(train_dates),
-                    "y": train_closes,
-                }
-            )
-
-            # Slice the pre-loaded sentiment frame in memory (no DB call).
-            # .loc[start:end] is inclusive on both ends for a sorted index.
-            window_sentiment: pd.DataFrame | None = None
-            if sentiment_indexed is not None:
-                start_ts = pd.Timestamp(window.train_start)
-                end_ts = pd.Timestamp(window.train_end)
-                slice_df = sentiment_indexed.loc[start_ts:end_ts]
-                if not slice_df.empty:
-                    window_sentiment = slice_df.reset_index()
-
-            has_sentiment = window_sentiment is not None and not window_sentiment.empty
-            if has_sentiment and window_sentiment is not None:
-                train_df = train_df.merge(window_sentiment, on="ds", how="left").fillna(0.0)
-
-            # Compute horizon from last train date to test date
-            actual_horizon = (window.test_date - window.train_end).days
-
+            # Train model on the training slice
             try:
-                yhat, yhat_lower, yhat_upper = await asyncio.to_thread(
-                    self._fit_and_predict_sync,
-                    train_df,
-                    window.test_date,
-                    actual_horizon,
-                    has_sentiment,
+                artifact_bytes, _train_metrics = await asyncio.to_thread(
+                    engine.train, train_slice, horizon_days
                 )
             except Exception:
                 logger.exception(
-                    "Prophet fit failed for %s window %s–%s → %s; skipping",
-                    ticker,
+                    "ForecastEngine train failed for window %s–%s; skipping",
                     window.train_start,
                     window.train_end,
+                )
+                continue
+
+            # Predict for the test row
+            feature_dict = {name: test_row.get(name) for name in FEATURE_NAMES}
+            try:
+                pred = await asyncio.to_thread(
+                    engine.predict, feature_dict, artifact_bytes, None, False
+                )
+            except Exception:
+                logger.exception(
+                    "ForecastEngine predict failed for %s at %s; skipping",
+                    ticker,
                     window.test_date,
                 )
                 continue
 
-            # Apply price floor to predictions (equities can't go negative)
-            price_floor = max(0.01, base_price * 0.01)
-            yhat = max(yhat, price_floor)
-            yhat_lower = max(yhat_lower, price_floor)
-            yhat_upper = max(yhat_upper, price_floor)
+            # pred returns percentages; actual_return is log return
+            # Convert predicted return from percentage to log return for comparison
+            pred_return = math.log(1.0 + pred["expected_return_pct"] / 100.0)
+            pred_lower = math.log(1.0 + pred["return_lower_pct"] / 100.0)
+            pred_upper = math.log(1.0 + pred["return_upper_pct"] / 100.0)
 
-            actuals.append(actual_price)
-            predicted.append(yhat)
-            base_prices.append(base_price)
-            lowers.append(yhat_lower)
-            uppers.append(yhat_upper)
+            actuals.append(float(actual_return))
+            predicted.append(pred_return)
+            lowers.append(pred_lower)
+            uppers.append(pred_upper)
 
-        # ── 4. Aggregate metrics ───────────────────────────────────────────
+        # ── 4. Aggregate metrics ────────────────────────────────────────
         if not actuals:
-            return BacktestMetrics(
-                mape=0.0,
-                mae=0.0,
-                rmse=0.0,
-                direction_accuracy=0.0,
-                ci_containment=0.0,
-                ci_bias="balanced",
-                avg_interval_width=0.0,
-                num_windows=0,
-            )
+            return self._empty_metrics()
 
+        # For direction accuracy with returns: base is 0 (positive = up, negative = down)
+        base_prices = [0.0] * len(actuals)
         avg_width = sum(hi - lo for lo, hi in zip(lowers, uppers)) / len(lowers) if lowers else 0.0
 
         return BacktestMetrics(
