@@ -94,6 +94,10 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.forecasting.model_retrain_all_task",
         "schedule": crontab(hour=2, minute=0, day_of_week=0),  # Sunday 2 AM ET
     },
+    "daily-feature-population": {
+        "task": "backend.tasks.forecasting.populate_daily_features_task",
+        "schedule": crontab(hour=22, minute=30),  # 10:30 PM ET — after nightly pipeline
+    },
     # ── News sentiment pipeline (4x daily during market hours) ──
     "news-ingest": {
         "task": "backend.tasks.news_sentiment.news_ingest_task",
@@ -232,6 +236,11 @@ celery_app.conf.beat_schedule = {
         "task": "backend.tasks.forecasting.run_backtest_task",
         # Saturday 03:30 ET — avoids 03:00 collision with purge-login-attempts-daily
         "schedule": crontab(hour=3, minute=30, day_of_week=6),
+    },
+    # ── Feature drift monitoring (11 PM ET — after daily feature population) ──
+    "feature-drift-check-daily": {
+        "task": "backend.tasks.evaluation.check_feature_drift_task",
+        "schedule": crontab(hour=23, minute=0),  # 11 PM ET — after daily features
     },
 }
 

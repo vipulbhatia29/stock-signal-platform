@@ -228,3 +228,171 @@ class TestMetricComputation:
     def test_safe_float_passes_finite(self):
         """_safe_float passes through finite values."""
         assert BacktestEngine._safe_float(3.14) == 3.14
+
+
+class TestRunWalkForwardEngine:
+    """Tests for ForecastEngine-based walk-forward."""
+
+    @pytest.mark.asyncio
+    async def test_run_walk_forward_returns_backtest_metrics(self):
+        """run_walk_forward returns BacktestMetrics with correct fields when sufficient data."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        import numpy as np
+        import pandas as pd
+
+        from backend.services.backtesting import BacktestEngine, BacktestMetrics
+
+        engine = BacktestEngine()
+
+        # Build fake historical_features rows (2 years of daily data, 2 tickers)
+        dates = pd.date_range("2023-01-01", periods=600, freq="D")
+        rng = np.random.default_rng(42)
+        rows = []
+        for d in dates:
+            for tkr in ["AAPL", "MSFT"]:
+                rows.append(
+                    MagicMock(
+                        date=d.date(),
+                        ticker=tkr,
+                        momentum_21d=rng.normal(0, 0.1),
+                        momentum_63d=rng.normal(0, 0.1),
+                        momentum_126d=rng.normal(0, 0.1),
+                        rsi_value=rng.uniform(30, 70),
+                        macd_histogram=rng.normal(0, 0.5),
+                        sma_cross=rng.choice([0, 1, 2]),
+                        bb_position=rng.choice([0, 1, 2]),
+                        volatility=rng.uniform(0.1, 0.4),
+                        sharpe_ratio=rng.normal(0.5, 0.3),
+                        vix_level=rng.uniform(12, 30),
+                        spy_momentum_21d=rng.normal(0, 0.05),
+                        stock_sentiment=None,
+                        sector_sentiment=None,
+                        macro_sentiment=None,
+                        sentiment_confidence=None,
+                        signals_aligned=None,
+                        convergence_label=None,
+                        forward_return_60d=(
+                            rng.normal(0, 0.05) if d.date() < dates[-60].date() else None
+                        ),
+                        forward_return_90d=(
+                            rng.normal(0, 0.05) if d.date() < dates[-90].date() else None
+                        ),
+                    )
+                )
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = rows
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        # Fake model artifact and train metrics
+        fake_artifact = b"fake_model_bytes"
+        fake_train_metrics = {
+            "direction_accuracy": 0.58,
+            "mean_absolute_error": 0.03,
+            "ci_containment": 0.80,
+        }
+
+        # Fake prediction result (percentages — engine converts to log returns)
+        fake_prediction = {
+            "expected_return_pct": 2.5,
+            "return_lower_pct": -3.0,
+            "return_upper_pct": 8.0,
+            "direction": "bullish",
+            "confidence": 0.65,
+        }
+
+        with (
+            patch("backend.services.backtesting.ForecastEngine") as MockEngine,
+            patch("backend.services.backtesting.asyncio.to_thread") as mock_to_thread,
+        ):
+            mock_engine_instance = MagicMock()
+            MockEngine.return_value = mock_engine_instance
+
+            async def fake_to_thread(fn, *args, **kwargs):
+                """Dispatch to appropriate fake return based on called function."""
+                if fn == mock_engine_instance.train:
+                    return (fake_artifact, fake_train_metrics)
+                elif fn == mock_engine_instance.predict:
+                    return fake_prediction
+                return fn(*args, **kwargs)
+
+            mock_to_thread.side_effect = fake_to_thread
+
+            metrics = await engine.run_walk_forward("AAPL", mock_db, horizon_days=60)
+
+        assert isinstance(metrics, BacktestMetrics)
+        assert metrics.num_windows > 0
+        assert 0.0 <= metrics.direction_accuracy <= 1.0
+        assert 0.0 <= metrics.ci_containment <= 1.0
+        assert metrics.mape >= 0.0
+
+    @pytest.mark.asyncio
+    async def test_run_walk_forward_no_data_returns_empty_metrics(self):
+        """run_walk_forward with no historical features returns zero metrics."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from backend.services.backtesting import BacktestEngine
+
+        engine = BacktestEngine()
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        metrics = await engine.run_walk_forward("AAPL", mock_db, horizon_days=60)
+
+        assert metrics.num_windows == 0
+        assert metrics.direction_accuracy == 0.0
+
+    @pytest.mark.asyncio
+    async def test_run_walk_forward_insufficient_data_returns_empty(self):
+        """run_walk_forward with too little data for even one window returns empty."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        import numpy as np
+        import pandas as pd
+
+        from backend.services.backtesting import BacktestEngine
+
+        engine = BacktestEngine()
+
+        # Only 100 days of data — not enough for min_train_days=365
+        dates = pd.date_range("2024-01-01", periods=100, freq="D")
+        rng = np.random.default_rng(42)
+        rows = []
+        for d in dates:
+            rows.append(
+                MagicMock(
+                    date=d.date(),
+                    ticker="AAPL",
+                    momentum_21d=rng.normal(0, 0.1),
+                    momentum_63d=rng.normal(0, 0.1),
+                    momentum_126d=rng.normal(0, 0.1),
+                    rsi_value=50.0,
+                    macd_histogram=0.0,
+                    sma_cross=1,
+                    bb_position=1,
+                    volatility=0.2,
+                    sharpe_ratio=0.5,
+                    vix_level=18.0,
+                    spy_momentum_21d=0.01,
+                    stock_sentiment=None,
+                    sector_sentiment=None,
+                    macro_sentiment=None,
+                    sentiment_confidence=None,
+                    signals_aligned=None,
+                    convergence_label=None,
+                    forward_return_60d=0.02,
+                    forward_return_90d=0.03,
+                )
+            )
+
+        mock_db = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = rows
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        metrics = await engine.run_walk_forward("AAPL", mock_db, horizon_days=60)
+        assert metrics.num_windows == 0

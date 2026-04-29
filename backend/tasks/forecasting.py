@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import uuid
 from datetime import datetime, timezone
 
+import pandas as pd
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +18,7 @@ from backend.config import settings
 from backend.models.backtest import BacktestRun
 from backend.models.forecast import ModelVersion
 from backend.services.backtesting import BacktestEngine
+from backend.services.feature_engineering import build_feature_dataframe
 from backend.services.ticker_state import mark_stages_updated
 from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
@@ -28,6 +31,258 @@ logger = logging.getLogger(__name__)
 _runner = PipelineRunner()
 
 MAX_NEW_MODELS_PER_NIGHT = 100
+
+
+async def _fetch_ticker_prices(ticker: str, db: AsyncSession) -> pd.Series:
+    """Fetch closing prices for a ticker from stock_prices.
+
+    Args:
+        ticker: Stock ticker symbol.
+        db: Async database session.
+
+    Returns:
+        Series of adj_close prices with UTC DatetimeIndex, ordered by time.
+
+    Raises:
+        ValueError: If no price data exists for the ticker.
+    """
+    from backend.models.price import StockPrice
+
+    result = await db.execute(
+        select(StockPrice.time, StockPrice.adj_close)
+        .where(StockPrice.ticker == ticker)
+        .order_by(StockPrice.time.asc())
+    )
+    rows = result.all()
+    if not rows:
+        raise ValueError(f"No price data found for ticker {ticker!r}")
+
+    df = pd.DataFrame(rows, columns=["time", "adj_close"])  # type: ignore[arg-type]
+    df["time"] = pd.to_datetime(df["time"], utc=True)
+    df = df.set_index("time")
+    closes: pd.Series = df["adj_close"].astype(float)  # type: ignore[assignment]
+    return closes
+
+
+async def _fetch_vix_and_spy(db: AsyncSession) -> tuple[pd.Series, pd.Series]:
+    """Fetch VIX (yfinance) and SPY (DB first, then yfinance fallback) close series.
+
+    VIX is always sourced from yfinance since we don't store it in stock_prices.
+    SPY is fetched from the DB stock_prices table and falls back to yfinance if
+    not present.
+
+    Args:
+        db: Async database session.
+
+    Returns:
+        Tuple of (vix_closes, spy_closes), both with UTC DatetimeIndex.
+
+    Raises:
+        RuntimeError: If VIX data cannot be downloaded from yfinance.
+    """
+    import yfinance as yf
+
+    from backend.models.price import StockPrice
+
+    # ── VIX — always from yfinance ─────────────────────────────────────────
+    vix = await asyncio.to_thread(yf.download, "^VIX", period="1y", progress=False)
+    if vix is None or vix.empty:  # type: ignore[union-attr]
+        raise RuntimeError("Failed to download VIX data from yfinance")
+    if isinstance(vix.columns, pd.MultiIndex):
+        vix.columns = vix.columns.get_level_values(0)
+    vix_closes: pd.Series = vix["Close"].copy()  # type: ignore[assignment]
+    if vix_closes.index.tz is None:  # type: ignore[union-attr]
+        vix_closes.index = vix_closes.index.tz_localize("UTC")  # type: ignore[union-attr]
+
+    # ── SPY — DB first, yfinance fallback ─────────────────────────────────
+    spy_result = await db.execute(
+        select(StockPrice.time, StockPrice.adj_close)
+        .where(StockPrice.ticker == "SPY")
+        .order_by(StockPrice.time.asc())
+    )
+    spy_rows = spy_result.all()
+
+    if spy_rows:
+        spy_df = pd.DataFrame(spy_rows, columns=["time", "adj_close"])  # type: ignore[arg-type]
+        spy_df["time"] = pd.to_datetime(spy_df["time"], utc=True)
+        spy_df = spy_df.set_index("time")
+        spy_closes: pd.Series = spy_df["adj_close"].astype(float)  # type: ignore[assignment]
+    else:
+        logger.warning("No SPY data in DB — falling back to yfinance")
+        spy_raw = await asyncio.to_thread(yf.download, "SPY", period="1y", progress=False)
+        if spy_raw is None or spy_raw.empty:  # type: ignore[union-attr]
+            raise RuntimeError("Failed to download SPY data from yfinance")
+        if isinstance(spy_raw.columns, pd.MultiIndex):
+            spy_raw.columns = spy_raw.columns.get_level_values(0)
+        spy_closes: pd.Series = spy_raw["Close"].copy()  # type: ignore[assignment]
+        if spy_closes.index.tz is None:  # type: ignore[union-attr]
+            spy_closes.index = spy_closes.index.tz_localize("UTC")  # type: ignore[union-attr]
+
+    return vix_closes, spy_closes
+
+
+async def _upsert_daily_feature_row(
+    ticker: str, features_df: pd.DataFrame, db: AsyncSession
+) -> None:
+    """Upsert the latest (today's) feature row into historical_features.
+
+    Takes the last row from features_df — forward return targets are set to
+    None since future prices are unknown. Uses ON CONFLICT DO UPDATE on
+    (date, ticker) so re-runs are idempotent.
+
+    Args:
+        ticker: Stock ticker symbol.
+        features_df: DataFrame returned by build_feature_dataframe(); must be
+            non-empty.
+        db: Async database session.
+    """
+    from backend.models.historical_feature import HistoricalFeature
+
+    last = features_df.iloc[-1]
+    idx = features_df.index[-1]
+    dt = idx.date() if hasattr(idx, "date") else idx  # type: ignore[union-attr]
+
+    values: dict = {
+        "date": dt,
+        "ticker": ticker,
+        "momentum_21d": round(float(last["momentum_21d"]), 6),
+        "momentum_63d": round(float(last["momentum_63d"]), 6),
+        "momentum_126d": round(float(last["momentum_126d"]), 6),
+        "rsi_value": round(float(last["rsi_value"]), 2),
+        "macd_histogram": round(float(last["macd_histogram"]), 6),
+        "sma_cross": int(last["sma_cross"]),
+        "bb_position": int(last["bb_position"]),
+        "volatility": round(float(last["volatility"]), 6),
+        "sharpe_ratio": round(float(last["sharpe_ratio"]), 6),
+        "vix_level": round(float(last["vix_level"]), 2),
+        "spy_momentum_21d": round(float(last["spy_momentum_21d"]), 6),
+        "stock_sentiment": None,
+        "sector_sentiment": None,
+        "macro_sentiment": None,
+        "sentiment_confidence": None,
+        "signals_aligned": None,
+        "convergence_label": None,
+        "forward_return_60d": None,
+        "forward_return_90d": None,
+    }
+
+    stmt = pg_insert(HistoricalFeature).values(values)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["date", "ticker"],
+        set_={k: stmt.excluded[k] for k in values if k not in ("date", "ticker")},
+    )
+    await db.execute(stmt)
+    await db.commit()
+
+
+@tracked_task("daily_features", trigger="scheduled")
+async def _populate_daily_features_async(*, run_id: uuid.UUID) -> dict:
+    """Compute and upsert today's feature row for every referenced ticker.
+
+    Fetches VIX + SPY once, then for each ticker fetches close prices from
+    the DB, runs build_feature_dataframe() in a thread (CPU-bound), and
+    upserts only the latest row into historical_features. Tickers that fail
+    are logged and skipped — the task continues for the remaining universe.
+
+    Args:
+        run_id: Pipeline run UUID injected by @tracked_task.
+
+    Returns:
+        Dict with status ("ok" | "disabled" | "degraded"), populated count,
+        failed count, and list of failed tickers.
+    """
+    if not settings.DAILY_FEATURES_ENABLED:
+        logger.info("DAILY_FEATURES_ENABLED=False — skipping")
+        return {"status": "disabled"}
+
+    async with _db.async_session_factory() as db:
+        tickers = await get_all_referenced_tickers(db)
+        if not tickers:
+            logger.info("No tickers found — skipping daily feature population")
+            return {"status": "ok", "populated": 0, "failed": 0, "failed_tickers": []}
+
+        vix_closes, spy_closes = await _fetch_vix_and_spy(db)
+
+    populated = 0
+    failed: list[str] = []
+
+    # Batch-fetch all prices (avoid N+1 query pattern)
+    async with _db.async_session_factory() as db:
+        from backend.models.price import StockPrice
+
+        price_result = await db.execute(
+            select(StockPrice.ticker, StockPrice.time, StockPrice.close)
+            .where(StockPrice.ticker.in_(tickers))
+            .order_by(StockPrice.ticker, StockPrice.time)
+        )
+        all_prices = price_result.all()
+
+    # Group prices by ticker
+    from collections import defaultdict
+
+    prices_by_ticker: dict[str, list] = defaultdict(list)
+    for row in all_prices:
+        prices_by_ticker[row.ticker].append((row.time, float(row.close)))
+
+    # Process each ticker with in-memory price data
+    for tkr in tickers:
+        try:
+            price_rows = prices_by_ticker.get(tkr, [])
+            if len(price_rows) < 250:
+                logger.warning(
+                    "Insufficient price data for %s (%d rows, need 250+)",
+                    tkr,
+                    len(price_rows),
+                )
+                failed.append(tkr)
+                continue
+
+            dates_idx = pd.DatetimeIndex([r[0] for r in price_rows], tz="UTC")
+            closes = pd.Series([r[1] for r in price_rows], index=dates_idx, name="close")
+
+            features_df = await asyncio.to_thread(
+                build_feature_dataframe,
+                closes,
+                vix_closes=vix_closes,
+                spy_closes=spy_closes,
+            )
+
+            if features_df.empty:
+                logger.warning("Empty feature DataFrame for %s", tkr)
+                failed.append(tkr)
+                continue
+
+            async with _db.async_session_factory() as db:
+                await _upsert_daily_feature_row(tkr, features_df, db)
+            populated += 1
+        except Exception:
+            logger.exception("Daily feature population failed for %s", tkr)
+            failed.append(tkr)
+
+    status = "degraded" if failed else "ok"
+    logger.info(
+        "Daily feature population complete: populated=%d failed=%d status=%s",
+        populated,
+        len(failed),
+        status,
+    )
+    return {
+        "status": status,
+        "populated": populated,
+        "failed": len(failed),
+        "failed_tickers": failed,
+    }
+
+
+@celery_app.task(name="backend.tasks.forecasting.populate_daily_features_task")
+def populate_daily_features_task() -> dict:
+    """Nightly task: compute today's feature row for every ticker (10:30 PM ET).
+
+    Returns:
+        Dict with status, populated count, failed count, and failed_tickers list.
+    """
+    logger.info("Starting daily feature population task")
+    return safe_asyncio_run(_populate_daily_features_async())  # type: ignore[arg-type]
 
 
 async def _get_price_data_counts(tickers: list[str], db: AsyncSession) -> dict[str, int]:
@@ -53,6 +308,60 @@ async def _get_price_data_counts(tickers: list[str], db: AsyncSession) -> dict[s
         .group_by(StockPrice.ticker)
     )
     return {row.ticker: row.cnt for row in result.all()}
+
+
+def _should_promote_challenger(
+    champion_metrics: dict | None,
+    challenger_metrics: dict,
+) -> dict:
+    """Decide whether a challenger model should replace the current champion.
+
+    Promotion criteria (spec review O1):
+    - Direction accuracy improves by ≥ CHAMPION_DIRECTION_THRESHOLD (default 1%)
+    - OR CI containment improves by ≥ CHAMPION_CI_THRESHOLD (default 5%)
+    - If no existing champion, always promote.
+    - If CHAMPION_CHALLENGER_ENABLED=False, always promote.
+
+    Args:
+        champion_metrics: Current champion's metrics dict, or None if no champion.
+        challenger_metrics: New challenger's metrics dict from training.
+
+    Returns:
+        Dict with "promote" (bool) and "reason" (str).
+    """
+    if not settings.CHAMPION_CHALLENGER_ENABLED:
+        return {"promote": True, "reason": "champion/challenger disabled"}
+
+    if champion_metrics is None:
+        return {"promote": True, "reason": "no existing champion"}
+
+    champ_dir = champion_metrics.get("direction_accuracy", 0.0)
+    chall_dir = challenger_metrics.get("direction_accuracy", 0.0)
+    dir_delta = chall_dir - champ_dir
+
+    champ_ci = champion_metrics.get("ci_containment", 0.0)
+    chall_ci = challenger_metrics.get("ci_containment", 0.0)
+    ci_delta = chall_ci - champ_ci
+
+    improved_metrics: list[str] = []
+    dir_threshold = settings.CHAMPION_DIRECTION_THRESHOLD
+    ci_threshold = settings.CHAMPION_CI_THRESHOLD
+
+    if dir_delta >= dir_threshold:
+        improved_metrics.append(f"direction_accuracy improved {dir_delta:+.4f} (≥{dir_threshold})")
+    if ci_delta >= ci_threshold:
+        improved_metrics.append(f"ci_containment improved {ci_delta:+.4f} (≥{ci_threshold})")
+
+    if improved_metrics:
+        return {"promote": True, "reason": "; ".join(improved_metrics)}
+
+    return {
+        "promote": False,
+        "reason": (
+            f"direction_accuracy delta={dir_delta:+.4f} (threshold={dir_threshold}), "
+            f"ci_containment delta={ci_delta:+.4f} (threshold={ci_threshold})"
+        ),
+    }
 
 
 @tracked_task("model_retrain", trigger="scheduled")
@@ -119,6 +428,18 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
     if not trained_models:
         return {"trained": 0, "total": len(tickers)}
 
+    # ── 2b. Compute training-time feature stats for drift monitoring ──────
+    numeric_features = [f for f in FEATURE_NAMES if f != "convergence_label"]
+    training_feature_stats: dict[str, dict[str, float]] = {}
+    for feat in numeric_features:
+        if feat in features_df.columns:
+            values = features_df[feat].dropna()
+            if len(values) >= 10:
+                training_feature_stats[feat] = {
+                    "mean": round(float(values.mean()), 6),
+                    "std": round(float(values.std()), 6),
+                }
+
     # ── 3. Persist ModelVersion rows + predict for each ticker ───────────
     trained = 0
     async with _db.async_session_factory() as db:
@@ -145,6 +466,41 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
         for horizon, (artifact_bytes, metrics) in trained_models.items():
             model_type = f"lightgbm_{horizon}d"
 
+            # ── Champion/challenger gate ───────────────────────────────────
+            champ_result = await db.execute(
+                select(ModelVersion).where(
+                    ModelVersion.model_type == model_type,
+                    ModelVersion.is_active.is_(True),
+                )
+            )
+            champion = champ_result.scalar_one_or_none()
+            champion_metrics = champion.metrics if champion else None
+
+            promotion = _should_promote_challenger(champion_metrics, metrics)
+
+            if not promotion["promote"]:
+                logger.info(
+                    "Champion/challenger: keeping champion for %s — %s",
+                    model_type,
+                    promotion["reason"],
+                )
+                if champion:
+                    updated = dict(champion.metrics or {})
+                    updated["last_challenger_comparison"] = {
+                        "challenger_metrics": metrics,
+                        "decision": "kept_champion",
+                        "reason": promotion["reason"],
+                        "compared_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                    champion.metrics = updated
+                continue
+
+            logger.info(
+                "Champion/challenger: promoting challenger for %s — %s",
+                model_type,
+                promotion["reason"],
+            )
+
             # Bump version number
             max_ver_result = await db.execute(
                 select(func.max(ModelVersion.version)).where(
@@ -163,6 +519,11 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
                 .values(is_active=False)
             )
 
+            metrics_with_stats = {
+                **metrics,
+                "training_feature_stats": training_feature_stats,
+            }
+
             mv = ModelVersion(
                 ticker="__universe__",
                 model_type=model_type,
@@ -177,7 +538,7 @@ async def _model_retrain_all_async(*, run_id: uuid.UUID) -> dict:
                     "ensemble_weight_xgb": 0.5,
                     "artifact_b64": base64.b64encode(artifact_bytes).decode("ascii"),
                 },
-                metrics=metrics,
+                metrics=metrics_with_stats,
                 status="active",
                 artifact_path=None,
             )

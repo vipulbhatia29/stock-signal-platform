@@ -1245,7 +1245,7 @@ GET /api/v1/observability/my-queries/{query_id}
 |---------|------|-------------|
 | `EmailService` | `backend/services/email.py` | Transactional email via Resend API. Sends: email verification link, password reset link, account deletion confirmation. Fire-and-forget with error logging. Feature-gated on `RESEND_API_KEY`. |
 | `GoogleOAuthService` | `backend/services/google_oauth.py` | Authorization URL generation (state + nonce), code exchange, JWKS validation via PyJWT, user lookup/creation, OAuthAccount management. JWKS cached in Redis (stable TTL). |
-| `BacktestEngine` | `backend/services/backtesting.py` | Walk-forward validation for Prophet models. Expanding window generation, 5 metrics (MAPE, MAE, RMSE, direction accuracy, CI containment), `_safe_float` NaN/Inf guard. |
+| `BacktestEngine` | `backend/services/backtesting.py` | Walk-forward validation using ForecastEngine (LightGBM+XGBoost). Cross-ticker training on historical_features, expanding window generation with purge buffer, 5 metrics (MAPE, MAE, RMSE, direction accuracy, CI containment), log return comparison, `_safe_float` NaN/Inf guard. |
 | `CacheInvalidator` | `backend/services/cache_invalidator.py` | Event-driven Redis cache invalidation. 7 event methods (`on_prices_updated`, `on_signals_updated`, `on_forecast_updated`, `on_sentiment_scored`, `on_portfolio_changed`, `on_backtest_completed`, `on_stock_ingested`). Batched deletes, fire-and-forget error handling, SCAN-based pattern clearing. |
 | `SignalConvergenceService` | `backend/services/signal_convergence.py` | Multi-signal convergence analysis. 5 classifiers (RSI, MACD, SMA, Piotroski, forecast) + news sentiment. Divergence detection (forecast vs technical majority). Portfolio and sector aggregation. Historical hit rate computation. |
 | `PortfolioForecastService` | `backend/services/portfolio_forecast.py` | Portfolio-level forecasting. Black-Litterman (Idzorek view confidences), vectorized Monte Carlo (Cholesky decomposition, 10K simulations), CVaR (95th + 99th percentile). Fetches Prophet views as BL opinion inputs. |
@@ -1684,7 +1684,9 @@ run_id = await run_group(
 | **intraday** | 1 task: intraday_refresh_all | 30-minute incremental refresh | continue | 1,800 (30 min) |
 | **warm_data** | 3 parallel tasks: analyst_consensus, fred_indicators, institutional_holders | 7 AM daily | continue | 3,600 (1 hr) |
 | **maintenance** | 4 sequential: purge_login_attempts → purge_deleted_accounts → purge_old_forecasts → purge_old_news_articles | 3-3:45 AM daily | continue | 1,800 (30 min) |
-| **model_training** | 2 sequential: retrain_all → backtest | Sunday 2 AM biweekly | stop_on_failure | 7,200 (2 hrs) |
+| **model_training** | 2 sequential: retrain_all (with champion/challenger gate) → backtest | Sunday 2 AM biweekly | stop_on_failure | 7,200 (2 hrs) |
+| **daily_features** | 1 task: populate_daily_features (batch price fetch + VIX + build_feature_dataframe) | 10:30 PM ET daily | continue | 600 (10 min) |
+| **feature_drift** | 1 task: check_feature_drift (mean/std vs training baseline, 2σ threshold) | 11 PM ET daily | continue | 120 (2 min) |
 | **news_sentiment** | 2 tasks: news_ingest → news_sentiment_scoring | News ingestion pipeline | continue | 3,600 (1 hr) |
 | **data_quality** | 1 task: dq_scan (10 checks) | 4 AM daily — negative prices, RSI range, forecast extremes, orphan positions, etc. | continue | 300 (5 min) |
 
