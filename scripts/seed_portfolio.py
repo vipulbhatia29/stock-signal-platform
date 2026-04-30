@@ -254,9 +254,7 @@ async def seed(csv_path: str, email: str, password: str) -> None:
     all_tickers = [p["ticker"] for p in positions_data]
     async with async_session_factory() as db:
         result = await db.execute(
-            text(
-                "SELECT DISTINCT ticker FROM stock_prices WHERE ticker = ANY(:tickers)"
-            ),
+            text("SELECT DISTINCT ticker FROM stock_prices WHERE ticker = ANY(:tickers)"),
             {"tickers": all_tickers},
         )
         tickers_with_prices = {r[0] for r in result.fetchall()}
