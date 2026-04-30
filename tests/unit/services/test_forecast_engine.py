@@ -187,6 +187,7 @@ def test_forecast_signal_insufficient_low_alignment() -> None:
 
 
 @pytest.mark.slow
+@pytest.mark.timeout(90)
 def test_train_and_predict_roundtrip() -> None:
     """Train on synthetic data and predict on one row; verify all output keys present."""
     engine = ForecastEngine()

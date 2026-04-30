@@ -423,3 +423,45 @@ Compared dashboard to Lovable template. Restructured zone order to tell a story:
 - Tests: 2698 unit (+21), 0 failures
 - 9 files changed, +1377/-217 lines, Alembic head: `286eaa38beab` (unchanged)
 - **KAN-551 DONE.** Resume: PR3 (KAN-552) frontend forecast card redesign, or PR4 (KAN-553) cleanup
+
+---
+
+## Session 145 — Full DB Reseed + Seed Pipeline Bug Sweep + Dashboard UI + Signal Scoring Research (2026-04-30)
+
+### Full Universe Reseed
+- Seeded: 503 S&P 500 + 12 ETFs + 62 portfolio tickers = 577 stocks
+- 10y prices (~2,513 rows each), signals, fundamentals (520), dividends (1,162 records)
+- News: 7,149 articles ingested, 500 scored via GPT-4o-mini
+- Feature backfill: 1,168,799 historical_features rows (518 tickers)
+- LightGBM+XGBoost models trained (60d + 90d), 1,004 forecast results
+- Convergence (505), recommendations (4), alerts (2) refreshed
+- Portfolio: 97 positions from Fidelity CSV (admin + vipul accounts)
+
+### Seed Pipeline Bugs Found & Fixed (KAN-558)
+1. **seed_forecasts.py used deprecated Prophet** — stored raw prices ($316) as `expected_return_pct`, dashboard showed +316%. Rewired to ForecastEngine (`_model_retrain_all_async`).
+2. **backfill_features.py BATCH_SIZE=5000** exceeded asyncpg 32,767 param limit (21 cols × 5000 = 105K). Fixed to 1500.
+3. **stocks.ticker + model_versions.ticker VARCHAR(10)** — ForecastEngine uses `__universe__` (12 chars). Migration 043: widened to VARCHAR(20).
+4. **No `__universe__` stock record** — cross-ticker ModelVersion FK breaks. Migration 043 seeds it.
+5. **Portfolio upload no auto-ingest** — new tickers got stock records but no prices/signals. Added auto-ingest step to seed_portfolio.py.
+6. **No seed orchestrator** — created `seed_all.py` (13 steps in dependency order).
+
+### Dashboard UI Improvements
+- **Action Required** — split into Sell Signals / Buy Signals two-column layout, 4 visible each with collapsible overflow
+- **Action Required filtering** — only shows actionable items: held+drop >5% (URGENT), held+weak score (URGENT), score >=8 (OPPORTUNITY), held+overbought RSI (CONSIDER)
+- **Data Bulletin** — scrollable window (560px max-height) with sticky header, replaces full-length table
+
+### Signal Scoring Research & Spec (KAN-554)
+- **Research:** Reviewed expert material from arxiv, Springer, Schwab, Fidelity on composite signal methodology
+- **Finding:** Current system (4-indicator additive average) is fundamentally flawed — Sharpe isn't a signal, no volume confirmation, no trend context, averaging masks disagreement. Max score 7.5/10, zero BUY signals ever generated.
+- **Design:** 5-gate confirmation pipeline (ADX trend → MACD/SMA direction → OBV/MFI volume → RSI entry timing → Piotroski fundamentals). Gates confirm or veto, not average.
+- **Spec written:** `docs/superpowers/specs/2026-04-30-signal-scoring-overhaul.md`
+- **JIRA:** KAN-554 (Epic), KAN-555/556/557 (3 implementation stories)
+- **Data verified:** All inputs available — OHLCV in stock_prices, pandas-ta has ADX/OBV/MFI/ATR
+
+### Migration
+- Alembic head: `757cedd28893` (migration 043 — VARCHAR widening + __universe__ seed)
+
+### Session 145 Totals
+- Tests: unchanged (seed/UI session, no test changes)
+- 12 files changed, 2 new files (seed_all.py, signal scoring spec), 1 migration
+- **KAN-558 fixes committed** (not yet merged). Resume: KAN-554 signal scoring overhaul (PR1 → PR2 → PR3)

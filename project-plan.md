@@ -598,6 +598,51 @@ All prior tech debt resolved in Session 94 (PR #189). KAN-398 absorbed into KAN-
 | KAN-552 | PR3: Frontend forecast card + bulletin column + track record redesign | KAN-551 | To Do |
 | KAN-553 | PR4: ~~Backtest adaptation + champion/challenger + drift monitoring~~ Absorbed into KAN-551 | KAN-550 | ✅ Done (merged into PR2) |
 
+### Session 145: Seed Pipeline Bug Sweep + UI Fixes + Signal Scoring Research (KAN-558)
+
+> Full DB reseed exposed 6 pipeline bugs. All fixed. Dashboard UI improvements (Action Required split, Data Bulletin scroll). Research-driven signal scoring overhaul spec written.
+
+**Seed pipeline fixes (KAN-558 — committed, not yet merged):**
+- `seed_forecasts.py` rewired from deprecated Prophet to LightGBM+XGBoost ForecastEngine
+- `backfill_features.py` BATCH_SIZE 5000→1500 (asyncpg 32,767 param limit)
+- Migration 043: `stocks.ticker` + `model_versions.ticker` VARCHAR(10)→VARCHAR(20) + `__universe__` seed
+- `seed_portfolio.py` auto-ingests prices for tickers missing price data
+- `seed_all.py` — new orchestrator runs all 13 seed steps in dependency order
+- `seed_tasks.py` — updated Celery task signature
+
+**Dashboard UI improvements (committed, not yet merged):**
+- Action Required: split into Sell Signals / Buy Signals columns (4 visible each, collapsible)
+- Action Required: only shows actionable items (held+drop >5%, held+weak, held+overbought, score >=8)
+- Data Bulletin: scrollable window (560px) with sticky header instead of full-length table
+
+**Seeded data (full universe):**
+- 503 S&P 500 + 12 ETFs + 62 portfolio tickers = 577 stocks
+- 10y prices, signals, fundamentals, dividends, news (7,149 articles), sentiment (153 tickers)
+- LightGBM+XGBoost forecast models trained (60d + 90d horizons, 1,004 predictions)
+- Convergence, recommendations, alerts refreshed
+
+---
+
+### Epic KAN-554: Signal Scoring Overhaul — Confirmation-Gate Pipeline
+
+> Replace additive 4-indicator average (RSI+MACD+SMA+Sharpe → 0-10) with research-backed 5-gate confirmation model (ADX trend + MACD/SMA direction + OBV/MFI volume + RSI entry timing + Piotroski fundamentals). Current system produces zero BUY signals (max score 7.5/10). Gate model produces actionable signals by requiring indicator confirmation, not averaging.
+> **Spec:** `docs/superpowers/specs/2026-04-30-signal-scoring-overhaul.md`
+
+| Ticket | Summary | Status |
+|--------|---------|--------|
+| KAN-554 | Epic: Signal Scoring Overhaul | To Do |
+| KAN-555 | PR1: Schema migration + new indicator computation (ADX, OBV, MFI, ATR) | To Do |
+| KAN-556 | PR2: Confirmation-gate engine — rewrite compute_composite_score() | To Do |
+| KAN-557 | PR3: Universe reseed + feature backfill + frontend validation | To Do |
+
+**Key design decisions:**
+- Score interface unchanged (0-10, same thresholds) — all downstream consumers unaffected
+- Gates are binary (confirm/veto), not weighted averages
+- RSI interpretation is regime-aware (ADX determines context)
+- Sharpe removed from scoring (moved to position sizing only)
+- Volume confirmation (OBV + MFI) added — currently missing entirely
+- All raw data exists in `stock_prices` (OHLCV) — no new data sources needed
+
 ---
 
 ## Parking Lot
