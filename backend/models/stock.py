@@ -28,7 +28,7 @@ class Stock(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "stocks"
 
-    ticker: Mapped[str] = mapped_column(String(10), unique=True, nullable=False, index=True)
+    ticker: Mapped[str] = mapped_column(String(20), unique=True, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     exchange: Mapped[str | None] = mapped_column(String(20), nullable=True)
     sector: Mapped[str | None] = mapped_column(String(100), nullable=True)

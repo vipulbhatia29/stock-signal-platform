@@ -25,7 +25,7 @@ class ModelVersion(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "model_versions"
 
     ticker: Mapped[str] = mapped_column(
-        String(10),
+        String(20),
         ForeignKey("stocks.ticker", ondelete="CASCADE"),
         nullable=False,
         index=True,
@@ -53,7 +53,7 @@ class ForecastResult(Base):
 
     forecast_date: Mapped[date] = mapped_column(Date, primary_key=True)
     ticker: Mapped[str] = mapped_column(
-        String(10),
+        String(20),
         ForeignKey("stocks.ticker", ondelete="CASCADE"),
         primary_key=True,
     )

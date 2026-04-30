@@ -43,7 +43,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 5000  # rows per INSERT
+BATCH_SIZE = 1500  # rows per INSERT (21 cols × 1500 = 31500 params, under asyncpg 32767 limit)
 SMA_WARMUP = 200  # rows needed before SMA-200 produces valid output
 
 

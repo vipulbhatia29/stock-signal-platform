@@ -141,15 +141,14 @@ def seed_fundamentals_task(
 @celery_app.task(bind=True, name="backend.tasks.seed_tasks.seed_forecasts_task")
 def seed_forecasts_task(
     self,
-    tickers: list[str] | None = None,
-    use_universe: bool = False,
     dry_run: bool = False,
 ) -> dict:
-    """Seed initial forecast data.
+    """Seed forecast data using the LightGBM+XGBoost ForecastEngine.
+
+    Delegates to the same retrain path used by the nightly pipeline.
+    Requires historical_features to be populated first.
 
     Args:
-        tickers: Explicit list of tickers. If None, uses universe if use_universe=True.
-        use_universe: If True, pull all tickers from the stock universe.
         dry_run: If True, show what would be computed without writing.
 
     Returns:
@@ -158,7 +157,7 @@ def seed_forecasts_task(
     from scripts.seed_forecasts import main
 
     self.update_state(state="PROGRESS", meta={"step": "seeding_forecasts", "progress": 0})
-    result = asyncio.run(main(tickers=tickers, use_universe=use_universe, dry_run=dry_run))
+    result = asyncio.run(main(dry_run=dry_run))
     return {"status": "complete", "result": result}
 
 

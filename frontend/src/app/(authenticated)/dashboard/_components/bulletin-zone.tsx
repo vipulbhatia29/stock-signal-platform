@@ -133,9 +133,9 @@ function WatchlistTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    <ScrollableTable>
       <Table>
-        <TableHeader className="bg-card2">
+        <TableHeader className="bg-card2 sticky top-0 z-10">
           <TableRow>
             <TH>Ticker</TH>
             <TH className="text-right">Price</TH>
@@ -222,7 +222,7 @@ function WatchlistTable({
           })}
         </TableBody>
       </Table>
-    </div>
+    </ScrollableTable>
   );
 }
 
@@ -246,9 +246,9 @@ function PortfolioTable({
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
+    <ScrollableTable>
       <Table>
-        <TableHeader className="bg-card2">
+        <TableHeader className="bg-card2 sticky top-0 z-10">
           <TableRow>
             <TH>Ticker</TH>
             <TH className="text-right">Shares</TH>
@@ -326,7 +326,7 @@ function PortfolioTable({
           })}
         </TableBody>
       </Table>
-    </div>
+    </ScrollableTable>
   );
 }
 
@@ -374,5 +374,16 @@ function ActionBadge({ action }: { action: string }) {
     <span className={cn("inline-flex rounded-full px-2 py-0.5 text-[9px] font-semibold", colors[action] ?? "bg-muted text-muted-foreground")}>
       {action}
     </span>
+  );
+}
+
+/** Scrollable container — shows ~15 rows with sticky header, scrolls for more. */
+function ScrollableTable({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="max-h-[560px] overflow-y-auto">
+        {children}
+      </div>
+    </div>
   );
 }

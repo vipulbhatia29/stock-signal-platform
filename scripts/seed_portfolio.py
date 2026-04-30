@@ -250,6 +250,30 @@ async def seed(csv_path: str, email: str, password: str) -> None:
             total_watchlist,
         )
 
+    # 6. Auto-ingest prices + signals for tickers that have no price data
+    all_tickers = [p["ticker"] for p in positions_data]
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text(
+                "SELECT DISTINCT ticker FROM stock_prices WHERE ticker = ANY(:tickers)"
+            ),
+            {"tickers": all_tickers},
+        )
+        tickers_with_prices = {r[0] for r in result.fetchall()}
+
+    tickers_needing_prices = [t for t in all_tickers if t not in tickers_with_prices]
+    if tickers_needing_prices:
+        logger.info(
+            "Auto-ingesting prices for %d tickers missing price data...",
+            len(tickers_needing_prices),
+        )
+        from scripts.seed_prices import main as seed_prices_main
+
+        await seed_prices_main(tickers=tickers_needing_prices, period="10y")
+        logger.info("Price ingestion complete for %d tickers", len(tickers_needing_prices))
+    else:
+        logger.info("All portfolio tickers already have price data")
+
 
 async def backfill_missing_sectors() -> None:
     """Backfill sector and industry for existing Stock rows where sector is NULL.
