@@ -564,7 +564,7 @@ class SignalConvergenceService:
         result = await db.execute(
             select(Position).where(
                 Position.portfolio_id == portfolio_id,
-                Position.quantity > 0,
+                Position.shares > 0,
             )
         )
         positions = result.scalars().all()
@@ -579,7 +579,7 @@ class SignalConvergenceService:
         pos_values: dict[str, float] = {}
         for p in positions:
             price = price_map.get(p.ticker) or float(p.avg_cost_basis or 0)
-            mv = float(p.quantity) * price
+            mv = float(p.shares) * price
             pos_values[p.ticker] = mv
             total_value += mv
 
