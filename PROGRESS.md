@@ -465,3 +465,42 @@ Compared dashboard to Lovable template. Restructured zone order to tell a story:
 - Tests: unchanged (seed/UI session, no test changes)
 - 12 files changed, 2 new files (seed_all.py, signal scoring spec), 1 migration
 - **KAN-558 fixes committed** (not yet merged). Resume: KAN-554 signal scoring overhaul (PR1 → PR2 → PR3)
+
+---
+
+## Session 146 — KAN-555: Signal Scoring Gate Indicators (PR1 of 3) + GLM Benchmark (2026-04-30)
+
+**Branch:** `feat/KAN-555-signal-scoring-indicators` → develop | **PR #297 merged**
+
+### What was built
+- **Migration 044** — 6 new nullable columns on `signal_snapshots`: `adx_value`, `obv_slope`, `mfi_value`, `atr_value`, `piotroski_score`, `macd_histogram_prev`
+- **4 new indicator functions** — `compute_adx()`, `compute_obv_slope()`, `compute_mfi()`, `compute_atr()` using pandas-ta, wired into `compute_signals()` with aligned OHLCV indexes
+- **`compute_macd()` refactored** to 4-tuple (adds prior-day histogram for Gate 2 acceleration check)
+- **`store_signal_snapshot()`** persists all 6 new fields
+- **Spec updated** — KAN-554 Epic ref, Piotroski neutral semantics (gate skipped, not penalized), convergence consumer migration noted, kill switch (`SIGNAL_SCORING_ENGINE` setting), hard acceptance gates for distribution validation
+- **Plan written** — 12 tasks across 3 PRs, subagent-ready, includes convergence consumer fix (Task 7b) and kill switch
+
+### GLM Benchmark (implementer-opencode)
+- **4 tasks dispatched** via `@implementer-opencode` with GLM model via OpenRouter
+- **Task 1 (migration):** GLM — perfect output, but edited 5 out-of-scope files (Serena onboarding side-effect)
+- **Task 2 (indicator funcs):** GLM — functionally correct, Opus review caught 4 edge case bugs (OBV ddof, OHLCV alignment, hist_prev NaN, close_series re-cast)
+- **Task 3 (tests):** Sonnet (not GLM — model override ignored) — **FAIL**, all 14 tests had wrong function signatures, had to be completely rewritten by orchestrator
+- **Task 4 (property tests):** GLM — correct, simple task done well
+- **Infrastructure bugs found:** (1) Serena onboarding auto-writes .serena/ files, (2) GLM model override sometimes ignored, (3) scope constraint not enforced (out-of-scope file edits every dispatch)
+
+### Opus Review Process
+- **Spec+plan review** (Backend Architect + Reliability): 10 findings, all HIGH/MEDIUM fixed (golden dataset MACD sites, feature flag, neutral Piotroski semantics, convergence old-row fallback, distribution acceptance gates)
+- **Code review round 1:** REQUEST CHANGES — 2 CRITICAL (model file missing, migration untracked), 4 WARNING (OBV ddof, OHLCV alignment, NaN hist_prev, tautological assertion)
+- **Code review round 2 (final):** APPROVE WITH NITS — 1 MEDIUM (closes vs gate_closes alignment), 3 LOW (OBV period 20→21, missing range-bound test, weak OBV assertion). All fixed.
+- **CI:** backend-lint failed (migration import sorting) → fixed → all 9 checks green
+
+### JIRA
+- **KAN-555** → Done (correct)
+- **KAN-554** → falsely closed by KAN-429 automation (matched Epic ref in PR body) → reopened to In Progress
+- **KAN-556, KAN-557** → To Do (correct, not yet started)
+
+### Session 146 Totals
+- Tests: 2714 unit (+16 new), 0 failures
+- 1 PR merged (#297), 9 files changed, +2379/-23 lines
+- Alembic head: `ebc5d9394dd1` (migration 044)
+- **KAN-555 DONE.** Resume: KAN-556 (PR2: confirmation-gate engine rewrite)
