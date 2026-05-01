@@ -146,7 +146,9 @@ def test_rsi_14_uptrend_is_high() -> None:
 def test_macd_12_26_9_golden_dataset_matches_expected() -> None:
     """MACD line for known 50-day series must match reference (rtol=0.05)."""
     closes = _series(_PRICES_50)
-    macd_val, hist_val, signal_label = compute_macd(closes, fast=12, slow=26, signal_period=9)
+    macd_val, hist_val, signal_label, hist_prev = compute_macd(
+        closes, fast=12, slow=26, signal_period=9
+    )
     assert macd_val is not None, "MACD should be computable for 50-day series"
     # Relative tolerance of 5%
     assert abs(macd_val - _EXPECTED_MACD_LINE) <= abs(_EXPECTED_MACD_LINE) * 0.05 + 0.01, (
@@ -158,7 +160,7 @@ def test_macd_12_26_9_golden_dataset_matches_expected() -> None:
 def test_macd_histogram_golden_dataset_sign() -> None:
     """MACD histogram sign (positive = bullish) must match reference."""
     closes = _series(_PRICES_50)
-    _, hist_val, signal_label = compute_macd(closes, fast=12, slow=26, signal_period=9)
+    _, hist_val, signal_label, _ = compute_macd(closes, fast=12, slow=26, signal_period=9)
     assert hist_val is not None
     # Signs must agree
     assert (hist_val > 0) == (_EXPECTED_MACD_HIST > 0), (
@@ -170,7 +172,7 @@ def test_macd_histogram_golden_dataset_sign() -> None:
 def test_macd_uptrend_is_bullish() -> None:
     """MACD for a strong uptrend should be BULLISH."""
     closes = _series(_PRICES_50)
-    _, _, signal_label = compute_macd(closes, fast=12, slow=26, signal_period=9)
+    _, _, signal_label, _ = compute_macd(closes, fast=12, slow=26, signal_period=9)
     assert signal_label == "BULLISH", f"Expected BULLISH for uptrend, got {signal_label}"
 
 

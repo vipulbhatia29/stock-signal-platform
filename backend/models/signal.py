@@ -68,3 +68,11 @@ class SignalSnapshot(Base):
     # Composite
     composite_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     composite_weights: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    # Gate indicators (confirmation-gate scoring v2)
+    adx_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    obv_slope: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mfi_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    atr_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    piotroski_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    macd_histogram_prev: Mapped[float | None] = mapped_column(Float, nullable=True)

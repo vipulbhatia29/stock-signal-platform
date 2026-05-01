@@ -58,6 +58,12 @@ from backend.services.signals import (
     SMASignal as SMASignal,
 )
 from backend.services.signals import (
+    compute_adx as compute_adx,
+)
+from backend.services.signals import (
+    compute_atr as compute_atr,
+)
+from backend.services.signals import (
     compute_bollinger as compute_bollinger,
 )
 from backend.services.signals import (
@@ -65,6 +71,12 @@ from backend.services.signals import (
 )
 from backend.services.signals import (
     compute_macd as compute_macd,
+)
+from backend.services.signals import (
+    compute_mfi as compute_mfi,
+)
+from backend.services.signals import (
+    compute_obv_slope as compute_obv_slope,
 )
 from backend.services.signals import (
     compute_price_change as compute_price_change,
@@ -112,4 +124,8 @@ __all__ = [
     "compute_signals",
     "compute_sma",
     "store_signal_snapshot",
+    "compute_adx",
+    "compute_atr",
+    "compute_mfi",
+    "compute_obv_slope",
 ]
