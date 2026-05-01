@@ -70,6 +70,9 @@ from backend.services.signals import (
     compute_composite_score as compute_composite_score,
 )
 from backend.services.signals import (
+    compute_confirmation_gates as compute_confirmation_gates,
+)
+from backend.services.signals import (
     compute_macd as compute_macd,
 )
 from backend.services.signals import (
@@ -117,6 +120,7 @@ __all__ = [
     "SignalResult",
     "compute_bollinger",
     "compute_composite_score",
+    "compute_confirmation_gates",
     "compute_macd",
     "compute_price_change",
     "compute_risk_return",

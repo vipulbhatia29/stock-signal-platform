@@ -504,3 +504,28 @@ Compared dashboard to Lovable template. Restructured zone order to tell a story:
 - 1 PR merged (#297), 9 files changed, +2379/-23 lines
 - Alembic head: `ebc5d9394dd1` (migration 044)
 - **KAN-555 DONE.** Resume: KAN-556 (PR2: confirmation-gate engine rewrite)
+
+---
+
+## Session 147 — KAN-556: Confirmation-Gate Engine (PR2 of 3) (2026-05-01)
+
+**Branch:** `feat/KAN-556-confirmation-gate-engine` → develop
+
+### What was built
+- **`compute_confirmation_gates()`** — 5-gate pure function replacing additive `compute_composite_score()`. Gates: (1) ADX trend regime, (2) MACD+SMA direction alignment (3/4 conditions), (3) OBV+MFI volume confirmation, (4) regime-aware RSI entry timing, (5) Piotroski fundamental health. Score = (confirmed/active) × 10.
+- **`_determine_direction()`** — majority-vote helper (MACD sign, SMA50 vs SMA200, price vs SMA50) used by gates 2-4.
+- **Kill switch** — `SIGNAL_SCORING_ENGINE` setting in config.py. Default `"confirmation_gate_v2"`, set `"additive_v1"` to rollback. Old `compute_composite_score()` preserved for rollback path.
+- **Convergence fix (Task 7b)** — `signal_convergence.py` now reads Piotroski from `piotroski_score` column (migration 044) with JSONB fallback for old-format rows.
+- **11 new tests** (TestConfirmationGates) — all-confirmed=10, no-confirmed=0, 4-of-5=8, piotroski neutral/veto/skip, RSI regime-aware trending/range-bound, boundary sweep, gate detail structure.
+- **Updated 4 test classes** — TestComputeSignalsEndToEnd (gate format), TestPiotroskiBlendingHardening (gate semantics), TestBullishBearishExtremes (direction-neutral), Hypothesis property tests (new function signature).
+
+### Key design decisions
+- Neutral Piotroski (4-6) does NOT count as active gate — prevents penalizing vs no-data
+- Gate 2 requires 3/4 direction conditions (or 2/3 without acceleration data)
+- RSI entry timing is regime-aware: trending (40-65 pullback), range-bound (<35 mean-reversion), emerging (<50 early)
+- Bearish direction confirms bearish-aligned gates (not just bullish scoring)
+
+### Session 147 Totals
+- Tests: 2723 unit (+9 net), 0 failures
+- 7 production+test files changed
+- Resume: KAN-557 (PR3: historical features + reseed + frontend validation)
