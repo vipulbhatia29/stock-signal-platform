@@ -162,6 +162,11 @@ class Settings(BaseSettings):
     WATCHLIST_AUTO_INGEST: bool = True
     # NEWS_SCORING_MAX_CONCURRENCY controls concurrency (added in B4.2, see above)
 
+    # --- Signal Scoring Engine ---
+    # "confirmation_gate_v2" = new 5-gate model (default)
+    # "additive_v1" = legacy additive scoring (rollback)
+    SIGNAL_SCORING_ENGINE: str = "confirmation_gate_v2"
+
     # --- Pipeline ---
     INTRADAY_REFRESH_CONCURRENCY: int = 5  # Spec E.3 — semaphore bound on fast path (= pool_size)
     PIPELINE_FAILURE_MODE: str = "continue"

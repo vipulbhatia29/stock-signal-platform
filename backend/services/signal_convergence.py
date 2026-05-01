@@ -324,10 +324,13 @@ class SignalConvergenceService:
         Returns:
             TickerConvergence with all fields populated.
         """
-        # Extract piotroski from composite_weights JSONB (stored during signal computation)
-        # JSONB numbers may deserialize as float — cast to int explicitly
-        weights = signal.composite_weights or {}
-        raw_pio = weights.get("piotroski")
+        # Read piotroski from the dedicated column (migration 044).
+        # Fall back to composite_weights JSONB for old-format rows that
+        # haven't been recomputed yet (transition period after deploy).
+        raw_pio = getattr(signal, "piotroski_score", None)
+        if raw_pio is None:
+            weights = signal.composite_weights or {}
+            raw_pio = weights.get("piotroski")
         piotroski_score: int | None = int(raw_pio) if raw_pio is not None else None
 
         # Compute forecast predicted return from ForecastResult (return stored directly)
@@ -561,7 +564,7 @@ class SignalConvergenceService:
         result = await db.execute(
             select(Position).where(
                 Position.portfolio_id == portfolio_id,
-                Position.quantity > 0,
+                Position.shares > 0,
             )
         )
         positions = result.scalars().all()
@@ -576,7 +579,7 @@ class SignalConvergenceService:
         pos_values: dict[str, float] = {}
         for p in positions:
             price = price_map.get(p.ticker) or float(p.avg_cost_basis or 0)
-            mv = float(p.quantity) * price
+            mv = float(p.shares) * price
             pos_values[p.ticker] = mv
             total_value += mv
 

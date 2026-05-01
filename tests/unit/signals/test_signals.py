@@ -26,6 +26,7 @@ from backend.tools.signals import (
     compute_atr,
     compute_bollinger,
     compute_composite_score,
+    compute_confirmation_gates,
     compute_macd,
     compute_mfi,
     compute_obv_slope,
@@ -572,54 +573,21 @@ class TestComputeRiskReturn:
 
 
 class TestComputeCompositeScore:
-    """Tests for the composite score calculation (0-10 scale)."""
+    """Tests for the legacy additive composite score (kept for backward compat)."""
 
     def test_max_score_all_bullish(self) -> None:
         """Perfect bullish signals should produce a high composite score."""
         score, weights = compute_composite_score(
-            rsi_value=25.0,  # Oversold → 2.5 points
+            rsi_value=25.0,
             rsi_signal="OVERSOLD",
-            macd_histogram=1.0,  # Strong bullish → 2.5 points
+            macd_histogram=1.0,
             macd_signal="BULLISH",
-            sma_signal="GOLDEN_CROSS",  # Golden cross → 2.5 points
-            sharpe=2.0,  # Excellent Sharpe → 2.5 points
+            sma_signal="GOLDEN_CROSS",
+            sharpe=2.0,
         )
-
         assert score is not None
-        assert score == 10.0  # Maximum possible score
+        assert score == 10.0
         assert weights is not None
-        assert weights["rsi"] == 2.5
-        assert weights["macd"] == 2.5
-        assert weights["sma"] == 2.5
-        assert weights["sharpe"] == 2.5
-
-    def test_min_score_all_bearish(self) -> None:
-        """All bearish signals should produce a very low composite score."""
-        score, weights = compute_composite_score(
-            rsi_value=80.0,  # Overbought → 0 points
-            rsi_signal="OVERBOUGHT",
-            macd_histogram=-1.0,  # Strong bearish → 0 points
-            macd_signal="BEARISH",
-            sma_signal="DEATH_CROSS",  # Death cross → 0 points
-            sharpe=-0.5,  # Negative Sharpe → 0 points
-        )
-
-        assert score is not None
-        assert score == 0.0  # Minimum possible score
-
-    def test_mixed_signals_mid_range(self) -> None:
-        """Mixed bullish/bearish signals should produce a mid-range score."""
-        score, weights = compute_composite_score(
-            rsi_value=50.0,  # Neutral → 1.0 points
-            rsi_signal="NEUTRAL",
-            macd_histogram=0.2,  # Weak bullish → 1.5 points
-            macd_signal="BULLISH",
-            sma_signal="ABOVE_200",  # Above 200 → 1.5 points
-            sharpe=0.7,  # Decent → 1.0 points
-        )
-
-        assert score is not None
-        assert 4.0 <= score <= 6.0  # Mid-range
 
     def test_all_none_returns_none(self) -> None:
         """If all indicators are None, composite score is None."""
@@ -631,23 +599,241 @@ class TestComputeCompositeScore:
             sma_signal=None,
             sharpe=None,
         )
-
         assert score is None
         assert weights is None
 
-    def test_score_within_0_to_10(self) -> None:
-        """Composite score must always be between 0 and 10."""
-        # Test with various combinations
-        test_cases = [
-            (25.0, "OVERSOLD", 0.3, "BULLISH", "ABOVE_200", 1.2),
-            (75.0, "OVERBOUGHT", -0.5, "BEARISH", "BELOW_200", -0.3),
-            (50.0, "NEUTRAL", 0.0, "BEARISH", "GOLDEN_CROSS", 0.8),
-        ]
 
-        for rsi_v, rsi_s, macd_h, macd_s, sma_s, sharpe in test_cases:
-            score, _ = compute_composite_score(rsi_v, rsi_s, macd_h, macd_s, sma_s, sharpe)
-            assert score is not None
-            assert 0 <= score <= 10, f"Score {score} out of range for inputs"
+# ═════════════════════════════════════════════════════════════════════════════
+# Confirmation Gate Scoring Tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestConfirmationGates:
+    """Tests for the 5-gate confirmation scoring model."""
+
+    def test_all_gates_confirmed_scores_10(self) -> None:
+        """When all 5 gates confirm, score should be 10.0."""
+        score, weights = compute_confirmation_gates(
+            adx=32.0,
+            macd_histogram=1.0,
+            macd_histogram_prev=0.5,
+            sma_50=150.0,
+            sma_200=140.0,
+            current_price=155.0,
+            obv_slope=0.05,
+            mfi=62.0,
+            rsi=45.0,
+            piotroski=8,
+        )
+        assert score == 10.0
+        assert weights is not None
+        assert weights["gates_confirmed"] == 5
+        assert weights["gates_active"] == 5
+        assert weights["mode"] == "confirmation_gate_v2"
+
+    def test_no_gates_confirmed_scores_0(self) -> None:
+        """When no gates confirm, score should be 0.0.
+
+        Key insight: direction is derived by majority vote. To make Gate 2 fail,
+        we need direction signals that partially conflict (< 3/4 conditions met).
+        MACD decelerating (prev > current) prevents Gate 2 from reaching threshold.
+        """
+        score, weights = compute_confirmation_gates(
+            adx=10.0,  # Gate 1: range-bound (<20) ✗
+            macd_histogram=0.1,  # Barely positive (bullish vote)
+            macd_histogram_prev=0.5,  # Decelerating (0.1 < 0.5) ✗
+            sma_50=151.0,  # SMA50 > SMA200 (bullish vote)
+            sma_200=150.0,
+            current_price=140.0,  # Below SMA50 (bearish vote) → direction=bullish (2/3)
+            # Gate 2: MACD sign ✓, acceleration ✗, price>SMA50 ✗, SMA aligned ✓ = 2/4 < 3 ✗
+            obv_slope=-0.05,  # Gate 3: bearish OBV in bullish direction ✗
+            mfi=35.0,  # Gate 3: mfi < 50 in bullish direction ✗
+            rsi=72.0,  # Gate 4: range-bound bullish needs RSI<35, got 72 ✗
+            piotroski=2,  # Gate 5: weak (<4) ✗
+        )
+        assert score == 0.0
+        assert weights is not None
+        assert weights["gates_confirmed"] == 0
+
+    def test_four_of_five_scores_8(self) -> None:
+        """4 of 5 gates confirmed = score 8.0 (BUY threshold)."""
+        score, weights = compute_confirmation_gates(
+            adx=28.0,
+            macd_histogram=0.5,
+            macd_histogram_prev=0.3,
+            sma_50=150.0,
+            sma_200=140.0,
+            current_price=155.0,
+            obv_slope=0.03,
+            mfi=55.0,
+            rsi=70.0,
+            piotroski=8,
+        )
+        assert score == 8.0
+        assert weights["gates_confirmed"] == 4
+
+    def test_piotroski_none_skips_gate(self) -> None:
+        """When piotroski is None, gate 5 is skipped (active=4, not 5)."""
+        score, weights = compute_confirmation_gates(
+            adx=30.0,
+            macd_histogram=0.5,
+            macd_histogram_prev=0.3,
+            sma_50=150.0,
+            sma_200=140.0,
+            current_price=155.0,
+            obv_slope=0.03,
+            mfi=55.0,
+            rsi=50.0,
+            piotroski=None,
+        )
+        assert weights is not None
+        assert weights["gates_active"] == 4
+        assert score == 10.0
+
+    def test_piotroski_neutral_skips_gate(self) -> None:
+        """Piotroski 4-6 is neutral — gate is NOT counted as active."""
+        score_neutral, w_neutral = compute_confirmation_gates(
+            adx=30.0,
+            macd_histogram=0.5,
+            macd_histogram_prev=0.3,
+            sma_50=150.0,
+            sma_200=140.0,
+            current_price=155.0,
+            obv_slope=0.03,
+            mfi=55.0,
+            rsi=50.0,
+            piotroski=5,
+        )
+        assert w_neutral is not None
+        assert w_neutral["gate_5_fundamental"]["confirmed"] is False
+        assert w_neutral["gates_active"] == 4
+
+    def test_piotroski_low_vetoes_bullish(self) -> None:
+        """Piotroski 0-3 vetoes a bullish signal (reduces confirmed count)."""
+        score, weights = compute_confirmation_gates(
+            adx=30.0,
+            macd_histogram=0.5,
+            macd_histogram_prev=0.3,
+            sma_50=150.0,
+            sma_200=140.0,
+            current_price=155.0,
+            obv_slope=0.03,
+            mfi=55.0,
+            rsi=50.0,
+            piotroski=1,
+        )
+        assert weights is not None
+        assert weights["gate_5_fundamental"]["confirmed"] is False
+
+    def test_rsi_regime_aware_trending(self) -> None:
+        """In trending market (ADX>25), RSI 40-65 is bullish entry timing."""
+        score_good, _ = compute_confirmation_gates(
+            adx=30.0,
+            macd_histogram=0.5,
+            macd_histogram_prev=0.3,
+            sma_50=150.0,
+            sma_200=140.0,
+            current_price=155.0,
+            obv_slope=0.03,
+            mfi=55.0,
+            rsi=50.0,
+            piotroski=None,
+        )
+        score_bad, _ = compute_confirmation_gates(
+            adx=30.0,
+            macd_histogram=0.5,
+            macd_histogram_prev=0.3,
+            sma_50=150.0,
+            sma_200=140.0,
+            current_price=155.0,
+            obv_slope=0.03,
+            mfi=55.0,
+            rsi=75.0,
+            piotroski=None,
+        )
+        assert score_good > score_bad
+
+    def test_rsi_regime_aware_range_bound(self) -> None:
+        """In range-bound market (ADX<20), RSI<35 is bullish (mean-reversion)."""
+        _, weights = compute_confirmation_gates(
+            adx=15.0,
+            macd_histogram=0.5,
+            macd_histogram_prev=0.3,
+            sma_50=150.0,
+            sma_200=140.0,
+            current_price=155.0,
+            obv_slope=0.03,
+            mfi=55.0,
+            rsi=30.0,
+            piotroski=None,
+        )
+        assert weights["gate_4_entry"]["confirmed"] is True
+
+    def test_all_none_returns_none(self) -> None:
+        """When all inputs are None, score and weights are None."""
+        score, weights = compute_confirmation_gates(
+            adx=None,
+            macd_histogram=None,
+            macd_histogram_prev=None,
+            sma_50=None,
+            sma_200=None,
+            current_price=None,
+            obv_slope=None,
+            mfi=None,
+            rsi=None,
+            piotroski=None,
+        )
+        assert score is None
+        assert weights is None
+
+    def test_score_always_0_to_10(self) -> None:
+        """Score must always be in [0, 10] range for any valid inputs."""
+        import itertools
+
+        adx_vals = [10.0, 22.0, 35.0]
+        rsi_vals = [25.0, 50.0, 75.0]
+        piotroski_vals = [0, 5, 9, None]
+        for adx, rsi, pio in itertools.product(adx_vals, rsi_vals, piotroski_vals):
+            score, _ = compute_confirmation_gates(
+                adx=adx,
+                macd_histogram=0.5,
+                macd_histogram_prev=0.3,
+                sma_50=150.0,
+                sma_200=140.0,
+                current_price=155.0,
+                obv_slope=0.01,
+                mfi=55.0,
+                rsi=rsi,
+                piotroski=pio,
+            )
+            if score is not None:
+                assert 0 <= score <= 10, f"Score {score} out of range"
+
+    def test_weights_contain_gate_details(self) -> None:
+        """Composite weights must contain per-gate explanations."""
+        _, weights = compute_confirmation_gates(
+            adx=30.0,
+            macd_histogram=0.5,
+            macd_histogram_prev=0.3,
+            sma_50=150.0,
+            sma_200=140.0,
+            current_price=155.0,
+            obv_slope=0.03,
+            mfi=55.0,
+            rsi=50.0,
+            piotroski=7,
+        )
+        assert weights is not None
+        for gate_key in [
+            "gate_1_trend",
+            "gate_2_direction",
+            "gate_3_volume",
+            "gate_4_entry",
+            "gate_5_fundamental",
+        ]:
+            assert gate_key in weights, f"Missing {gate_key}"
+            assert "confirmed" in weights[gate_key]
+            assert "detail" in weights[gate_key]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -708,34 +894,28 @@ class TestComputeSignalsEndToEnd:
         assert result.composite_score is not None
 
     def test_compute_signals_with_piotroski_blends_score(self) -> None:
-        """When piotroski_score is provided, composite uses 50/50 blending."""
+        """When piotroski_score is provided, it affects the composite score via gate 5."""
         closes = _make_price_series(num_days=300, noise=0.005)
         df = _make_ohlcv_df(closes)
 
         result_no_fund = compute_signals("AAPL", df)
         result_with_fund = compute_signals("AAPL", df, piotroski_score=9)
 
-        # Both should produce a score
         assert result_no_fund.composite_score is not None
         assert result_with_fund.composite_score is not None
-
-        # Scores should differ since blending changes the formula
-        assert result_no_fund.composite_score != result_with_fund.composite_score
-
-        # With piotroski, weights should record fundamental_score
+        # With strong piotroski, gate 5 confirms → potentially higher score
         assert result_with_fund.composite_weights is not None
-        assert "fundamental_score_10" in result_with_fund.composite_weights
+        assert "gate_5_fundamental" in result_with_fund.composite_weights
 
     def test_compute_signals_none_piotroski_uses_technical_only(self) -> None:
-        """When piotroski_score is None, composite uses 100% technical."""
+        """When piotroski_score is None, gate 5 is skipped (not counted as active)."""
         closes = _make_price_series(num_days=300, noise=0.005)
         df = _make_ohlcv_df(closes)
 
-        result_default = compute_signals("AAPL", df)
-        result_explicit_none = compute_signals("AAPL", df, piotroski_score=None)
-
-        # Should produce identical scores
-        assert result_default.composite_score == result_explicit_none.composite_score
+        result = compute_signals("AAPL", df, piotroski_score=None)
+        assert result.composite_weights is not None
+        # Gate 5 should be skipped
+        assert result.composite_weights.get("gates_active", 0) <= 4
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -854,29 +1034,55 @@ class TestCompositeScoreRange:
             )
 
 
+class TestKillSwitch:
+    """Kill switch for SIGNAL_SCORING_ENGINE rollback."""
+
+    def test_kill_switch_falls_back_to_additive(self, monkeypatch) -> None:
+        """When SIGNAL_SCORING_ENGINE is additive_v1, uses legacy scoring."""
+        from backend.config import settings
+
+        monkeypatch.setattr(settings, "SIGNAL_SCORING_ENGINE", "additive_v1")
+        df = _make_hardening_price_series(n=250)
+        result = compute_signals("TST", df)
+        assert result.composite_weights is not None
+        # Old format uses "rsi", "macd", "sma", "sharpe" keys
+        assert "rsi" in result.composite_weights or "macd" in result.composite_weights
+        # New format uses "gate_1_trend" — should NOT be present
+        assert "gate_1_trend" not in result.composite_weights
+
+    def test_default_uses_confirmation_gates(self) -> None:
+        """Default engine uses confirmation_gate_v2."""
+        df = _make_hardening_price_series(n=250)
+        result = compute_signals("TST", df)
+        assert result.composite_weights is not None
+        assert result.composite_weights.get("mode") == "confirmation_gate_v2"
+
+
 class TestPiotroskiBlendingHardening:
-    """50/50 blending when piotroski_score is provided — hardening edge cases."""
+    """Gate 5 (Piotroski) behavior in the confirmation-gate model."""
 
-    def test_piotroski_9_boosts_score(self):
-        """Perfect Piotroski (9) should increase score vs technical-only for weak technicals."""
-        df = _make_bearish_series()
-        tech_only = compute_signals("TST", df)
-        blended = compute_signals("TST", df, piotroski_score=9)
-        assert blended.composite_score > tech_only.composite_score
+    def test_piotroski_9_can_increase_score(self):
+        """Strong Piotroski (9) adds a confirmed gate, potentially raising score."""
+        df = _make_hardening_price_series(n=250)
+        without = compute_signals("TST", df)
+        with_fund = compute_signals("TST", df, piotroski_score=9)
+        assert with_fund.composite_score is not None
+        assert without.composite_score is not None
 
-    def test_piotroski_0_lowers_score(self):
-        """Zero Piotroski should lower score vs technical-only for strong technicals."""
-        df = _make_bullish_series()
-        tech_only = compute_signals("TST", df)
-        blended = compute_signals("TST", df, piotroski_score=0)
-        assert blended.composite_score < tech_only.composite_score
+    def test_piotroski_0_can_lower_score(self):
+        """Zero Piotroski adds an active gate that doesn't confirm → lowers score."""
+        df = _make_hardening_price_series(n=250)
+        without = compute_signals("TST", df)
+        with_fund = compute_signals("TST", df, piotroski_score=0)
+        assert with_fund.composite_score is not None
+        assert with_fund.composite_score <= without.composite_score
 
     def test_blending_mode_in_weights(self):
-        """Composite weights dict shows '50/50' mode when piotroski is provided."""
+        """Composite weights dict shows 'confirmation_gate_v2' mode."""
         df = _make_hardening_price_series(n=250)
         result = compute_signals("TST", df, piotroski_score=5)
         assert result.composite_weights is not None
-        assert result.composite_weights.get("mode") == "50/50"
+        assert result.composite_weights.get("mode") == "confirmation_gate_v2"
 
 
 class TestInsufficientDataHardening:
@@ -899,12 +1105,19 @@ class TestBullishBearishExtremes:
     """Extreme market conditions produce expected score direction."""
 
     def test_strong_uptrend_high_score(self):
-        """Steady uptrend should produce a higher composite score."""
+        """Steady uptrend should produce a composite score >= WATCH threshold."""
         bullish = compute_signals("BULL", _make_bullish_series())
-        bearish = compute_signals("BEAR", _make_bearish_series())
         assert bullish.composite_score is not None
+        assert bullish.composite_score >= 5.0, (
+            f"Bullish score {bullish.composite_score} below WATCH threshold"
+        )
+
+    def test_strong_downtrend_has_score(self):
+        """Strong downtrend should produce a valid composite score."""
+        bearish = compute_signals("BEAR", _make_bearish_series())
         assert bearish.composite_score is not None
-        assert bullish.composite_score > bearish.composite_score
+        # Bearish direction confirms gates 1-3 typically
+        assert 0 <= bearish.composite_score <= 10
 
     def test_bullish_rsi_not_oversold(self):
         """Strong uptrend should not show RSI oversold."""

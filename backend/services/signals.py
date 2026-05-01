@@ -275,15 +275,32 @@ def compute_signals(
             mfi_val = compute_mfi(high, low, gate_closes, volume)
 
     # ── Compute composite score ──────────────────────────────────────
-    score, weights = compute_composite_score(
-        rsi_val,
-        rsi_sig,
-        macd_hist,
-        macd_sig,
-        sma_sig,
-        sharpe,
-        piotroski_score=piotroski_score,
-    )
+    from backend.config import settings
+
+    if settings.SIGNAL_SCORING_ENGINE == "confirmation_gate_v2":
+        score, weights = compute_confirmation_gates(
+            adx=adx_val,
+            macd_histogram=macd_hist,
+            macd_histogram_prev=macd_hist_prev,
+            sma_50=sma50,
+            sma_200=sma200,
+            current_price=float(closes.iloc[-1]) if len(closes) > 0 else None,
+            obv_slope=obv_slope_val,
+            mfi=mfi_val,
+            rsi=rsi_val,
+            piotroski=piotroski_score,
+        )
+    else:
+        # Fallback to additive v1 scoring (kill switch for rollback)
+        score, weights = compute_composite_score(
+            rsi_val,
+            rsi_sig,
+            macd_hist,
+            macd_sig,
+            sma_sig,
+            sharpe,
+            piotroski_score=piotroski_score,
+        )
 
     change_pct, current_price = compute_price_change(df)
 
@@ -745,6 +762,312 @@ def compute_quantstats_stock(
 # ─────────────────────────────────────────────────────────────────────────────
 # Composite score — combines all indicators into a single 0-10 number
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+def _determine_direction(
+    macd_histogram: float | None,
+    sma_50: float | None,
+    sma_200: float | None,
+    current_price: float | None,
+) -> str:
+    """Determine overall direction from technical signals.
+
+    Uses majority vote of available directional indicators:
+    MACD histogram sign, SMA50 vs SMA200, price vs SMA50.
+
+    Returns:
+        "bullish" or "bearish".
+    """
+    bullish_votes = 0
+    total_votes = 0
+
+    if macd_histogram is not None:
+        total_votes += 1
+        if macd_histogram > 0:
+            bullish_votes += 1
+
+    if sma_50 is not None and sma_200 is not None:
+        total_votes += 1
+        if sma_50 > sma_200:
+            bullish_votes += 1
+
+    if current_price is not None and sma_50 is not None:
+        total_votes += 1
+        if current_price > sma_50:
+            bullish_votes += 1
+
+    if total_votes == 0:
+        # Default bullish when no directional data available. This creates
+        # a mild bullish bias for data-sparse tickers — Gates 3/4 will
+        # evaluate against bullish expectations. Acceptable because: (1)
+        # data-sparse = no MACD/SMA = Gates 2-4 likely skip anyway, (2)
+        # the bias only affects Gate 4 RSI ranges when ADX IS available
+        # but SMA/MACD are not — a rare edge case.
+        return "bullish"
+
+    return "bullish" if bullish_votes > total_votes / 2 else "bearish"
+
+
+def compute_confirmation_gates(
+    *,
+    adx: float | None,
+    macd_histogram: float | None,
+    macd_histogram_prev: float | None,
+    sma_50: float | None,
+    sma_200: float | None,
+    current_price: float | None,
+    obv_slope: float | None,
+    mfi: float | None,
+    rsi: float | None,
+    piotroski: int | None,
+) -> tuple[float | None, dict | None]:
+    """Compute composite score using 5-gate confirmation model.
+
+    Each gate is binary (confirmed or not). Score = (confirmed/active) * 10.
+    Gates with insufficient data are skipped (not counted as active).
+
+    Gate 1: Trend regime (ADX > 20)
+    Gate 2: Direction (MACD + SMA alignment, 3 of 4 conditions)
+    Gate 3: Volume (OBV slope + MFI agree with direction)
+    Gate 4: Entry timing (RSI in favorable zone, regime-aware)
+    Gate 5: Fundamental health (Piotroski F-Score)
+
+    Args:
+        adx: ADX value (0-100). None = skip gate 1.
+        macd_histogram: Current MACD histogram value.
+        macd_histogram_prev: Prior day MACD histogram (for acceleration).
+        sma_50: 50-day SMA value.
+        sma_200: 200-day SMA value.
+        current_price: Latest closing price.
+        obv_slope: Normalized 21-day OBV slope.
+        mfi: Money Flow Index (0-100).
+        rsi: RSI value (0-100).
+        piotroski: Piotroski F-Score (0-9). None = skip gate 5.
+
+    Returns:
+        Tuple of (composite_score, weights_dict). Both None if no gates evaluable.
+    """
+    # If nothing is available, return None
+    if all(v is None for v in [adx, macd_histogram, rsi]):
+        return None, None
+
+    gates_active = 0
+    gates_confirmed = 0
+    weights: dict = {"mode": "confirmation_gate_v2"}
+
+    # Determine overall direction from Gate 2 inputs (needed by Gates 3 and 4)
+    direction = _determine_direction(macd_histogram, sma_50, sma_200, current_price)
+
+    # ── Gate 1: Trend Regime (ADX) ────────────────────────────────────
+    if adx is not None:
+        gates_active += 1
+        confirmed = adx > 20
+        regime = "trending" if adx > 25 else ("emerging" if adx >= 20 else "range_bound")
+        if confirmed:
+            gates_confirmed += 1
+        weights["gate_1_trend"] = {
+            "confirmed": confirmed,
+            "adx": adx,
+            "regime": regime,
+            "detail": (
+                f"{'Strong' if adx > 25 else 'Emerging'} trend (ADX {adx})"
+                if confirmed
+                else f"Range-bound (ADX {adx})"
+            ),
+        }
+    else:
+        regime = "unknown"
+        weights["gate_1_trend"] = {
+            "confirmed": False,
+            "adx": None,
+            "regime": "unknown",
+            "detail": "No ADX data",
+        }
+
+    # ── Gate 2: Direction (MACD + SMA alignment) ──────────────────────
+    if (
+        macd_histogram is not None
+        and sma_50 is not None
+        and sma_200 is not None
+        and current_price is not None
+    ):
+        gates_active += 1
+        conditions_met = 0
+        conditions_total = 4
+
+        # Condition 1: MACD histogram positive (bullish) or negative (bearish)
+        macd_positive = macd_histogram > 0
+        if direction == "bullish" and macd_positive:
+            conditions_met += 1
+        elif direction == "bearish" and not macd_positive:
+            conditions_met += 1
+
+        # Condition 2: MACD accelerating
+        if macd_histogram_prev is not None:
+            if direction == "bullish" and macd_histogram > macd_histogram_prev:
+                conditions_met += 1
+            elif direction == "bearish" and macd_histogram < macd_histogram_prev:
+                conditions_met += 1
+        else:
+            conditions_total = 3  # Can't evaluate acceleration
+
+        # Condition 3: Price above/below 50-day SMA
+        if direction == "bullish" and current_price > sma_50:
+            conditions_met += 1
+        elif direction == "bearish" and current_price < sma_50:
+            conditions_met += 1
+
+        # Condition 4: 50-day SMA above/below 200-day SMA
+        if direction == "bullish" and sma_50 > sma_200:
+            conditions_met += 1
+        elif direction == "bearish" and sma_50 < sma_200:
+            conditions_met += 1
+
+        confirmed = conditions_met >= 3 if conditions_total == 4 else conditions_met >= 2
+        if confirmed:
+            gates_confirmed += 1
+
+        weights["gate_2_direction"] = {
+            "confirmed": confirmed,
+            "direction": direction,
+            "conditions_met": conditions_met,
+            "conditions_total": conditions_total,
+            "macd_accel": macd_histogram_prev is not None
+            and (
+                (direction == "bullish" and macd_histogram > macd_histogram_prev)
+                or (direction == "bearish" and macd_histogram < macd_histogram_prev)
+            ),
+            "sma_aligned": (direction == "bullish" and sma_50 > sma_200)
+            or (direction == "bearish" and sma_50 < sma_200),
+            "detail": (
+                f"{direction.title()} — {conditions_met}/{conditions_total} direction signals align"
+            ),
+        }
+    else:
+        weights["gate_2_direction"] = {
+            "confirmed": False,
+            "direction": direction,
+            "detail": "Insufficient data for direction",
+        }
+
+    # ── Gate 3: Volume Confirmation (OBV + MFI) ───────────────────────
+    if obv_slope is not None and mfi is not None:
+        gates_active += 1
+        if direction == "bullish":
+            obv_confirms = obv_slope > 0
+            mfi_confirms = mfi > 50
+        else:
+            obv_confirms = obv_slope < 0
+            mfi_confirms = mfi < 50
+
+        confirmed = obv_confirms and mfi_confirms
+        if confirmed:
+            gates_confirmed += 1
+
+        weights["gate_3_volume"] = {
+            "confirmed": confirmed,
+            "obv_slope": obv_slope,
+            "mfi": mfi,
+            "detail": (
+                f"Money {'flowing in' if mfi > 50 else 'flowing out'} "
+                f"(MFI {mfi}, OBV {'rising' if obv_slope > 0 else 'falling'})"
+            ),
+        }
+    else:
+        weights["gate_3_volume"] = {
+            "confirmed": False,
+            "obv_slope": obv_slope,
+            "mfi": mfi,
+            "detail": "Insufficient volume data",
+        }
+
+    # ── Gate 4: Entry Timing (RSI, regime-aware) ──────────────────────
+    if rsi is not None:
+        gates_active += 1
+        confirmed = False
+
+        if direction == "bullish":
+            if regime == "trending" and 40 <= rsi <= 65:
+                confirmed = True  # Pullback in uptrend
+                detail = f"RSI {rsi} — pullback entry in uptrend (40-65)"
+            elif regime == "range_bound" and rsi < 35:
+                confirmed = True  # Oversold mean-reversion
+                detail = f"RSI {rsi} — oversold mean-reversion entry (<35)"
+            elif regime == "emerging" and rsi < 50:
+                confirmed = True  # Not yet extended
+                detail = f"RSI {rsi} — early trend entry (<50)"
+            else:
+                rsi_label = "chasing" if rsi > 65 else "unfavorable"
+                detail = f"RSI {rsi} — {rsi_label} for {regime} {direction}"
+        else:  # bearish
+            if regime == "trending" and 35 <= rsi <= 60:
+                confirmed = True
+                detail = f"RSI {rsi} — bounce entry in downtrend (35-60)"
+            elif regime == "range_bound" and rsi > 65:
+                confirmed = True
+                detail = f"RSI {rsi} — overbought mean-reversion entry (>65)"
+            elif regime == "emerging" and rsi > 50:
+                confirmed = True
+                detail = f"RSI {rsi} — early downtrend entry (>50)"
+            else:
+                detail = f"RSI {rsi} — unfavorable for {regime} {direction}"
+
+        if confirmed:
+            gates_confirmed += 1
+
+        weights["gate_4_entry"] = {
+            "confirmed": confirmed,
+            "rsi": rsi,
+            "regime": regime,
+            "detail": detail,
+        }
+    else:
+        weights["gate_4_entry"] = {
+            "confirmed": False,
+            "rsi": None,
+            "detail": "No RSI data",
+        }
+
+    # ── Gate 5: Fundamental Health (Piotroski) ────────────────────────
+    # Piotroski 4-6 is truly neutral — gate is NOT counted as active.
+    # Only strong (>=7, confirms) and weak (0-3, vetoes) are active.
+    if piotroski is not None:
+        if piotroski >= 7:
+            gates_active += 1
+            gates_confirmed += 1
+            confirmed = True
+            detail = f"Strong fundamentals (F-Score {piotroski}/9)"
+        elif piotroski >= 4:
+            # Neutral — gate not counted as active
+            confirmed = False
+            detail = f"Neutral fundamentals (F-Score {piotroski}/9) — no effect"
+        else:
+            gates_active += 1
+            confirmed = False  # Weak — vetoes bullish
+            detail = f"Weak fundamentals (F-Score {piotroski}/9) — vetoes bullish"
+
+        weights["gate_5_fundamental"] = {
+            "confirmed": confirmed,
+            "piotroski": piotroski,
+            "detail": detail,
+        }
+    else:
+        weights["gate_5_fundamental"] = {
+            "confirmed": False,
+            "piotroski": None,
+            "detail": "No fundamental data (skipped)",
+        }
+
+    # ── Compute final score ───────────────────────────────────────────
+    if gates_active == 0:
+        return None, None
+
+    score = round((gates_confirmed / gates_active) * 10, 1)
+    weights["gates_active"] = gates_active
+    weights["gates_confirmed"] = gates_confirmed
+    weights["total"] = score
+
+    return score, weights
 
 
 def compute_composite_score(

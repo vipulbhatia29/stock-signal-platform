@@ -22,7 +22,7 @@ from backend.services.signals import (
     MACD_SLOW,
     RSI_PERIOD,
     compute_bollinger,
-    compute_composite_score,
+    compute_confirmation_gates,
     compute_macd,
     compute_rsi,
     compute_signals,
@@ -235,19 +235,26 @@ def test_composite_score_bounded_0_to_10(prices: list[float]) -> None:
 @pytest.mark.domain
 @settings(max_examples=20)
 @given(
-    rsi=st.floats(min_value=0.0, max_value=100.0, allow_nan=False, allow_infinity=False),
-    sharpe=st.floats(min_value=-10.0, max_value=10.0, allow_nan=False, allow_infinity=False),
+    adx=st.one_of(st.none(), st.floats(0, 100, allow_nan=False)),
+    rsi=st.one_of(st.none(), st.floats(0, 100, allow_nan=False)),
+    mfi=st.one_of(st.none(), st.floats(0, 100, allow_nan=False)),
+    piotroski=st.one_of(st.none(), st.integers(0, 9)),
 )
-def test_composite_score_bounded_from_inputs(rsi: float, sharpe: float) -> None:
-    """Direct call to compute_composite_score must produce score in [0, 10]."""
-    score, _ = compute_composite_score(
-        rsi_value=rsi,
-        rsi_signal="NEUTRAL",
+def test_composite_score_bounded_from_inputs(
+    adx: float | None, rsi: float | None, mfi: float | None, piotroski: int | None
+) -> None:
+    """Confirmation gate score must produce score in [0, 10] for any inputs."""
+    score, _ = compute_confirmation_gates(
+        adx=adx,
         macd_histogram=0.5,
-        macd_signal="BULLISH",
-        sma_signal="ABOVE_200",
-        sharpe=sharpe,
-        piotroski_score=None,
+        macd_histogram_prev=0.3,
+        sma_50=150.0,
+        sma_200=140.0,
+        current_price=155.0,
+        obv_slope=0.01,
+        mfi=mfi,
+        rsi=rsi,
+        piotroski=piotroski,
     )
     if score is not None:
         assert 0.0 <= score <= 10.0, f"Score={score} out of bounds"
@@ -256,30 +263,39 @@ def test_composite_score_bounded_from_inputs(rsi: float, sharpe: float) -> None:
 @pytest.mark.domain
 @settings(max_examples=20)
 @given(
-    rsi_a=st.floats(min_value=0.0, max_value=29.9, allow_nan=False, allow_infinity=False),
-    rsi_b=st.floats(min_value=70.1, max_value=100.0, allow_nan=False, allow_infinity=False),
+    adx_strong=st.floats(min_value=30.0, max_value=100.0, allow_nan=False, allow_infinity=False),
+    adx_weak=st.floats(min_value=0.0, max_value=15.0, allow_nan=False, allow_infinity=False),
 )
-def test_composite_score_pairwise_dominance(rsi_a: float, rsi_b: float) -> None:
-    """If A dominates B on all inputs, score(A) >= score(B).
+def test_composite_score_pairwise_dominance(adx_strong: float, adx_weak: float) -> None:
+    """If A has stronger signals than B, score(A) >= score(B).
 
-    Oversold RSI is bullish (higher score) vs overbought RSI.
+    Strong ADX (trending) enables Gate 1 and better RSI entry.
     """
-    # A = oversold (bullish), B = overbought (bearish)
-    score_a, _ = compute_composite_score(
-        rsi_value=rsi_a,
-        rsi_signal="OVERSOLD",
+    # A: strong trend with all bullish signals → should score higher
+    score_a, _ = compute_confirmation_gates(
+        adx=adx_strong,
         macd_histogram=1.0,
-        macd_signal="BULLISH",
-        sma_signal="GOLDEN_CROSS",
-        sharpe=2.0,
+        macd_histogram_prev=0.5,
+        sma_50=150.0,
+        sma_200=140.0,
+        current_price=155.0,
+        obv_slope=0.05,
+        mfi=62.0,
+        rsi=50.0,
+        piotroski=8,
     )
-    score_b, _ = compute_composite_score(
-        rsi_value=rsi_b,
-        rsi_signal="OVERBOUGHT",
-        macd_histogram=-1.0,
-        macd_signal="BEARISH",
-        sma_signal="DEATH_CROSS",
-        sharpe=-1.0,
+    # B: range-bound with conflicting signals → should score lower
+    score_b, _ = compute_confirmation_gates(
+        adx=adx_weak,
+        macd_histogram=0.1,
+        macd_histogram_prev=0.5,
+        sma_50=151.0,
+        sma_200=150.0,
+        current_price=140.0,
+        obv_slope=-0.05,
+        mfi=35.0,
+        rsi=72.0,
+        piotroski=1,
     )
     if score_a is not None and score_b is not None:
         assert score_a >= score_b, f"A ({score_a}) should dominate B ({score_b})"

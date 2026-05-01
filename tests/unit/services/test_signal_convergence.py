@@ -375,9 +375,10 @@ class TestServiceComputeConvergence:
         Returns:
             SimpleNamespace mimicking SignalSnapshot.
         """
-        weights = {}
+        weights: dict = {}
         if piotroski_score is not None:
-            weights["piotroski"] = piotroski_score
+            weights["gate_5_fundamental"] = {"piotroski": piotroski_score}
+            weights["mode"] = "confirmation_gate_v2"
         return SimpleNamespace(
             rsi_value=rsi,
             macd_histogram=macd_histogram,
@@ -385,6 +386,7 @@ class TestServiceComputeConvergence:
             sma_200=sma_200,
             composite_score=composite_score,
             composite_weights=weights,
+            piotroski_score=piotroski_score,
             ticker="AAPL",
         )
 
@@ -497,8 +499,8 @@ class TestServiceComputeConvergence:
         forecast_sig = [s for s in result.signals if s.signal == "forecast"][0]
         assert forecast_sig.direction == "neutral"
 
-    def test_piotroski_from_composite_weights(self) -> None:
-        """Piotroski is extracted from composite_weights JSONB."""
+    def test_piotroski_from_column(self) -> None:
+        """Piotroski is extracted from piotroski_score column (with JSONB fallback)."""
         signal = self._make_signal(piotroski_score=8)
         service = SignalConvergenceService()
         result = service._compute_convergence("AAPL", signal, None, None)
