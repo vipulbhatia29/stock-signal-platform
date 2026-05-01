@@ -22,9 +22,13 @@ from backend.tools.signals import (
     MACDSignal,
     RSISignal,
     SMASignal,
+    compute_adx,
+    compute_atr,
     compute_bollinger,
     compute_composite_score,
     compute_macd,
+    compute_mfi,
+    compute_obv_slope,
     compute_price_change,
     compute_risk_return,
     compute_rsi,
@@ -184,12 +188,13 @@ class TestComputeMACD:
     def test_macd_uptrend_is_bullish(self) -> None:
         """A steady uptrend should produce a BULLISH MACD signal."""
         closes = _make_price_series(daily_change=0.003, num_days=100)
-        macd_val, hist_val, signal = compute_macd(closes)
+        macd_val, hist_val, signal, hist_prev = compute_macd(closes)
 
         assert macd_val is not None
         assert hist_val is not None
         assert signal == MACDSignal.BULLISH
         assert hist_val > 0  # Positive histogram = bullish
+        assert hist_prev is not None  # 100 days is enough for prior-day histogram
 
     def test_macd_downtrend_is_bearish(self) -> None:
         """An accelerating downtrend should produce a BEARISH MACD signal.
@@ -207,7 +212,7 @@ class TestComputeMACD:
         dates = pd.date_range("2023-01-01", periods=300, freq="B")
         closes = pd.Series(prices, index=dates)
 
-        macd_val, hist_val, signal = compute_macd(closes)
+        macd_val, hist_val, signal, hist_prev = compute_macd(closes)
 
         assert macd_val is not None
         assert hist_val is not None
@@ -217,11 +222,12 @@ class TestComputeMACD:
     def test_macd_insufficient_data_returns_none(self) -> None:
         """With too few data points, MACD should return None."""
         closes = _make_price_series(num_days=20)  # Need 26+9=35 minimum
-        macd_val, hist_val, signal = compute_macd(closes)
+        macd_val, hist_val, signal, hist_prev = compute_macd(closes)
 
         assert macd_val is None
         assert hist_val is None
         assert signal is None
+        assert hist_prev is None
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -330,6 +336,168 @@ class TestComputeBollinger:
         assert upper is None
         assert lower is None
         assert position is None
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ADX Tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestComputeADX:
+    """Tests for ADX (Average Directional Index) computation."""
+
+    def test_adx_trending_market(self) -> None:
+        """Strong trend should produce ADX > 20."""
+        df = _make_hardening_price_series(n=250, trend=0.008, volatility=0.005, seed=10)
+        val = compute_adx(df["High"], df["Low"], df["Close"])
+        assert val is not None
+        assert val > 20, f"ADX {val} too low for strong trend"
+
+    def test_adx_bounded_0_100(self) -> None:
+        """ADX must be between 0 and 100."""
+        df = _make_hardening_price_series(n=250)
+        val = compute_adx(df["High"], df["Low"], df["Close"])
+        assert val is not None
+        assert 0 <= val <= 100
+
+    def test_adx_range_bound_market(self) -> None:
+        """Flat market with noise should produce ADX < 30."""
+        df = _make_hardening_price_series(n=250, trend=0.0, volatility=0.01, seed=20)
+        val = compute_adx(df["High"], df["Low"], df["Close"])
+        assert val is not None
+        assert val < 30, f"ADX {val} too high for range-bound market"
+
+    def test_adx_insufficient_data(self) -> None:
+        """ADX returns None for too few data points."""
+        df = _make_hardening_price_series(n=10)
+        val = compute_adx(df["High"], df["Low"], df["Close"])
+        assert val is None
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# OBV Slope Tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestComputeOBVSlope:
+    """Tests for OBV (On-Balance Volume) slope computation."""
+
+    def test_obv_slope_uptrend_positive(self) -> None:
+        """Rising prices with increasing volume should produce positive OBV slope."""
+        n = 100
+        prices = 100.0 * np.cumprod(1 + np.full(n, 0.005))
+        dates = pd.bdate_range(end="2025-01-01", periods=n)
+        closes = pd.Series(prices, index=dates)
+        volumes = pd.Series(np.linspace(1_000_000, 5_000_000, n), index=dates)
+        val = compute_obv_slope(closes, volumes)
+        assert val is not None
+        assert val > 0, f"OBV slope {val} should be positive for confirmed uptrend"
+
+    def test_obv_slope_with_random_volume(self) -> None:
+        """OBV slope should return a finite value with random volume data."""
+        df = _make_hardening_price_series(n=100)
+        val = compute_obv_slope(df["Close"], df["Volume"])
+        assert val is not None
+
+    def test_obv_slope_insufficient_data(self) -> None:
+        """OBV slope returns None for too few data points."""
+        closes = pd.Series([100.0, 101.0], index=pd.bdate_range(end="2025-01-01", periods=2))
+        volumes = pd.Series([1_000_000, 1_000_000], index=closes.index)
+        val = compute_obv_slope(closes, volumes)
+        assert val is None
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# MFI Tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestComputeMFI:
+    """Tests for MFI (Money Flow Index) computation."""
+
+    def test_mfi_bounded_0_100(self) -> None:
+        """MFI must be between 0 and 100."""
+        df = _make_hardening_price_series(n=100)
+        val = compute_mfi(df["High"], df["Low"], df["Close"], df["Volume"])
+        assert val is not None
+        assert 0 <= val <= 100
+
+    def test_mfi_insufficient_data(self) -> None:
+        """MFI returns None for too few data points."""
+        df = _make_hardening_price_series(n=5)
+        val = compute_mfi(df["High"], df["Low"], df["Close"], df["Volume"])
+        assert val is None
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# ATR Tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestComputeATR:
+    """Tests for ATR (Average True Range) computation."""
+
+    def test_atr_positive(self) -> None:
+        """ATR must be positive for any valid price data."""
+        df = _make_hardening_price_series(n=100)
+        val = compute_atr(df["High"], df["Low"], df["Close"])
+        assert val is not None
+        assert val > 0
+
+    def test_atr_higher_volatility_higher_atr(self) -> None:
+        """Higher volatility data should produce a higher ATR."""
+        low_vol = _make_hardening_price_series(n=100, volatility=0.005, seed=1)
+        high_vol = _make_hardening_price_series(n=100, volatility=0.04, seed=1)
+        atr_low = compute_atr(low_vol["High"], low_vol["Low"], low_vol["Close"])
+        atr_high = compute_atr(high_vol["High"], high_vol["Low"], high_vol["Close"])
+        assert atr_low is not None and atr_high is not None
+        assert atr_high > atr_low
+
+    def test_atr_insufficient_data(self) -> None:
+        """ATR returns None for too few data points."""
+        df = _make_hardening_price_series(n=5)
+        val = compute_atr(df["High"], df["Low"], df["Close"])
+        assert val is None
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Gate Indicator Integration Tests
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+class TestComputeSignalsGateIndicators:
+    """Tests that compute_signals() populates gate indicator fields."""
+
+    def test_gate_indicators_populated(self) -> None:
+        """compute_signals() with sufficient OHLCV data populates all gate fields."""
+        df = _make_hardening_price_series(n=250)
+        result = compute_signals("AAPL", df)
+        assert result.adx_value is not None
+        assert result.mfi_value is not None
+        assert result.atr_value is not None
+        assert result.obv_slope is not None
+
+    def test_gate_indicators_none_for_insufficient_data(self) -> None:
+        """Gate indicators are None when data is too short."""
+        df = _make_hardening_price_series(n=10)
+        result = compute_signals("TINY", df)
+        assert result.adx_value is None
+        assert result.mfi_value is None
+        assert result.atr_value is None
+        assert result.obv_slope is None
+
+    def test_piotroski_persisted_in_result(self) -> None:
+        """Piotroski score passed to compute_signals appears in result."""
+        df = _make_hardening_price_series(n=250)
+        result = compute_signals("AAPL", df, piotroski_score=7)
+        assert result.piotroski_score_value == 7
+
+    def test_macd_histogram_prev_populated(self) -> None:
+        """Prior-day MACD histogram is populated when MACD is available."""
+        df = _make_hardening_price_series(n=250)
+        result = compute_signals("AAPL", df)
+        if result.macd_histogram is not None:
+            assert result.macd_histogram_prev is not None
 
 
 # ═════════════════════════════════════════════════════════════════════════════

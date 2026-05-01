@@ -1,7 +1,7 @@
 # Signal Scoring Overhaul — Confirmation-Gate Pipeline
 
 **Date:** 2026-04-30
-**Epic:** KAN-TBD
+**Epic:** KAN-554
 **Author:** Claude (Opus) + PM design session
 **Status:** Draft
 
@@ -93,10 +93,12 @@ RSI interpretation depends on the regime from Gate 1:
 | 0-3 | Weak fundamentals — vetoes bullish signal |
 | NULL | No data (ETFs, new listings) — gate skipped, not counted |
 
-**Data source:** Computed on-demand from yfinance in `stock_data.py`. Currently transient — needs to be persisted in `signal_snapshots` or `stocks` table.
+**Data source:** Computed on-demand from yfinance in `stock_data.py`. Now persisted in `signal_snapshots.piotroski_score` column (migration 044). Previously only available transiently or buried in `composite_weights` JSONB.
 
-**Confirmed when:** F-Score >= 7, OR F-Score 4-6 (neutral pass), OR no data available (skip).
-**Vetoed when:** F-Score 0-3 AND direction is bullish.
+**Confirmed when:** F-Score >= 7.
+**Neutral (gate skipped, not counted as active):** F-Score 4-6 — does not confirm, does not veto, does not affect score. Equivalent to no data.
+**Vetoed when:** F-Score 0-3 — gate counted as active but not confirmed, lowering score.
+**Skipped when:** No data available (ETFs, new listings) — gate not counted.
 
 ### Score Computation
 
@@ -160,15 +162,16 @@ Add 6 new `mapped_column` fields matching the migration.
 
 | File | Change |
 |------|--------|
-| `backend/services/signals.py` | Rewrite `compute_composite_score()` → `compute_confirmation_gates()`. Add ADX/OBV/MFI/ATR computation in `compute_signals()`. |
+| `backend/services/signals.py` | Rewrite `compute_composite_score()` → `compute_confirmation_gates()`. Add ADX/OBV/MFI/ATR computation in `compute_signals()`. Extract `macd_histogram_prev` from existing `compute_macd()` call (avoid double MACD computation). |
 | `backend/models/signal.py` | Add 6 new columns |
 | `backend/migrations/versions/XXX.py` | Migration for new columns |
-| `backend/services/recommendations.py` | Thresholds stay the same (BUY >= 8, WATCH >= 5) — distribution changes |
+| `backend/services/signal_convergence.py` | **BREAKING CHANGE:** Update Piotroski extraction (line 329-331) to read from `signal.piotroski_score` column instead of parsing `composite_weights` JSONB. Old format stored `{"piotroski": 7}` at top level; new format nests it inside `gate_5_fundamental`. |
+| `backend/services/recommendations.py` | Thresholds stay the same (BUY >= 8, WATCH >= 5) — distribution changes. `score_breakdown` in reasoning dict will contain new gate format (non-breaking but different structure for AI agent context). |
 | `backend/services/feature_engineering.py` | Add ADX/OBV/MFI to historical feature builder |
 | `backend/models/historical_feature.py` | Add new feature columns |
 | `scripts/backfill_features.py` | Include new indicators in backfill |
 | `tests/unit/services/test_signals.py` | Rewrite composite score tests for gate model |
-| `tests/unit/services/test_recommendations.py` | Verify recommendation distribution |
+| `tests/unit/services/test_signal_convergence.py` | Update tests that mock `composite_weights` to verify new piotroski extraction |
 | Frontend: `action-required-zone.tsx` | Threshold may need re-tuning (currently 8 for BUY) |
 
 ## Implementation Plan (3 PRs)
@@ -180,11 +183,12 @@ Add 6 new `mapped_column` fields matching the migration.
 - Store `macd_histogram_prev` (prior day value)
 - Unit tests for new indicator computation
 
-### PR2: Gate Engine + Score Rewrite (~1 day)
+### PR2: Gate Engine + Score Rewrite + Consumer Migration (~1 day)
 - Replace `compute_composite_score()` with `compute_confirmation_gates()`
 - Gate logic for all 5 gates with regime-aware RSI
 - `composite_weights` JSONB output with per-gate explanations
 - Score = `(confirmed / active) * 10`
+- **Fix convergence consumer:** `signal_convergence.py` must read `signal.piotroski_score` column (not JSONB) for Piotroski direction classification
 - Rewrite all composite score unit tests
 - Validate score distribution across full universe (expect: 5-15 BUY, 80-120 WATCH, rest AVOID)
 
@@ -201,7 +205,7 @@ Add 6 new `mapped_column` fields matching the migration.
 3. Score of 8+ (BUY) means 4+ of 5 gates confirmed — achievable but selective (~2-5% of universe)
 4. Score of 0-4 (AVOID) means fewer than 3 gates confirmed — majority of universe in bearish markets
 5. `composite_weights` JSONB contains per-gate explanations (human-readable)
-6. All existing consumers (dashboard, screener, sectors, stock detail, recommendations, convergence, chat) work unchanged — they read the same 0-10 score
+6. All existing consumers (dashboard, screener, sectors, stock detail, recommendations, convergence, chat) work unchanged — they read the same 0-10 score. **Convergence service must be updated** to read `piotroski_score` from the new column (not from `composite_weights` JSONB which changes format).
 7. Action Required section shows a realistic mix of BUY and SELL signals
 8. All existing signal tests updated, no regressions
 
@@ -210,8 +214,17 @@ Add 6 new `mapped_column` fields matching the migration.
 The main risk is that the new scoring produces a very different distribution than the old one. Downstream consumers (alerts < 4, convergence labels, recommendation thresholds) were calibrated to the old distribution. Mitigation:
 
 - PR2 includes a universe-wide distribution analysis before merging
+- **Hard acceptance gate:** BUY count must be 5-100, WATCH count must be >= 50. If outside range, STOP and recalibrate.
 - If the distribution is dramatically different, thresholds are re-calibrated in the same PR
 - The `composite_weights.mode` field (`"confirmation_gate_v2"`) lets us identify which scoring version produced a given snapshot
+
+## Rollback: Kill Switch
+
+`SIGNAL_SCORING_ENGINE` setting in `backend/config.py`:
+- `"confirmation_gate_v2"` (default) — new gate model
+- `"additive_v1"` — reverts to old additive scoring without code changes
+
+Both the old `compute_composite_score()` and new `compute_confirmation_gates()` remain in the codebase. The setting toggles which one `compute_signals()` calls.
 
 ## References
 

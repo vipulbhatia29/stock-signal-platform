@@ -141,6 +141,14 @@ class SignalResult:
     beta: float | None = None
     data_days: int | None = None  # number of trading days used for QuantStats
 
+    # Gate indicators (confirmation-gate scoring v2)
+    adx_value: float | None = None
+    obv_slope: float | None = None
+    mfi_value: float | None = None
+    atr_value: float | None = None
+    piotroski_score_value: int | None = None
+    macd_histogram_prev: float | None = None
+
 
 def compute_price_change(
     df: pd.DataFrame | None,
@@ -203,7 +211,25 @@ def compute_signals(
     # even though for a single column it's always Series at runtime.
     closes = cast(pd.Series, df[close_col]).dropna()
 
-    # ── Guard: we need enough data to compute signals ────────────────
+    # Extract aligned OHLCV columns for gate indicator calculations.
+    # Drop rows where ANY column is NaN to keep indexes aligned.
+    # gate_closes is the close series from this aligned slice — use it
+    # (not `closes`) when calling gate indicator functions so all inputs
+    # share the same index.
+    _ohlcv_cols = [c for c in ("High", "Low", "Volume") if c in df.columns]
+    if _ohlcv_cols:
+        _ohlcv = df[[close_col] + _ohlcv_cols].dropna()
+        gate_closes = cast(pd.Series, _ohlcv[close_col])
+        high = cast(pd.Series, _ohlcv["High"]) if "High" in _ohlcv.columns else None
+        low = cast(pd.Series, _ohlcv["Low"]) if "Low" in _ohlcv.columns else None
+        volume = cast(pd.Series, _ohlcv["Volume"]) if "Volume" in _ohlcv.columns else None
+    else:
+        gate_closes = closes
+        high = None
+        low = None
+        volume = None
+
+    # ── Guard: we need enough data to compute signals ────────────────────
     if len(closes) < RSI_PERIOD + 1:
         logger.warning("Not enough data for %s: only %d rows", ticker, len(closes))
         return SignalResult(
@@ -224,14 +250,29 @@ def compute_signals(
             sharpe_ratio=None,
             composite_score=None,
             composite_weights=None,
+            piotroski_score_value=piotroski_score,
         )
 
     # ── Compute each indicator ───────────────────────────────────────
     rsi_val, rsi_sig = compute_rsi(closes)
-    macd_val, macd_hist, macd_sig = compute_macd(closes)
+    macd_val, macd_hist, macd_sig, macd_hist_prev = compute_macd(closes)
     sma50, sma200, sma_sig = compute_sma(closes)
     bb_up, bb_low, bb_pos = compute_bollinger(closes)
     ann_ret, vol, sharpe = compute_risk_return(closes, risk_free_rate)
+
+    # ── Compute gate indicators (OHLCV required) ──────────────────────
+    adx_val = None
+    obv_slope_val = None
+    mfi_val = None
+    atr_val = None
+
+    if high is not None and low is not None:
+        adx_val = compute_adx(high, low, gate_closes)
+        atr_val = compute_atr(high, low, gate_closes)
+    if volume is not None:
+        obv_slope_val = compute_obv_slope(gate_closes, volume)
+        if high is not None and low is not None:
+            mfi_val = compute_mfi(high, low, gate_closes, volume)
 
     # ── Compute composite score ──────────────────────────────────────
     score, weights = compute_composite_score(
@@ -266,6 +307,12 @@ def compute_signals(
         composite_weights=weights,
         change_pct=change_pct,
         current_price=current_price,
+        adx_value=adx_val,
+        obv_slope=obv_slope_val,
+        mfi_value=mfi_val,
+        atr_value=atr_val,
+        piotroski_score_value=piotroski_score,
+        macd_histogram_prev=macd_hist_prev,
     )
 
 
@@ -311,7 +358,7 @@ def compute_macd(
     fast: int = MACD_FAST,
     slow: int = MACD_SLOW,
     signal_period: int = MACD_SIGNAL,
-) -> tuple[float | None, float | None, str | None]:
+) -> tuple[float | None, float | None, str | None, float | None]:
     """Compute MACD (Moving Average Convergence Divergence).
 
     Args:
@@ -321,14 +368,14 @@ def compute_macd(
         signal_period: Signal line EMA period (default 9).
 
     Returns:
-        Tuple of (macd_value, histogram_value, signal_label).
+        Tuple of (macd_value, histogram_value, signal_label, histogram_prev).
     """
     if len(closes) < slow + signal_period:
-        return None, None, None
+        return None, None, None, None
 
     macd_df = ta.macd(closes, fast=fast, slow=slow, signal=signal_period)  # type: ignore[attr-defined]
     if macd_df is None or macd_df.dropna().empty:
-        return None, None, None
+        return None, None, None, None
 
     macd_col = f"MACD_{fast}_{slow}_{signal_period}"
     hist_col = f"MACDh_{fast}_{slow}_{signal_period}"
@@ -336,9 +383,14 @@ def compute_macd(
     macd_val = round(float(macd_df[macd_col].iloc[-1]), 4)
     hist_val = round(float(macd_df[hist_col].iloc[-1]), 4)
 
+    hist_prev = None
+    hist_series = macd_df[hist_col].dropna()
+    if len(hist_series) >= 2:
+        hist_prev = round(float(hist_series.iloc[-2]), 4)
+
     signal = MACDSignal.BULLISH if hist_val > 0 else MACDSignal.BEARISH
 
-    return macd_val, hist_val, signal
+    return macd_val, hist_val, signal, hist_prev
 
 
 def compute_sma(
@@ -471,6 +523,152 @@ def compute_risk_return(
         sharpe = round((annualized - risk_free_rate) / vol, 4)
 
     return annualized, vol, sharpe
+
+
+ADX_PERIOD = 14  # 14-day ADX is standard
+ATR_PERIOD = 14  # 14-day ATR is standard
+
+
+def compute_adx(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    period: int = ADX_PERIOD,
+) -> float | None:
+    """Compute ADX (Average Directional Index) — measures trend strength.
+
+    Args:
+        high: Series of high prices.
+        low: Series of low prices.
+        close: Series of closing prices.
+        period: Lookback period (default 14).
+
+    Returns:
+        ADX value (0-100), or None if insufficient data.
+    """
+    if len(high) < period + 1 or len(low) < period + 1 or len(close) < period + 1:
+        return None
+
+    adx_series = ta.adx(high, low, close, length=period)  # type: ignore[attr-defined]
+    if adx_series is None or adx_series.dropna().empty:
+        return None
+
+    adx_col = f"ADX_{period}"
+    adx_val = adx_series[adx_col].iloc[-1]
+    if pd.isna(adx_val):
+        return None
+
+    return round(float(adx_val), 2)
+
+
+def compute_obv_slope(
+    closes: pd.Series,
+    volumes: pd.Series,
+    period: int = 21,
+) -> float | None:
+    """Compute OBV (On-Balance Volume) slope — measures volume trend.
+
+    Computes linear regression slope of OBV over the lookback period.
+
+    Args:
+        closes: Series of closing prices.
+        volumes: Series of volumes.
+        period: Lookback period for slope calculation (default 20).
+
+    Returns:
+        OBV slope (normalized), or None if insufficient data.
+    """
+    if len(closes) < period + 1 or len(volumes) < period + 1:
+        return None
+
+    obv = ta.obv(closes, volumes)  # type: ignore[attr-defined]
+    if obv is None or obv.dropna().empty:
+        return None
+
+    obv_values = obv.iloc[-period:]
+    if len(obv_values) < period:
+        return None
+
+    x = np.arange(len(obv_values), dtype=float)
+    y = obv_values.values.astype(float)
+    if not np.isfinite(y).all():
+        return None
+
+    # Normalize slope by mean absolute OBV for cross-stock comparability
+    mean_obv = np.abs(y).mean()
+    if mean_obv == 0:
+        return 0.0
+    slope = float(np.polyfit(x, y, 1)[0])
+    return round(slope / mean_obv, 6)
+
+
+def compute_mfi(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    volumes: pd.Series,
+    period: int = 14,
+) -> float | None:
+    """Compute MFI (Money Flow Index) — volume-weighted RSI.
+
+    Args:
+        high: Series of high prices.
+        low: Series of low prices.
+        close: Series of closing prices.
+        volumes: Series of volumes.
+        period: Lookback period (default 14).
+
+    Returns:
+        MFI value (0-100), or None if insufficient data.
+    """
+    if (
+        len(high) < period + 1
+        or len(low) < period + 1
+        or len(close) < period + 1
+        or len(volumes) < period + 1
+    ):
+        return None
+
+    mfi_series = ta.mfi(high, low, close, volumes, length=period)  # type: ignore[attr-defined]
+    if mfi_series is None or mfi_series.dropna().empty:
+        return None
+
+    mfi_val = mfi_series.iloc[-1]
+    if pd.isna(mfi_val):
+        return None
+
+    return round(float(mfi_val), 2)
+
+
+def compute_atr(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    period: int = ATR_PERIOD,
+) -> float | None:
+    """Compute ATR (Average True Range) — measures volatility.
+
+    Args:
+        high: Series of high prices.
+        low: Series of low prices.
+        close: Series of closing prices.
+        period: Lookback period (default 14).
+
+    Returns:
+        ATR value, or None if insufficient data.
+    """
+    if len(high) < period + 1 or len(low) < period + 1 or len(close) < period + 1:
+        return None
+
+    atr_series = ta.atr(high, low, close, length=period)  # type: ignore[attr-defined]
+    if atr_series is None or atr_series.dropna().empty:
+        return None
+
+    atr_val = atr_series.iloc[-1]
+    if pd.isna(atr_val):
+        return None
+
+    return round(float(atr_val), 4)
 
 
 def compute_quantstats_stock(
@@ -699,6 +897,12 @@ async def store_signal_snapshot(
         "alpha": result.alpha,
         "beta": result.beta,
         "data_days": result.data_days,
+        "adx_value": result.adx_value,
+        "obv_slope": result.obv_slope,
+        "mfi_value": result.mfi_value,
+        "atr_value": result.atr_value,
+        "piotroski_score": result.piotroski_score_value,
+        "macd_histogram_prev": result.macd_histogram_prev,
     }
 
     stmt = pg_insert(SignalSnapshot).values(values)

@@ -204,7 +204,7 @@ def test_macd_signal_smoothing(prices: list[float]) -> None:
     closes = _make_series(prices)
     if len(closes) < MACD_SLOW + MACD_SIGNAL:
         return
-    macd_val, hist_val, signal_label = compute_macd(closes)
+    macd_val, hist_val, signal_label, hist_prev = compute_macd(closes)
     if macd_val is None or hist_val is None:
         return
     assert math.isfinite(macd_val)
@@ -311,6 +311,11 @@ def test_signal_no_nan_inf_in_output(prices: list[float]) -> None:
         result.composite_score,
         result.change_pct,
         result.current_price,
+        result.adx_value,
+        result.obv_slope,
+        result.mfi_value,
+        result.atr_value,
+        result.macd_histogram_prev,
     ]
     for field in float_fields:
         if field is not None:
