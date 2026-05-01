@@ -766,7 +766,6 @@ def compute_quantstats_stock(
 
 def _determine_direction(
     macd_histogram: float | None,
-    macd_histogram_prev: float | None,
     sma_50: float | None,
     sma_200: float | None,
     current_price: float | None,
@@ -798,7 +797,13 @@ def _determine_direction(
             bullish_votes += 1
 
     if total_votes == 0:
-        return "bullish"  # Default when no data
+        # Default bullish when no directional data available. This creates
+        # a mild bullish bias for data-sparse tickers — Gates 3/4 will
+        # evaluate against bullish expectations. Acceptable because: (1)
+        # data-sparse = no MACD/SMA = Gates 2-4 likely skip anyway, (2)
+        # the bias only affects Gate 4 RSI ranges when ADX IS available
+        # but SMA/MACD are not — a rare edge case.
+        return "bullish"
 
     return "bullish" if bullish_votes > total_votes / 2 else "bearish"
 
@@ -851,9 +856,7 @@ def compute_confirmation_gates(
     weights: dict = {"mode": "confirmation_gate_v2"}
 
     # Determine overall direction from Gate 2 inputs (needed by Gates 3 and 4)
-    direction = _determine_direction(
-        macd_histogram, macd_histogram_prev, sma_50, sma_200, current_price
-    )
+    direction = _determine_direction(macd_histogram, sma_50, sma_200, current_price)
 
     # ── Gate 1: Trend Regime (ADX) ────────────────────────────────────
     if adx is not None:

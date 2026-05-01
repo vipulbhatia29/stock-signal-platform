@@ -1034,6 +1034,30 @@ class TestCompositeScoreRange:
             )
 
 
+class TestKillSwitch:
+    """Kill switch for SIGNAL_SCORING_ENGINE rollback."""
+
+    def test_kill_switch_falls_back_to_additive(self, monkeypatch) -> None:
+        """When SIGNAL_SCORING_ENGINE is additive_v1, uses legacy scoring."""
+        from backend.config import settings
+
+        monkeypatch.setattr(settings, "SIGNAL_SCORING_ENGINE", "additive_v1")
+        df = _make_hardening_price_series(n=250)
+        result = compute_signals("TST", df)
+        assert result.composite_weights is not None
+        # Old format uses "rsi", "macd", "sma", "sharpe" keys
+        assert "rsi" in result.composite_weights or "macd" in result.composite_weights
+        # New format uses "gate_1_trend" — should NOT be present
+        assert "gate_1_trend" not in result.composite_weights
+
+    def test_default_uses_confirmation_gates(self) -> None:
+        """Default engine uses confirmation_gate_v2."""
+        df = _make_hardening_price_series(n=250)
+        result = compute_signals("TST", df)
+        assert result.composite_weights is not None
+        assert result.composite_weights.get("mode") == "confirmation_gate_v2"
+
+
 class TestPiotroskiBlendingHardening:
     """Gate 5 (Piotroski) behavior in the confirmation-gate model."""
 
