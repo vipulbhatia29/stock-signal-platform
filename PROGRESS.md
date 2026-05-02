@@ -529,3 +529,35 @@ Compared dashboard to Lovable template. Restructured zone order to tell a story:
 - Tests: 2723 unit (+9 net), 0 failures
 - 7 production+test files changed
 - Resume: KAN-557 (PR3: historical features + reseed + frontend validation)
+
+---
+
+## Session 148 — KAN-557: Historical Features + Reseed + Distribution Validation (PR3 of 3) (2026-05-02)
+
+**Branch:** `feat/KAN-557-historical-features-reseed` → develop
+
+### What was built
+1. **Migration 045** (`0ff65ce55dc5`) — 3 nullable columns on `historical_features`: `adx_value`, `obv_slope`, `mfi_value`
+2. **3 vectorized feature functions** — `compute_adx_series()`, `compute_obv_slope_series()`, `compute_mfi_series()` in `feature_engineering.py`. Hardened `_slope()` with NaN/Inf guards + polyfit error handling.
+3. **Backfill script updated** — `_load_all_prices()` now fetches OHLCV (was close-only). Gate indicators computed per-ticker after `build_feature_dataframe()`. BATCH_SIZE reduced 1500→1300 (24 cols × 1300 = 31,200 < 32,767 asyncpg limit).
+4. **Daily feature task wired** — `populate_daily_features_task` (Celery Beat 10:30 PM) now computes ADX/OBV/MFI for each ticker. Batch price query extended to fetch high/low/volume. `_upsert_daily_feature_row` includes 3 gate columns.
+5. **Distribution validated** — BUY: 33 (gate: 5-100 ✅), WATCH: 278 (gate: ≥50 ✅), AVOID: 259 (majority ✅). All rows: `mode=confirmation_gate_v2`. Spot-check UNP (score 10, 4/4 gates confirmed).
+
+### Expert review findings (fixed)
+- **CRITICAL:** Daily feature task was missing gate indicators — now wired
+- **HIGH:** `_slope` lacked NaN/Inf robustness — hardened
+- **MEDIUM:** Test mock rows needed OHLCV columns — updated
+
+### Docs updated
+- PROJECT_INDEX.md — migration count, test counts, session/date
+- README.md — signal engine (confirmation gates), forecast engine (LightGBM), test counts
+- FSD.md — FR-3.2 rewritten for confirmation-gate v2
+- TDD.md — added FeatureEngineering service entry
+- PROGRESS.md — session 148 entry
+- Serena memory project/state — updated
+
+### Session 148 Totals
+- Tests: 2742 unit (+17 new), 0 failures
+- 9 files changed, +419/-95 lines, Alembic head: `0ff65ce55dc5` (migration 045)
+- **KAN-557 DONE.** Epic KAN-554 (Signal Scoring Overhaul) — all 3 PRs complete.
+- Resume: Transition KAN-557/KAN-554 → Done. Next epic.

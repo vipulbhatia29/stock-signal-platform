@@ -45,18 +45,19 @@ def _make_features_df() -> pd.DataFrame:
 
 
 def _make_price_rows(ticker: str, n: int = 300) -> list:
-    """Return synthetic price rows as named tuples matching (ticker, time, close)."""
-    base = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    """Return synthetic price rows matching (ticker, time, close, high, low, volume)."""
     rows = []
     for i in range(n):
         row = MagicMock()
         row.ticker = ticker
-        row.time = base.replace(day=1) if i == 0 else base
-        # Use pandas Timestamp-compatible objects
         from datetime import timedelta
 
         row.time = datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(days=i)
-        row.close = 100.0 + i * 0.1
+        price = 100.0 + i * 0.1
+        row.close = price
+        row.high = price * 1.01
+        row.low = price * 0.99
+        row.volume = 1_000_000.0
         rows.append(row)
     return rows
 

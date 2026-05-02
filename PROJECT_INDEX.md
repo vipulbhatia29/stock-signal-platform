@@ -2,7 +2,7 @@
 
 Stock analysis SaaS for part-time investors — US equities, signal detection, portfolio tracking, AI-powered recommendations. Multi-user cloud deployment target.
 
-**Updated:** 2026-04-25 | **Session:** 135 | **Alembic head:** `e0f1a2b3c4d5` (migration 040)
+**Updated:** 2026-05-02 | **Session:** 148 | **Alembic head:** `0ff65ce55dc5` (migration 045)
 
 ---
 
@@ -11,7 +11,7 @@ Stock analysis SaaS for part-time investors — US equities, signal detection, p
 ```
 backend/                       FastAPI + SQLAlchemy async + Celery
 ├── agents/ (20 files)         LangGraph ReAct, guards, intent, providers
-├── migrations/versions/ (41)  Alembic migrations (TimescaleDB hypertables)
+├── migrations/versions/ (46)  Alembic migrations (TimescaleDB hypertables)
 ├── models/ (30+ files)        SQLAlchemy 2.0 ORM models (public + observability schema)
 ├── observability/ (30+ files) SDK, writers, anomaly engine, MCP tools, admin routers
 │   ├── anomaly/               12 anomaly rules + engine + persistence
@@ -31,7 +31,7 @@ frontend/                      Next.js 15 + TypeScript + Tailwind v4 + shadcn/ui
 ├── src/lib/                   api.ts (fetch wrapper), auth, format, chart-theme, utils
 └── src/__tests__/ (86 files)  Jest + MSW v2 test suites
 
-tests/                         2629 unit + 454 API + 78 integration + 29 E2E
+tests/                         2742 unit + 454 API + 78 integration + 29 E2E
 ├── unit/ (255 files)          Services, routers, tools, agents, pipeline, guards, obs
 ├── api/ (51 files)            Endpoint tests with testcontainers
 ├── integration/ (24 files)    Observability SDK, anomaly lifecycle, MCP tools, retention
@@ -131,7 +131,7 @@ docs/                          Specifications and plans
 | Engine | PostgreSQL 16 + TimescaleDB |
 | Schemas | `public` (app tables) + `observability` (18 obs tables) |
 | Tables | 50+ (public) + 18 (observability) |
-| Migrations | 41 (Alembic) — head: `e0f1a2b3c4d5` (migration 040) |
+| Migrations | 46 (Alembic) — head: `0ff65ce55dc5` (migration 045) |
 | Hypertables | stock_prices, signal_snapshots, news_articles, forecast_results, portfolio_health_snapshots, recommendation_snapshots, external_api_call_log, rate_limiter_event, request_log, api_error_log, slow_query_log, cache_operation_log, celery_worker_heartbeat, celery_queue_depth, provider_health_snapshot |
 | Compression | stock_prices (180d), signal_snapshots (180d), news_articles (60d), external_api_call_log (7d) |
 | Retention | 18 policies ranging from 7d (compressed API logs) to 365d (deploy events) |
@@ -142,7 +142,7 @@ docs/                          Specifications and plans
 
 | Category | Location | Count |
 |----------|----------|-------|
-| **Unit** | `tests/unit/` | 2629 tests (255 files) |
+| **Unit** | `tests/unit/` | 2742 tests (255+ files) |
 | **API** | `tests/api/` | 454 tests (51 files) |
 | **Integration** | `tests/integration/` | 78 tests (24 files) — obs SDK, anomaly lifecycle, MCP tools, retention |
 | **E2E** | `tests/e2e/` | 29 Playwright specs — auth, dashboard, portfolio, admin, sectors, obs, Lighthouse |
@@ -192,9 +192,9 @@ docs/                          Specifications and plans
 | **Type Checker** | Pyright (Python), TypeScript strict (frontend) |
 | **CI Gate** | 13 checks, Semgrep custom rules, path-filter routing |
 | **Git Strategy** | Branch from `develop`, PR to `develop`, `main` is production-ready |
-| **Tests** | 2629 unit + 454 API + 78 integration + 29 E2E + 86 frontend |
+| **Tests** | 2742 unit + 454 API + 78 integration + 29 E2E + 551 frontend |
 | **Auth** | JWT (httpOnly cookie), OAuth 2.0 (Google), email verification, Resend |
 
 ---
 
-**Last updated:** 2026-04-25 | **Session:** 135
+**Last updated:** 2026-05-02 | **Session:** 148

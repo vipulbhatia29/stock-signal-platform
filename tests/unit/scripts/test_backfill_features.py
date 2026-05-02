@@ -14,7 +14,13 @@ def _make_price_rows(n: int = 300) -> list:
     dates = pd.bdate_range(end="2025-06-01", periods=n, tz="UTC")
     rng = np.random.default_rng(42)
     prices = 100.0 * np.cumprod(1 + rng.normal(0.0005, 0.015, n))
-    return [(d.to_pydatetime(), float(p)) for d, p in zip(dates, prices)]
+    highs = prices * 1.01
+    lows = prices * 0.99
+    volumes = rng.integers(1_000_000, 10_000_000, n).astype(float)
+    return [
+        (d.to_pydatetime(), float(p), float(h), float(lo), float(v))
+        for d, p, h, lo, v in zip(dates, prices, highs, lows, volumes)
+    ]
 
 
 @pytest.mark.asyncio
@@ -33,6 +39,9 @@ async def test_load_all_prices_returns_dataframe():
     assert df is not None
     assert len(df) == 50
     assert "adj_close" in df.columns
+    assert "high" in df.columns
+    assert "low" in df.columns
+    assert "volume" in df.columns
     assert isinstance(df.index, pd.DatetimeIndex)
 
 

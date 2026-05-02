@@ -35,7 +35,12 @@ from backend.database import async_session_factory
 from backend.models.historical_feature import HistoricalFeature
 from backend.models.price import StockPrice
 from backend.models.stock import Stock
-from backend.services.feature_engineering import build_feature_dataframe
+from backend.services.feature_engineering import (
+    build_feature_dataframe,
+    compute_adx_series,
+    compute_mfi_series,
+    compute_obv_slope_series,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,7 +48,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-BATCH_SIZE = 1500  # rows per INSERT (21 cols × 1500 = 31500 params, under asyncpg 32767 limit)
+BATCH_SIZE = 1300  # rows per INSERT (24 cols × 1300 = 31200 params, under asyncpg 32767 limit)
 SMA_WARMUP = 200  # rows needed before SMA-200 produces valid output
 
 
@@ -55,10 +60,17 @@ async def _load_all_prices(ticker: str, db: AsyncSession) -> pd.DataFrame | None
         db: Async database session.
 
     Returns:
-        DataFrame with DatetimeIndex and adj_close column, or None if no data.
+        DataFrame with DatetimeIndex and adj_close, high, low, volume columns,
+        or None if no data.
     """
     result = await db.execute(
-        select(StockPrice.time, StockPrice.adj_close)
+        select(
+            StockPrice.time,
+            StockPrice.adj_close,
+            StockPrice.high,
+            StockPrice.low,
+            StockPrice.volume,
+        )
         .where(StockPrice.ticker == ticker)
         .order_by(StockPrice.time.asc())
     )
@@ -66,10 +78,13 @@ async def _load_all_prices(ticker: str, db: AsyncSession) -> pd.DataFrame | None
     if not rows:
         return None
 
-    df = pd.DataFrame(rows, columns=["time", "adj_close"])
+    df = pd.DataFrame(rows, columns=["time", "adj_close", "high", "low", "volume"])
     df["time"] = pd.to_datetime(df["time"], utc=True)
     df = df.set_index("time")
     df["adj_close"] = df["adj_close"].astype(float)
+    df["high"] = df["high"].astype(float)
+    df["low"] = df["low"].astype(float)
+    df["volume"] = df["volume"].astype(float)
     return df
 
 
@@ -173,6 +188,15 @@ async def _bulk_upsert_features(
             "sentiment_confidence": None,
             "signals_aligned": None,
             "convergence_label": None,
+            "adx_value": (
+                round(float(row["adx_value"]), 2) if pd.notna(row.get("adx_value")) else None
+            ),
+            "obv_slope": (
+                round(float(row["obv_slope"]), 6) if pd.notna(row.get("obv_slope")) else None
+            ),
+            "mfi_value": (
+                round(float(row["mfi_value"]), 2) if pd.notna(row.get("mfi_value")) else None
+            ),
             "forward_return_60d": (
                 round(float(row["forward_return_60d"]), 6)
                 if pd.notna(row["forward_return_60d"])
@@ -267,6 +291,17 @@ async def run_backfill(
                 vix_closes=vix_closes,
                 spy_closes=spy_closes,
             )
+
+            # Gate indicators (confirmation-gate scoring v2)
+            adx_s = compute_adx_series(price_df["high"], price_df["low"], price_df["adj_close"])
+            obv_s = compute_obv_slope_series(price_df["adj_close"], price_df["volume"])
+            mfi_s = compute_mfi_series(
+                price_df["high"], price_df["low"], price_df["adj_close"], price_df["volume"]
+            )
+            # Align to features_df index (which has warmup rows dropped)
+            features_df["adx_value"] = adx_s.reindex(features_df.index)
+            features_df["obv_slope"] = obv_s.reindex(features_df.index)
+            features_df["mfi_value"] = mfi_s.reindex(features_df.index)
 
             async with async_session_factory() as db:
                 rows = await _bulk_upsert_features(features_df, ticker, db)
