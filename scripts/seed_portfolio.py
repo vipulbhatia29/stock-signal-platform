@@ -75,10 +75,10 @@ def parse_fidelity_csv(csv_path: str) -> list[dict]:
         symbol = row.get("Symbol", "").strip()
         asset_type = row.get("Asset Type", "").strip()
 
-        # Skip non-equity rows (ETFs, cash, totals)
-        if asset_type != "Equity":
-            continue
+        # Skip cash/summary rows — keep equities AND ETFs
         if not symbol or symbol in ("Cash & Cash Investments", "Positions Total"):
+            continue
+        if asset_type in ("Cash and Money Market", ""):
             continue
 
         shares = _parse_decimal(row.get("Qty (Quantity)", ""))
@@ -116,7 +116,7 @@ def parse_fidelity_csv(csv_path: str) -> list[dict]:
 async def seed(csv_path: str, email: str, password: str) -> None:
     """Create user, portfolio, positions, and watchlist from CSV."""
     positions_data = parse_fidelity_csv(csv_path)
-    logger.info("Parsed %d equity positions from CSV", len(positions_data))
+    logger.info("Parsed %d positions from CSV (equities + ETFs)", len(positions_data))
 
     async with async_session_factory() as db:
         # 1. Check/create user
@@ -271,6 +271,47 @@ async def seed(csv_path: str, email: str, password: str) -> None:
         logger.info("Price ingestion complete for %d tickers", len(tickers_needing_prices))
     else:
         logger.info("All portfolio tickers already have price data")
+
+    # 7. Auto-backfill historical features for tickers missing them
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text("SELECT DISTINCT ticker FROM historical_features WHERE ticker = ANY(:tickers)"),
+            {"tickers": all_tickers},
+        )
+        tickers_with_features = {r[0] for r in result.fetchall()}
+
+    tickers_needing_features = [t for t in all_tickers if t not in tickers_with_features]
+    if tickers_needing_features:
+        logger.info(
+            "Auto-backfilling features for %d tickers missing historical_features...",
+            len(tickers_needing_features),
+        )
+        from scripts.backfill_features import run_backfill
+
+        await run_backfill(tickers=tickers_needing_features)
+        logger.info("Feature backfill complete for %d tickers", len(tickers_needing_features))
+    else:
+        logger.info("All portfolio tickers already have historical features")
+
+    # 8. Reconciliation check — parsed CSV count vs DB positions
+    async with async_session_factory() as db:
+        result = await db.execute(
+            text("SELECT COUNT(*) FROM positions WHERE portfolio_id = :pid"),
+            {"pid": str(portfolio.id)},
+        )
+        db_count = result.scalar()
+
+    csv_count = len(positions_data)
+    if db_count != csv_count:
+        logger.warning(
+            "RECONCILIATION MISMATCH: CSV has %d positions but DB has %d "
+            "(delta=%d). Investigate missing tickers.",
+            csv_count,
+            db_count,
+            db_count - csv_count,
+        )
+    else:
+        logger.info("Reconciliation OK: %d positions in CSV match DB", csv_count)
 
 
 async def backfill_missing_sectors() -> None:
