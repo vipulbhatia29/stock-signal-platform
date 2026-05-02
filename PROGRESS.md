@@ -556,8 +556,19 @@ Compared dashboard to Lovable template. Restructured zone order to tell a story:
 - PROGRESS.md — session 148 entry
 - Serena memory project/state — updated
 
+### Gap analysis & planning (second half of session)
+- **Unified chart brainstorm** — compared against competitor TradingView-style chart. Designed Option C (full chart + legend strip). Spec + plan written. KAN-559 created under KAN-400 with subtasks KAN-560/561.
+- **Forecast pipeline deep dive** — traced full pipeline from raw data through prediction. Found: 6/18 features always NaN, no fundamentals in model, sentiment pipe broken (news_sentiment_daily → historical_features never connected), cross-ticker model identity-blind, no data validation/outlier handling. Created Epic KAN-562 with 6 stories/bugs (KAN-563 through KAN-568).
+- **Portfolio data diagnosis** — Fidelity CSV shows $84,739 but platform shows $44,880. Root cause: `parse_fidelity_csv()` filters `asset_type != "Equity"` dropping 19 ETFs. Design principle: import layer never filters — downstream consumers decide what they can handle.
+- **FinBERT decision** — replace GPT-4o-mini with FinBERT (ProsusAI/finbert) for sentiment. Local, free, financial-domain-specific.
+- **Execution order** — 25 items across 7 sprints prioritized in project-plan.md. Data foundations → sentiment → forecast features → stock detail UI → portfolio UI → admin UI → tuning/testing.
+- **JIRA cleanup** — closed KAN-429, KAN-529, KAN-550, KAN-551, KAN-553. Updated KAN-546 scope to chat agent only.
+
 ### Session 148 Totals
 - Tests: 2742 unit (+17 new), 0 failures
-- 9 files changed, +419/-95 lines, Alembic head: `0ff65ce55dc5` (migration 045)
-- **KAN-557 DONE.** Epic KAN-554 (Signal Scoring Overhaul) — all 3 PRs complete.
-- Resume: Transition KAN-557/KAN-554 → Done. Next epic.
+- 1 PR merged (#299), 15 files changed
+- Alembic head: `0ff65ce55dc5` (migration 045)
+- **KAN-554 COMPLETE** (Signal Scoring Overhaul — all 3 PRs)
+- 10 JIRA tickets created (KAN-559–568), 5 closed, 1 updated
+- 2 Obsidian notes saved (forecast gap analysis, chart design)
+- Resume: Sprint 1 — KAN-568 (fix portfolio data) then KAN-558 (seed pipeline bugs)
