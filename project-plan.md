@@ -630,10 +630,10 @@ All prior tech debt resolved in Session 94 (PR #189). KAN-398 absorbed into KAN-
 
 | Ticket | Summary | Status |
 |--------|---------|--------|
-| KAN-554 | Epic: Signal Scoring Overhaul | To Do |
-| KAN-555 | PR1: Schema migration + new indicator computation (ADX, OBV, MFI, ATR) | To Do |
-| KAN-556 | PR2: Confirmation-gate engine — rewrite compute_composite_score() | To Do |
-| KAN-557 | PR3: Universe reseed + feature backfill + frontend validation | To Do |
+| KAN-554 | Epic: Signal Scoring Overhaul | ✅ Done (S148) |
+| KAN-555 | PR1: Schema migration + new indicator computation (ADX, OBV, MFI, ATR) | ✅ Done — PR #297 |
+| KAN-556 | PR2: Confirmation-gate engine — rewrite compute_composite_score() | ✅ Done — PR #298 |
+| KAN-557 | PR3: Historical features + reseed + distribution validation | ✅ Done — PR #299 (S148) |
 
 **Key design decisions:**
 - Score interface unchanged (0-10, same thresholds) — all downstream consumers unaffected
@@ -642,6 +642,119 @@ All prior tech debt resolved in Session 94 (PR #189). KAN-398 absorbed into KAN-
 - Sharpe removed from scoring (moved to position sizing only)
 - Volume confirmation (OBV + MFI) added — currently missing entirely
 - All raw data exists in `stock_prices` (OHLCV) — no new data sources needed
+
+---
+
+### KAN-559: Unified Chart with Indicator Overlays (under KAN-400)
+
+> Replace disconnected price chart + signal cards with unified lightweight-charts instance. SMA 50/200 always overlaid, Bollinger toggle, RSI/MACD sub-panels toggle, compact legend strip. New backend endpoint for indicator time series.
+> **Spec:** `docs/superpowers/specs/2026-05-02-unified-chart-with-indicators.md`
+> **Plan:** `docs/superpowers/plans/2026-05-02-unified-chart-with-indicators.md`
+
+| Ticket | Summary | Status |
+|--------|---------|--------|
+| KAN-559 | Unified chart with SMA overlays, indicator panels, legend strip | To Do |
+| KAN-560 | PR1: Backend indicator endpoint + chart rewrite + legend strip | To Do |
+| KAN-561 | PR2: RSI/MACD sub-panels + Bollinger + golden cross markers | To Do |
+
+---
+
+### Epic KAN-562: Forecast Pipeline v2 — Fundamentals, Sentiment, Data Quality
+
+> Current forecast model uses only 11 price-derived features. Fundamentals (Piotroski, P/E, earnings) exist in DB but not connected. Sentiment pipe broken (scores never reach model). No data validation, no outlier handling, no hyperparameter tuning. 81 tickers missing forecasts.
+> **Analysis:** Obsidian `Session 148 — Forecast Pipeline Gap Analysis.md`
+
+| Ticket | Summary | Priority | Status |
+|--------|---------|----------|--------|
+| KAN-562 | Epic: Forecast Pipeline v2 | High | To Do |
+| KAN-563 | Add fundamentals + earnings to forecast features | High | To Do |
+| KAN-564 | FinBERT migration + fix sentiment pipe | High | To Do |
+| KAN-565 | Cross-ticker identity features (sector, market cap, regime) | Medium | To Do |
+| KAN-566 | Data quality & preprocessing hardening | Medium | To Do |
+| KAN-567 | Hyperparameter tuning & ensemble optimization | Low | To Do |
+| KAN-568 | BUG: 81 tickers missing forecasts (ingest doesn't backfill) | High | To Do |
+
+---
+
+---
+
+## Execution Order (Session 148 — PM-approved)
+
+> **Principle:** Fix data foundations first, then build features on correct data, then polish UI last. Never build UI on broken data, never tune a model with missing features, never write E2E tests against changing pages.
+
+### Sprint 1: Fix Broken Data (~3 days)
+| # | Ticket | Summary |
+|---|--------|---------|
+| 1 | **KAN-568** | Portfolio data incomplete — ETFs filtered out, features never backfilled, forecasts silently missing |
+| 2 | **KAN-558** | Seed pipeline bugs — Prophet stale, backfill overflow, VARCHAR(10), missing orchestrator |
+
+### Sprint 2: Sentiment Infrastructure (~4 days)
+| # | Ticket | Summary |
+|---|--------|---------|
+| 3 | **KAN-564** | FinBERT migration + fix sentiment pipe to forecast model + Gate 6 |
+
+### Sprint 3: Forecast Features (~3 days)
+| # | Ticket | Summary |
+|---|--------|---------|
+| 4 | **KAN-563** | Add fundamentals + earnings to forecast features |
+| 5 | **KAN-565** | Cross-ticker identity features — sector, market cap, regime |
+| 6 | **KAN-566** | Data quality & preprocessing hardening |
+
+### Sprint 4: UI — Stock Detail & Chart (~5 days)
+| # | Ticket | Summary |
+|---|--------|---------|
+| 7 | **KAN-559** (560+561) | Unified chart with SMA overlays, indicator panels, legend strip |
+| 8 | **KAN-532** | Stock detail header — price, change%, market cap |
+| 9 | **KAN-540** | Stock detail completions — dividends, earnings, news badges |
+
+### Sprint 5: UI — Portfolio, Screener, Navigation (~4 days)
+| # | Ticket | Summary |
+|---|--------|---------|
+| 10 | **KAN-535** | Portfolio log transaction — ticker selection, price binding |
+| 11 | **KAN-536** | Portfolio CSV upload UI — Fidelity format, template, errors |
+| 12 | **KAN-537** | Portfolio display fixes — return %, pie chart, health grade |
+| 13 | **KAN-533** | Screener decision-ready view — price, change%, recommendation |
+| 14 | **KAN-534** | Search → Ingest → Navigate flow |
+| 15 | **KAN-541** | Navigation — admin sidebar, alerts popover, email banner |
+
+### Sprint 6: UI — Sectors, Admin, Observability (~5 days)
+| # | Ticket | Summary |
+|---|--------|---------|
+| 16 | **KAN-538** | Sectors overhaul — heatmap, convergence badges |
+| 17 | **KAN-545** | Alerts end-to-end — bell popover, /alerts page, generation |
+| 18 | **KAN-544** | Pipeline control — sidebar, task polling, audit log |
+| 19 | **KAN-539** | Command Center 8-zone vision |
+| 20 | **KAN-543** | Admin observability dashboard |
+| 21 | **KAN-542** | User observability polish |
+
+### Sprint 7+: Tuning & Test Infrastructure
+| # | Ticket | Summary |
+|---|--------|---------|
+| 22 | **KAN-567** | Hyperparameter tuning & ensemble optimization |
+| 23 | **KAN-211** | Test suite hardening (213, 215, 216) |
+| 24 | **KAN-217** | Playwright E2E refresh |
+| 25 | **KAN-363** | Visual regression baselines |
+
+### Deferred
+| Ticket | Summary | When |
+|--------|---------|------|
+| KAN-546 | LLM round-robin for chat agent | AI Analyst revamp |
+| KAN-521 | Backtesting dashboard (admin) | After Sprint 6 |
+| KAN-522 | LLM Admin Console | After Sprint 6 |
+| KAN-157 | Live LLM eval in CI | After Sprint 7 |
+| KAN-162 | Langfuse self-hosted | Indefinite |
+| KAN-456 | Langfuse task_tracer wiring | Indefinite |
+| KAN-485 | Obs full-text search indexes | Indefinite |
+| KAN-486 | Obs health data source | Indefinite |
+
+### Closed (Session 148)
+| Ticket | Reason |
+|--------|--------|
+| ~~KAN-529~~ | Superseded by KAN-564 (FinBERT replaces LLM cascade for sentiment) |
+| ~~KAN-550~~ | Already merged (PR1 of KAN-548) |
+| ~~KAN-551~~ | Already merged (PR2 of KAN-548) |
+| ~~KAN-553~~ | Already merged (PR4 of KAN-548) |
+| ~~KAN-429~~ | JIRA automation bug — manageable, not a product feature |
 
 ---
 
