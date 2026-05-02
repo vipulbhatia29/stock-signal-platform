@@ -694,11 +694,17 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
 
         refreshed = 0
         refreshed_tickers: list[str] = []
+        skipped_no_features: list[str] = []
+        skipped_no_price: list[str] = []
 
         for ticker in all_tickers:
             feat_row = latest_features.get(ticker)
             base_price = prices.get(ticker)
-            if feat_row is None or base_price is None:
+            if feat_row is None:
+                skipped_no_features.append(ticker)
+                continue
+            if base_price is None:
+                skipped_no_price.append(ticker)
                 continue
 
             feature_dict = {name: getattr(feat_row, name, None) for name in FEATURE_NAMES}
@@ -744,6 +750,20 @@ async def _forecast_refresh_async(*, run_id: uuid.UUID) -> dict:
             refreshed += 1
 
         await db.commit()
+
+        # Log skipped tickers for visibility
+        if skipped_no_features:
+            logger.warning(
+                "Forecast refresh skipped %d tickers with no historical_features: %s",
+                len(skipped_no_features),
+                skipped_no_features[:20],  # cap log output
+            )
+        if skipped_no_price:
+            logger.warning(
+                "Forecast refresh skipped %d tickers with no price data: %s",
+                len(skipped_no_price),
+                skipped_no_price[:20],
+            )
 
         # ── Dispatch training for new tickers without features ────────────
         try:
