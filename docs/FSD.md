@@ -196,43 +196,36 @@ For a given ticker, using the last 252 trading days of price data:
 | Volatility | std(daily_returns) × √252 | Percentage |
 | Sharpe Ratio | (annualized_return - risk_free_rate) / volatility | Decimal (risk_free_rate from FRED or default 4.5%) |
 
-**FR-3.2: Composite Score Calculation**
+**FR-3.2: Composite Score Calculation (Confirmation-Gate v2)**
 
-Technical-only scoring (composite_weights stored per snapshot):
+5-gate confirmation pipeline (replaces additive scoring as of Session 147). Each gate confirms or vetoes — no averaging. Score = (gates_confirmed / gates_active) × 10. Kill switch: `SIGNAL_SCORING_ENGINE` config setting.
 
 ```
-score = 0
-max_score = 10
+Gate 1 — Trend Regime (ADX):
+  ADX >= 20 → trending regime (confirms)
+  ADX < 20  → range-bound (confirms with adjusted RSI thresholds)
 
-# RSI contribution (0-2.5 points)
-if RSI < 30: +2.5     # oversold = buying opportunity
-elif RSI < 45: +1.5
-elif RSI > 70: +0     # overbought = risky
-else: +1.0            # neutral
+Gate 2 — Direction (MACD + SMA):
+  Count conditions: MACD > 0, MACD accelerating, price > SMA50, SMA50 > SMA200
+  3/4 bullish → confirms bullish direction
+  3/4 bearish → confirms bearish direction
 
-# MACD contribution (0-2.5 points)
-if MACD histogram > 0 and magnitude > 0.5: +2.5  # Uses magnitude as proxy for 'increasing' (only latest value available, not series)
-elif MACD histogram > 0: +1.5
-elif MACD histogram < 0 and decreasing: +0
-else: +0.5
+Gate 3 — Volume (OBV + MFI):
+  OBV slope positive AND MFI > 40 → money flowing in (confirms)
 
-# SMA contribution (0-2.5 points)
-if GOLDEN_CROSS: +2.5
-elif ABOVE_200: +1.5
-elif BELOW_200: +0.5
-elif DEATH_CROSS: +0
+Gate 4 — Entry Timing (RSI, regime-aware):
+  Trending: RSI 40-65 (pullback entry)
+  Range-bound: RSI < 35 (mean-reversion)
+  Emerging: RSI < 50 (early trend)
 
-# Sharpe contribution (0-2.5 points)
-if sharpe > 1.5: +2.5
-elif sharpe > 1.0: +2.0
-elif sharpe > 0.5: +1.0
-elif sharpe > 0: +0.5
-else: +0
+Gate 5 — Fundamentals (Piotroski F-Score):
+  ≥ 7 confirms, ≤ 3 vetoes, 4-6 neutral (gate not counted as active)
 
-composite_score = score  # 0-10 range
+composite_score = (gates_confirmed / gates_active) * 10  # 0-10 range
+composite_weights = { mode, gates_confirmed, gates_active, gate_1..5 details }
 ```
 
-When fundamental signals (FR-5) are added, scoring rebalances to 50/50 weight.
+Legacy additive scoring available via `SIGNAL_SCORING_ENGINE=additive_v1`.
 
 **FR-3.3: Signal Staleness**
 - Signals older than 24 hours are flagged as STALE

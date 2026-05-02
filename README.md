@@ -26,18 +26,21 @@ Part-time investors — professionals who:
 
 ### Signal Engine
 
-Computes technical and fundamental indicators for 500+ stocks, synthesized into a single **composite score (0-10)** that blends:
+Computes technical and fundamental indicators for 500+ stocks, synthesized into a single **composite score (0-10)** using a **5-gate confirmation pipeline**:
 
-| Technical Signals (50%) | Fundamental Score (50%) |
-|------------------------|--------------------------|
-| RSI (14-period) — overbought/oversold | Piotroski F-Score (0-9, scaled to 0-5 pts) |
-| MACD (12,26,9) — momentum | |
-| SMA 50/200 Crossover — golden/death cross | **Also materialized (not scored):** |
-| Bollinger Bands (20,2) — volatility position | P/E, PEG, FCF Yield, D/E, margins, ROE |
-| Annualized Return, Volatility, Sharpe Ratio | Revenue/Earnings Growth, analyst targets |
-| Sortino, Max Drawdown, Alpha, Beta (via QuantStats) | |
+| Gate | Indicator | Logic |
+|------|-----------|-------|
+| **1. Trend** | ADX (14) | Trending (ADX ≥ 20) vs range-bound regime detection |
+| **2. Direction** | MACD + SMA 50/200 | 3/4 bullish conditions required (majority vote) |
+| **3. Volume** | OBV slope + MFI (14) | Money flow confirmation (OBV rising + MFI > 40) |
+| **4. Entry** | RSI (14) | Regime-aware timing (trending: 40-65, range: <35, emerging: <50) |
+| **5. Fundamentals** | Piotroski F-Score | Health check (≥ 7 confirms, ≤ 3 vetoes, 4-6 neutral/skipped) |
+
+**Score = (gates confirmed / gates active) × 10.** Gates confirm or veto — no averaging. Kill switch: `SIGNAL_SCORING_ENGINE` config (`confirmation_gate_v2` default, `additive_v1` for rollback).
 
 **Score interpretation:** 8-10 = BUY, 5-7 = WATCH, <5 = AVOID. Scores are portfolio-aware — if you already hold a stock at full allocation, it becomes HOLD instead of BUY.
+
+**Also materialized (not scored):** Bollinger Bands, annualized return, volatility, Sharpe/Sortino, Max Drawdown, Alpha, Beta (QuantStats), ATR, P/E, PEG, FCF Yield, D/E, margins, ROE, analyst targets.
 
 ### AI Financial Analyst (Chat)
 
@@ -71,15 +74,16 @@ Data-driven multi-provider cascade configured via `llm_model_config` table in th
 
 Features token budgeting per tier, per-query cost tracking, and Redis-backed rate limiting with Lua scripts for atomic operations.
 
-### Prophet Forecasting & Backtesting
+### Forecasting & Backtesting (LightGBM + XGBoost Ensemble)
 
 - Stock-level + 11 SPDR sector ETF + portfolio-level forecasts
-- 90/180/270-day prediction horizons with confidence intervals
-- Weekly model retraining (Sunday 2 AM ET) with **per-ticker calibrated drift detection** (threshold = `backtest_mape × 1.5`, self-healing demotion after 3 consecutive failures). Nightly cap: 100 new models; user-initiated ingests bypass cap.
+- 60/90-day **return-based** predictions (not price targets) with 80% confidence intervals
+- LightGBM + XGBoost ensemble with quantile regression, SHAP top-3 drivers
+- 17 features from historical_features table (11 technical + 3 gate indicators + sentiment + convergence)
+- Weekly model retraining with champion/challenger promotion gate (direction accuracy + CI containment)
 - Walk-forward backtesting engine with 5 metrics (MAPE, MAE, RMSE, direction accuracy, CI containment)
-- VIX regime overlay for forecast confidence
-- AccuracyBadge component showing model accuracy tier (Excellent/Good/Fair/Poor)
-- News sentiment regressors feeding Prophet (stock, sector, macro — feature-flagged)
+- Feature drift monitoring (nightly, flags models when features shift >2σ from training distribution)
+- Daily feature population task (10:30 PM ET, nightly)
 
 ### News Sentiment Pipeline
 
@@ -216,7 +220,7 @@ No paid data subscriptions required. All core functionality works with just the 
 | **Frontend** | Next.js 15, TypeScript, Tailwind CSS v4, shadcn/ui (base-ui), Recharts, TanStack Query |
 | **Database** | PostgreSQL 16 + TimescaleDB (time-series hypertables) |
 | **Cache/Broker** | Redis 7 (cache + Celery broker + JWT token blocklist) |
-| **AI/ML** | LangGraph (agent orchestration), Claude Sonnet (LLM), Prophet (forecasting) |
+| **AI/ML** | LangGraph (agent orchestration), Claude Sonnet (LLM), LightGBM+XGBoost (forecasting), SHAP (explainability) |
 | **LLM Providers** | Groq (primary agent), Anthropic (fallback/synthesis), OpenAI (secondary) — DB-driven cascade |
 | **Observability** | Langfuse (tracing), ObservabilityCollector (metrics), Assessment Engine (eval) |
 | **Background** | Celery + Celery Beat (task scheduling) |
@@ -324,7 +328,7 @@ uv run python -m scripts.seed_fundamentals --universe
 # Step 6: Dividends — full payment history
 uv run python -m scripts.seed_dividends --universe
 
-# Step 7: Forecasts — train Prophet models, generate 90/180/270d predictions
+# Step 7: Forecasts — train LightGBM+XGBoost ensemble, generate 60/90d return forecasts
 uv run python -m scripts.seed_forecasts --universe
 ```
 
@@ -545,7 +549,7 @@ uv run ruff format backend/ tests/     # Python format
 cd frontend && npm run lint             # TypeScript/React lint
 ```
 
-**Test coverage:** ~2,319 total tests (1,848 backend + 423 frontend + 48 E2E + 27 nightly perf). Coverage: ~69% (floor 60%). Tiered test architecture (T0-T4), 14 CI checks via `ci-gate`, 13 custom Semgrep rules as permanent guardrails.
+**Test coverage:** ~3,300+ total tests (2,742 unit + 454 API + 78 integration + 551 frontend + 29 E2E). Tiered test architecture (T0-T4), 14 CI checks via `ci-gate`, 13 custom Semgrep rules as permanent guardrails.
 
 ## API Endpoints
 

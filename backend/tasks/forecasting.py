@@ -18,7 +18,12 @@ from backend.config import settings
 from backend.models.backtest import BacktestRun
 from backend.models.forecast import ModelVersion
 from backend.services.backtesting import BacktestEngine
-from backend.services.feature_engineering import build_feature_dataframe
+from backend.services.feature_engineering import (
+    build_feature_dataframe,
+    compute_adx_series,
+    compute_mfi_series,
+    compute_obv_slope_series,
+)
 from backend.services.ticker_state import mark_stages_updated
 from backend.services.ticker_universe import get_all_referenced_tickers
 from backend.tasks import celery_app
@@ -162,6 +167,21 @@ async def _upsert_daily_feature_row(
         "sentiment_confidence": None,
         "signals_aligned": None,
         "convergence_label": None,
+        "adx_value": (
+            round(float(last["adx_value"]), 2)
+            if "adx_value" in last.index and pd.notna(last.get("adx_value"))
+            else None
+        ),
+        "obv_slope": (
+            round(float(last["obv_slope"]), 6)
+            if "obv_slope" in last.index and pd.notna(last.get("obv_slope"))
+            else None
+        ),
+        "mfi_value": (
+            round(float(last["mfi_value"]), 2)
+            if "mfi_value" in last.index and pd.notna(last.get("mfi_value"))
+            else None
+        ),
         "forward_return_60d": None,
         "forward_return_90d": None,
     }
@@ -211,7 +231,14 @@ async def _populate_daily_features_async(*, run_id: uuid.UUID) -> dict:
         from backend.models.price import StockPrice
 
         price_result = await db.execute(
-            select(StockPrice.ticker, StockPrice.time, StockPrice.close)
+            select(
+                StockPrice.ticker,
+                StockPrice.time,
+                StockPrice.close,
+                StockPrice.high,
+                StockPrice.low,
+                StockPrice.volume,
+            )
             .where(StockPrice.ticker.in_(tickers))
             .order_by(StockPrice.ticker, StockPrice.time)
         )
@@ -222,7 +249,9 @@ async def _populate_daily_features_async(*, run_id: uuid.UUID) -> dict:
 
     prices_by_ticker: dict[str, list] = defaultdict(list)
     for row in all_prices:
-        prices_by_ticker[row.ticker].append((row.time, float(row.close)))
+        prices_by_ticker[row.ticker].append(
+            (row.time, float(row.close), float(row.high), float(row.low), float(row.volume))
+        )
 
     # Process each ticker with in-memory price data
     for tkr in tickers:
@@ -239,6 +268,9 @@ async def _populate_daily_features_async(*, run_id: uuid.UUID) -> dict:
 
             dates_idx = pd.DatetimeIndex([r[0] for r in price_rows], tz="UTC")
             closes = pd.Series([r[1] for r in price_rows], index=dates_idx, name="close")
+            highs = pd.Series([r[2] for r in price_rows], index=dates_idx, name="high")
+            lows = pd.Series([r[3] for r in price_rows], index=dates_idx, name="low")
+            volumes = pd.Series([r[4] for r in price_rows], index=dates_idx, name="volume")
 
             features_df = await asyncio.to_thread(
                 build_feature_dataframe,
@@ -246,6 +278,14 @@ async def _populate_daily_features_async(*, run_id: uuid.UUID) -> dict:
                 vix_closes=vix_closes,
                 spy_closes=spy_closes,
             )
+
+            # Gate indicators (confirmation-gate scoring v2)
+            adx_s = compute_adx_series(highs, lows, closes)
+            obv_s = compute_obv_slope_series(closes, volumes)
+            mfi_s = compute_mfi_series(highs, lows, closes, volumes)
+            features_df["adx_value"] = adx_s.reindex(features_df.index)
+            features_df["obv_slope"] = obv_s.reindex(features_df.index)
+            features_df["mfi_value"] = mfi_s.reindex(features_df.index)
 
             if features_df.empty:
                 logger.warning("Empty feature DataFrame for %s", tkr)

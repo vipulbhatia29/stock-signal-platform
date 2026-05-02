@@ -30,6 +30,11 @@ BB_PERIOD = 20
 BB_STD_DEV = 2
 TRADING_DAYS_PER_YEAR = 252
 
+# Gate indicator parameters (confirmation-gate scoring v2)
+ADX_PERIOD = 14
+MFI_PERIOD = 14
+OBV_SLOPE_WINDOW = 21
+
 
 def compute_momentum(closes: pd.Series, window: int) -> pd.Series:
     """Compute N-day momentum (simple return).
@@ -232,6 +237,87 @@ def compute_forward_log_returns(
     """
     future_prices = closes.shift(-horizon)
     return np.log(future_prices / closes)
+
+
+def compute_adx_series(
+    high: pd.Series, low: pd.Series, close: pd.Series, period: int = ADX_PERIOD
+) -> pd.Series:
+    """Compute ADX for entire series (vectorized).
+
+    Args:
+        high: High prices.
+        low: Low prices.
+        close: Closing prices.
+        period: ADX period (default 14).
+
+    Returns:
+        Series of ADX values. NaN for warmup period.
+    """
+    adx_df = ta.adx(high, low, close, length=period)  # type: ignore[attr-defined]
+    if adx_df is None or adx_df.empty:
+        return pd.Series(np.nan, index=close.index)
+    col = f"ADX_{period}"
+    if col not in adx_df.columns:
+        return pd.Series(np.nan, index=close.index)
+    return adx_df[col]
+
+
+def compute_obv_slope_series(
+    close: pd.Series, volume: pd.Series, window: int = OBV_SLOPE_WINDOW
+) -> pd.Series:
+    """Compute rolling OBV slope (normalized) for entire series.
+
+    Args:
+        close: Closing prices.
+        volume: Volume data.
+        window: Rolling window for slope calculation (default 21).
+
+    Returns:
+        Series of normalized OBV slope values.
+    """
+    obv = ta.obv(close, volume)  # type: ignore[attr-defined]
+    if obv is None:
+        return pd.Series(np.nan, index=close.index)
+
+    def _slope(arr: np.ndarray) -> float:
+        if not np.isfinite(arr).any():
+            return 0.0
+        x = np.arange(len(arr), dtype=float)
+        mean_abs = float(np.abs(arr).mean())
+        if mean_abs == 0 or not np.isfinite(mean_abs):
+            return 0.0
+        try:
+            slope = float(np.polyfit(x, arr, 1)[0])
+        except (np.linalg.LinAlgError, ValueError):
+            return 0.0
+        return slope / mean_abs if np.isfinite(slope / mean_abs) else 0.0
+
+    return obv.rolling(window).apply(_slope, raw=True)
+
+
+def compute_mfi_series(
+    high: pd.Series,
+    low: pd.Series,
+    close: pd.Series,
+    volume: pd.Series,
+    period: int = MFI_PERIOD,
+) -> pd.Series:
+    """Compute MFI for entire series (vectorized).
+
+    Args:
+        high: High prices.
+        low: Low prices.
+        close: Closing prices.
+        volume: Volume data.
+        period: MFI period (default 14).
+
+    Returns:
+        Series of MFI values (0-100).
+    """
+    mfi = ta.mfi(high, low, close, volume, length=period)  # type: ignore[attr-defined]
+    if mfi is None:
+        return pd.Series(np.nan, index=close.index)
+    return mfi
 
 
 def build_feature_dataframe(

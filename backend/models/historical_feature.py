@@ -53,6 +53,11 @@ class HistoricalFeature(Base):
     vix_level: Mapped[float] = mapped_column(Float, nullable=False)
     spy_momentum_21d: Mapped[float] = mapped_column(Float, nullable=False)
 
+    # Gate indicators (confirmation-gate scoring v2)
+    adx_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    obv_slope: Mapped[float | None] = mapped_column(Float, nullable=True)
+    mfi_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+
     # Sentiment features (NaN for historical rows — model handles missing natively)
     stock_sentiment: Mapped[float | None] = mapped_column(Float, nullable=True)
     sector_sentiment: Mapped[float | None] = mapped_column(Float, nullable=True)
