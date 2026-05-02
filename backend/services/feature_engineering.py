@@ -259,7 +259,7 @@ def compute_adx_series(
     col = f"ADX_{period}"
     if col not in adx_df.columns:
         return pd.Series(np.nan, index=close.index)
-    return adx_df[col]
+    return pd.Series(adx_df[col])
 
 
 def compute_obv_slope_series(
@@ -292,7 +292,7 @@ def compute_obv_slope_series(
             return 0.0
         return slope / mean_abs if np.isfinite(slope / mean_abs) else 0.0
 
-    return obv.rolling(window).apply(_slope, raw=True)
+    return pd.Series(obv.rolling(window).apply(_slope, raw=True))
 
 
 def compute_mfi_series(
