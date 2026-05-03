@@ -392,3 +392,134 @@ class TestLLMClientResetPin:
 
         client = LLMClient(providers=[DummyProvider()])
         client.reset_pin()
+
+
+class TestBudgetCompression:
+    @pytest.mark.asyncio
+    async def test_compresses_on_budget_exhaustion(self):
+        """When model is over budget, compress messages and retry."""
+        from backend.agents.message_compressor import MessageCompressor
+
+        budget_obj = TokenBudget(
+            redis=FakeRedis(),
+            limits={"m1": ModelLimits(tpm=10000, rpm=30, tpd=100000, rpd=1000)},
+        )
+        await budget_obj.record("m1", 5000)
+
+        compressor = MessageCompressor()
+        provider = GroqProvider(
+            api_key="test-key",
+            models=["m1"],
+            token_budget=budget_obj,
+            compressor=compressor,
+        )
+
+        # Build messages with compressible content: history + large tool results
+        big_messages: list[dict] = [
+            {"role": "system", "content": "system prompt"},
+        ]
+        # 5 history turns (compressible via stage 2)
+        for i in range(5):
+            big_messages.append({"role": "user", "content": f"old question {i} " * 50})
+            big_messages.append({"role": "assistant", "content": f"old answer {i} " * 50})
+        # Current query + tool results (compressible via stage 3)
+        big_messages.append({"role": "user", "content": "current query"})
+        big_messages.append(
+            {
+                "role": "assistant",
+                "content": "",
+                "tool_calls": [
+                    {
+                        "id": "tc_1",
+                        "type": "function",
+                        "function": {"name": "tool_1", "arguments": "{}"},
+                    }
+                ],
+            }
+        )
+        big_messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": "tc_1",
+                "content": "data " * 3000,  # 15000 chars of tool result
+            }
+        )
+
+        with patch.object(
+            provider,
+            "_call_model",
+            new_callable=AsyncMock,
+            return_value=_make_response("m1"),
+        ) as mock_call:
+            result = await provider.chat(big_messages, [])
+            assert result.model == "m1"
+            # Verify compression happened: total content is smaller
+            original_total = sum(len(m.get("content", "")) for m in big_messages)
+            compressed_msgs = mock_call.call_args[0][1]
+            compressed_total = sum(len(m.get("content", "")) for m in compressed_msgs)
+            assert compressed_total < original_total
+
+    @pytest.mark.asyncio
+    async def test_cascades_when_compression_insufficient(self):
+        """When compression can't bring cost under budget, cascade to next model."""
+        from backend.agents.message_compressor import MessageCompressor
+
+        budget_obj = TokenBudget(
+            redis=FakeRedis(),
+            limits={
+                "m1": ModelLimits(tpm=100, rpm=30, tpd=100000, rpd=1000),
+                "m2": ModelLimits(tpm=10000, rpm=30, tpd=100000, rpd=1000),
+            },
+        )
+        await budget_obj.record("m1", 95)
+
+        compressor = MessageCompressor()
+        provider = GroqProvider(
+            api_key="test-key",
+            models=["m1", "m2"],
+            token_budget=budget_obj,
+            compressor=compressor,
+            round_robin=False,
+        )
+
+        messages = [
+            {"role": "system", "content": "x " * 200},
+            {"role": "user", "content": "analyze this"},
+        ]
+
+        with patch.object(
+            provider,
+            "_call_model",
+            new_callable=AsyncMock,
+            return_value=_make_response("m2"),
+        ):
+            result = await provider.chat(messages, [])
+            assert result.model == "m2"
+
+    @pytest.mark.asyncio
+    async def test_no_compression_without_compressor(self):
+        """Without compressor injected, budget skip works as before."""
+        budget_obj = TokenBudget(
+            redis=FakeRedis(),
+            limits={
+                "m1": ModelLimits(tpm=100, rpm=30, tpd=100000, rpd=1000),
+                "m2": ModelLimits(tpm=10000, rpm=30, tpd=100000, rpd=1000),
+            },
+        )
+        await budget_obj.record("m1", 95)
+
+        provider = GroqProvider(
+            api_key="test-key",
+            models=["m1", "m2"],
+            token_budget=budget_obj,
+            round_robin=False,
+        )
+
+        with patch.object(
+            provider,
+            "_call_model",
+            new_callable=AsyncMock,
+            return_value=_make_response("m2"),
+        ):
+            result = await provider.chat([{"role": "user", "content": "hi"}], [])
+            assert result.model == "m2"
