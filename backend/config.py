@@ -76,6 +76,7 @@ class Settings(BaseSettings):
     # --- Optional API Keys ---
     ANTHROPIC_API_KEY: str = ""
     GROQ_API_KEY: str = ""
+    GROQ_ROUND_ROBIN: bool = True
     OPENAI_API_KEY: str = ""
     SERPAPI_API_KEY: str = ""
     FRED_API_KEY: str = ""
