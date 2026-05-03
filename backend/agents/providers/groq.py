@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from backend.agents.llm_client import (
     AllModelsExhaustedError,
@@ -26,6 +26,9 @@ try:
     _GROQ_ERRORS = (GroqAPIError, GroqStatusError, GroqConnectionError)
 except ImportError:
     _GROQ_ERRORS = ()
+
+if TYPE_CHECKING:
+    from backend.agents.message_compressor import MessageCompressor
 
 
 def _classify_error(exc: Exception) -> str:
@@ -60,6 +63,8 @@ class RoundRobinPool:
 
     def ordered_models(self) -> list[str]:
         """Return models rotated by one position each call."""
+        if not self._models:
+            return []
         with self._lock:
             start = self._counter % len(self._models)
             self._counter += 1
@@ -75,7 +80,7 @@ class GroqProvider(LLMProvider):
         models: list[str] | None = None,
         token_budget: TokenBudget | None = None,
         round_robin: bool = True,
-        compressor: Any | None = None,
+        compressor: MessageCompressor | None = None,
     ) -> None:
         self._api_key = api_key
         self._models = models or ["llama-3.3-70b-versatile"]
@@ -149,7 +154,7 @@ class GroqProvider(LLMProvider):
                         tpm = self._token_budget.get_tpm(model_name)
                         target = int(tpm * 0.70) if tpm else None
                         compressed = self._compressor.compress(
-                            messages, iteration=1, target_tokens=target
+                            messages, iteration=2, target_tokens=target
                         )
                         compressed_est = TokenBudget.estimate_tokens(compressed)
                         if await self._token_budget.can_afford(model_name, compressed_est):

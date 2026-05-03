@@ -109,6 +109,8 @@ class MessageCompressor:
                 condensed = condensed.replace("{{user_context}}", user_ctx)
             if entity_ctx:
                 condensed = condensed.replace("{{entity_context}}", entity_ctx)
+            # Strip any unreplaced placeholders
+            condensed = condensed.replace("{{user_context}}", "").replace("{{entity_context}}", "")
             messages[0] = {**messages[0], "content": condensed}
 
         # Stage 2: History truncation
