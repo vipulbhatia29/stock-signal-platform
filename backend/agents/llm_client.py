@@ -204,6 +204,16 @@ class LLMClient:
         self._collector = collector
         self._langfuse = langfuse_service
 
+    def reset_pin(self) -> None:
+        """Reset model pinning on all providers that support it.
+
+        Called at the start of each new user request to allow round-robin
+        rotation between requests while maintaining per-request pinning.
+        """
+        for provider in self._providers:
+            if hasattr(provider, "reset_pin"):
+                provider.reset_pin()
+
     def get_active_chat_model(self) -> Any:
         """Return the LangChain chat model from the first healthy provider."""
         for provider in self._providers:

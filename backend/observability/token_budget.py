@@ -91,6 +91,11 @@ class TokenBudget:
                     rpd=m.rpd_limit or 1_000,
                 )
 
+    def get_tpm(self, model: str) -> int | None:
+        """Return the TPM limit for a model, or None if unknown."""
+        lim = self._limits.get(model)
+        return lim.tpm if lim else None
+
     @staticmethod
     def estimate_tokens(messages: list[dict[str, Any] | Any]) -> int:
         """Estimate token count. Heuristic: len(text) // 4 * 1.2."""
