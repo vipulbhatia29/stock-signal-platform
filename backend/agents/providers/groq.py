@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any
 
@@ -45,6 +46,26 @@ def _classify_error(exc: Exception) -> str:
     return "permanent"
 
 
+class RoundRobinPool:
+    """Thread-safe rotating model selector.
+
+    Each call to ordered_models() returns all models but rotates the
+    starting position, distributing primary traffic evenly.
+    """
+
+    def __init__(self, models: list[str]) -> None:
+        self._models = list(models)
+        self._counter = 0
+        self._lock = threading.Lock()
+
+    def ordered_models(self) -> list[str]:
+        """Return models rotated by one position each call."""
+        with self._lock:
+            start = self._counter % len(self._models)
+            self._counter += 1
+        return self._models[start:] + self._models[:start]
+
+
 class GroqProvider(LLMProvider):
     """Groq provider with internal multi-model cascade."""
 
@@ -53,12 +74,17 @@ class GroqProvider(LLMProvider):
         api_key: str,
         models: list[str] | None = None,
         token_budget: TokenBudget | None = None,
+        round_robin: bool = True,
+        compressor: Any | None = None,
     ) -> None:
         self._api_key = api_key
         self._models = models or ["llama-3.3-70b-versatile"]
         self._token_budget = token_budget
         self.health = ProviderHealth(provider="groq")
         self._chat_models: dict[str, Any] = {}
+        self._pool = RoundRobinPool(self._models) if round_robin else None
+        self._pinned_model: str | None = None
+        self._compressor = compressor
 
     @property
     def name(self) -> str:
@@ -76,6 +102,14 @@ class GroqProvider(LLMProvider):
                 model=model_name,
             )
         return self._chat_models[model_name]
+
+    def pin_model(self, model: str) -> None:
+        """Pin to a specific model for remaining calls in this request."""
+        self._pinned_model = model
+
+    def reset_pin(self) -> None:
+        """Clear the pinned model. Call at start of each new user request."""
+        self._pinned_model = None
 
     async def chat(
         self,
@@ -97,18 +131,54 @@ class GroqProvider(LLMProvider):
         estimated_tokens = TokenBudget.estimate_tokens(messages)
         errors: list[tuple[str, str]] = []
 
-        for model_name in self._models:
-            # Budget check
+        # Determine model order: pinned > round-robin > sequential
+        if self._pinned_model:
+            remaining = [m for m in self._models if m != self._pinned_model]
+            models = [self._pinned_model] + remaining
+        elif self._pool:
+            models = self._pool.ordered_models()
+        else:
+            models = self._models
+
+        for model_name in models:
+            # Budget check (with optional compress-then-retry)
+            messages_for_call = messages
             if self._token_budget:
                 if not await self._token_budget.can_afford(model_name, estimated_tokens):
-                    logger.info("Skipping %s — over budget", model_name)
-                    errors.append((model_name, "over_budget"))
-                    await self._record_cascade(from_model=model_name, reason="over_budget")
-                    continue
+                    if self._compressor:
+                        tpm = self._token_budget.get_tpm(model_name)
+                        target = int(tpm * 0.70) if tpm else None
+                        compressed = self._compressor.compress(
+                            messages, iteration=1, target_tokens=target
+                        )
+                        compressed_est = TokenBudget.estimate_tokens(compressed)
+                        if await self._token_budget.can_afford(model_name, compressed_est):
+                            logger.info(
+                                "Compressed messages for %s: %d → %d tokens",
+                                model_name,
+                                estimated_tokens,
+                                compressed_est,
+                            )
+                            messages_for_call = compressed
+                        else:
+                            logger.info(
+                                "Skipping %s — over budget even after compression",
+                                model_name,
+                            )
+                            errors.append((model_name, "over_budget"))
+                            await self._record_cascade(
+                                from_model=model_name, reason="over_budget_compressed"
+                            )
+                            continue
+                    else:
+                        logger.info("Skipping %s — over budget", model_name)
+                        errors.append((model_name, "over_budget"))
+                        await self._record_cascade(from_model=model_name, reason="over_budget")
+                        continue
 
             start = time.monotonic()
             try:
-                result = await self._call_model(model_name, messages, tools, stream)
+                result = await self._call_model(model_name, messages_for_call, tools, stream)
                 # Record usage on success
                 if self._token_budget:
                     actual = result.prompt_tokens + result.completion_tokens
@@ -120,6 +190,7 @@ class GroqProvider(LLMProvider):
                     prompt_tokens=result.prompt_tokens,
                     completion_tokens=result.completion_tokens,
                 )
+                self.pin_model(model_name)
                 return result
             except Exception as exc:
                 error_type = _classify_error(exc)

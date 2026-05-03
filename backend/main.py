@@ -182,11 +182,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         all_groq = [mc for ms in tier_configs.values() for mc in ms if mc.provider == "groq"]
         token_budget.load_limits(all_groq)
 
+        from backend.agents.message_compressor import MessageCompressor
+
         providers.append(
             GroqProvider(
                 api_key=settings.GROQ_API_KEY,
                 models=groq_models or None,
                 token_budget=token_budget,
+                round_robin=settings.GROQ_ROUND_ROBIN,
+                compressor=MessageCompressor(),
             )
         )
     if settings.ANTHROPIC_API_KEY:

@@ -325,6 +325,8 @@ async def _event_generator(
 
             tool_executor = getattr(request.app.state, "tool_executor", None)
             llm_client = getattr(request.app.state, "llm_client", None)
+            if llm_client:
+                llm_client.reset_pin()
             registry = getattr(request.app.state, "tool_registry", None)
             collector = getattr(request.app.state, "collector", None)
             cache = getattr(request.app.state, "cache", None)
