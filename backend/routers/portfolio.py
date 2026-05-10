@@ -17,6 +17,7 @@ from backend.models.signal import SignalSnapshot
 from backend.models.user import User
 from backend.rate_limit import limiter
 from backend.routers.preferences import _get_or_create_preference
+from backend.schemas.attribution import ImportResult
 from backend.schemas.portfolio import (
     BulkTransactionResponse,
     DivestmentAlert,
@@ -57,6 +58,11 @@ from backend.services.portfolio.bulk_import import (
     MAX_FILE_SIZE,
     ingest_new_tickers,
     parse_csv,
+)
+from backend.services.portfolio.csv_parser import parse_fidelity_csv
+from backend.services.portfolio.snapshot_import import (
+    compute_csv_hash,
+    import_portfolio_snapshot,
 )
 from backend.services.portfolio_forecast import PortfolioForecastResult, PortfolioForecastService
 from backend.services.recommendations import calculate_position_size
@@ -908,3 +914,107 @@ async def bulk_upload_transactions(
         errors=all_errors,
         validate_only=False,
     )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CSV Snapshot Import (Decision Attribution)
+# ──────────────────────────────────────────────────────────────────────────────
+
+_SNAPSHOT_MAX_FILE_SIZE = 512 * 1024  # 512KB
+
+
+@router.post(
+    "/import-snapshot",
+    response_model=ImportResult,
+    status_code=status.HTTP_201_CREATED,
+    summary="Import portfolio positions from Fidelity CSV",
+)
+@limiter.limit("10/hour")
+async def import_snapshot(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_async_session),
+) -> ImportResult:
+    """Upload a Fidelity-format positions CSV to snapshot portfolio state.
+
+    The system stores a point-in-time snapshot, computes diffs against
+    the previous import, and detects position changes (OPEN/ADD/TRIM/CLOSE).
+    """
+    require_verified_email(current_user)
+
+    # Content-type check
+    if file.content_type not in (
+        "text/csv",
+        "application/csv",
+        "text/plain",
+        "application/vnd.ms-excel",
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be a CSV",
+        )
+
+    # Size check
+    content_bytes = await file.read()
+    if len(content_bytes) > _SNAPSHOT_MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Maximum 512KB.",
+        )
+
+    # Encoding
+    try:
+        content = content_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be UTF-8 encoded",
+        )
+
+    # Parse CSV
+    rows, warnings, errors = parse_fidelity_csv(content)
+
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"errors": [e.model_dump() for e in errors]},
+        )
+
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"errors": [{"message": "No valid positions found in CSV"}]},
+        )
+
+    # Get or create portfolio
+    portfolio = await get_or_create_portfolio(current_user.id, db)
+
+    # Compute hash for dedup
+    csv_hash = compute_csv_hash(content)
+
+    # Import snapshot
+    result = await import_portfolio_snapshot(
+        portfolio_id=portfolio.id,
+        user_id=current_user.id,
+        rows=rows,
+        csv_hash=csv_hash,
+        db=db,
+    )
+
+    # Dedup rejection
+    if result.is_duplicate:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This CSV was already imported.",
+        )
+
+    # Cache invalidation
+    cache = getattr(request.app.state, "cache", None)
+    if cache:
+        await cache.invalidate_user(str(current_user.id))
+
+    # Merge parser warnings into result
+    result.warnings = warnings + result.warnings
+
+    return result
