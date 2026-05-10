@@ -48,7 +48,6 @@ class PositionSnapshot(Base):
     is_baseline: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
 
     __table_args__ = (
-        sa.UniqueConstraint("id", name="uq_position_snapshots_id"),
         sa.UniqueConstraint(
             "portfolio_id",
             "ticker",
@@ -90,12 +89,14 @@ class PositionChange(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
+    # No FK to position_snapshots — TimescaleDB hypertables don't support
+    # unique constraints on non-partition columns. App-level integrity.
     snapshot_before_id: Mapped[uuid.UUID | None] = mapped_column(
-        sa.ForeignKey("position_snapshots.id", ondelete="SET NULL"),
+        sa.UUID(),
         nullable=True,
     )
     snapshot_after_id: Mapped[uuid.UUID] = mapped_column(
-        sa.ForeignKey("position_snapshots.id", ondelete="CASCADE"),
+        sa.UUID(),
         nullable=False,
     )
     prev_shares: Mapped[Decimal] = mapped_column(

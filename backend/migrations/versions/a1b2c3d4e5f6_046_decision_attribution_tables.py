@@ -44,7 +44,6 @@ def upgrade() -> None:
             ondelete="RESTRICT",
         ),
         sa.PrimaryKeyConstraint("id", "imported_at"),
-        sa.UniqueConstraint("id", name="uq_position_snapshots_id"),
         sa.UniqueConstraint(
             "portfolio_id",
             "ticker",
@@ -92,18 +91,10 @@ def upgrade() -> None:
             ["stocks.ticker"],
             ondelete="RESTRICT",
         ),
-        sa.ForeignKeyConstraint(
-            ["snapshot_before_id"],
-            ["position_snapshots.id"],
-            name="fk_position_changes_snapshot_before",
-            ondelete="SET NULL",
-        ),
-        sa.ForeignKeyConstraint(
-            ["snapshot_after_id"],
-            ["position_snapshots.id"],
-            name="fk_position_changes_snapshot_after",
-            ondelete="CASCADE",
-        ),
+        # NOTE: No FK to position_snapshots.id — TimescaleDB hypertables
+        # don't support unique constraints on non-partition columns,
+        # so standard FK references are not possible. Referential integrity
+        # is maintained at the application level.
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

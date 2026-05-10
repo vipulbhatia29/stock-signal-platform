@@ -263,7 +263,7 @@ async def import_portfolio_snapshot(
         select(PositionSnapshot.imported_at)
         .where(
             PositionSnapshot.portfolio_id == portfolio_id,
-            PositionSnapshot.csv_hash == csv_hash,  # nosemgrep: no-timing-unsafe-compare
+            PositionSnapshot.csv_hash == csv_hash,  # nosemgrep
         )
         .limit(1)
     )
