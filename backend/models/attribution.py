@@ -127,8 +127,7 @@ class PositionChange(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     def __repr__(self) -> str:
         return (
-            f"<PositionChange ticker={self.ticker} {self.implied_action} "
-            f"delta={self.delta_shares}>"
+            f"<PositionChange ticker={self.ticker} {self.implied_action} delta={self.delta_shares}>"
         )
 
 

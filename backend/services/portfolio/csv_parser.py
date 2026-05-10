@@ -116,7 +116,8 @@ def parse_fidelity_csv(
     if header_idx is None:
         errors.append(
             CsvValidationError(
-                message="Could not find header row. Expected columns: Symbol, Qty, Price, Cost Basis",
+                message="Could not find header row. "
+                "Expected columns: Symbol, Qty, Price, Cost Basis",
             )
         )
         return rows, warnings, errors

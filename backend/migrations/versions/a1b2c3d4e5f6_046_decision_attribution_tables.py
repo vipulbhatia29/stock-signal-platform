@@ -78,9 +78,7 @@ def upgrade() -> None:
         sa.Column("prev_avg_cost_basis", sa.Numeric(12, 4), nullable=False, server_default="0"),
         sa.Column("new_avg_cost_basis", sa.Numeric(12, 4), nullable=False),
         sa.Column("implied_action", sa.String(10), nullable=False),
-        sa.Column(
-            "attribution_status", sa.String(10), nullable=False, server_default="pending"
-        ),
+        sa.Column("attribution_status", sa.String(10), nullable=False, server_default="pending"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(
