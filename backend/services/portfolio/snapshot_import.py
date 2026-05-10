@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.models.attribution import PositionChange, PositionSnapshot
 from backend.models.portfolio import Position
-from backend.models.stock import Watchlist
+from backend.models.stock import Stock, Watchlist
 from backend.schemas.attribution import ImportResult, ImportWarning, SnapshotRowSchema
 from backend.services.stock_data import ensure_stock_exists
 
@@ -178,28 +178,29 @@ async def _sync_positions(
     now = datetime.now(timezone.utc)
     current_tickers = {r.ticker for r in rows}
 
-    for row in rows:
-        stmt = (
-            pg_insert(Position.__table__)
-            .values(
-                id=uuid.uuid4(),
-                portfolio_id=portfolio_id,
-                ticker=row.ticker,
-                shares=row.shares,
-                avg_cost_basis=row.avg_cost_basis,
-                opened_at=now,
-                created_at=now,
-                updated_at=now,
-            )
-            .on_conflict_do_update(
-                constraint="uq_positions_portfolio_ticker",
-                set_={
-                    "shares": row.shares,
-                    "avg_cost_basis": row.avg_cost_basis,
-                    "updated_at": now,
-                    "closed_at": None,
-                },
-            )
+    if rows:
+        values_list = [
+            {
+                "id": uuid.uuid4(),
+                "portfolio_id": portfolio_id,
+                "ticker": row.ticker,
+                "shares": row.shares,
+                "avg_cost_basis": row.avg_cost_basis,
+                "opened_at": now,
+                "created_at": now,
+                "updated_at": now,
+            }
+            for row in rows
+        ]
+        stmt = pg_insert(Position.__table__).values(values_list)
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_positions_portfolio_ticker",
+            set_={
+                "shares": stmt.excluded.shares,
+                "avg_cost_basis": stmt.excluded.avg_cost_basis,
+                "updated_at": now,
+                "closed_at": None,
+            },
         )
         await db.execute(stmt)
 
@@ -286,18 +287,23 @@ async def import_portfolio_snapshot(
         else:
             is_baseline = True
 
-    # 3. Auto-create stocks for unknown tickers (pre-pass)
-    # NOTE: ensure_stock_exists() may commit internally.
-    # Run as pre-pass so stock creation is isolated from snapshot transaction.
+    # 3. Auto-create stocks for unknown tickers (batch pre-check + targeted create)
+    # First, batch-check which tickers already exist to avoid N+1 queries.
+    # Then only call ensure_stock_exists for the missing ones.
+    all_tickers = {row.ticker for row in rows}
+    existing_result = await db.execute(select(Stock.ticker).where(Stock.ticker.in_(all_tickers)))
+    existing_tickers = {row[0] for row in existing_result.all()}
+    missing_tickers = all_tickers - existing_tickers
+
     failed_tickers: set[str] = set()
-    for row in rows:
+    for ticker in missing_tickers:
         try:
-            await ensure_stock_exists(row.ticker, db)
+            await ensure_stock_exists(ticker, db)
         except ValueError:
-            failed_tickers.add(row.ticker)
+            failed_tickers.add(ticker)
             warnings.append(
                 ImportWarning(
-                    message=f"{row.ticker} not found — skipped. Is this a mutual fund?",
+                    message=f"{ticker} not found — skipped. Is this a mutual fund?",
                 )
             )
 
