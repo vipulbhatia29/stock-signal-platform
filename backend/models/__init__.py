@@ -25,6 +25,11 @@ from backend.models.logs import LLMCallLog, ToolExecutionLog
 from backend.models.news_sentiment import NewsArticle, NewsSentimentDaily
 from backend.models.oauth_account import OAuthAccount
 from backend.models.pipeline import PipelineRun, PipelineWatermark
+from backend.models.attribution import (  # noqa: F401
+    DecisionAttribution,
+    PositionChange,
+    PositionSnapshot,
+)
 from backend.models.portfolio import (  # noqa: F401
     Portfolio,
     PortfolioSnapshot,
@@ -46,6 +51,7 @@ __all__ = [
     "AssessmentRun",
     "BacktestRun",
     "Base",
+    "DecisionAttribution",
     "ChatMessage",
     "ChatSession",
     "DividendPayment",
@@ -68,6 +74,8 @@ __all__ = [
     "PortfolioHealthSnapshot",
     "PortfolioSnapshot",
     "Position",
+    "PositionChange",
+    "PositionSnapshot",
     "RebalancingSuggestion",
     "RecommendationOutcome",
     "RecommendationSnapshot",
