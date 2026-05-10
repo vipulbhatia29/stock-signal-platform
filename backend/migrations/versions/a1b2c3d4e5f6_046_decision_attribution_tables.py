@@ -43,7 +43,8 @@ def upgrade() -> None:
             ["stocks.ticker"],
             ondelete="RESTRICT",
         ),
-        sa.PrimaryKeyConstraint("id"),
+        sa.PrimaryKeyConstraint("id", "imported_at"),
+        sa.UniqueConstraint("id", name="uq_position_snapshots_id"),
         sa.UniqueConstraint(
             "portfolio_id",
             "ticker",
@@ -94,11 +95,13 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["snapshot_before_id"],
             ["position_snapshots.id"],
+            name="fk_position_changes_snapshot_before",
             ondelete="SET NULL",
         ),
         sa.ForeignKeyConstraint(
             ["snapshot_after_id"],
             ["position_snapshots.id"],
+            name="fk_position_changes_snapshot_after",
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),

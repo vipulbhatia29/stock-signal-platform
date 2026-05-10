@@ -12,15 +12,25 @@ from sqlalchemy.orm import Mapped, mapped_column
 from backend.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
 
 
-class PositionSnapshot(UUIDPrimaryKeyMixin, Base):
+class PositionSnapshot(Base):
     """Raw position state from a single CSV import.
 
     One row per ticker per import. TimescaleDB hypertable on imported_at.
     Source of truth for attribution diffs - NOT the Position table.
+
+    Uses composite PK (id, imported_at) because TimescaleDB requires the
+    partitioning column in the primary key. A unique constraint on id alone
+    supports FK references from position_changes.
     """
 
     __tablename__ = "position_snapshots"
 
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    imported_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        primary_key=True,
+        default=lambda: datetime.now(timezone.utc),
+    )
     portfolio_id: Mapped[uuid.UUID] = mapped_column(
         sa.ForeignKey("portfolios.id", ondelete="CASCADE"),
         nullable=False,
@@ -28,11 +38,6 @@ class PositionSnapshot(UUIDPrimaryKeyMixin, Base):
     ticker: Mapped[str] = mapped_column(
         sa.ForeignKey("stocks.ticker", ondelete="RESTRICT"),
         nullable=False,
-    )
-    imported_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True),
-        nullable=False,
-        default=lambda: datetime.now(timezone.utc),
     )
     shares: Mapped[Decimal] = mapped_column(sa.Numeric(12, 4), nullable=False)
     avg_cost_basis: Mapped[Decimal] = mapped_column(sa.Numeric(12, 4), nullable=False)
@@ -43,6 +48,7 @@ class PositionSnapshot(UUIDPrimaryKeyMixin, Base):
     is_baseline: Mapped[bool] = mapped_column(sa.Boolean, default=False, nullable=False)
 
     __table_args__ = (
+        sa.UniqueConstraint("id", name="uq_position_snapshots_id"),
         sa.UniqueConstraint(
             "portfolio_id",
             "ticker",

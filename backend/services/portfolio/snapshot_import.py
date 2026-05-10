@@ -192,7 +192,7 @@ async def _sync_positions(
             }
             for row in rows
         ]
-        stmt = pg_insert(Position.__table__).values(values_list)
+        stmt = pg_insert(Position).values(values_list)  # type: ignore[arg-type]
         stmt = stmt.on_conflict_do_update(
             constraint="uq_positions_portfolio_ticker",
             set_={
@@ -263,7 +263,7 @@ async def import_portfolio_snapshot(
         select(PositionSnapshot.imported_at)
         .where(
             PositionSnapshot.portfolio_id == portfolio_id,
-            PositionSnapshot.csv_hash == csv_hash,
+            PositionSnapshot.csv_hash == csv_hash,  # nosemgrep: no-timing-unsafe-compare
         )
         .limit(1)
     )
