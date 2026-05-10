@@ -8,6 +8,11 @@ fixture teardown failures. PR2a addresses this when more obs models are added.
 
 from backend.models.alert import InAppAlert
 from backend.models.assessment import AssessmentResult, AssessmentRun
+from backend.models.attribution import (  # noqa: F401
+    DecisionAttribution,
+    PositionChange,
+    PositionSnapshot,
+)
 from backend.models.audit import AdminAuditLog
 from backend.models.backtest import BacktestRun
 from backend.models.base import Base
@@ -46,6 +51,7 @@ __all__ = [
     "AssessmentRun",
     "BacktestRun",
     "Base",
+    "DecisionAttribution",
     "ChatMessage",
     "ChatSession",
     "DividendPayment",
@@ -68,6 +74,8 @@ __all__ = [
     "PortfolioHealthSnapshot",
     "PortfolioSnapshot",
     "Position",
+    "PositionChange",
+    "PositionSnapshot",
     "RebalancingSuggestion",
     "RecommendationOutcome",
     "RecommendationSnapshot",
